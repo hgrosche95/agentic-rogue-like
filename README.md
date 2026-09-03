@@ -1,52 +1,55 @@
 # agentic-rogue-like
 
-A roguelike (think Slay the Spire / FTL) where the run content isn't pulled
-from a fixed drop table, but generated live by an LLM agent — constrained to
-tool calls with a game-balance budget, so it can be creative without being
-able to break the run.
+Ein Roguelike (Slay the Spire / FTL lassen grüßen), bei dem der Run-Inhalt
+nicht aus einer festen Drop-Tabelle kommt, sondern live von einem LLM-Agenten
+generiert wird — eingeschränkt auf Tool-Calls mit einem Balance-Budget, damit
+er kreativ sein kann, ohne den Run kaputt zu machen.
 
-## Goal
+## Ziel
 
-A personal project to build real, hands-on experience with agentic AI in
-Python — LangGraph, tool-calling, structured-output validation — as a
-complement to prior TypeScript/NestJS agent work
-([ai-trip-planer](https://github.com/hgrosche95/ai-trip-planer)). Code is
-written to be understood and explained, not just to work: the deterministic
-game and the agent layer are kept strictly separate on purpose, so the seam
-between "what the LLM is allowed to decide" and "what stays fixed game
-logic" stays visible instead of blurring together.
+Ein privates Projekt, um echte, praktische Erfahrung mit Agentic AI in Python
+aufzubauen — LangGraph, Tool-Calling, Validierung strukturierter Ausgaben —
+als Ergänzung zu meinem bisherigen TypeScript/NestJS-Agenten-Projekt
+([ai-trip-planer](https://github.com/hgrosche95/ai-trip-planer)). Der Code
+ist so geschrieben, dass er verstanden und erklärt werden kann, nicht nur
+funktioniert: Das deterministische Spiel und die Agenten-Schicht sind bewusst
+strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
+"was feste Spiellogik bleibt" sichtbar bleibt, statt zu verschwimmen.
 
 ## Status
 
-- [x] **Skeleton** — project setup, core state models (`RunState`,
+- [x] **Skelett** — Projekt-Setup, Kern-Datenmodelle (`RunState`,
       `PlayerState`, `MapNode`, `Enemy`)
-- [x] **Deterministic core loop** — procedurally generated node-map,
-      dice-based combat, event/rest/shop resolution, win/lose conditions.
-      Fully playable in the terminal, no LLM involved yet.
-- [ ] **Encounter agent** — a LangGraph agent that generates enemies, relics
-      and events via constrained tool calls, validated against a per-floor
-      budget, replacing the static content pools above.
-- [ ] **Narrator agent** — wraps generated/mechanical results in flavor text.
-- [ ] **Difficulty agent** — adapts future encounter budgets to how the run
-      is going.
-- [ ] **Polish** — nicer terminal UI, a recorded run, tests that assert
-      agent-generated content always stays within its balance budget.
+- [x] **Deterministischer Kern-Loop** — prozedural generierte Node-Map,
+      würfelbasierter Kampf, Event-/Rest-/Shop-Auflösung,
+      Sieg-/Niederlage-Bedingungen. Vollständig spielbar im Terminal, noch
+      ohne LLM.
+- [ ] **Encounter-Agent** — ein LangGraph-Agent, der Gegner, Relikte und
+      Events über constrained Tool-Calls generiert, validiert gegen ein
+      Etagen-Budget, und die statischen Content-Pools oben ersetzt.
+- [ ] **Narrator-Agent** — verpackt generierte/mechanische Ergebnisse in
+      Flavor-Text.
+- [ ] **Difficulty-Agent** — passt zukünftige Encounter-Budgets an den
+      Run-Verlauf an.
+- [ ] **Politur** — schönere Terminal-Oberfläche, ein aufgezeichneter Run,
+      Tests, die sicherstellen, dass agenten-generierter Content immer im
+      Balance-Budget bleibt.
 
-## Why built this way
+## Warum so gebaut
 
-Most roguelikes get their variety from large, hand-authored content tables.
-This flips that: the content generator is an agent making state-aware
-decisions (what to spawn, how hard, what it does) through a strict schema,
-instead of either a static table or unconstrained free text. The
-deterministic core loop was built and tested first, entirely without an LLM,
-so the game is playable and its balance is understood on its own terms before
-an agent starts generating content into it.
+Die meisten Roguelikes beziehen ihre Abwechslung aus großen, handgeschriebenen
+Content-Tabellen. Hier ist es umgekehrt: Der Content-Generator ist ein Agent,
+der zustandsbewusste Entscheidungen (was spawnt, wie stark, was es tut) über
+ein striktes Schema trifft — statt entweder einer statischen Tabelle oder
+unbeschränktem Freitext. Der deterministische Kern-Loop wurde zuerst gebaut
+und getestet, komplett ohne LLM, damit das Spiel für sich spielbar und seine
+Balance nachvollziehbar ist, bevor ein Agent anfängt, Content hineinzugenerieren.
 
 ## Stack
 
-Python, Pydantic (state + tool schemas), LangGraph + Claude (agent), pytest.
+Python, Pydantic (State + Tool-Schemas), LangGraph + Claude (Agent), pytest.
 
-## Development
+## Entwicklung
 
 ```bash
 uv sync
