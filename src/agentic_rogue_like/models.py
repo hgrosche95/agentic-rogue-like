@@ -44,6 +44,7 @@ class Card(BaseModel):
 class PlayerState(BaseModel):
     hp: int
     max_hp: int
+    attack: int = 5
     gold: int = 0
     relics: list[Relic] = Field(default_factory=list)
     deck: list[Card] = Field(default_factory=list)
@@ -51,6 +52,13 @@ class PlayerState(BaseModel):
     @property
     def is_alive(self) -> bool:
         return self.hp > 0
+
+
+class Enemy(BaseModel):
+    id: str
+    name: str
+    hp: int
+    attack: int
 
 
 class MapNode(BaseModel):
