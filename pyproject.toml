@@ -1,0 +1,24 @@
+[project]
+name = "agentic-rogue-like"
+version = "0.1.0"
+description = "A roguelike where an LLM agent generates run content (enemies, relics, events) inside balance-constrained tool schemas instead of fixed drop tables."
+readme = "README.md"
+authors = [
+    { name = "hgrosche95", email = "h.grosche95@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.13.5",
+]
+
+[project.scripts]
+agentic-rogue-like = "agentic_rogue_like:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
