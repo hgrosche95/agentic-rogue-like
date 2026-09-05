@@ -8,7 +8,7 @@ yet; enemies.py still serves the static pool.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 
 class EnemyBudget(BaseModel):
@@ -21,7 +21,7 @@ class EnemyBudget(BaseModel):
 
     @field_validator("max_hp")
     @classmethod
-    def _hp_range_valid(cls, max_hp: int, info) -> int:
+    def _hp_range_valid(cls, max_hp: int, info: ValidationInfo) -> int:
         min_hp = info.data.get("min_hp")
         if min_hp is not None and max_hp < min_hp:
             raise ValueError("max_hp must be >= min_hp")
@@ -29,7 +29,7 @@ class EnemyBudget(BaseModel):
 
     @field_validator("max_attack")
     @classmethod
-    def _attack_range_valid(cls, max_attack: int, info) -> int:
+    def _attack_range_valid(cls, max_attack: int, info: ValidationInfo) -> int:
         min_attack = info.data.get("min_attack")
         if min_attack is not None and max_attack < min_attack:
             raise ValueError("max_attack must be >= min_attack")
@@ -52,9 +52,7 @@ class BudgetViolation(Exception):
 def validate_proposal(proposal: EnemyProposal, budget: EnemyBudget) -> None:
     """Raise BudgetViolation if the proposal breaks its budget."""
     if not (budget.min_hp <= proposal.hp <= budget.max_hp):
-        raise BudgetViolation(
-            f"hp {proposal.hp} outside budget [{budget.min_hp}, {budget.max_hp}]"
-        )
+        raise BudgetViolation(f"hp {proposal.hp} outside budget [{budget.min_hp}, {budget.max_hp}]")
     if not (budget.min_attack <= proposal.attack <= budget.max_attack):
         raise BudgetViolation(
             f"attack {proposal.attack} outside budget [{budget.min_attack}, {budget.max_attack}]"

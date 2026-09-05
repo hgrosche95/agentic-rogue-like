@@ -14,11 +14,7 @@ def _play_full_run(seed: int) -> None:
         if run.status is not RunStatus.ONGOING:
             break
 
-        choices = available_choices(run)
-        if not choices:
-            run.status = RunStatus.VICTORY
-            break
-        run.current_node_id = choices[0]
+        run.current_node_id = available_choices(run)[0]
 
         steps += 1
         assert steps < 100, "run did not terminate - possible infinite loop in the map"

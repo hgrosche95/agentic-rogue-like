@@ -8,12 +8,12 @@ so the shape defined here is also the schema the LLM is allowed to produce.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class NodeType(str, Enum):
+class NodeType(StrEnum):
     COMBAT = "combat"
     ELITE = "elite"
     EVENT = "event"
@@ -22,7 +22,7 @@ class NodeType(str, Enum):
     BOSS = "boss"
 
 
-class RunStatus(str, Enum):
+class RunStatus(StrEnum):
     ONGOING = "ongoing"
     VICTORY = "victory"
     DEFEAT = "defeat"

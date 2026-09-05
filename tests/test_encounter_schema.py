@@ -18,7 +18,9 @@ def test_proposal_within_budget_passes() -> None:
 
 def test_proposal_outside_hp_budget_raises() -> None:
     budget = EnemyBudget(min_hp=10, max_hp=20, min_attack=2, max_attack=5)
-    proposal = EnemyProposal(name="Ogre", description="Too strong for this floor.", hp=999, attack=3)
+    proposal = EnemyProposal(
+        name="Ogre", description="Too strong for this floor.", hp=999, attack=3
+    )
 
     with pytest.raises(BudgetViolation):
         validate_proposal(proposal, budget)

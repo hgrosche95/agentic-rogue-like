@@ -71,4 +71,6 @@ def resolve_node(
         run.history.append(f"You rest and recover {healed} HP.")
 
     elif node.type is NodeType.SHOP:
+        # TODO(Phase 3): the shop is announced but sells nothing until there
+        # are relics and cards to spend gold on.
         run.history.append(f"A merchant offers wares. You have {run.player.gold} gold.")

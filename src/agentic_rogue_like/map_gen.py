@@ -50,7 +50,8 @@ def generate_map(seed: int) -> dict[str, MapNode]:
     floors: list[list[str]] = []
 
     for floor in range(NUM_FLOORS):
-        count = 1 if floor == NUM_FLOORS - 1 else rng.randint(MIN_NODES_PER_FLOOR, MAX_NODES_PER_FLOOR)
+        is_boss_floor = floor == NUM_FLOORS - 1
+        count = 1 if is_boss_floor else rng.randint(MIN_NODES_PER_FLOOR, MAX_NODES_PER_FLOOR)
         floor_ids = []
         for i in range(count):
             node_id = f"{floor}-{i}"

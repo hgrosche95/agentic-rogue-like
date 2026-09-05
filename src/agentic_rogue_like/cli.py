@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import random
 
+from dotenv import load_dotenv
+
 from .engine import available_choices, new_run, resolve_node
 from .events import EventOption, GameEvent
 from .models import RunState, RunStatus
@@ -33,6 +35,8 @@ def _choose_next_node(run: RunState, choices: list[str]) -> str:
 
 
 def main() -> None:
+    load_dotenv()
+
     seed = random.randint(0, 1_000_000)
     print(f"agentic-rogue-like - seed {seed}\n")
 
@@ -40,20 +44,20 @@ def main() -> None:
     rng = random.Random(seed)
     last_printed = 0
 
-    while run.status is RunStatus.ONGOING:
-        resolve_node(run, rng, choose_event_option=_choose_event_option)
-        for line in run.history[last_printed:]:
-            print(line)
-        last_printed = len(run.history)
+    try:
+        while run.status is RunStatus.ONGOING:
+            resolve_node(run, rng, choose_event_option=_choose_event_option)
+            for line in run.history[last_printed:]:
+                print(line)
+            last_printed = len(run.history)
 
-        if run.status is not RunStatus.ONGOING:
-            break
+            if run.status is not RunStatus.ONGOING:
+                break
 
-        choices = available_choices(run)
-        if not choices:
-            run.status = RunStatus.VICTORY
-            break
-        run.current_node_id = _choose_next_node(run, choices)
+            run.current_node_id = _choose_next_node(run, available_choices(run))
+    except (EOFError, KeyboardInterrupt):
+        print("\nRun abandoned.")
+        return
 
     print("\n--- Run over ---")
     print(f"Result: {run.status.value}")
