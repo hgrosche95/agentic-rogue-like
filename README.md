@@ -24,9 +24,13 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       würfelbasierter Kampf, Event-/Rest-/Shop-Auflösung,
       Sieg-/Niederlage-Bedingungen. Vollständig spielbar im Terminal, noch
       ohne LLM.
-- [ ] **Encounter-Agent** — ein LangGraph-Agent, der Gegner, Relikte und
-      Events über constrained Tool-Calls generiert, validiert gegen ein
-      Etagen-Budget, und die statischen Content-Pools oben ersetzt.
+- [ ] **Encounter-Agent** — ein LangGraph-Agent, der Gegner über constrained
+      Tool-Calls generiert und gegen ein Etagen-Budget validiert, mit
+      Retry-Schleife bei Budget-Verstoß. Für Gegner isoliert gebaut und
+      end-to-end bewiesen (echte Groq-Calls plus deterministisch gemockte
+      Retry-Tests) — noch nicht in `engine.py` eingeklinkt, ersetzt den
+      statischen Pool also noch nicht. Relikte und Events als weitere
+      Content-Typen fehlen noch.
 - [ ] **Narrator-Agent** — verpackt generierte/mechanische Ergebnisse in
       Flavor-Text.
 - [ ] **Difficulty-Agent** — passt zukünftige Encounter-Budgets an den
@@ -47,12 +51,16 @@ Balance nachvollziehbar ist, bevor ein Agent anfängt, Content hineinzugeneriere
 
 ## Stack
 
-Python, Pydantic (State + Tool-Schemas), LangGraph + Claude (Agent), pytest.
+Python, Pydantic (State + Tool-Schemas), LangGraph + Groq (Agent), pytest, ruff.
 
 ## Entwicklung
 
 ```bash
 uv sync
 uv run pytest
+uv run ruff check .
 uv run agentic-rogue-like
 ```
+
+Für den Encounter-Agent wird ein `GROQ_API_KEY` benötigt (z. B. in einer
+lokalen, nicht eingecheckten `.env`-Datei).
