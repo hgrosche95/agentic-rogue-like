@@ -56,7 +56,8 @@ def generate_enemy(state: EncounterState) -> EncounterState:
     prompt = (
         f"Invent an enemy for a roguelike encounter. "
         f"It must have hp between {state['budget'].min_hp} and {state['budget'].max_hp}, "
-        f"and attack between {state['budget'].min_attack} and {state['budget'].max_attack}."
+        f"and attack between {state['budget'].min_attack} and {state['budget'].max_attack}. "
+        f"Keep the description under 150 characters."
     )
     if state["last_error"]:
         prompt += f" Your previous attempt was rejected: {state['last_error']}. Fix it."
