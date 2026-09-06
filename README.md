@@ -26,11 +26,12 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       ohne LLM.
 - [ ] **Encounter-Agent** — ein LangGraph-Agent, der Gegner über constrained
       Tool-Calls generiert und gegen ein Etagen-Budget validiert, mit
-      Retry-Schleife bei Budget-Verstoß. Für Gegner isoliert gebaut und
-      end-to-end bewiesen (echte Groq-Calls plus deterministisch gemockte
-      Retry-Tests) — noch nicht in `engine.py` eingeklinkt, ersetzt den
-      statischen Pool also noch nicht. Relikte und Events als weitere
-      Content-Typen fehlen noch.
+      Retry-Schleife bei Budget-Verstoß. Für Gegner voll eingeklinkt: die
+      Engine ruft ihn über `ENCOUNTER_AGENT_ENABLED=1` live an und fällt bei
+      jedem Fehler (API nicht erreichbar, Budget nach 3 Versuchen nie
+      getroffen, ...) auf den statischen Pool zurück — in einem echten Lauf
+      bereits beobachtet und mit `monkeypatch` deterministisch getestet.
+      Relikte und Events als weitere Content-Typen fehlen noch.
 - [ ] **Narrator-Agent** — verpackt generierte/mechanische Ergebnisse in
       Flavor-Text.
 - [ ] **Difficulty-Agent** — passt zukünftige Encounter-Budgets an den
@@ -63,4 +64,8 @@ uv run agentic-rogue-like
 ```
 
 Für den Encounter-Agent wird ein `GROQ_API_KEY` benötigt (z. B. in einer
-lokalen, nicht eingecheckten `.env`-Datei).
+lokalen, nicht eingecheckten `.env`-Datei). Er ist standardmäßig aus — nur
+mit zusätzlich gesetztem `ENCOUNTER_AGENT_ENABLED=1` generiert die Engine
+Gegner live über Groq statt aus dem statischen Pool. `pytest` lädt keine
+`.env` und setzt das Flag nie, damit die Test-Suite schnell und ohne
+Netzwerk bleibt.

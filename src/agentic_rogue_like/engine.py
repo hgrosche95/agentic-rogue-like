@@ -10,8 +10,8 @@ from __future__ import annotations
 import random
 from collections.abc import Callable
 
+from .agent.encounter_agent import enemy_for_node
 from .combat import resolve_combat
-from .enemies import pick_enemy
 from .events import EventOption, GameEvent, random_event
 from .map_gen import NUM_FLOORS, generate_map
 from .models import NodeType, PlayerState, RunState, RunStatus
@@ -39,7 +39,8 @@ def resolve_node(
     run.floor = node.floor
 
     if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
-        enemy = pick_enemy(
+        enemy = enemy_for_node(
+            enemy_id=f"agent-{rng.getrandbits(32):08x}",
             floor=node.floor,
             num_floors=NUM_FLOORS,
             elite=node.type is NodeType.ELITE,

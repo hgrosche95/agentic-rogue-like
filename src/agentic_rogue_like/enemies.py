@@ -3,7 +3,8 @@
 Phase 2 replaces this fixed pool with the encounter agent generating
 enemies via a constrained tool call, validated against a per-floor budget.
 The `Enemy` shape here is exactly the schema that tool call will have to
-produce.
+produce. This module stays agent-unaware on purpose - agent/encounter_agent.py
+imports pick_enemy() as its fallback, so the dependency can only go one way.
 """
 
 from __future__ import annotations
