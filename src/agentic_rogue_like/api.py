@@ -18,10 +18,10 @@ import random
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from .engine import apply_event_choice, available_choices, new_run, resolve_node, start_event
-from .models import MapNode, NodeType, PlayerState, RunStatus
+from .models import SETTING_PRESETS, MapNode, NodeType, PlayerState, RunStatus
 from .sessions import RunSession, create_session, get_session
 
 app = FastAPI(title="agentic-rogue-like")
@@ -58,6 +58,7 @@ class RunView(BaseModel):
     run_id: str
     status: RunStatus
     floor: int
+    setting: str
     player: PlayerState
     history: list[str]
     current_node: MapNode
@@ -71,6 +72,17 @@ class RunView(BaseModel):
 
 class NewRunRequest(BaseModel):
     seed: int | None = None
+    setting: str = SETTING_PRESETS[0]
+
+    @field_validator("setting")
+    @classmethod
+    def _setting_must_be_a_known_preset(cls, value: str) -> str:
+        # This string is folded straight into the encounter agent's prompt
+        # (see agent/encounter_agent.py) - restricting it to a fixed list
+        # keeps that untrusted-ish input from being arbitrary free text.
+        if value not in SETTING_PRESETS:
+            raise ValueError(f"setting must be one of {SETTING_PRESETS}")
+        return value
 
 
 class EventChoiceRequest(BaseModel):
@@ -104,6 +116,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         run_id=run_id,
         status=run.status,
         floor=run.floor,
+        setting=run.setting,
         player=run.player,
         history=run.history,
         current_node=node,
@@ -121,10 +134,15 @@ def _get_session_or_404(run_id: str) -> RunSession:
     return session
 
 
+@app.get("/settings")
+def list_settings() -> list[str]:
+    return list(SETTING_PRESETS)
+
+
 @app.post("/runs")
 def create_run(request: NewRunRequest) -> RunView:
     seed = request.seed if request.seed is not None else random.randint(0, 1_000_000)
-    run = new_run(seed)
+    run = new_run(seed, setting=request.setting)
     run_id = create_session(run, random.Random(seed))
     return _run_view(run_id, get_session(run_id))
 

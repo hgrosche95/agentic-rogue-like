@@ -14,15 +14,17 @@ from .agent.encounter_agent import enemy_for_node
 from .combat import resolve_combat
 from .events import EventOption, GameEvent, random_event
 from .map_gen import NUM_FLOORS, generate_map
-from .models import NodeType, PlayerState, RunState, RunStatus
+from .models import DEFAULT_SETTING, NodeType, PlayerState, RunState, RunStatus
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
 
 
-def new_run(seed: int) -> RunState:
+def new_run(seed: int, setting: str = DEFAULT_SETTING) -> RunState:
     player = PlayerState(hp=50, max_hp=50, attack=5, gold=0)
     nodes = generate_map(seed)
-    return RunState(seed=seed, player=player, nodes=nodes, current_node_id="0-0")
+    return RunState(
+        seed=seed, player=player, nodes=nodes, current_node_id="0-0", setting=setting
+    )
 
 
 def available_choices(run: RunState) -> list[str]:
@@ -75,6 +77,7 @@ def resolve_node(
             elite=node.type is NodeType.ELITE,
             boss=node.type is NodeType.BOSS,
             rng=rng,
+            setting=run.setting,
         )
         result = resolve_combat(run.player, enemy, rng)
         run.history.extend(result.log)

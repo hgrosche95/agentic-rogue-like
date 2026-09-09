@@ -33,8 +33,38 @@ body {
   font-family: "Baloo 2", "Nunito", sans-serif;
   font-size: 1.7rem;
   color: var(--tangerine);
-  margin: 0 0 1.1rem;
+  margin: 0 0 0.4rem;
   text-shadow: 2px 2px 0 rgba(36, 26, 16, 0.15);
+}
+
+.setting-badge {
+  display: inline-block;
+  margin: 0 0 1.1rem;
+  padding: 0.15rem 0.7rem;
+  background: #fff;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--violet);
+}
+
+/* ---------- setting picker ---------- */
+.setting-picker-label {
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+}
+
+.setting-picker {
+  margin-bottom: 1.2rem;
+}
+
+.setting-picker button.is-selected {
+  background: var(--tangerine);
+  color: #fff;
+  border-color: var(--line);
 }
 
 /* ---------- player stats ---------- */
@@ -91,21 +121,17 @@ body {
   margin-bottom: 1.1rem;
 }
 
-.dungeon-map-inner {
-  position: relative;
-  overflow-x: auto;
-  overflow-y: hidden;
-  max-width: 100%;
-}
-
-.dungeon-map-lines {
-  position: absolute;
-  inset: 0;
+.dungeon-map-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
 }
 
 .map-path {
   stroke: var(--hp-empty);
   stroke-width: 3;
+  stroke-linecap: round;
 }
 
 .map-path.is-walked {
@@ -113,96 +139,103 @@ body {
 }
 
 .map-node {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  border: 3px solid var(--line);
-  background: #fff;
-  color: var(--line);
-  font-size: 1.05rem;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: default;
   opacity: 0.45;
-  box-shadow: 2px 2px 0 var(--line);
 }
 
-.map-node.type-combat,
-.map-node.type-elite {
-  color: var(--tangerine);
+.map-node-circle {
+  fill: #fff;
+  stroke: var(--line);
+  stroke-width: 2.5;
 }
-.map-node.type-elite {
-  color: var(--maroon);
+
+.map-node-symbol {
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  fill: var(--line);
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
 }
-.map-node.type-event {
-  color: var(--violet);
+
+.map-node.type-combat .map-node-symbol {
+  fill: var(--tangerine);
 }
-.map-node.type-shop {
-  color: var(--gold);
+.map-node.type-elite .map-node-symbol,
+.map-node.type-boss .map-node-symbol {
+  fill: var(--maroon);
 }
-.map-node.type-rest {
-  color: var(--green);
+.map-node.type-event .map-node-symbol {
+  fill: var(--violet);
 }
-.map-node.type-boss {
-  color: var(--maroon);
-  width: 44px;
-  height: 44px;
-  font-size: 1.3rem;
+.map-node.type-shop .map-node-symbol {
+  fill: var(--gold);
+}
+.map-node.type-rest .map-node-symbol {
+  fill: var(--green);
+}
+.map-node.type-boss .map-node-circle {
+  r: 15px;
+}
+.map-node.type-boss .map-node-symbol {
+  font-size: 15px;
 }
 
 .map-node.is-visited {
   opacity: 0.85;
-  background: var(--hp-empty);
+}
+.map-node.is-visited .map-node-circle {
+  fill: var(--hp-empty);
 }
 
 .map-node.is-current {
   opacity: 1;
-  background: #fff;
-  box-shadow: 0 0 0 4px rgba(255, 122, 69, 0.35), 3px 3px 0 var(--line);
+}
+.map-node.is-current .map-node-circle {
+  stroke-width: 3;
+}
+
+.map-node-ring {
+  fill: none;
+  stroke: var(--tangerine);
+  stroke-width: 2;
+  opacity: 0.6;
   animation: map-pulse 1.6s ease-in-out infinite;
 }
 
 .you-are-here {
-  position: absolute;
-  bottom: -1.15rem;
-  left: 50%;
-  transform: translateX(-50%);
   font-family: "Baloo 2", sans-serif;
-  font-size: 0.6rem;
+  font-size: 7px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--tangerine);
-  white-space: nowrap;
+  fill: var(--tangerine);
+  text-anchor: middle;
 }
 
 .map-node.is-reachable {
   opacity: 1;
   cursor: pointer;
-  background: #fff;
-  box-shadow: 4px 4px 0 var(--line);
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
 
-.map-node.is-reachable:hover {
-  transform: translate(-50%, -50%) translate(-2px, -2px);
-  box-shadow: 6px 6px 0 var(--line);
+.map-node.is-reachable:focus-visible .map-node-circle,
+.map-node.is-reachable:hover .map-node-circle {
+  fill: #fff2e2;
+  stroke-width: 3.5;
 }
 
-.map-node:disabled {
-  pointer-events: none;
+.map-node.is-reachable:focus-visible {
+  outline: none;
 }
 
 @keyframes map-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 4px rgba(255, 122, 69, 0.35), 3px 3px 0 var(--line);
+    r: 17px;
+    opacity: 0.6;
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(255, 122, 69, 0.15), 3px 3px 0 var(--line);
+    r: 20px;
+    opacity: 0.15;
   }
 }
 

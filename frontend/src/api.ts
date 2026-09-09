@@ -37,6 +37,7 @@ export interface RunView {
   run_id: string;
   status: RunStatus;
   floor: number;
+  setting: string;
   player: PlayerState;
   history: string[];
   current_node: MapNode;
@@ -58,10 +59,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function createRun(seed?: number): Promise<RunView> {
+export function listSettings(): Promise<string[]> {
+  return request<string[]>("/settings");
+}
+
+export function createRun(setting: string, seed?: number): Promise<RunView> {
   return request<RunView>("/runs", {
     method: "POST",
-    body: JSON.stringify({ seed: seed ?? null }),
+    body: JSON.stringify({ seed: seed ?? null, setting }),
   });
 }
 

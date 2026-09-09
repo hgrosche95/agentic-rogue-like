@@ -69,6 +69,19 @@ class MapNode(BaseModel):
     visited: bool = False
 
 
+# Offered to the player at run start and folded into the encounter agent's
+# prompt (see agent/encounter_agent.py) so generated enemies match a theme
+# instead of always reading as generic dungeon fantasy.
+SETTING_PRESETS: tuple[str, ...] = (
+    "dungeon",
+    "cyberpunk",
+    "alien planet",
+    "pirate seas",
+    "haunted carnival",
+)
+DEFAULT_SETTING = SETTING_PRESETS[0]
+
+
 class RunState(BaseModel):
     seed: int
     floor: int = 0
@@ -77,3 +90,4 @@ class RunState(BaseModel):
     nodes: dict[str, MapNode] = Field(default_factory=dict)
     current_node_id: str | None = None
     history: list[str] = Field(default_factory=list)
+    setting: str = DEFAULT_SETTING

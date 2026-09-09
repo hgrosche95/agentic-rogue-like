@@ -22,7 +22,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from ..enemies import pick_enemy
-from ..models import Enemy
+from ..models import DEFAULT_SETTING, Enemy
 from .budgets import budget_for
 from .encounter_schema import BudgetViolation, EnemyBudget, EnemyProposal, validate_proposal
 
@@ -34,6 +34,7 @@ REQUEST_TIMEOUT_SECONDS = 20.0
 
 class EncounterState(TypedDict):
     budget: EnemyBudget
+    setting: str
     attempt: int
     last_error: str | None
     proposal: EnemyProposal | None
@@ -53,8 +54,11 @@ def _model() -> ChatGroq:
 
 def generate_enemy(state: EncounterState) -> EncounterState:
     model = _model().with_structured_output(EnemyProposal)
+    setting = state.get("setting") or DEFAULT_SETTING
     prompt = (
-        f"Invent an enemy for a roguelike encounter. "
+        f"Invent an enemy for a {setting}-themed roguelike encounter. "
+        f"Its name and description must fit the {setting} setting instead of "
+        f"generic dungeon fantasy. "
         f"It must have hp between {state['budget'].min_hp} and {state['budget'].max_hp}, "
         f"and attack between {state['budget'].min_attack} and {state['budget'].max_attack}. "
         f"Keep the description under 150 characters."
@@ -97,12 +101,17 @@ def build_graph() -> CompiledStateGraph:
 
 
 def generate_balanced_enemy(
-    enemy_id: str, floor: int, num_floors: int, elite: bool, boss: bool
+    enemy_id: str,
+    floor: int,
+    num_floors: int,
+    elite: bool,
+    boss: bool,
+    setting: str = DEFAULT_SETTING,
 ) -> Enemy:
     budget = budget_for(floor=floor, num_floors=num_floors, elite=elite, boss=boss)
     app = build_graph()
     result: EncounterState = app.invoke(
-        {"budget": budget, "attempt": 0, "last_error": None, "proposal": None}
+        {"budget": budget, "setting": setting, "attempt": 0, "last_error": None, "proposal": None}
     )
 
     if result["last_error"] is not None:
@@ -113,7 +122,13 @@ def generate_balanced_enemy(
 
 
 def enemy_for_node(
-    enemy_id: str, floor: int, num_floors: int, elite: bool, boss: bool, rng: random.Random
+    enemy_id: str,
+    floor: int,
+    num_floors: int,
+    elite: bool,
+    boss: bool,
+    rng: random.Random,
+    setting: str = DEFAULT_SETTING,
 ) -> Enemy:
     """Agent-generated enemy, degrading to the static pool if the agent can't deliver.
 
@@ -122,13 +137,22 @@ def enemy_for_node(
     enemy, never the run. The catch is deliberately broad - anything escaping the
     LLM path lands here rather than on the player's terminal - and logged with a
     traceback, so a run that quietly plays on the static pool is still traceable.
+
+    The static pool ignores `setting` - it's a fixed, pre-balanced fallback,
+    not something worth theming - so a disabled or failed agent still means
+    generic dungeon enemies regardless of what the player picked.
     """
     if os.environ.get("ENCOUNTER_AGENT_ENABLED") != "1":
         return pick_enemy(floor=floor, num_floors=num_floors, elite=elite, boss=boss, rng=rng)
 
     try:
         return generate_balanced_enemy(
-            enemy_id=enemy_id, floor=floor, num_floors=num_floors, elite=elite, boss=boss
+            enemy_id=enemy_id,
+            floor=floor,
+            num_floors=num_floors,
+            elite=elite,
+            boss=boss,
+            setting=setting,
         )
     except Exception:
         logger.warning("encounter agent failed, using static pool", exc_info=True)

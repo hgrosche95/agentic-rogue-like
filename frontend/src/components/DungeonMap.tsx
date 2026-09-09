@@ -2,9 +2,9 @@ import { useMemo } from "react";
 import type { MapNode } from "../api";
 import { NODE_STYLE } from "../nodeTypes";
 
-const COL_W = 76;
-const ROW_H = 60;
-const PAD = 28;
+const COL_W = 74;
+const ROW_H = 54;
+const PAD = 24;
 
 function nodeIndex(id: string): number {
   return Number(id.split("-")[1]);
@@ -36,9 +36,9 @@ export function DungeonMap({
     return { byFloor, maxRows, numFloors };
   }, [nodes]);
 
-  const width = PAD * 2 + (numFloors - 1) * COL_W;
-  const height = PAD * 2 + maxRows * ROW_H;
-  const centerY = PAD + (maxRows * ROW_H) / 2;
+  const width = PAD * 2 + Math.max(numFloors - 1, 0) * COL_W;
+  const height = PAD * 2 + Math.max(maxRows - 1, 0) * ROW_H;
+  const centerY = height / 2;
 
   function pos(node: MapNode) {
     const siblingCount = byFloor.get(node.floor)?.length ?? 1;
@@ -54,28 +54,26 @@ export function DungeonMap({
 
   return (
     <div className="dungeon-map">
-      <div className="dungeon-map-inner" style={{ width, height }}>
-        <svg className="dungeon-map-lines" width={width} height={height}>
-          {allNodes.flatMap((node) => {
-            const from = pos(node);
-            return node.connections.map((targetId) => {
-              const target = nodes[targetId];
-              if (!target) return null;
-              const to = pos(target);
-              const walked = node.visited && target.visited;
-              return (
-                <line
-                  key={`${node.id}->${targetId}`}
-                  x1={from.x}
-                  y1={from.y}
-                  x2={to.x}
-                  y2={to.y}
-                  className={walked ? "map-path is-walked" : "map-path"}
-                />
-              );
-            });
-          })}
-        </svg>
+      <svg className="dungeon-map-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Dungeon map">
+        {allNodes.flatMap((node) => {
+          const from = pos(node);
+          return node.connections.map((targetId) => {
+            const target = nodes[targetId];
+            if (!target) return null;
+            const to = pos(target);
+            const walked = node.visited && target.visited;
+            return (
+              <line
+                key={`${node.id}->${targetId}`}
+                x1={from.x}
+                y1={from.y}
+                x2={to.x}
+                y2={to.y}
+                className={walked ? "map-path is-walked" : "map-path"}
+              />
+            );
+          });
+        })}
 
         {allNodes.map((node) => {
           const { x, y } = pos(node);
@@ -92,20 +90,35 @@ export function DungeonMap({
             .filter(Boolean)
             .join(" ");
           return (
-            <button
+            <g
               key={node.id}
               className={classes}
-              style={{ left: x, top: y }}
-              disabled={disabled || !isReachable}
-              onClick={() => onChoose(node.id)}
-              title={`${style.label} · floor ${node.floor}`}
+              transform={`translate(${x} ${y})`}
+              role={isReachable ? "button" : undefined}
+              tabIndex={isReachable && !disabled ? 0 : undefined}
+              aria-label={`${style.label}, floor ${node.floor}`}
+              onClick={() => {
+                if (isReachable && !disabled) onChoose(node.id);
+              }}
+              onKeyDown={(e) => {
+                if ((e.key === "Enter" || e.key === " ") && isReachable && !disabled) {
+                  e.preventDefault();
+                  onChoose(node.id);
+                }
+              }}
             >
-              <span aria-hidden="true">{style.symbol}</span>
-              {isCurrent && <span className="you-are-here">you</span>}
-            </button>
+              {isCurrent && <circle className="map-node-ring" r={17} />}
+              <circle className="map-node-circle" r={13} />
+              <text className="map-node-symbol">{style.symbol}</text>
+              {isCurrent && (
+                <text className="you-are-here" y={24}>
+                  you
+                </text>
+              )}
+            </g>
           );
         })}
-      </div>
+      </svg>
 
       <div className="map-legend">
         {(Object.keys(NODE_STYLE) as (keyof typeof NODE_STYLE)[]).map((type) => (
