@@ -64,6 +64,9 @@ class RunView(BaseModel):
     node_resolved: bool
     available_choices: list[MapNode]
     pending_event: PendingEventView | None
+    # Every node in the run, not just the current/reachable ones - the
+    # frontend draws the whole dungeon graph, not just the next step.
+    nodes: dict[str, MapNode]
 
 
 class NewRunRequest(BaseModel):
@@ -107,6 +110,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         node_resolved=node_resolved,
         available_choices=choices,
         pending_event=pending_event,
+        nodes=run.nodes,
     )
 
 

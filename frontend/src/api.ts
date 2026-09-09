@@ -43,6 +43,7 @@ export interface RunView {
   node_resolved: boolean;
   available_choices: MapNode[];
   pending_event: PendingEventView | null;
+  nodes: Record<string, MapNode>;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

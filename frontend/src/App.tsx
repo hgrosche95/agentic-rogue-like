@@ -7,10 +7,10 @@ import {
   resolveCurrentNode,
   type RunView,
 } from "./api";
+import { DungeonMap } from "./components/DungeonMap";
 import { EndScreen } from "./components/EndScreen";
 import { EventPrompt } from "./components/EventPrompt";
 import { HistoryLog } from "./components/HistoryLog";
-import { NodeChoices } from "./components/NodeChoices";
 import { PlayerStats } from "./components/PlayerStats";
 
 function App() {
@@ -46,6 +46,15 @@ function App() {
     <main className="game">
       <h1>agentic-rogue-like</h1>
       <PlayerStats player={run.player} floor={run.floor} />
+
+      <DungeonMap
+        nodes={run.nodes}
+        currentNodeId={run.current_node.id}
+        reachableIds={run.available_choices.map((n) => n.id)}
+        disabled={isLoading}
+        onChoose={(nodeId) => runAction(() => chooseNextNode(run.run_id, nodeId))}
+      />
+
       <HistoryLog history={run.history} />
       {error && <p className="error">{error}</p>}
 
@@ -69,12 +78,8 @@ function App() {
         </button>
       )}
 
-      {run.status === "ongoing" && run.node_resolved && (
-        <NodeChoices
-          choices={run.available_choices}
-          disabled={isLoading}
-          onChoose={(nodeId) => runAction(() => chooseNextNode(run.run_id, nodeId))}
-        />
+      {run.status === "ongoing" && run.node_resolved && run.available_choices.length > 0 && (
+        <p className="map-hint">Choose your next room on the map above.</p>
       )}
     </main>
   );
