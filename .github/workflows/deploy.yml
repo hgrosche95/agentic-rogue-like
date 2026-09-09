@@ -1,0 +1,112 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# id-token: write enables OIDC login against Azure (azure/login exchanges the
+# GitHub-issued OIDC token for a short-lived Azure access token - no
+# long-lived client secret has to live as a GitHub secret).
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_RESOURCE_GROUP: agentic-rogue-like-dev-rg
+  CONTAINER_APP_NAME: agentic-rogue-like-dev-api
+  STATIC_WEB_APP_NAME: agentic-rogue-like-dev-web
+  ACR_NAME: cae34de06044acr
+
+jobs:
+  deploy-backend:
+    runs-on: ubuntu-latest
+    outputs:
+      api_url: ${{ steps.api-url.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Builds inside ACR itself (no local Docker daemon needed on the
+      # runner) and pushes straight to the registry the container app
+      # already pulls from via its system-assigned managed identity - no
+      # registry password/PAT needed anywhere in this pipeline.
+      - name: Build backend image in ACR
+        run: |
+          az acr build \
+            --registry "$ACR_NAME" \
+            --image "agentic-rogue-like-dev-api:${{ github.sha }}" \
+            .
+
+      - name: Point the container app at the new image
+        run: |
+          az containerapp update \
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "$ACR_NAME.azurecr.io/agentic-rogue-like-dev-api:${{ github.sha }}"
+
+      - name: Read the container app's URL
+        id: api-url
+        run: |
+          FQDN=$(az containerapp show \
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "url=https://$FQDN" >> "$GITHUB_OUTPUT"
+
+  deploy-frontend:
+    needs: deploy-backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      # VITE_API_BASE_URL has to be set at BUILD time - Vite inlines it into
+      # the static JS bundle - so this only runs after deploy-backend has
+      # published this run's container app URL.
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: ${{ needs.deploy-backend.outputs.api_url }}
+        run: npm run build
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get Static Web App deployment token
+        id: swa-token
+        run: |
+          TOKEN=$(az staticwebapp secrets list \
+            --name "$STATIC_WEB_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --query "properties.apiKey" -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy frontend
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.swa-token.outputs.token }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: frontend/dist
+          skip_app_build: true

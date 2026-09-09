@@ -1,0 +1,62 @@
+.game {
+  max-width: 640px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  font-family: system-ui, sans-serif;
+}
+
+.player-stats {
+  display: flex;
+  gap: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.history-log {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  height: 240px;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  background: #fafafa;
+}
+
+.history-log p {
+  margin: 0.25rem 0;
+}
+
+.muted {
+  color: #888;
+}
+
+.choice-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.event-prompt p {
+  margin-bottom: 0.5rem;
+}
+
+.end-screen {
+  text-align: center;
+}
+
+.error {
+  color: #c0392b;
+}
+
+button {
+  cursor: pointer;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: white;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

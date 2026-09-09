@@ -29,12 +29,41 @@ def available_choices(run: RunState) -> list[str]:
     return run.nodes[run.current_node_id].connections
 
 
+def start_event(run: RunState, rng: random.Random) -> GameEvent:
+    """First half of resolving an EVENT node: draw the event, record its text.
+
+    Split out from `resolve_node` so a caller that can't supply an option
+    synchronously (the web API, which has to wait for a second request with
+    the player's choice) can pause here instead of blocking on a callback.
+    """
+    node = run.nodes[run.current_node_id]
+    node.visited = True
+    run.floor = node.floor
+
+    event = random_event(rng)
+    run.history.append(event.description)
+    return event
+
+
+def apply_event_choice(run: RunState, option: EventOption, rng: random.Random) -> None:
+    """Second half of resolving an EVENT node: apply the chosen option's effect."""
+    outcome = option.effect(run.player, rng)
+    run.history.append(f"> {option.label}: {outcome}")
+
+
 def resolve_node(
     run: RunState,
     rng: random.Random,
     choose_event_option: ChooseEventOption | None = None,
 ) -> None:
     node = run.nodes[run.current_node_id]
+
+    if node.type is NodeType.EVENT:
+        event = start_event(run, rng)
+        option = choose_event_option(event) if choose_event_option else rng.choice(event.options)
+        apply_event_choice(run, option, rng)
+        return
+
     node.visited = True
     run.floor = node.floor
 
@@ -58,13 +87,6 @@ def resolve_node(
             reward = rng.randint(15, 35)
             run.player.gold += reward
             run.history.append(f"You loot {reward} gold from the {enemy.name}.")
-
-    elif node.type is NodeType.EVENT:
-        event = random_event(rng)
-        run.history.append(event.description)
-        option = choose_event_option(event) if choose_event_option else rng.choice(event.options)
-        outcome = option.effect(run.player, rng)
-        run.history.append(f"> {option.label}: {outcome}")
 
     elif node.type is NodeType.REST:
         healed = min(15, run.player.max_hp - run.player.hp)
