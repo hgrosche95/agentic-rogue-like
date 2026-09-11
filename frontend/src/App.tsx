@@ -60,7 +60,10 @@ function App() {
           onSelect={setSelectedSetting}
           disabled={isLoading}
         />
-        <button disabled={isLoading} onClick={() => runAction(() => createRun(selectedSetting))}>
+        <button
+          disabled={isLoading || selectedSetting.trim() === ""}
+          onClick={() => runAction(() => createRun(selectedSetting))}
+        >
           Start run
         </button>
         {error && <p className="error">{error}</p>}
@@ -69,7 +72,7 @@ function App() {
   }
 
   return (
-    <main className="game">
+    <main className={`game${run.pending_combat ? " is-wide" : ""}`}>
       <h1>agentic-rogue-like</h1>
       <p className="setting-badge">{run.setting}</p>
       <PlayerStats player={run.player} floor={run.floor} />

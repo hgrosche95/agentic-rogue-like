@@ -58,6 +58,25 @@ def test_run_always_terminates_in_victory_or_defeat() -> None:
         assert run["status"] in ("victory", "defeat")
 
 
+def test_custom_setting_is_accepted() -> None:
+    response = client.post("/runs", json={"seed": 1, "setting": "underwater steampunk city"})
+
+    assert response.status_code == 200
+    assert response.json()["setting"] == "underwater steampunk city"
+
+
+def test_empty_custom_setting_is_rejected() -> None:
+    response = client.post("/runs", json={"seed": 1, "setting": "   "})
+
+    assert response.status_code == 422
+
+
+def test_overly_long_custom_setting_is_rejected() -> None:
+    response = client.post("/runs", json={"seed": 1, "setting": "x" * 41})
+
+    assert response.status_code == 422
+
+
 def test_resolve_twice_without_choosing_next_node_is_rejected() -> None:
     run = client.post("/runs", json={"seed": 1}).json()
     run_id = run["run_id"]

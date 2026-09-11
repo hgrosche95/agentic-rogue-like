@@ -102,6 +102,9 @@ SETTING_PRESETS: tuple[str, ...] = (
     "haunted carnival",
 )
 DEFAULT_SETTING = SETTING_PRESETS[0]
+# Players can also type their own setting instead of picking a preset - capped
+# so a stray essay doesn't blow up the encounter agent's prompt.
+MAX_CUSTOM_SETTING_LENGTH = 40
 
 
 class RunState(BaseModel):

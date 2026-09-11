@@ -39,7 +39,15 @@ from .engine import (
     start_combat_node,
     start_event,
 )
-from .models import SETTING_PRESETS, CardType, MapNode, NodeType, PlayerState, RunStatus
+from .models import (
+    MAX_CUSTOM_SETTING_LENGTH,
+    SETTING_PRESETS,
+    CardType,
+    MapNode,
+    NodeType,
+    PlayerState,
+    RunStatus,
+)
 from .sessions import RunSession, create_session, get_session
 
 app = FastAPI(title="agentic-rogue-like")
@@ -124,13 +132,21 @@ class NewRunRequest(BaseModel):
 
     @field_validator("setting")
     @classmethod
-    def _setting_must_be_a_known_preset(cls, value: str) -> str:
-        # This string is folded straight into the encounter agent's prompt
-        # (see agent/encounter_agent.py) - restricting it to a fixed list
-        # keeps that untrusted-ish input from being arbitrary free text.
-        if value not in SETTING_PRESETS:
-            raise ValueError(f"setting must be one of {SETTING_PRESETS}")
-        return value
+    def _setting_is_a_preset_or_short_custom_text(cls, value: str) -> str:
+        # This string is folded straight into the encounter agent's (and
+        # narrator's) prompts - presets pass through untouched, but a
+        # player-typed custom setting still gets bounded so a stray essay
+        # can't blow up the prompt.
+        if value in SETTING_PRESETS:
+            return value
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("setting must not be empty")
+        if len(cleaned) > MAX_CUSTOM_SETTING_LENGTH:
+            raise ValueError(
+                f"custom setting must be at most {MAX_CUSTOM_SETTING_LENGTH} characters"
+            )
+        return cleaned
 
 
 class EventChoiceRequest(BaseModel):

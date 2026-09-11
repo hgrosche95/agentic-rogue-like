@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable
+from dataclasses import replace
 
 from .agent.encounter_agent import enemy_for_node
+from .agent.narrator import narrate
 from .cards import starter_deck
 from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
@@ -47,6 +49,11 @@ def start_event(run: RunState, rng: random.Random) -> GameEvent:
     run.floor = node.floor
 
     event = random_event(rng)
+    flavor = narrate(run.setting, event.description)
+    if flavor:
+        # EVENT_POOL entries are shared singletons re-picked by every run -
+        # replace() makes a themed copy instead of mutating the pool itself.
+        event = replace(event, description=flavor)
     run.history.append(event.description)
     return event
 
@@ -147,11 +154,17 @@ def resolve_node(
         _finish_combat(run, node, enemy.name, victory, rng)
 
     elif node.type is NodeType.REST:
+        flavor = narrate(run.setting, "a weary adventurer resting and tending their wounds")
+        if flavor:
+            run.history.append(flavor)
         healed = min(15, run.player.max_hp - run.player.hp)
         run.player.hp += healed
         run.history.append(f"You rest and recover {healed} HP.")
 
     elif node.type is NodeType.SHOP:
+        flavor = narrate(run.setting, "a traveling merchant offering strange wares for sale")
+        if flavor:
+            run.history.append(flavor)
         # TODO(Phase 3): the shop is announced but sells nothing until there
         # are relics and cards to spend gold on.
         run.history.append(f"A merchant offers wares. You have {run.player.gold} gold.")

@@ -14,19 +14,22 @@ import random
 from .models import Enemy
 
 ENEMY_POOL: dict[str, list[Enemy]] = {
+    # Kept inside agent/budgets.py's ranges (see its own comment for why
+    # these read high compared to the old dice-combat numbers) - a test
+    # pins that invariant down so this pool can't quietly drift out of it.
     "early": [
-        Enemy(id="rat-swarm", name="Rat Swarm", hp=18, attack=3, attack_name="Swarm Bite"),
-        Enemy(id="cave-slime", name="Cave Slime", hp=22, attack=2, attack_name="Acid Splash"),
+        Enemy(id="rat-swarm", name="Rat Swarm", hp=30, attack=7, attack_name="Swarm Bite"),
+        Enemy(id="cave-slime", name="Cave Slime", hp=35, attack=6, attack_name="Acid Splash"),
     ],
     "mid": [
-        Enemy(id="bandit", name="Bandit", hp=32, attack=5, attack_name="Dagger Strike"),
-        Enemy(id="wild-boar", name="Wild Boar", hp=28, attack=6, attack_name="Tusk Charge"),
+        Enemy(id="bandit", name="Bandit", hp=45, attack=12, attack_name="Dagger Strike"),
+        Enemy(id="wild-boar", name="Wild Boar", hp=50, attack=13, attack_name="Tusk Charge"),
     ],
     "elite": [
-        Enemy(id="ogre", name="Ogre", hp=55, attack=8, attack_name="Club Smash"),
+        Enemy(id="ogre", name="Ogre", hp=85, attack=19, attack_name="Club Smash"),
     ],
     "boss": [
-        Enemy(id="the-warden", name="The Warden", hp=90, attack=10, attack_name="Iron Verdict"),
+        Enemy(id="the-warden", name="The Warden", hp=160, attack=24, attack_name="Iron Verdict"),
     ],
 }
 

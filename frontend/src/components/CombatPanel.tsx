@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { PERMANENT_CARD_TYPES, type Card, type HandCardView, type PendingCombatView } from "../api";
+import { MonsterIcon } from "./MonsterIcon";
 
 function CardFace({ card }: { card: Card }) {
   const isPermanent = PERMANENT_CARD_TYPES.includes(card.type);
   return (
     <>
-      {isPermanent && <span className="permanent-badge" title="Permanent - stays on the field">∞</span>}
-      <span className="hand-card-name">{card.name}</span>
-      <span className="hand-card-description">{card.description}</span>
+      <div className="card-header">{card.name}</div>
+      <span className="card-rank">{isPermanent ? "∞" : card.value}</span>
+      <div className="card-body">{card.description}</div>
     </>
   );
 }
@@ -49,41 +50,77 @@ export function CombatPanel({
 
   return (
     <div className="combat-panel">
-      <div className="enemy-area">
-        <span className={`intent-badge type-${combat.enemy_intent}`}>
-          {combat.enemy_intent === "attack" ? "Attacking" : "Defending"} · {combat.enemy_intent_value}
-        </span>
-        <span className="enemy-name">{combat.enemy_name}</span>
-        <div className="enemy-vitals">
-          <span className="hp-track enemy-hp-track">
-            <span className="hp-fill enemy-hp-fill" style={{ width: `${enemyHpPercent}%` }} />
+      <div className="monster-card">
+        <MonsterIcon seed={combat.enemy_name} size={72} />
+        <div className="monster-info">
+          <span className={`intent-badge type-${combat.enemy_intent}`}>
+            {combat.enemy_intent === "attack" ? "Attacking" : "Defending"} ·{" "}
+            {combat.enemy_intent_value}
           </span>
-          <span className="stat-figure">
-            {combat.enemy_hp}/{combat.enemy_max_hp}
-          </span>
+          <span className="enemy-name">{combat.enemy_name}</span>
+          <div className="enemy-vitals">
+            <span className="hp-track enemy-hp-track">
+              <span className="hp-fill enemy-hp-fill" style={{ width: `${enemyHpPercent}%` }} />
+            </span>
+            <span className="stat-figure">
+              {combat.enemy_hp}/{combat.enemy_max_hp}
+            </span>
+          </div>
           {combat.enemy_block > 0 && (
             <span className="block-badge enemy-block-badge">Block {combat.enemy_block}</span>
           )}
         </div>
       </div>
 
-      <div className="field">
-        {combat.field.map((card, slotIndex) =>
-          card === null ? (
-            <button
-              key={slotIndex}
-              className={`field-slot is-empty${selectedHandIndex !== null ? " is-targetable" : ""}`}
-              disabled={disabled || selectedHandIndex === null}
-              onClick={() => playIntoSlot(slotIndex)}
-            >
-              {slotIndex + 1}
-            </button>
-          ) : (
-            <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
-              <CardFace card={card} />
+      <div className="battlefield">
+        <Pile label="Deck" count={combat.draw_count} kind="deck" />
+
+        <div className="battlefield-zones">
+          <div className="field-zone">
+            <span className="zone-label">Field</span>
+            <div className="field">
+              {combat.field.map((card, slotIndex) =>
+                card === null ? (
+                  <button
+                    key={slotIndex}
+                    className={`field-slot is-empty${selectedHandIndex !== null ? " is-targetable" : ""}`}
+                    disabled={disabled || selectedHandIndex === null}
+                    onClick={() => playIntoSlot(slotIndex)}
+                  >
+                    {slotIndex + 1}
+                  </button>
+                ) : (
+                  <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
+                    <CardFace card={card} />
+                  </div>
+                ),
+              )}
             </div>
-          ),
-        )}
+          </div>
+
+          <div className="zone-divider" />
+
+          <div className="hand-zone">
+            <span className="zone-label">Hand</span>
+            <div className="hand">
+              {combat.hand.map((card: HandCardView) => (
+                <button
+                  key={card.hand_index}
+                  className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}`}
+                  disabled={disabled}
+                  onClick={() => selectCard(card.hand_index)}
+                >
+                  <CardFace card={card} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="side-piles">
+          <Pile label="Graveyard" count={combat.discard_count} kind="graveyard" />
+          <Pile label="Banished" count={combat.banished_count} kind="banished" />
+        </div>
       </div>
 
       <div className="combat-resources">
@@ -94,28 +131,6 @@ export function CombatPanel({
             ? "Select a card from your hand, then play it onto an empty field slot."
             : "Choose an empty slot to play the selected card."}
         </p>
-      </div>
-
-      <div className="combat-footer">
-        <Pile label="Deck" count={combat.draw_count} kind="deck" />
-
-        <div className="hand">
-          {combat.hand.map((card: HandCardView) => (
-            <button
-              key={card.hand_index}
-              className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}`}
-              disabled={disabled}
-              onClick={() => selectCard(card.hand_index)}
-            >
-              <CardFace card={card} />
-            </button>
-          ))}
-        </div>
-
-        <div className="side-piles">
-          <Pile label="Graveyard" count={combat.discard_count} kind="graveyard" />
-          <Pile label="Banished" count={combat.banished_count} kind="banished" />
-        </div>
       </div>
 
       <button className="end-turn-button" disabled={disabled} onClick={onEndTurn}>
