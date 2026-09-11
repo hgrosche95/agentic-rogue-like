@@ -4,10 +4,13 @@ import {
   chooseEventOption,
   chooseNextNode,
   createRun,
+  endCombatTurn,
   listSettings,
+  playCard,
   resolveCurrentNode,
   type RunView,
 } from "./api";
+import { CombatPanel } from "./components/CombatPanel";
 import { DungeonMap } from "./components/DungeonMap";
 import { EndScreen } from "./components/EndScreen";
 import { EventPrompt } from "./components/EventPrompt";
@@ -94,11 +97,25 @@ function App() {
         />
       )}
 
-      {run.status === "ongoing" && !run.pending_event && !run.node_resolved && (
-        <button disabled={isLoading} onClick={() => runAction(() => resolveCurrentNode(run.run_id))}>
-          Continue
-        </button>
+      {run.status === "ongoing" && run.pending_combat && (
+        <CombatPanel
+          combat={run.pending_combat}
+          disabled={isLoading}
+          onPlayCard={(handIndex, slotIndex) =>
+            runAction(() => playCard(run.run_id, handIndex, slotIndex))
+          }
+          onEndTurn={() => runAction(() => endCombatTurn(run.run_id))}
+        />
       )}
+
+      {run.status === "ongoing" &&
+        !run.pending_event &&
+        !run.pending_combat &&
+        !run.node_resolved && (
+          <button disabled={isLoading} onClick={() => runAction(() => resolveCurrentNode(run.run_id))}>
+            Continue
+          </button>
+        )}
 
       {run.status === "ongoing" && run.node_resolved && run.available_choices.length > 0 && (
         <p className="map-hint">Choose your next room on the map above.</p>

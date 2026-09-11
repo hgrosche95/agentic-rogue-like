@@ -5,6 +5,26 @@ from agentic_rogue_like.api import app
 client = TestClient(app)
 
 
+def _play_combat(run_id: str, run: dict) -> dict:
+    turns = 0
+    while run["pending_combat"] is not None:
+        combat = run["pending_combat"]
+        empty_slot = next((i for i, c in enumerate(combat["field"]) if c is None), None)
+
+        if combat["hand"] and empty_slot is not None:
+            run = client.post(
+                f"/runs/{run_id}/combat/play-card",
+                json={"hand_index": combat["hand"][0]["hand_index"], "slot_index": empty_slot},
+            ).json()
+        else:
+            run = client.post(f"/runs/{run_id}/combat/end-turn").json()
+
+        turns += 1
+        assert turns < 200, "combat did not terminate"
+
+    return run
+
+
 def _play_full_run(seed: int) -> dict:
     run = client.post("/runs", json={"seed": seed}).json()
     run_id = run["run_id"]
@@ -17,6 +37,8 @@ def _play_full_run(seed: int) -> dict:
             run = client.post(
                 f"/runs/{run_id}/event-choice", json={"option_index": 0}
             ).json()
+
+        run = _play_combat(run_id, run)
 
         if run["status"] != "ongoing":
             break

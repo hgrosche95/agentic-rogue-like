@@ -21,9 +21,25 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 - [x] **Skelett** — Projekt-Setup, Kern-Datenmodelle (`RunState`,
       `PlayerState`, `MapNode`, `Enemy`)
 - [x] **Deterministischer Kern-Loop** — prozedural generierte Node-Map,
-      würfelbasierter Kampf, Event-/Rest-/Shop-Auflösung,
-      Sieg-/Niederlage-Bedingungen. Vollständig spielbar im Terminal, noch
-      ohne LLM.
+      Kampf-/Event-/Rest-/Shop-Auflösung, Sieg-/Niederlage-Bedingungen.
+      Vollständig spielbar im Terminal, noch ohne LLM.
+- [x] **Web-UI + HTTP-API** — eine FastAPI-Schicht (`api.py`) legt dieselbe
+      Engine über zustandslose HTTP-Requests offen (Zustand pro Run liegt in
+      `sessions.py`), ein React/Vite-Frontend (`frontend/`) spielt einen Run
+      als klickbare Dungeon-Map statt im Terminal. Ergänzt die CLI, ersetzt
+      sie nicht — `cli.py` funktioniert unverändert weiter. Deployment nach
+      Azure (Container Apps + Static Web Apps) via GitHub Actions.
+- [x] **Kartenbasierter Kampf** — kein Energie-System; das Feld mit 5 Slots
+      ist die Ressource. Aktionskarten (Angriff/Block/Heilung, später mehr)
+      brauchen einen freien Slot, wirken sofort und wandern in den
+      Friedhof; permanente Karten (Verstärker, Rüstung, Recycling, Mehr)
+      belegen ihren Slot dauerhaft und wirken positionsabhängig — z. B.
+      "Aktionskarten rechts von mir sind 25% effektiver". Nicht gespielte
+      Handkarten bleiben für die nächste Runde erhalten statt zu verfallen.
+      `cli.py` und die Tests spielen automatisiert (`auto_resolve_combat` —
+      erste bezahlbare Karte in den ersten freien Slot, dann Rundenende),
+      das Web-UI interaktiv Karte für Karte über eigene Endpunkte
+      (`/combat/play-card`, `/combat/end-turn`).
 - [ ] **Encounter-Agent** — ein LangGraph-Agent, der Gegner über constrained
       Tool-Calls generiert und gegen ein Etagen-Budget validiert, mit
       Retry-Schleife bei Budget-Verstoß. Für Gegner voll eingeklinkt: die
@@ -36,9 +52,30 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       Flavor-Text.
 - [ ] **Difficulty-Agent** — passt zukünftige Encounter-Budgets an den
       Run-Verlauf an.
-- [ ] **Politur** — schönere Terminal-Oberfläche, ein aufgezeichneter Run,
-      Tests, die sicherstellen, dass agenten-generierter Content immer im
-      Balance-Budget bleibt.
+- [ ] **Politur** — Tests, die sicherstellen, dass agenten-generierter
+      Content immer im Balance-Budget bleibt; weitere Content-Typen
+      (Relikte, Events) für den Encounter-Agent; echte Kartenvielfalt fürs
+      Kampfdeck statt des aktuellen Platzhalter-Startdecks.
+
+## Projektstruktur
+
+```
+src/agentic_rogue_like/
+├── models.py       Pydantic-Datenmodelle (RunState, PlayerState, MapNode, Enemy, Card, ...)
+├── map_gen.py      Prozedurale Etagen-/Node-Map
+├── combat.py       Kartenbasierter Kampf: Deck/Hand/Feld, Zieh-/Ablagelogik
+├── cards.py        Platzhalter-Startdeck (Aktions- + permanente Karten)
+├── events.py       Event-/Rest-/Shop-Auflösung
+├── enemies.py      Statischer Gegner-Pool (Fallback für den Encounter-Agent)
+├── engine.py       Der deterministische Kern-Loop, den CLI und API beide treiben
+├── agent/          LangGraph-Encounter-Agent + sein Tool-Schema
+├── cli.py          Terminal-Frontend (input()/print()-Loop)
+├── api.py          FastAPI-HTTP-Frontend fürs Web-UI (uvicorn agentic_rogue_like.api:app)
+└── sessions.py      Hält Run-Zustand zwischen HTTP-Requests am Leben
+
+frontend/           React + Vite + TypeScript — Dungeon-Map, Kampf, Event-Prompts
+tests/              pytest-Suite (Engine, Kampf, API, Encounter-Agent/-Schema)
+```
 
 ## Warum so gebaut
 
@@ -52,9 +89,13 @@ Balance nachvollziehbar ist, bevor ein Agent anfängt, Content hineinzugeneriere
 
 ## Stack
 
-Python, Pydantic (State + Tool-Schemas), LangGraph + Groq (Agent), pytest, ruff.
+Python, Pydantic (State + Tool-Schemas), LangGraph + Groq (Agent), FastAPI +
+Uvicorn (Web-API), React + Vite + TypeScript (Frontend), pytest, ruff,
+Docker, Azure Container Apps + Static Web Apps (Deployment).
 
 ## Entwicklung
+
+### Terminal
 
 ```bash
 uv sync
@@ -69,3 +110,30 @@ mit zusätzlich gesetztem `ENCOUNTER_AGENT_ENABLED=1` generiert die Engine
 Gegner live über Groq statt aus dem statischen Pool. `pytest` lädt keine
 `.env` und setzt das Flag nie, damit die Test-Suite schnell und ohne
 Netzwerk bleibt.
+
+### Web (API + Frontend)
+
+```bash
+uv run agentic-rogue-like-api   # FastAPI auf http://localhost:8000
+```
+
+```bash
+cd frontend
+npm install
+npm run dev                     # Vite-Dev-Server, meist http://localhost:5173
+```
+
+Die API erlaubt standardmäßig nur `http://localhost:5173` per CORS
+(`FRONTEND_ORIGINS`-Env-Var, kommagetrennt — so läuft dasselbe Image lokal
+und in Produktion ohne Rebuild). Das Frontend liest seinerseits die
+API-Adresse aus `VITE_API_BASE_URL` zur Build-Zeit.
+
+## Deployment
+
+Jeder Push auf `master` löst `.github/workflows/deploy.yml` aus: baut das
+Backend-Image (`Dockerfile`, `uv`) direkt in der Azure Container Registry,
+aktualisiert die Azure Container App darauf, baut danach das Frontend gegen
+die frisch deployte API-URL und published es nach Azure Static Web Apps.
+Login läuft über OIDC/Federated Credentials — kein Passwort oder
+Registry-Secret im Repo. Es gibt aktuell kein separates CI-Test-Gate vor dem
+Deploy; `pytest` läuft nur manuell/lokal.

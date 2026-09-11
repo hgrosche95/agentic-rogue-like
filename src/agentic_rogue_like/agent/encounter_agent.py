@@ -57,11 +57,13 @@ def generate_enemy(state: EncounterState) -> EncounterState:
     setting = state.get("setting") or DEFAULT_SETTING
     prompt = (
         f"Invent an enemy for a {setting}-themed roguelike encounter. "
-        f"Its name and description must fit the {setting} setting instead of "
-        f"generic dungeon fantasy. "
+        f"Its name, description and attack_name must fit the {setting} setting "
+        f"instead of generic dungeon fantasy. attack_name is what the enemy's "
+        f"attack is called (e.g. 'Tusk Charge', not just 'Attack') and shows up "
+        f"in the combat log as '<name> uses <attack_name> for N damage'. "
         f"It must have hp between {state['budget'].min_hp} and {state['budget'].max_hp}, "
         f"and attack between {state['budget'].min_attack} and {state['budget'].max_attack}. "
-        f"Keep the description under 150 characters."
+        f"Keep the description under 150 characters and attack_name under 40 characters."
     )
     if state["last_error"]:
         prompt += f" Your previous attempt was rejected: {state['last_error']}. Fix it."
@@ -118,7 +120,13 @@ def generate_balanced_enemy(
         raise BudgetViolation(f"agent failed after {MAX_ATTEMPTS} attempts: {result['last_error']}")
 
     proposal = result["proposal"]
-    return Enemy(id=enemy_id, name=proposal.name, hp=proposal.hp, attack=proposal.attack)
+    return Enemy(
+        id=enemy_id,
+        name=proposal.name,
+        hp=proposal.hp,
+        attack=proposal.attack,
+        attack_name=proposal.attack_name,
+    )
 
 
 def enemy_for_node(

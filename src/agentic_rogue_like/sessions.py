@@ -15,6 +15,7 @@ import random
 import uuid
 from dataclasses import dataclass, field
 
+from .combat import CombatState
 from .events import GameEvent
 from .models import RunState
 
@@ -24,6 +25,7 @@ class RunSession:
     run: RunState
     rng: random.Random
     pending_event: GameEvent | None = field(default=None)
+    combat: CombatState | None = field(default=None)
 
 
 _sessions: dict[str, RunSession] = {}

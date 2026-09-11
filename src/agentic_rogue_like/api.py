@@ -1,4 +1,4 @@
-"""HTTP entry point for the React frontend - `uvicorn agentic_rogue_like.api:app`.
+"""HTTP entry point for the React frontend.
 
 Mirrors what `cli.py` does (drive `engine.py`'s functions to play a run) but
 over stateless HTTP requests instead of a blocking input()/print() loop, so
@@ -9,6 +9,14 @@ can call the encounter agent, which makes a *synchronous* Groq call that can
 take several seconds (see agent/encounter_agent.py). FastAPI runs sync route
 functions in a worker thread, so a slow generation only blocks the request
 that triggered it, not the whole server's event loop.
+
+For local dev, run `uv run agentic-rogue-like-api` (see `dev()` below)
+instead of pointing uvicorn at this module directly - that's what loads
+`.env`. Loading it here at module scope would also fire on every bare
+`import agentic_rogue_like.api`, including pytest's, which would silently
+turn `uv run pytest` into a suite of real Groq calls the moment a local
+`.env` sets ENCOUNTER_AGENT_ENABLED=1 - exactly the network-free guarantee
+the test suite depends on (see README).
 """
 
 from __future__ import annotations
@@ -20,8 +28,18 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, field_validator
 
-from .engine import apply_event_choice, available_choices, new_run, resolve_node, start_event
-from .models import SETTING_PRESETS, MapNode, NodeType, PlayerState, RunStatus
+from .engine import (
+    apply_event_choice,
+    available_choices,
+    end_combat_turn,
+    finalize_combat,
+    new_run,
+    play_combat_card,
+    resolve_node,
+    start_combat_node,
+    start_event,
+)
+from .models import SETTING_PRESETS, CardType, MapNode, NodeType, PlayerState, RunStatus
 from .sessions import RunSession, create_session, get_session
 
 app = FastAPI(title="agentic-rogue-like")
@@ -54,6 +72,31 @@ class PendingEventView(BaseModel):
     options: list[EventOptionView]
 
 
+class CardView(BaseModel):
+    id: str
+    name: str
+    type: str
+    value: int
+    description: str
+
+
+class HandCardView(CardView):
+    hand_index: int
+
+
+class PendingCombatView(BaseModel):
+    enemy_name: str
+    enemy_attack_name: str
+    enemy_hp: int
+    enemy_max_hp: int
+    hand: list[HandCardView]
+    field: list[CardView | None]
+    player_block: int
+    armor: int
+    draw_count: int
+    discard_count: int
+
+
 class RunView(BaseModel):
     run_id: str
     status: RunStatus
@@ -65,6 +108,7 @@ class RunView(BaseModel):
     node_resolved: bool
     available_choices: list[MapNode]
     pending_event: PendingEventView | None
+    pending_combat: PendingCombatView | None
     # Every node in the run, not just the current/reachable ones - the
     # frontend draws the whole dungeon graph, not just the next step.
     nodes: dict[str, MapNode]
@@ -89,6 +133,11 @@ class EventChoiceRequest(BaseModel):
     option_index: int
 
 
+class PlayCardRequest(BaseModel):
+    hand_index: int
+    slot_index: int
+
+
 class ChooseNodeRequest(BaseModel):
     node_id: str
 
@@ -96,7 +145,7 @@ class ChooseNodeRequest(BaseModel):
 def _run_view(run_id: str, session: RunSession) -> RunView:
     run = session.run
     node = run.nodes[run.current_node_id]
-    node_resolved = node.visited and session.pending_event is None
+    node_resolved = node.visited and session.pending_event is None and session.combat is None
 
     pending_event = None
     if session.pending_event is not None:
@@ -106,6 +155,43 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
                 EventOptionView(index=i, label=option.label)
                 for i, option in enumerate(session.pending_event.options)
             ],
+        )
+
+    pending_combat = None
+    if session.combat is not None:
+        combat = session.combat
+        pending_combat = PendingCombatView(
+            enemy_name=combat.enemy.name,
+            enemy_attack_name=combat.enemy.attack_name,
+            enemy_hp=combat.enemy_hp,
+            enemy_max_hp=combat.enemy.hp,
+            hand=[
+                HandCardView(
+                    hand_index=i,
+                    id=card.id,
+                    name=card.name,
+                    type=card.type.value,
+                    value=card.value,
+                    description=card.description,
+                )
+                for i, card in enumerate(combat.hand)
+            ],
+            field=[
+                None
+                if card is None
+                else CardView(
+                    id=card.id,
+                    name=card.name,
+                    type=card.type.value,
+                    value=card.value,
+                    description=card.description,
+                )
+                for card in combat.field
+            ],
+            player_block=combat.player_block,
+            armor=sum(1 for c in combat.field if c is not None and c.type is CardType.ARMOR),
+            draw_count=len(combat.draw_pile),
+            discard_count=len(combat.discard_pile),
         )
 
     choices = []
@@ -123,6 +209,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         node_resolved=node_resolved,
         available_choices=choices,
         pending_event=pending_event,
+        pending_combat=pending_combat,
         nodes=run.nodes,
     )
 
@@ -158,13 +245,55 @@ def resolve_current_node(run_id: str) -> RunView:
     run = session.run
     node = run.nodes[run.current_node_id]
 
-    if node.visited and session.pending_event is None:
+    # visited flips true the instant resolution starts (see start_event /
+    # start_combat_node / resolve_node), not once it finishes - so this is
+    # the right guard even while an event/combat is still in progress. A
+    # laxer check here would let a second /resolve call quietly restart a
+    # combat mid-fight and hand the player a brand new hand and full energy.
+    if node.visited:
         raise HTTPException(status_code=409, detail="node already resolved")
 
     if node.type is NodeType.EVENT:
         session.pending_event = start_event(run, session.rng)
+    elif node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
+        session.combat = start_combat_node(run, session.rng)
     else:
         resolve_node(run, session.rng)
+
+    return _run_view(run_id, session)
+
+
+@app.post("/runs/{run_id}/combat/play-card")
+def play_card_endpoint(run_id: str, request: PlayCardRequest) -> RunView:
+    session = _get_session_or_404(run_id)
+    if session.combat is None:
+        raise HTTPException(status_code=409, detail="no combat in progress")
+
+    try:
+        play_combat_card(
+            session.run, session.combat, request.hand_index, request.slot_index, session.rng
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if session.combat.enemy_hp <= 0:
+        finalize_combat(session.run, session.combat, session.rng)
+        session.combat = None
+
+    return _run_view(run_id, session)
+
+
+@app.post("/runs/{run_id}/combat/end-turn")
+def end_turn_endpoint(run_id: str) -> RunView:
+    session = _get_session_or_404(run_id)
+    if session.combat is None:
+        raise HTTPException(status_code=409, detail="no combat in progress")
+
+    end_combat_turn(session.run, session.combat, session.rng)
+
+    if session.run.player.hp <= 0:
+        finalize_combat(session.run, session.combat, session.rng)
+        session.combat = None
 
     return _run_view(run_id, session)
 
@@ -190,10 +319,27 @@ def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
     run = session.run
     node = run.nodes[run.current_node_id]
 
-    if not node.visited or session.pending_event is not None:
+    if not node.visited or session.pending_event is not None or session.combat is not None:
         raise HTTPException(status_code=409, detail="current node is not resolved yet")
     if request.node_id not in available_choices(run):
         raise HTTPException(status_code=400, detail="node_id is not reachable from here")
 
     run.current_node_id = request.node_id
     return _run_view(run_id, session)
+
+
+def dev() -> None:
+    """Local dev entry point - `uv run agentic-rogue-like-api`.
+
+    Loads .env (for GROQ_API_KEY / ENCOUNTER_AGENT_ENABLED) before uvicorn
+    ever imports this module, then hands off to it with --reload. Deployed
+    environments (Azure) set these as real env vars instead and run uvicorn
+    directly, so they never go through this function.
+    """
+    from dotenv import load_dotenv
+
+    load_dotenv()
+
+    import uvicorn
+
+    uvicorn.run("agentic_rogue_like.api:app", host="127.0.0.1", port=8000, reload=True)

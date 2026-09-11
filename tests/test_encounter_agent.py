@@ -13,7 +13,11 @@ class _AlwaysOverpowered:
 
     def invoke(self, prompt):
         return EnemyProposal(
-            name="Overpowered Thing", description="Too strong.", hp=999, attack=999
+            name="Overpowered Thing",
+            description="Too strong.",
+            hp=999,
+            attack=999,
+            attack_name="Overkill",
         )
 
 
@@ -48,7 +52,13 @@ class _WellBehaved:
         return self
 
     def invoke(self, prompt):
-        return EnemyProposal(name="Crystal Wisp", description="Glows faintly.", hp=20, attack=3)
+        return EnemyProposal(
+            name="Crystal Wisp",
+            description="Glows faintly.",
+            hp=20,
+            attack=3,
+            attack_name="Prism Flare",
+        )
 
 
 def _enemy_for_node(model_stub: object) -> object:

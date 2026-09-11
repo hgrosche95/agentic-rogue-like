@@ -11,7 +11,9 @@ from agentic_rogue_like.agent.encounter_schema import (
 
 def test_proposal_within_budget_passes() -> None:
     budget = EnemyBudget(min_hp=10, max_hp=20, min_attack=2, max_attack=5)
-    proposal = EnemyProposal(name="Cave Slime", description="A slow ooze.", hp=15, attack=3)
+    proposal = EnemyProposal(
+        name="Cave Slime", description="A slow ooze.", hp=15, attack=3, attack_name="Acid Splash"
+    )
 
     validate_proposal(proposal, budget)
 
@@ -19,7 +21,11 @@ def test_proposal_within_budget_passes() -> None:
 def test_proposal_outside_hp_budget_raises() -> None:
     budget = EnemyBudget(min_hp=10, max_hp=20, min_attack=2, max_attack=5)
     proposal = EnemyProposal(
-        name="Ogre", description="Too strong for this floor.", hp=999, attack=3
+        name="Ogre",
+        description="Too strong for this floor.",
+        hp=999,
+        attack=3,
+        attack_name="Club Smash",
     )
 
     with pytest.raises(BudgetViolation):

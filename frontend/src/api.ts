@@ -5,6 +5,30 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000
 
 export type RunStatus = "ongoing" | "victory" | "defeat";
 export type NodeType = "combat" | "elite" | "event" | "shop" | "rest" | "boss";
+export type CardType =
+  | "attack"
+  | "block"
+  | "heal"
+  | "final_strike"
+  | "amplifier"
+  | "armor"
+  | "recycling"
+  | "draw_bonus";
+
+export const PERMANENT_CARD_TYPES: readonly CardType[] = [
+  "amplifier",
+  "armor",
+  "recycling",
+  "draw_bonus",
+];
+
+export interface Card {
+  id: string;
+  name: string;
+  type: CardType;
+  value: number;
+  description: string;
+}
 
 export interface PlayerState {
   hp: number;
@@ -12,7 +36,7 @@ export interface PlayerState {
   attack: number;
   gold: number;
   relics: { id: string; name: string; description: string }[];
-  deck: { id: string; name: string; cost: number; description: string }[];
+  deck: Card[];
 }
 
 export interface MapNode {
@@ -33,6 +57,23 @@ export interface PendingEventView {
   options: EventOptionView[];
 }
 
+export interface HandCardView extends Card {
+  hand_index: number;
+}
+
+export interface PendingCombatView {
+  enemy_name: string;
+  enemy_attack_name: string;
+  enemy_hp: number;
+  enemy_max_hp: number;
+  hand: HandCardView[];
+  field: (Card | null)[];
+  player_block: number;
+  armor: number;
+  draw_count: number;
+  discard_count: number;
+}
+
 export interface RunView {
   run_id: string;
   status: RunStatus;
@@ -44,6 +85,7 @@ export interface RunView {
   node_resolved: boolean;
   available_choices: MapNode[];
   pending_event: PendingEventView | null;
+  pending_combat: PendingCombatView | null;
   nodes: Record<string, MapNode>;
 }
 
@@ -86,4 +128,15 @@ export function chooseNextNode(runId: string, nodeId: string): Promise<RunView> 
     method: "POST",
     body: JSON.stringify({ node_id: nodeId }),
   });
+}
+
+export function playCard(runId: string, handIndex: number, slotIndex: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/combat/play-card`, {
+    method: "POST",
+    body: JSON.stringify({ hand_index: handIndex, slot_index: slotIndex }),
+  });
+}
+
+export function endCombatTurn(runId: string): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/combat/end-turn`, { method: "POST" });
 }

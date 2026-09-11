@@ -11,16 +11,20 @@ import random
 from collections.abc import Callable
 
 from .agent.encounter_agent import enemy_for_node
-from .combat import resolve_combat
+from .cards import starter_deck
+from .combat import CombatState, auto_resolve_combat
+from .combat import end_turn as _end_combat_turn
+from .combat import play_card as _play_combat_card
+from .combat import start_combat as _start_combat
 from .events import EventOption, GameEvent, random_event
 from .map_gen import NUM_FLOORS, generate_map
-from .models import DEFAULT_SETTING, NodeType, PlayerState, RunState, RunStatus
+from .models import DEFAULT_SETTING, MapNode, NodeType, PlayerState, RunState, RunStatus
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
 
 
 def new_run(seed: int, setting: str = DEFAULT_SETTING) -> RunState:
-    player = PlayerState(hp=50, max_hp=50, attack=5, gold=0)
+    player = PlayerState(hp=50, max_hp=50, attack=5, gold=0, deck=starter_deck())
     nodes = generate_map(seed)
     return RunState(
         seed=seed, player=player, nodes=nodes, current_node_id="0-0", setting=setting
@@ -53,6 +57,65 @@ def apply_event_choice(run: RunState, option: EventOption, rng: random.Random) -
     run.history.append(f"> {option.label}: {outcome}")
 
 
+def _finish_combat(
+    run: RunState, node: MapNode, enemy_name: str, victory: bool, rng: random.Random
+) -> None:
+    if not victory:
+        run.history.append("You have fallen.")
+        run.status = RunStatus.DEFEAT
+        return
+    run.history.append("Victory!")
+    if node.type is NodeType.BOSS:
+        run.status = RunStatus.VICTORY
+    else:
+        reward = rng.randint(15, 35)
+        run.player.gold += reward
+        run.history.append(f"You loot {reward} gold from the {enemy_name}.")
+
+
+def start_combat_node(run: RunState, rng: random.Random) -> CombatState:
+    """First step of resolving a COMBAT/ELITE/BOSS node the interactive way.
+
+    Mirrors start_event: picks the enemy and shuffles/draws an opening hand,
+    then hands the CombatState back to the caller (the web API) to hold
+    between requests - play_combat_card/end_combat_turn advance it one
+    action at a time instead of auto_resolve_combat playing it out in one go.
+    """
+    node = run.nodes[run.current_node_id]
+    node.visited = True
+    run.floor = node.floor
+
+    enemy = enemy_for_node(
+        enemy_id=f"agent-{rng.getrandbits(32):08x}",
+        floor=node.floor,
+        num_floors=NUM_FLOORS,
+        elite=node.type is NodeType.ELITE,
+        boss=node.type is NodeType.BOSS,
+        rng=rng,
+        setting=run.setting,
+    )
+    state, log = _start_combat(run.player.deck, enemy, rng)
+    run.history.extend(log)
+    return state
+
+
+def play_combat_card(
+    run: RunState, state: CombatState, hand_index: int, slot_index: int, rng: random.Random
+) -> None:
+    """Raises ValueError (via combat.play_card) on an invalid index or an occupied slot."""
+    run.history.append(_play_combat_card(state, hand_index, slot_index, run.player, rng))
+
+
+def end_combat_turn(run: RunState, state: CombatState, rng: random.Random) -> None:
+    run.history.extend(_end_combat_turn(state, run.player, rng))
+
+
+def finalize_combat(run: RunState, state: CombatState, rng: random.Random) -> None:
+    """Call once state.enemy_hp <= 0 or run.player.hp <= 0 to close out an interactive fight."""
+    node = run.nodes[run.current_node_id]
+    _finish_combat(run, node, state.enemy.name, victory=run.player.hp > 0, rng=rng)
+
+
 def resolve_node(
     run: RunState,
     rng: random.Random,
@@ -79,17 +142,9 @@ def resolve_node(
             rng=rng,
             setting=run.setting,
         )
-        result = resolve_combat(run.player, enemy, rng)
-        run.history.extend(result.log)
-
-        if not result.victory:
-            run.status = RunStatus.DEFEAT
-        elif node.type is NodeType.BOSS:
-            run.status = RunStatus.VICTORY
-        else:
-            reward = rng.randint(15, 35)
-            run.player.gold += reward
-            run.history.append(f"You loot {reward} gold from the {enemy.name}.")
+        victory, log = auto_resolve_combat(run.player.deck, enemy, run.player, rng)
+        run.history.extend(log)
+        _finish_combat(run, node, enemy.name, victory, rng)
 
     elif node.type is NodeType.REST:
         healed = min(15, run.player.max_hp - run.player.hp)

@@ -15,18 +15,18 @@ from .models import Enemy
 
 ENEMY_POOL: dict[str, list[Enemy]] = {
     "early": [
-        Enemy(id="rat-swarm", name="Rat Swarm", hp=18, attack=3),
-        Enemy(id="cave-slime", name="Cave Slime", hp=22, attack=2),
+        Enemy(id="rat-swarm", name="Rat Swarm", hp=18, attack=3, attack_name="Swarm Bite"),
+        Enemy(id="cave-slime", name="Cave Slime", hp=22, attack=2, attack_name="Acid Splash"),
     ],
     "mid": [
-        Enemy(id="bandit", name="Bandit", hp=32, attack=5),
-        Enemy(id="wild-boar", name="Wild Boar", hp=28, attack=6),
+        Enemy(id="bandit", name="Bandit", hp=32, attack=5, attack_name="Dagger Strike"),
+        Enemy(id="wild-boar", name="Wild Boar", hp=28, attack=6, attack_name="Tusk Charge"),
     ],
     "elite": [
-        Enemy(id="ogre", name="Ogre", hp=55, attack=8),
+        Enemy(id="ogre", name="Ogre", hp=55, attack=8, attack_name="Club Smash"),
     ],
     "boss": [
-        Enemy(id="the-warden", name="The Warden", hp=90, attack=10),
+        Enemy(id="the-warden", name="The Warden", hp=90, attack=10, attack_name="Iron Verdict"),
     ],
 }
 

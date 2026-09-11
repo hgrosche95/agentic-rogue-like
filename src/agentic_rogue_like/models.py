@@ -34,10 +34,31 @@ class Relic(BaseModel):
     description: str
 
 
+class CardType(StrEnum):
+    # Action cards: resolve once, then go to the discard pile (or back to
+    # the deck, if a Recycling permanent applies) - see combat.py.
+    ATTACK = "attack"
+    BLOCK = "block"
+    HEAL = "heal"
+    FINAL_STRIKE = "final_strike"
+    # Permanent cards: occupy a field slot for the rest of the fight instead
+    # of being discarded, passively affecting play based on their position.
+    AMPLIFIER = "amplifier"
+    ARMOR = "armor"
+    RECYCLING = "recycling"
+    DRAW_BONUS = "draw_bonus"
+
+
+PERMANENT_CARD_TYPES = frozenset(
+    {CardType.AMPLIFIER, CardType.ARMOR, CardType.RECYCLING, CardType.DRAW_BONUS}
+)
+
+
 class Card(BaseModel):
     id: str
     name: str
-    cost: int
+    type: CardType
+    value: int
     description: str
 
 
@@ -59,6 +80,7 @@ class Enemy(BaseModel):
     name: str
     hp: int
     attack: int
+    attack_name: str
 
 
 class MapNode(BaseModel):

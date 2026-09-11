@@ -10,6 +10,7 @@
   --green: #23a370;
   --gold: #e0a415;
   --maroon: #b23a2e;
+  --sky: #3f7fc4;
   --hp-empty: #f1d9ad;
 }
 
@@ -357,4 +358,208 @@ button:disabled {
 .error {
   color: var(--maroon);
   font-weight: 700;
+}
+
+/* ---------- combat ---------- */
+.combat-panel {
+  margin-bottom: 1.1rem;
+}
+
+.enemy-status {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+
+.enemy-name {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  color: var(--maroon);
+  white-space: nowrap;
+}
+
+.enemy-hp-fill {
+  background: linear-gradient(90deg, #d15a4a, var(--maroon));
+}
+
+.combat-resources {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.8rem;
+  margin-bottom: 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink-dim);
+}
+
+.block-badge,
+.armor-badge {
+  background: #e6e1ff;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  color: var(--violet);
+}
+
+.armor-badge {
+  background: #dcebfa;
+  color: var(--sky);
+}
+
+.field-hint {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ink-dim);
+  margin: 0 0 0.5rem;
+}
+
+.field {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.field-slot {
+  width: 76px;
+  height: 76px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0.3rem;
+  gap: 0.15rem;
+}
+
+.field-slot.is-empty {
+  border: 3px dashed var(--hp-empty);
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink-dim);
+  font-weight: 700;
+  cursor: default;
+}
+
+.field-slot.is-empty.is-targetable {
+  border-color: var(--tangerine);
+  background: #fff2e2;
+  cursor: pointer;
+  color: var(--tangerine);
+}
+
+.field-slot.is-empty:disabled {
+  opacity: 1;
+  box-shadow: none;
+  transform: none;
+}
+
+.field-slot.is-occupied {
+  border: 3px solid var(--line);
+  background: #fff;
+  box-shadow: 3px 3px 0 var(--line);
+}
+
+.field-slot .hand-card-name {
+  font-size: 0.62rem;
+}
+
+.field-slot .hand-card-description {
+  display: none;
+}
+
+.hand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.hand-card {
+  width: 120px;
+  min-height: 110px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.3rem;
+  padding: 0.6rem 0.5rem 0.5rem;
+  position: relative;
+}
+
+.hand-card.is-selected {
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 var(--line);
+  background: #fff2e2;
+}
+
+.permanent-badge {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.hand-card-name {
+  font-family: "Baloo 2", sans-serif;
+  font-size: 0.85rem;
+}
+
+.hand-card-description {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--ink-dim);
+  line-height: 1.3;
+}
+
+.type-attack .hand-card-name,
+.type-attack .permanent-badge {
+  color: var(--tangerine);
+}
+.type-block .hand-card-name,
+.type-block .permanent-badge {
+  color: var(--violet);
+}
+.type-heal .hand-card-name,
+.type-heal .permanent-badge {
+  color: var(--green);
+}
+.type-final_strike .hand-card-name,
+.type-final_strike .permanent-badge {
+  color: var(--maroon);
+}
+.type-amplifier .hand-card-name,
+.type-amplifier .permanent-badge,
+.type-recycling .hand-card-name,
+.type-recycling .permanent-badge {
+  color: var(--gold);
+}
+.type-armor .hand-card-name,
+.type-armor .permanent-badge {
+  color: var(--sky);
+}
+.type-draw_bonus .hand-card-name,
+.type-draw_bonus .permanent-badge {
+  color: var(--green);
+}
+
+.end-turn-button {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--line);
+}
+
+.end-turn-button:hover:not(:disabled) {
+  background: #4a3624;
 }
