@@ -89,12 +89,16 @@ class PendingCombatView(BaseModel):
     enemy_attack_name: str
     enemy_hp: int
     enemy_max_hp: int
+    enemy_block: int
+    enemy_intent: str
+    enemy_intent_value: int
     hand: list[HandCardView]
     field: list[CardView | None]
     player_block: int
     armor: int
     draw_count: int
     discard_count: int
+    banished_count: int
 
 
 class RunView(BaseModel):
@@ -165,6 +169,9 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_attack_name=combat.enemy.attack_name,
             enemy_hp=combat.enemy_hp,
             enemy_max_hp=combat.enemy.hp,
+            enemy_block=combat.enemy_block,
+            enemy_intent=combat.enemy_intent.value,
+            enemy_intent_value=combat.enemy.attack,
             hand=[
                 HandCardView(
                     hand_index=i,
@@ -192,6 +199,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             armor=sum(1 for c in combat.field if c is not None and c.type is CardType.ARMOR),
             draw_count=len(combat.draw_pile),
             discard_count=len(combat.discard_pile),
+            banished_count=len(combat.banished_pile),
         )
 
     choices = []

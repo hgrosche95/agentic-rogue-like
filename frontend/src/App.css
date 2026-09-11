@@ -365,18 +365,49 @@ button:disabled {
   margin-bottom: 1.1rem;
 }
 
-.enemy-status {
+.enemy-area {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.6rem;
+  text-align: center;
+  gap: 0.3rem;
+  margin-bottom: 1rem;
+}
+
+.intent-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.7rem;
+  border-radius: 999px;
+  border: 2px solid var(--line);
+}
+
+.intent-badge.type-attack {
+  background: #ffe1d1;
+  color: var(--tangerine);
+}
+
+.intent-badge.type-defend {
+  background: #dcebfa;
+  color: var(--sky);
 }
 
 .enemy-name {
   font-family: "Baloo 2", sans-serif;
   font-weight: 700;
+  font-size: 1.05rem;
   color: var(--maroon);
-  white-space: nowrap;
+}
+
+.enemy-vitals {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 320px;
 }
 
 .enemy-hp-fill {
@@ -385,13 +416,15 @@ button:disabled {
 
 .combat-resources {
   display: flex;
-  align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem 0.8rem;
+  justify-content: center;
+  align-items: center;
+  gap: 0.4rem 0.8rem;
   margin-bottom: 0.8rem;
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--ink-dim);
+  text-align: center;
 }
 
 .block-badge,
@@ -403,20 +436,26 @@ button:disabled {
   color: var(--violet);
 }
 
+.enemy-block-badge {
+  flex-shrink: 0;
+}
+
 .armor-badge {
   background: #dcebfa;
   color: var(--sky);
 }
 
 .field-hint {
+  width: 100%;
   font-size: 0.78rem;
   font-weight: 700;
   color: var(--ink-dim);
-  margin: 0 0 0.5rem;
+  margin: 0.2rem 0 0;
 }
 
 .field {
   display: flex;
+  justify-content: center;
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
@@ -470,11 +509,103 @@ button:disabled {
   display: none;
 }
 
+.combat-footer {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: end;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
 .hand {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.6rem;
-  margin-bottom: 0.8rem;
+}
+
+.side-piles {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.pile-face {
+  position: relative;
+  width: 52px;
+  height: 68px;
+  border-radius: 8px;
+  border: 3px solid var(--line);
+  box-shadow: 2px 2px 0 var(--line);
+  background: repeating-linear-gradient(
+    135deg,
+    #fff2e2,
+    #fff2e2 6px,
+    var(--hp-empty) 6px,
+    var(--hp-empty) 12px
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pile-count {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  background: #fff;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pile-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ink-dim);
+}
+
+.side-piles .pile-face {
+  width: 38px;
+  height: 50px;
+}
+
+.side-piles .pile-count {
+  font-size: 0.78rem;
+  min-width: 20px;
+  height: 20px;
+}
+
+.pile-graveyard .pile-face {
+  border-color: var(--violet);
+  background: repeating-linear-gradient(135deg, #efe7ff, #efe7ff 6px, #d8c9ff 6px, #d8c9ff 12px);
+}
+
+.pile-graveyard .pile-label {
+  color: var(--violet);
+}
+
+.pile-banished .pile-face {
+  border-color: var(--maroon);
+  background: repeating-linear-gradient(135deg, #f6e7e5, #f6e7e5 6px, #e3bcb7 6px, #e3bcb7 12px);
+}
+
+.pile-banished .pile-label {
+  color: var(--maroon);
 }
 
 .hand-card {

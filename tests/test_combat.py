@@ -5,6 +5,7 @@ import pytest
 from agentic_rogue_like.combat import (
     FIELD_SIZE,
     HAND_SIZE,
+    EnemyIntentType,
     auto_resolve_combat,
     end_turn,
     play_card,
@@ -169,6 +170,44 @@ def test_final_strike_destroys_all_permanents_for_damage() -> None:
     # 2 permanents destroyed, base 5 each, boosted 25% by the amplifier that
     # was on the field (to the left of slot 2) when the effect resolved.
     assert 999 - state.enemy_hp == round(5 * 2 * 1.25)
+
+
+def test_final_strike_sends_destroyed_permanents_to_the_banished_pile() -> None:
+    player = _player([ARMOR, FINAL_STRIKE] + [MEND] * 8)
+    state, _ = start_combat(player.deck, _enemy(hp=999), random.Random(1))
+    armor_index = next(i for i, c in enumerate(state.hand) if c.type is CardType.ARMOR)
+    play_card(state, armor_index, 0, player, random.Random(2))
+
+    final_index = next(i for i, c in enumerate(state.hand) if c.type is CardType.FINAL_STRIKE)
+    play_card(state, final_index, 1, player, random.Random(2))
+
+    assert len(state.banished_pile) == 1
+    assert state.banished_pile[0].type is CardType.ARMOR
+    assert not any(c.type is CardType.ARMOR for c in state.discard_pile)
+
+
+def test_enemy_defend_intent_grants_block_instead_of_attacking() -> None:
+    player = _player(_basic_deck())
+    state, _ = start_combat(player.deck, _enemy(attack=7), random.Random(1))
+    state.enemy_intent = EnemyIntentType.DEFEND
+    hp_before = player.hp
+
+    end_turn(state, player, random.Random(2))
+
+    assert player.hp == hp_before
+    assert state.enemy_block == 7
+
+
+def test_enemy_block_absorbs_player_attack_damage_before_hp() -> None:
+    player = _player([STRIKE] * 10)
+    state, _ = start_combat(player.deck, _enemy(hp=20), random.Random(1))
+    state.enemy_block = 100  # more than a single Strike can punch through
+
+    strike_index = next(i for i, c in enumerate(state.hand) if c.type is CardType.ATTACK)
+    play_card(state, strike_index, 0, player, random.Random(2))
+
+    assert state.enemy_hp == 20  # fully absorbed by block, HP untouched
+    assert state.enemy_block == 100 - (STRIKE.value + player.attack)
 
 
 def test_auto_resolve_combat_terminates_in_victory_or_defeat() -> None:

@@ -8,7 +8,13 @@ play based on where they sit (see PERMANENT_CARD_TYPES in models.py and
 _field_modifiers below). A field full of permanents means no empty slot
 left for anything else - Final Strike existing as an action card is the
 game's own answer to that self-inflicted dead end, not a bug: destroy every
-permanent at once, cash them in for damage, get the field back.
+permanent at once, cash them in for damage, get the field back. Destroyed
+permanents go to the banished pile - gone for the rest of the fight, unlike
+discarded action cards which can be reshuffled back in.
+
+The enemy telegraphs its next move a turn ahead (an "intent": either attack
+for its attack stat, or brace for the same amount of block) so playing a
+card is an informed choice, not a guess.
 
 Two ways to drive this engine:
 - step by step (start_combat / play_card / end_turn) - what the web API
@@ -21,6 +27,7 @@ Two ways to drive this engine:
 from __future__ import annotations
 
 import random
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -29,14 +36,23 @@ from .models import PERMANENT_CARD_TYPES, Card, CardType, Enemy, PlayerState
 HAND_SIZE = 5
 FIELD_SIZE = 5
 MAX_AUTO_TURNS = 50
+ENEMY_DEFEND_CHANCE = 0.3
+
+
+class EnemyIntentType(StrEnum):
+    ATTACK = "attack"
+    DEFEND = "defend"
 
 
 class CombatState(BaseModel):
     enemy: Enemy
     enemy_hp: int
+    enemy_block: int = 0
+    enemy_intent: EnemyIntentType = EnemyIntentType.ATTACK
     draw_pile: list[Card]
     hand: list[Card]
     discard_pile: list[Card]
+    banished_pile: list[Card] = Field(default_factory=list)
     field: list[Card | None] = Field(default_factory=lambda: [None] * FIELD_SIZE)
     player_block: int = 0
 
@@ -56,6 +72,19 @@ def _target_hand_size(state: CombatState) -> int:
     return HAND_SIZE + draw_bonus
 
 
+def _roll_enemy_intent(rng: random.Random) -> EnemyIntentType:
+    return EnemyIntentType.DEFEND if rng.random() < ENEMY_DEFEND_CHANCE else EnemyIntentType.ATTACK
+
+
+def _damage_enemy(state: CombatState, damage: int) -> tuple[int, int]:
+    """Apply damage to the enemy's block first, then its HP. Returns (absorbed, dealt)."""
+    absorbed = min(damage, state.enemy_block)
+    state.enemy_block -= absorbed
+    dealt = damage - absorbed
+    state.enemy_hp = max(state.enemy_hp - dealt, 0)
+    return absorbed, dealt
+
+
 def start_combat(
     deck: list[Card], enemy: Enemy, rng: random.Random
 ) -> tuple[CombatState, list[str]]:
@@ -70,6 +99,7 @@ def start_combat(
     state = CombatState(
         enemy=enemy,
         enemy_hp=enemy.hp,
+        enemy_intent=_roll_enemy_intent(rng),
         draw_pile=draw_pile,
         hand=[],
         discard_pile=[],
@@ -133,9 +163,15 @@ def _apply_action_effect(
 ) -> str:
     if card.type is CardType.ATTACK:
         damage = round((card.value + player.attack) * multiplier)
-        state.enemy_hp = max(state.enemy_hp - damage, 0)
+        absorbed, dealt = _damage_enemy(state, damage)
+        if absorbed > 0:
+            return (
+                f"You play {card.name}, dealing {damage} damage - {state.enemy.name}'s "
+                f"block absorbs {absorbed}, {dealt} gets through. {state.enemy.name} at "
+                f"{state.enemy_hp} HP."
+            )
         return (
-            f"You play {card.name}, dealing {damage} damage. "
+            f"You play {card.name}, dealing {dealt} damage. "
             f"{state.enemy.name} at {state.enemy_hp} HP."
         )
 
@@ -151,12 +187,13 @@ def _apply_action_effect(
         return f"You play {card.name}, healing {healed} HP."
 
     # FINAL_STRIKE
-    destroyed = sum(1 for c in state.field if c is not None)
+    destroyed = [c for c in state.field if c is not None]
+    state.banished_pile.extend(destroyed)
     state.field = [None] * FIELD_SIZE
-    damage = round(card.value * destroyed * multiplier)
-    state.enemy_hp = max(state.enemy_hp - damage, 0)
+    damage = round(card.value * len(destroyed) * multiplier)
+    absorbed, dealt = _damage_enemy(state, damage)
     return (
-        f"You play {card.name}, destroying {destroyed} permanent card(s) for "
+        f"You play {card.name}, destroying {len(destroyed)} permanent card(s) for "
         f"{damage} damage. {state.enemy.name} at {state.enemy_hp} HP."
     )
 
@@ -164,26 +201,31 @@ def _apply_action_effect(
 def end_turn(state: CombatState, player: PlayerState, rng: random.Random) -> list[str]:
     log: list[str] = []
 
-    armor = sum(1 for c in state.field if c is not None and c.type is CardType.ARMOR)
-    reduction = state.player_block + armor
-    raw_damage = state.enemy.attack + rng.randint(1, 6)
-    blocked = min(raw_damage, reduction)
-    taken = raw_damage - blocked
-    player.hp = max(player.hp - taken, 0)
-
-    if blocked > 0:
-        armor_note = f" (includes {armor} armor)" if armor else ""
-        log.append(
-            f"{state.enemy.name} uses {state.enemy.attack_name}. "
-            f"You block {blocked}{armor_note} and take {taken} damage. You are at {player.hp} HP."
-        )
+    if state.enemy_intent is EnemyIntentType.DEFEND:
+        state.enemy_block += state.enemy.attack
+        log.append(f"{state.enemy.name} braces itself, gaining {state.enemy.attack} block.")
     else:
-        log.append(
-            f"{state.enemy.name} uses {state.enemy.attack_name} for {taken} damage. "
-            f"You are at {player.hp} HP."
-        )
+        armor = sum(1 for c in state.field if c is not None and c.type is CardType.ARMOR)
+        reduction = state.player_block + armor
+        raw_damage = state.enemy.attack + rng.randint(1, 6)
+        blocked = min(raw_damage, reduction)
+        taken = raw_damage - blocked
+        player.hp = max(player.hp - taken, 0)
+
+        if blocked > 0:
+            armor_note = f" (includes {armor} armor)" if armor else ""
+            log.append(
+                f"{state.enemy.name} uses {state.enemy.attack_name}. You block "
+                f"{blocked}{armor_note} and take {taken} damage. You are at {player.hp} HP."
+            )
+        else:
+            log.append(
+                f"{state.enemy.name} uses {state.enemy.attack_name} for {taken} damage. "
+                f"You are at {player.hp} HP."
+            )
 
     state.player_block = 0
+    state.enemy_intent = _roll_enemy_intent(rng)
     # Unplayed hand cards carry over to next turn - only top up to the
     # target hand size instead of discarding and redrawing from scratch.
     _draw(state, max(0, _target_hand_size(state) - len(state.hand)), rng)

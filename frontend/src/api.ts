@@ -61,17 +61,23 @@ export interface HandCardView extends Card {
   hand_index: number;
 }
 
+export type EnemyIntentType = "attack" | "defend";
+
 export interface PendingCombatView {
   enemy_name: string;
   enemy_attack_name: string;
   enemy_hp: number;
   enemy_max_hp: number;
+  enemy_block: number;
+  enemy_intent: EnemyIntentType;
+  enemy_intent_value: number;
   hand: HandCardView[];
   field: (Card | null)[];
   player_block: number;
   armor: number;
   draw_count: number;
   discard_count: number;
+  banished_count: number;
 }
 
 export interface RunView {
