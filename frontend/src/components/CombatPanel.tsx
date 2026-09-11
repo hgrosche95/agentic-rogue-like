@@ -72,48 +72,44 @@ export function CombatPanel({
         </div>
       </div>
 
+      <div className="field-zone">
+        <span className="zone-label">Field</span>
+        <div className="field">
+          {combat.field.map((card, slotIndex) =>
+            card === null ? (
+              <button
+                key={slotIndex}
+                className={`field-slot is-empty${selectedHandIndex !== null ? " is-targetable" : ""}`}
+                disabled={disabled || selectedHandIndex === null}
+                onClick={() => playIntoSlot(slotIndex)}
+              >
+                {slotIndex + 1}
+              </button>
+            ) : (
+              <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
+                <CardFace card={card} />
+              </div>
+            ),
+          )}
+        </div>
+      </div>
+
       <div className="battlefield">
         <Pile label="Deck" count={combat.draw_count} kind="deck" />
 
-        <div className="battlefield-zones">
-          <div className="field-zone">
-            <span className="zone-label">Field</span>
-            <div className="field">
-              {combat.field.map((card, slotIndex) =>
-                card === null ? (
-                  <button
-                    key={slotIndex}
-                    className={`field-slot is-empty${selectedHandIndex !== null ? " is-targetable" : ""}`}
-                    disabled={disabled || selectedHandIndex === null}
-                    onClick={() => playIntoSlot(slotIndex)}
-                  >
-                    {slotIndex + 1}
-                  </button>
-                ) : (
-                  <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
-                    <CardFace card={card} />
-                  </div>
-                ),
-              )}
-            </div>
-          </div>
-
-          <div className="zone-divider" />
-
-          <div className="hand-zone">
-            <span className="zone-label">Hand</span>
-            <div className="hand">
-              {combat.hand.map((card: HandCardView) => (
-                <button
-                  key={card.hand_index}
-                  className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}`}
-                  disabled={disabled}
-                  onClick={() => selectCard(card.hand_index)}
-                >
-                  <CardFace card={card} />
-                </button>
-              ))}
-            </div>
+        <div className="hand-zone">
+          <span className="zone-label">Hand</span>
+          <div className="hand">
+            {combat.hand.map((card: HandCardView) => (
+              <button
+                key={card.hand_index}
+                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}`}
+                disabled={disabled}
+                onClick={() => selectCard(card.hand_index)}
+              >
+                <CardFace card={card} />
+              </button>
+            ))}
           </div>
         </div>
 

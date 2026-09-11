@@ -471,22 +471,7 @@ button:disabled {
   flex-shrink: 0;
 }
 
-/* -- the table: deck | field + hand side by side | graveyard/banished -- */
-.battlefield {
-  display: flex;
-  align-items: flex-start;
-  gap: 1.1rem;
-  margin-bottom: 0.7rem;
-}
-
-.battlefield-zones {
-  display: flex;
-  align-items: flex-start;
-  gap: 1.1rem;
-  flex: 1;
-  min-width: 0;
-}
-
+/* -- the field: its own centered row, above the hand -- */
 .zone-label {
   display: block;
   font-size: 0.62rem;
@@ -498,24 +483,27 @@ button:disabled {
 }
 
 .field-zone {
-  flex-shrink: 0;
+  text-align: center;
+  margin-bottom: 0.9rem;
+}
+
+.field {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+/* -- the table below it: deck | hand | graveyard/banished -- */
+.battlefield {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.1rem;
+  margin-bottom: 0.7rem;
 }
 
 .hand-zone {
   flex: 1;
   min-width: 0;
-}
-
-.zone-divider {
-  align-self: stretch;
-  width: 2px;
-  margin-top: 1.35rem;
-  background-image: repeating-linear-gradient(to bottom, var(--hp-empty) 0 6px, transparent 6px 12px);
-}
-
-.field {
-  display: flex;
-  gap: 0.4rem;
 }
 
 .hand {
