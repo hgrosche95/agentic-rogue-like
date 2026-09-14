@@ -8,15 +8,17 @@ on:
 # id-token: write enables OIDC login against Azure (azure/login exchanges the
 # GitHub-issued OIDC token for a short-lived Azure access token - no
 # long-lived client secret has to live as a GitHub secret).
+# packages: write lets this workflow push to ghcr.io using GITHUB_TOKEN.
 permissions:
   id-token: write
   contents: read
+  packages: write
 
 env:
   AZURE_RESOURCE_GROUP: agentic-rogue-like-dev-rg
   CONTAINER_APP_NAME: agentic-rogue-like-dev-api
   STATIC_WEB_APP_NAME: agentic-rogue-like-dev-web
-  ACR_NAME: cae34de06044acr
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/agentic-rogue-like-api
 
 jobs:
   deploy-backend:
@@ -26,6 +28,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Pushes to the public ghcr.io package instead of a private Azure
+      # Container Registry, so there's no per-registry fixed Azure cost and
+      # no registry credential for the container app to hold - it just
+      # pulls the public image by tag.
+      - name: Build and push backend image to GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
       - name: Log in to Azure
         uses: azure/login@v2
         with:
@@ -33,23 +53,12 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # Builds inside ACR itself (no local Docker daemon needed on the
-      # runner) and pushes straight to the registry the container app
-      # already pulls from via its system-assigned managed identity - no
-      # registry password/PAT needed anywhere in this pipeline.
-      - name: Build backend image in ACR
-        run: |
-          az acr build \
-            --registry "$ACR_NAME" \
-            --image "agentic-rogue-like-dev-api:${{ github.sha }}" \
-            .
-
       - name: Point the container app at the new image
         run: |
           az containerapp update \
             --name "$CONTAINER_APP_NAME" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --image "$ACR_NAME.azurecr.io/agentic-rogue-like-dev-api:${{ github.sha }}"
+            --image "$IMAGE_NAME:${{ github.sha }}"
 
       - name: Read the container app's URL
         id: api-url
