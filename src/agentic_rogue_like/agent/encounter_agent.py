@@ -52,8 +52,7 @@ def _model() -> ChatGroq:
     )
 
 
-def generate_enemy(state: EncounterState) -> EncounterState:
-    model = _model().with_structured_output(EnemyProposal)
+def _build_prompt(state: EncounterState) -> str:
     setting = state.get("setting") or DEFAULT_SETTING
     prompt = (
         f"Invent an enemy for a {setting}-themed roguelike encounter. "
@@ -67,8 +66,12 @@ def generate_enemy(state: EncounterState) -> EncounterState:
     )
     if state["last_error"]:
         prompt += f" Your previous attempt was rejected: {state['last_error']}. Fix it."
+    return prompt
 
-    proposal = model.invoke(prompt)
+
+def generate_enemy(state: EncounterState) -> EncounterState:
+    model = _model().with_structured_output(EnemyProposal)
+    proposal = model.invoke(_build_prompt(state))
     return {**state, "proposal": proposal, "attempt": state["attempt"] + 1}
 
 
