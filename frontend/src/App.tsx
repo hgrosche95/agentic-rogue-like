@@ -82,6 +82,7 @@ function App() {
         currentNodeId={run.current_node.id}
         reachableIds={run.available_choices.map((n) => n.id)}
         disabled={isLoading}
+        compact={Boolean(run.pending_combat)}
         onChoose={(nodeId) => runAction(() => chooseNextNode(run.run_id, nodeId))}
       />
 
