@@ -1,17 +1,24 @@
 :root {
-  --ink: #3a2a1a;
-  --ink-dim: #8a7457;
-  --paper: #fff6ea;
-  --panel: #fff0da;
-  --line: #241a10;
-  --tangerine: #ff7a45;
-  --tangerine-deep: #ff9a45;
-  --violet: #7c5cff;
-  --green: #23a370;
-  --gold: #e0a415;
-  --maroon: #b23a2e;
-  --sky: #3f7fc4;
-  --hp-empty: #f1d9ad;
+  /* brass/copper housing, cream ink, cyan energy accent */
+  --ink: #ecdfc0;
+  --ink-dim: #a08e68;
+  --paper: #141109;
+  --panel: #1c1710;
+  --panel-deep: #120f08;
+  --line: #6b5227;
+  --line-soft: #3a2f1a;
+  --cyan: #4fd8e0;
+  --cyan-bright: #8ff2ef;
+  --tangerine: #c08a3a;
+  --tangerine-deep: #d9a24a;
+  --violet: var(--cyan);
+  --green: #7cae5a;
+  --gold: #e0a83f;
+  --maroon: #c65a3a;
+  --sky: #4a8a82;
+  --hp-empty: #2a2214;
+  --glow-cyan: 0 0 10px rgba(79, 216, 224, 0.55);
+  --glow-red: 0 0 10px rgba(198, 90, 58, 0.5);
 }
 
 body {
@@ -23,11 +30,12 @@ body {
   max-width: 560px;
   margin: 2.5rem auto;
   padding: 1.75rem 1.75rem 2rem;
-  font-family: "Nunito", system-ui, sans-serif;
+  font-family: "Rajdhani", system-ui, sans-serif;
+  font-weight: 600;
   background: var(--panel);
-  border: 3px solid var(--line);
-  border-radius: 22px;
-  box-shadow: 8px 8px 0 var(--line);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(236, 223, 192, 0.04);
   transition: max-width 0.2s ease;
 }
 
@@ -38,24 +46,27 @@ body {
 }
 
 .game h1 {
-  font-family: "Baloo 2", "Nunito", sans-serif;
-  font-size: 1.7rem;
-  color: var(--tangerine);
-  margin: 0 0 0.4rem;
-  text-shadow: 2px 2px 0 rgba(36, 26, 16, 0.15);
+  font-family: "Michroma", "Rajdhani", sans-serif;
+  font-weight: 400;
+  font-size: 1.35rem;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  margin: 0 0 0.5rem;
+  text-shadow: 0 0 14px rgba(79, 216, 224, 0.35);
 }
 
 .setting-badge {
   display: inline-block;
   margin: 0 0 1.1rem;
   padding: 0.15rem 0.7rem;
-  background: #fff;
+  background: var(--panel-deep);
   border: 2px solid var(--line);
   border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 800;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--violet);
 }
 
@@ -81,14 +92,14 @@ body {
   max-width: 320px;
   margin-top: 0.7rem;
   padding: 0.55rem 0.8rem;
-  font-family: "Nunito", sans-serif;
+  font-family: "Rajdhani", sans-serif;
   font-weight: 600;
   font-size: 0.9rem;
   color: var(--ink);
-  background: #fff;
-  border: 3px solid var(--line);
-  border-radius: 12px;
-  box-shadow: 3px 3px 0 var(--line);
+  background: var(--panel-deep);
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(236, 223, 192, 0.04);
 }
 
 .custom-setting-input:focus {
@@ -112,11 +123,12 @@ body {
 }
 
 .stat-floor {
-  background: #fff;
+  background: var(--panel-deep);
   border: 2px solid var(--line);
   border-radius: 999px;
   padding: 0.15rem 0.7rem;
-  font-size: 0.85rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
 }
 
 .hp-track {
@@ -132,22 +144,26 @@ body {
 .hp-fill {
   display: block;
   height: 100%;
-  background: linear-gradient(90deg, var(--tangerine-deep), var(--tangerine));
+  background: linear-gradient(90deg, var(--cyan), var(--cyan-bright));
+  box-shadow: var(--glow-cyan);
   transition: width 0.25s ease;
 }
 
 .stat-figure {
-  font-size: 0.85rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
   color: var(--ink-dim);
   font-variant-numeric: tabular-nums;
 }
 
 .stat-gold {
-  background: #ffe4a3;
+  background: var(--panel-deep);
   border: 2px solid var(--line);
   border-radius: 999px;
   padding: 0.15rem 0.7rem;
-  font-size: 0.85rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+  color: var(--gold);
 }
 
 /* ---------- dungeon map ---------- */
@@ -163,13 +179,14 @@ body {
 }
 
 .map-path {
-  stroke: var(--hp-empty);
-  stroke-width: 3;
+  stroke: var(--line-soft);
+  stroke-width: 6;
   stroke-linecap: round;
 }
 
 .map-path.is-walked {
-  stroke: var(--tangerine);
+  stroke: var(--cyan);
+  filter: drop-shadow(0 0 3px rgba(79, 216, 224, 0.55));
 }
 
 .map-node {
@@ -177,18 +194,27 @@ body {
 }
 
 .map-node-circle {
-  fill: #fff;
+  fill: var(--panel-deep);
   stroke: var(--line);
   stroke-width: 2.5;
 }
 
 .map-node-symbol {
-  font-family: "Nunito", sans-serif;
-  font-weight: 800;
-  font-size: 13px;
-  fill: var(--line);
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 700;
+  font-size: 12px;
+  fill: var(--ink-dim);
   text-anchor: middle;
   dominant-baseline: central;
+  pointer-events: none;
+}
+
+.map-node-check {
+  fill: none;
+  stroke: var(--panel-deep);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   pointer-events: none;
 }
 
@@ -210,39 +236,52 @@ body {
 }
 .map-node.type-boss .map-node-circle {
   r: 15px;
+  stroke-width: 3.5;
 }
 .map-node.type-boss .map-node-symbol {
   font-size: 15px;
 }
 
 .map-node.is-visited {
-  opacity: 0.85;
+  opacity: 0.9;
 }
 .map-node.is-visited .map-node-circle {
-  fill: var(--hp-empty);
+  fill: var(--tangerine);
+  stroke: var(--tangerine-deep);
 }
 
 .map-node.is-current {
   opacity: 1;
 }
 .map-node.is-current .map-node-circle {
+  fill: var(--panel-deep);
+  stroke: var(--cyan);
   stroke-width: 3;
+}
+.map-node.is-current .map-node-symbol {
+  fill: var(--cyan);
+}
+
+.map-node-needle {
+  stroke: var(--cyan);
+  stroke-width: 1.6;
+  stroke-linecap: round;
 }
 
 .map-node-ring {
   fill: none;
-  stroke: var(--tangerine);
-  stroke-width: 2;
-  opacity: 0.6;
+  stroke: var(--cyan);
+  stroke-width: 1.6;
+  opacity: 0.55;
   animation: map-pulse 1.6s ease-in-out infinite;
 }
 
 .you-are-here {
-  font-family: "Baloo 2", sans-serif;
+  font-family: "IBM Plex Mono", monospace;
   font-size: 7px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  fill: var(--tangerine);
+  letter-spacing: 0.08em;
+  fill: var(--cyan);
   text-anchor: middle;
 }
 
@@ -251,10 +290,16 @@ body {
   cursor: pointer;
 }
 
+.map-node.is-reachable .map-node-circle {
+  stroke: var(--tangerine);
+}
+
 .map-node.is-reachable:focus-visible .map-node-circle,
 .map-node.is-reachable:hover .map-node-circle {
-  fill: #fff2e2;
+  fill: var(--panel);
+  stroke: var(--cyan);
   stroke-width: 3.5;
+  filter: drop-shadow(0 0 4px rgba(79, 216, 224, 0.5));
 }
 
 .map-node.is-reachable:focus-visible {
@@ -279,15 +324,18 @@ body {
   gap: 0.4rem 0.8rem;
   margin-top: 0.6rem;
   padding-top: 0.6rem;
-  border-top: 2px dashed var(--hp-empty);
+  border-top: 2px dashed var(--line-soft);
 }
 
 .legend-item {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
   color: var(--ink-dim);
 }
 
@@ -322,13 +370,14 @@ body {
 
 /* ---------- log ---------- */
 .history-log {
-  background: var(--paper);
+  background: var(--panel-deep);
   border: 2px solid var(--line);
-  border-radius: 14px;
+  border-radius: 6px;
   padding: 0.85rem 1.1rem;
   height: 220px;
   overflow-y: auto;
   margin-bottom: 1.1rem;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.45);
 }
 
 .history-log p {
@@ -350,27 +399,27 @@ body {
 
 button {
   cursor: pointer;
-  font-family: "Nunito", sans-serif;
+  font-family: "Rajdhani", sans-serif;
   font-weight: 700;
+  letter-spacing: 0.02em;
   padding: 0.65rem 1.1rem;
-  border-radius: 12px;
-  border: 3px solid var(--line);
-  background: #fff;
+  border-radius: 6px;
+  border: 2px solid var(--line);
+  background: var(--panel-deep);
   color: var(--ink);
-  box-shadow: 3px 3px 0 var(--line);
-  transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.1s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 
 button:hover:not(:disabled) {
-  transform: translate(-2px, -2px);
-  box-shadow: 5px 5px 0 var(--line);
-  background: #fff2e2;
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan), 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 button:disabled {
   opacity: 0.5;
   cursor: default;
-  box-shadow: 3px 3px 0 var(--line);
+  box-shadow: none;
   transform: none;
 }
 
@@ -384,8 +433,11 @@ button:disabled {
 }
 
 .end-screen h2 {
-  font-family: "Baloo 2", sans-serif;
-  color: var(--tangerine);
+  font-family: "Michroma", sans-serif;
+  font-weight: 400;
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
+  color: var(--ink);
 }
 
 .error {
@@ -398,36 +450,85 @@ button:disabled {
   margin-bottom: 1.1rem;
 }
 
-/* -- the monster: a generated icon + name/intent/HP as one card-like unit -- */
-.monster-card {
+/* -- arena split: player and monster as mirrored, facing panels -- */
+.arena-split {
   display: flex;
-  align-items: center;
-  gap: 1.1rem;
-  background: #fff;
-  border: 3px solid var(--line);
-  border-radius: 16px;
-  box-shadow: 4px 4px 0 var(--line);
-  padding: 0.9rem 1.4rem;
+  align-items: stretch;
+  gap: 1rem;
+  background: var(--panel-deep);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  padding: 0.9rem 1.1rem;
   margin: 0 auto 1.2rem;
-  max-width: 460px;
+  max-width: 640px;
+  box-shadow: inset 0 0 0 1px rgba(236, 223, 192, 0.04);
+}
+
+.combatant {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.combatant-enemy {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.arena-divider {
+  flex-shrink: 0;
+  width: 2px;
+  align-self: stretch;
+  background: linear-gradient(180deg, transparent, var(--line), transparent);
+}
+
+.combatant-name {
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--cyan);
+}
+
+.combatant-enemy-head {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .monster-icon {
   flex-shrink: 0;
-  filter: drop-shadow(2px 2px 0 rgba(36, 26, 16, 0.15));
+  filter: drop-shadow(0 0 6px rgba(198, 90, 58, 0.4));
 }
 
-.monster-info {
+.combatant-vitals {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.combatant-enemy .combatant-vitals {
+  flex-direction: row-reverse;
+}
+
+.combatant-badges {
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
-  min-width: 0;
+}
+
+.combatant-enemy .combatant-badges {
+  justify-content: flex-end;
 }
 
 .intent-badge {
-  font-size: 0.68rem;
-  font-weight: 800;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.64rem;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   padding: 0.15rem 0.7rem;
@@ -436,48 +537,34 @@ button:disabled {
 }
 
 .intent-badge.type-attack {
-  background: #ffe1d1;
-  color: var(--tangerine);
+  background: rgba(198, 90, 58, 0.18);
+  color: var(--maroon);
+  border-color: var(--maroon);
 }
 
 .intent-badge.type-defend {
-  background: #dcebfa;
+  background: rgba(74, 138, 130, 0.18);
   color: var(--sky);
+  border-color: var(--sky);
 }
 
 .enemy-name {
-  font-family: "Baloo 2", sans-serif;
-  font-weight: 700;
-  font-size: 1.15rem;
   color: var(--maroon);
 }
 
-.enemy-vitals {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-}
-
-.enemy-hp-track {
-  flex: 1 1 auto;
-}
-
 .enemy-hp-fill {
-  background: linear-gradient(90deg, #d15a4a, var(--maroon));
-}
-
-.enemy-block-badge {
-  flex-shrink: 0;
+  background: linear-gradient(90deg, var(--maroon), #e0805a);
+  box-shadow: var(--glow-red);
 }
 
 /* -- the field: its own centered row, above the hand -- */
 .zone-label {
   display: block;
+  font-family: "IBM Plex Mono", monospace;
   font-size: 0.62rem;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   color: var(--ink-dim);
   margin-bottom: 0.4rem;
 }
@@ -517,31 +604,38 @@ button:disabled {
 .field-slot.is-occupied {
   width: 112px;
   height: 156px;
-  border-radius: 10px;
-  border: 3px solid var(--line);
-  background: #fff;
-  box-shadow: 3px 3px 0 var(--line);
+  border-radius: 6px;
+  border: 2px solid var(--line);
+  background: var(--panel-deep);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
   padding: 0;
   overflow: hidden;
   position: relative;
   display: flex;
   flex-direction: column;
   text-align: center;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.hand-card:hover:not(:disabled) {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.55);
 }
 
 .hand-card.is-selected {
-  transform: translate(-2px, -2px);
-  box-shadow: 5px 5px 0 var(--line);
+  transform: translateY(-8px);
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan), 0 8px 18px rgba(0, 0, 0, 0.55);
 }
 
 .card-header {
   padding: 0.45rem 0.4rem 0.3rem 2.15rem;
-  font-family: "Baloo 2", sans-serif;
+  font-family: "Rajdhani", sans-serif;
   font-weight: 700;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   line-height: 1.15;
   text-align: left;
-  color: #fff;
+  color: var(--panel-deep);
   background: var(--ink-dim);
 }
 
@@ -552,14 +646,14 @@ button:disabled {
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--panel-deep);
   border: 2px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: "Baloo 2", sans-serif;
+  font-family: "IBM Plex Mono", monospace;
   font-weight: 700;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: var(--ink);
 }
 
@@ -642,21 +736,24 @@ button:disabled {
 }
 
 .field-slot.is-empty {
-  border: 3px dashed var(--hp-empty);
+  border: 2px dashed var(--line-soft);
   background: transparent;
   box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: "IBM Plex Mono", monospace;
   color: var(--ink-dim);
   font-weight: 700;
   cursor: default;
 }
 
 .field-slot.is-empty.is-targetable {
-  border-color: var(--tangerine);
-  background: #fff2e2;
-  color: var(--tangerine);
+  border-color: var(--cyan);
+  border-style: solid;
+  background: rgba(79, 216, 224, 0.1);
+  color: var(--cyan);
+  box-shadow: var(--glow-cyan);
   cursor: pointer;
 }
 
@@ -704,15 +801,15 @@ button:disabled {
   position: relative;
   width: 52px;
   height: 68px;
-  border-radius: 8px;
-  border: 3px solid var(--line);
-  box-shadow: 2px 2px 0 var(--line);
+  border-radius: 6px;
+  border: 2px solid var(--line);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
   background: repeating-linear-gradient(
     135deg,
-    #fff2e2,
-    #fff2e2 6px,
-    var(--hp-empty) 6px,
-    var(--hp-empty) 12px
+    var(--panel-deep),
+    var(--panel-deep) 6px,
+    var(--line-soft) 6px,
+    var(--line-soft) 12px
   );
   display: flex;
   align-items: center;
@@ -720,10 +817,10 @@ button:disabled {
 }
 
 .pile-count {
-  font-family: "Baloo 2", sans-serif;
+  font-family: "IBM Plex Mono", monospace;
   font-weight: 700;
-  font-size: 0.95rem;
-  background: #fff;
+  font-size: 0.9rem;
+  background: var(--panel-deep);
   border: 2px solid var(--line);
   border-radius: 999px;
   min-width: 24px;
@@ -732,13 +829,15 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
+  color: var(--ink);
 }
 
 .pile-label {
-  font-size: 0.6rem;
-  font-weight: 800;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.58rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
   color: var(--ink-dim);
 }
 
@@ -748,14 +847,14 @@ button:disabled {
 }
 
 .side-piles .pile-count {
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   min-width: 20px;
   height: 20px;
 }
 
 .pile-graveyard .pile-face {
   border-color: var(--violet);
-  background: repeating-linear-gradient(135deg, #efe7ff, #efe7ff 6px, #d8c9ff 6px, #d8c9ff 12px);
+  background: repeating-linear-gradient(135deg, var(--panel-deep), var(--panel-deep) 6px, rgba(79, 216, 224, 0.18) 6px, rgba(79, 216, 224, 0.18) 12px);
 }
 
 .pile-graveyard .pile-label {
@@ -764,55 +863,48 @@ button:disabled {
 
 .pile-banished .pile-face {
   border-color: var(--maroon);
-  background: repeating-linear-gradient(135deg, #f6e7e5, #f6e7e5 6px, #e3bcb7 6px, #e3bcb7 12px);
+  background: repeating-linear-gradient(135deg, var(--panel-deep), var(--panel-deep) 6px, rgba(198, 90, 58, 0.18) 6px, rgba(198, 90, 58, 0.18) 12px);
 }
 
 .pile-banished .pile-label {
   color: var(--maroon);
 }
 
-/* -- player's own block/armor + the play hint -- */
-.combat-resources {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 0.4rem 0.8rem;
-  margin-bottom: 0.8rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--ink-dim);
-  text-align: center;
-}
-
 .block-badge,
 .armor-badge {
-  background: #e6e1ff;
+  background: rgba(79, 216, 224, 0.14);
   border: 2px solid var(--line);
   border-radius: 999px;
   padding: 0.1rem 0.6rem;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
   color: var(--violet);
 }
 
 .armor-badge {
-  background: #dcebfa;
+  background: rgba(74, 138, 130, 0.18);
   color: var(--sky);
 }
 
 .field-hint {
-  width: 100%;
-  font-size: 0.78rem;
-  font-weight: 700;
+  text-align: center;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
   color: var(--ink-dim);
-  margin: 0.2rem 0 0;
+  margin: 0 0 0.8rem;
 }
 
 .end-turn-button {
-  background: var(--ink);
-  color: #fff;
+  display: block;
+  width: 100%;
+  background: var(--panel-deep);
+  color: var(--ink);
   border-color: var(--line);
 }
 
 .end-turn-button:hover:not(:disabled) {
-  background: #4a3624;
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan), 0 2px 8px rgba(0, 0, 0, 0.4);
 }

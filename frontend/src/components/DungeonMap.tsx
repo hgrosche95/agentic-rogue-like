@@ -2,9 +2,11 @@ import { useMemo } from "react";
 import type { MapNode } from "../api";
 import { NODE_STYLE } from "../nodeTypes";
 
-const COL_W = 74;
-const ROW_H = 54;
-const PAD = 24;
+// Bergpfad: floors climb bottom-to-top, siblings spread left-right - a
+// vertical ascent the player scrolls through, rather than a horizontal graph.
+const SIBLING_W = 62;
+const FLOOR_H = 72;
+const PAD = 26;
 
 function nodeIndex(id: string): number {
   return Number(id.split("-")[1]);
@@ -36,16 +38,16 @@ export function DungeonMap({
     return { byFloor, maxRows, numFloors };
   }, [nodes]);
 
-  const width = PAD * 2 + Math.max(numFloors - 1, 0) * COL_W;
-  const height = PAD * 2 + Math.max(maxRows - 1, 0) * ROW_H;
-  const centerY = height / 2;
+  const width = PAD * 2 + Math.max(maxRows - 1, 0) * SIBLING_W;
+  const height = PAD * 2 + Math.max(numFloors - 1, 0) * FLOOR_H;
+  const centerX = width / 2;
 
   function pos(node: MapNode) {
     const siblingCount = byFloor.get(node.floor)?.length ?? 1;
     const i = nodeIndex(node.id);
     return {
-      x: PAD + node.floor * COL_W,
-      y: centerY + (i - (siblingCount - 1) / 2) * ROW_H,
+      x: centerX + (i - (siblingCount - 1) / 2) * SIBLING_W,
+      y: height - PAD - node.floor * FLOOR_H,
     };
   }
 
@@ -109,7 +111,12 @@ export function DungeonMap({
             >
               {isCurrent && <circle className="map-node-ring" r={17} />}
               <circle className="map-node-circle" r={13} />
-              <text className="map-node-symbol">{style.symbol}</text>
+              {node.visited && !isCurrent ? (
+                <path className="map-node-check" d="M -6 0 L -1.5 5 L 7 -6" />
+              ) : (
+                <text className="map-node-symbol">{style.symbol}</text>
+              )}
+              {isCurrent && <line className="map-node-needle" x1={0} y1={0} x2={0} y2={-10} />}
               {isCurrent && (
                 <text className="you-are-here" y={24}>
                   you

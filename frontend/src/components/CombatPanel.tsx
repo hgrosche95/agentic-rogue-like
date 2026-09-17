@@ -1,5 +1,11 @@
 import { useState } from "react";
-import { PERMANENT_CARD_TYPES, type Card, type HandCardView, type PendingCombatView } from "../api";
+import {
+  PERMANENT_CARD_TYPES,
+  type Card,
+  type HandCardView,
+  type PendingCombatView,
+  type PlayerState,
+} from "../api";
 import { MonsterIcon } from "./MonsterIcon";
 
 function CardFace({ card }: { card: Card }) {
@@ -26,16 +32,19 @@ function Pile({ label, count, kind }: { label: string; count: number; kind: stri
 
 export function CombatPanel({
   combat,
+  player,
   disabled,
   onPlayCard,
   onEndTurn,
 }: {
   combat: PendingCombatView;
+  player: PlayerState;
   disabled: boolean;
   onPlayCard: (handIndex: number, slotIndex: number) => void;
   onEndTurn: () => void;
 }) {
   const [selectedHandIndex, setSelectedHandIndex] = useState<number | null>(null);
+  const playerHpPercent = Math.max(0, Math.min(100, (player.hp / player.max_hp) * 100));
   const enemyHpPercent = Math.max(0, Math.min(100, (combat.enemy_hp / combat.enemy_max_hp) * 100));
 
   function selectCard(handIndex: number) {
@@ -50,15 +59,31 @@ export function CombatPanel({
 
   return (
     <div className="combat-panel">
-      <div className="monster-card">
-        <MonsterIcon seed={combat.enemy_name} size={72} />
-        <div className="monster-info">
-          <span className={`intent-badge type-${combat.enemy_intent}`}>
-            {combat.enemy_intent === "attack" ? "Attacking" : "Defending"} ·{" "}
-            {combat.enemy_intent_value}
-          </span>
-          <span className="enemy-name">{combat.enemy_name}</span>
-          <div className="enemy-vitals">
+      <div className="arena-split">
+        <div className="combatant combatant-player">
+          <span className="combatant-name">You</span>
+          <div className="combatant-vitals">
+            <span className="hp-track">
+              <span className="hp-fill" style={{ width: `${playerHpPercent}%` }} />
+            </span>
+            <span className="stat-figure">
+              {player.hp}/{player.max_hp}
+            </span>
+          </div>
+          <div className="combatant-badges">
+            {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
+            {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
+          </div>
+        </div>
+
+        <div className="arena-divider" aria-hidden="true" />
+
+        <div className="combatant combatant-enemy">
+          <div className="combatant-enemy-head">
+            <MonsterIcon seed={combat.enemy_name} size={40} />
+            <span className="combatant-name enemy-name">{combat.enemy_name}</span>
+          </div>
+          <div className="combatant-vitals">
             <span className="hp-track enemy-hp-track">
               <span className="hp-fill enemy-hp-fill" style={{ width: `${enemyHpPercent}%` }} />
             </span>
@@ -66,9 +91,15 @@ export function CombatPanel({
               {combat.enemy_hp}/{combat.enemy_max_hp}
             </span>
           </div>
-          {combat.enemy_block > 0 && (
-            <span className="block-badge enemy-block-badge">Block {combat.enemy_block}</span>
-          )}
+          <div className="combatant-badges">
+            <span className={`intent-badge type-${combat.enemy_intent}`}>
+              {combat.enemy_intent === "attack" ? "Attacking" : "Defending"} ·{" "}
+              {combat.enemy_intent_value}
+            </span>
+            {combat.enemy_block > 0 && (
+              <span className="block-badge enemy-block-badge">Block {combat.enemy_block}</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -119,15 +150,11 @@ export function CombatPanel({
         </div>
       </div>
 
-      <div className="combat-resources">
-        {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
-        {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
-        <p className="field-hint">
-          {selectedHandIndex === null
-            ? "Select a card from your hand, then play it onto an empty field slot."
-            : "Choose an empty slot to play the selected card."}
-        </p>
-      </div>
+      <p className="field-hint">
+        {selectedHandIndex === null
+          ? "Select a card from your hand, then play it onto an empty field slot."
+          : "Choose an empty slot to play the selected card."}
+      </p>
 
       <button className="end-turn-button" disabled={disabled} onClick={onEndTurn}>
         End turn
