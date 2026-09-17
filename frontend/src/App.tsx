@@ -103,6 +103,7 @@ function App() {
       {run.status === "ongoing" && run.pending_combat && (
         <CombatPanel
           combat={run.pending_combat}
+          player={run.player}
           disabled={isLoading}
           onPlayCard={(handIndex, slotIndex) =>
             runAction(() => playCard(run.run_id, handIndex, slotIndex))
