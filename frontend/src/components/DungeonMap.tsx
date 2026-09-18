@@ -18,12 +18,14 @@ export function DungeonMap({
   reachableIds,
   onChoose,
   disabled,
+  compact = false,
 }: {
   nodes: Record<string, MapNode>;
   currentNodeId: string;
   reachableIds: string[];
   onChoose: (nodeId: string) => void;
   disabled: boolean;
+  compact?: boolean;
 }) {
   const { byFloor, maxRows, numFloors } = useMemo(() => {
     const byFloor = new Map<number, MapNode[]>();
@@ -55,7 +57,7 @@ export function DungeonMap({
   const allNodes = Object.values(nodes);
 
   return (
-    <div className="dungeon-map">
+    <div className={`dungeon-map${compact ? " is-compact" : ""}`}>
       <svg className="dungeon-map-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Dungeon map">
         {allNodes.flatMap((node) => {
           const from = pos(node);
