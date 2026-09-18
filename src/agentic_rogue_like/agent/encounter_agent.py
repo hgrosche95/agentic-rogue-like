@@ -15,11 +15,11 @@ from __future__ import annotations
 import logging
 import os
 import random
-from typing import TypedDict
+from typing import TYPE_CHECKING, TypedDict
 
-from langchain_groq import ChatGroq
-from langgraph.graph import END, StateGraph
-from langgraph.graph.state import CompiledStateGraph
+if TYPE_CHECKING:
+    from langchain_groq import ChatGroq
+    from langgraph.graph.state import CompiledStateGraph
 
 from ..enemies import pick_enemy
 from ..models import DEFAULT_SETTING, Enemy
@@ -41,6 +41,12 @@ class EncounterState(TypedDict):
 
 
 def _model() -> ChatGroq:
+    # Imported lazily: langchain_groq is only needed once the encounter
+    # agent actually runs (see enemy_for_node's ENCOUNTER_AGENT_ENABLED
+    # check) - importing it at module scope would pull it into every
+    # process that imports this module, agent disabled or not.
+    from langchain_groq import ChatGroq
+
     # max_retries=0: the graph's own retry loop already caps attempts, and
     # stacking the client's retries on top would multiply the wait before
     # enemy_for_node() can fall back to the static pool.
@@ -92,6 +98,9 @@ def _route_after_validation(state: EncounterState) -> str:
 
 
 def build_graph() -> CompiledStateGraph:
+    # Same lazy-import reasoning as _model() above, for langgraph.
+    from langgraph.graph import END, StateGraph
+
     graph = StateGraph(EncounterState)
     graph.add_node("generate_enemy", generate_enemy)
     graph.add_node("validate_budget", validate_budget)
