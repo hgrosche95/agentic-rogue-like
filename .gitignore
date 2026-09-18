@@ -15,3 +15,7 @@ wheels/
 # Frontend
 frontend/node_modules
 frontend/dist
+
+# Training pipeline: large/generated, not meant to be committed
+training/artifacts/
+training/.ipynb_checkpoints/

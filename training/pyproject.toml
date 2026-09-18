@@ -1,0 +1,30 @@
+[project]
+name = "agentic-rogue-like-training"
+version = "0.1.0"
+description = "Data generation, fine-tuning and evaluation pipeline for the encounter agent's model. Not part of the runtime app or its Docker image - a separate uv project on purpose, see training/README.md."
+requires-python = ">=3.12"
+dependencies = [
+    "agentic-rogue-like",
+    "python-dotenv>=1.2.3",
+]
+
+[tool.uv.sources]
+agentic-rogue-like = { path = "..", editable = true }
+
+# This project is a script/notebook collection, not an importable package -
+# uv_build (the main project's build backend) would otherwise demand a
+# src/agentic_rogue_like_training/__init__.py that doesn't exist.
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.14.0",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

@@ -26,6 +26,12 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<string[]>(FALLBACK_SETTINGS);
   const [selectedSetting, setSelectedSetting] = useState(FALLBACK_SETTINGS[0]);
+  const [isMapOpen, setIsMapOpen] = useState(false);
+  const inCombat = Boolean(run?.pending_combat);
+
+  useEffect(() => {
+    if (!inCombat) setIsMapOpen(false);
+  }, [inCombat]);
 
   useEffect(() => {
     listSettings()
@@ -71,20 +77,64 @@ function App() {
     );
   }
 
+  const mapProps = {
+    nodes: run.nodes,
+    currentNodeId: run.current_node.id,
+    reachableIds: run.available_choices.map((n) => n.id),
+    disabled: isLoading,
+    onChoose: (nodeId: string) => runAction(() => chooseNextNode(run.run_id, nodeId)),
+  };
+
   return (
-    <main className={`game${run.pending_combat ? " is-wide" : ""}`}>
+    <main className={`game${inCombat ? " is-wide" : ""}`}>
       <h1>agentic-rogue-like</h1>
       <p className="setting-badge">{run.setting}</p>
       <PlayerStats player={run.player} floor={run.floor} />
 
-      <DungeonMap
-        nodes={run.nodes}
-        currentNodeId={run.current_node.id}
-        reachableIds={run.available_choices.map((n) => n.id)}
-        disabled={isLoading}
-        compact={Boolean(run.pending_combat)}
-        onChoose={(nodeId) => runAction(() => chooseNextNode(run.run_id, nodeId))}
-      />
+      {inCombat ? (
+        <div className="map-toggle-row">
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Show map"
+            onClick={() => setIsMapOpen(true)}
+          >
+            <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+              <circle className="dial" cx="10" cy="10" r="7" />
+              <line className="dial" x1="10" y1="3.6" x2="10" y2="5" />
+              <line className="dial" x1="10" y1="15" x2="10" y2="16.4" />
+              <line className="dial" x1="3.6" y1="10" x2="5" y2="10" />
+              <line className="dial" x1="15" y1="10" x2="16.4" y2="10" />
+              <line className="needle" x1="10" y1="10" x2="10" y2="5.6" />
+              <line className="needle" x1="10" y1="10" x2="12.6" y2="12.6" />
+            </svg>
+          </button>
+        </div>
+      ) : (
+        <DungeonMap {...mapProps} />
+      )}
+
+      {inCombat && isMapOpen && (
+        <div className="map-overlay">
+          <div className="map-overlay-panel">
+            <div className="map-overlay-head">
+              <span>Map</span>
+              <button
+                type="button"
+                className="icon-btn is-small"
+                aria-label="Close map"
+                onClick={() => setIsMapOpen(false)}
+              >
+                <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                  <line className="close-icon" x1="3" y1="3" x2="13" y2="13" />
+                  <line className="close-icon" x1="13" y1="3" x2="3" y2="13" />
+                </svg>
+              </button>
+            </div>
+            <DungeonMap {...mapProps} />
+          </div>
+        </div>
+      )}
 
       <HistoryLog history={run.history} />
       {error && <p className="error">{error}</p>}
