@@ -40,11 +40,15 @@ training/
 
 ## Status
 
-- [ ] Eval-Harness + Groq-Baseline (zuerst gebaut, bevor es überhaupt ein
+- [x] Eval-Harness + Groq-Baseline (zuerst gebaut, bevor es überhaupt ein
       eigenes Modell gibt — liefert die Vergleichszahlen und validiert den
-      Harness gegen ein bekanntes Verhalten)
-- [ ] Trainingsdaten-Generierung
-- [ ] Basismodell-Entscheidung
+      Harness gegen ein bekanntes Verhalten). Ergebnis:
+      `artifacts/eval_reports/groq-baseline.md`.
+- [x] Trainingsdaten-Generierung — 296 Beispiele (217 train / 40 val / 39
+      test), alle 4 Budget-Tiers abgedeckt. Ergebnis:
+      `artifacts/dataset/data_card.md`.
+- [x] Basismodell-Entscheidung — Qwen2.5-1.5B-Instruct, siehe
+      [`MODEL_CHOICE.md`](MODEL_CHOICE.md).
 - [ ] Fine-Tuning (Colab, LoRA/QLoRA)
 - [ ] Eval-Harness gegen das fein-getunte Modell
 - [ ] Quantisierung + Ollama-Serving

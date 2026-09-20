@@ -10,6 +10,7 @@ sends - only the LangChain call shape differs, just enough to read usage.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -18,7 +19,7 @@ from unittest.mock import patch
 from agentic_rogue_like.agent import encounter_agent
 from agentic_rogue_like.agent.encounter_schema import EnemyProposal
 
-from common.groq_backoff import call_with_backoff
+from common.groq_backoff import RateLimitTooLong, call_with_backoff
 
 from .testset import EvalContext
 
@@ -60,6 +61,10 @@ def _run_one(context: EvalContext) -> CallResult:
         states, latency = call_with_backoff(
             lambda: list(app.stream(_initial_state(context), stream_mode="values"))
         )
+    except RateLimitTooLong:
+        # A near-exhausted quota isn't a model failure - let the caller stop
+        # the run instead of miscounting it as an invalid response.
+        raise
     except Exception as exc:  # noqa: BLE001 - deliberately broad, same boundary enemy_for_node uses
         return CallResult(
             context=context,
@@ -84,6 +89,21 @@ def _run_one(context: EvalContext) -> CallResult:
     )
 
 
+def _run_all(contexts: list[EvalContext]) -> list[CallResult]:
+    results: list[CallResult] = []
+    for context in contexts:
+        try:
+            results.append(_run_one(context))
+        except RateLimitTooLong as exc:
+            print(
+                f"Stopping early - quota exhausted after {len(results)}/{len(contexts)} "
+                f"calls: {exc}",
+                file=sys.stderr,
+            )
+            break
+    return results
+
+
 def run_harness(
     contexts: list[EvalContext], model_factory: ModelFactory | None = None
 ) -> list[CallResult]:
@@ -92,11 +112,15 @@ def run_harness(
     Passing a factory patches `encounter_agent._model` for the duration of the
     run - the same seam the existing tests use (see tests/test_encounter_agent.py)
     - so a fine-tuned model's wrapper can be evaluated with this same function.
+
+    Stops early (returning whatever's collected so far) if the daily quota
+    runs out mid-run, rather than letting the rest silently count as
+    "invalid" model responses - see RateLimitTooLong in common.groq_backoff.
     """
     if model_factory is None:
-        return [_run_one(context) for context in contexts]
+        return _run_all(contexts)
     with patch.object(encounter_agent, "_model", side_effect=model_factory):
-        return [_run_one(context) for context in contexts]
+        return _run_all(contexts)
 
 
 def measure_cost_samples(
@@ -116,7 +140,11 @@ def measure_cost_samples(
 
         model = factory().with_structured_output(EnemyProposal, include_raw=True)
         prompt = encounter_agent._build_prompt(_initial_state(context))
-        result, _latency = call_with_backoff(lambda m=model, p=prompt: m.invoke(p))
+        try:
+            result, _latency = call_with_backoff(lambda m=model, p=prompt: m.invoke(p))
+        except RateLimitTooLong as exc:
+            print(f"Cost probe stopping early - quota exhausted: {exc}", file=sys.stderr)
+            break
         usage = result["raw"].usage_metadata
         samples.append(
             CostSample(
