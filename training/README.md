@@ -49,7 +49,10 @@ training/
       `artifacts/dataset/data_card.md`.
 - [x] Basismodell-Entscheidung — Qwen2.5-1.5B-Instruct, siehe
       [`MODEL_CHOICE.md`](MODEL_CHOICE.md).
-- [ ] Fine-Tuning (Colab, LoRA/QLoRA)
+- [ ] Fine-Tuning (Colab, LoRA/QLoRA) — Notebook
+      [`notebook/finetune_qwen.ipynb`](notebook/finetune_qwen.ipynb) geschrieben
+      (Rang 16, Alpha 32, Dropout 0,05, q/k/v/o_proj, 3 Epochen + Early
+      Stopping), **noch nicht in Colab ausgeführt/verifiziert**.
 - [ ] Eval-Harness gegen das fein-getunte Modell
 - [ ] Quantisierung + Ollama-Serving
 - [ ] Integration in `encounter_agent.py` hinter konfigurierbarem Switch

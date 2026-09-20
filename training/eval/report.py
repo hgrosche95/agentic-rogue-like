@@ -12,8 +12,11 @@ import math
 from dataclasses import asdict, fields
 from pathlib import Path
 
+from agentic_rogue_like.agent.encounter_schema import EnemyBudget, EnemyProposal
+
 from .harness import CallResult
 from .metrics import Report, TierMetrics
+from .testset import EvalContext
 
 REPORTS_DIR = Path(__file__).resolve().parent.parent / "artifacts" / "eval_reports"
 
@@ -87,6 +90,42 @@ def _result_to_jsonable(result: CallResult) -> dict:
     data["context"]["budget"] = result.context.budget.model_dump()
     data["proposal"] = result.proposal.model_dump() if result.proposal is not None else None
     return data
+
+
+def _jsonable_to_result(data: dict) -> CallResult:
+    """Inverse of _result_to_jsonable - lets a rerun merge onto a previous
+    report's raw results instead of a same-label run silently overwriting it
+    (see load_previous_results)."""
+    context_data = data["context"]
+    context = EvalContext(
+        tier=context_data["tier"],
+        floor=context_data["floor"],
+        num_floors=context_data["num_floors"],
+        elite=context_data["elite"],
+        boss=context_data["boss"],
+        setting=context_data["setting"],
+        budget=EnemyBudget(**context_data["budget"]),
+    )
+    proposal = EnemyProposal(**data["proposal"]) if data["proposal"] is not None else None
+    return CallResult(
+        context=context,
+        status=data["status"],
+        attempts_used=data["attempts_used"],
+        first_attempt_violation=data["first_attempt_violation"],
+        latency_seconds=data["latency_seconds"],
+        proposal=proposal,
+        error_message=data["error_message"],
+    )
+
+
+def load_previous_results(label: str) -> list[CallResult]:
+    """Empty list if this label has no report yet - a first run for a label
+    isn't a merge, just a save."""
+    path = (REPORTS_DIR / label).with_suffix(".json")
+    if not path.exists():
+        return []
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return [_jsonable_to_result(d) for d in data]
 
 
 def save_report(report: Report, raw_results: list[CallResult]) -> Path:

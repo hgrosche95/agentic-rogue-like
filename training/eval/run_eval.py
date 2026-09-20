@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 from .harness import measure_cost_samples, run_harness
 from .metrics import compute_report
-from .report import save_report
+from .report import load_previous_results, save_report
 from .testset import build_test_contexts
 
 BASELINE_MODEL_NAME = "openai/gpt-oss-20b"
@@ -32,19 +32,31 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=5)
     args = parser.parse_args()
 
+    previous_results = load_previous_results(args.label)
+    if previous_results:
+        print(
+            f"Found {len(previous_results)} previous results for '{args.label}' - "
+            f"merging instead of overwriting.",
+            file=sys.stderr,
+        )
+
     contexts = build_test_contexts(repeats=args.repeats)
     print(
         f"Running {len(contexts)} calls against {BASELINE_MODEL_NAME} ({args.label})...",
         file=sys.stderr,
     )
     results = run_harness(contexts)
+    combined_results = previous_results + results
 
     print("Measuring token usage/cost (one probe per tier x setting)...", file=sys.stderr)
     cost_samples = measure_cost_samples(contexts)
 
-    report = compute_report(args.label, BASELINE_MODEL_NAME, results, cost_samples)
-    path = save_report(report, results)
-    print(f"Report written to {path} (.md/.csv/.json)", file=sys.stderr)
+    report = compute_report(args.label, BASELINE_MODEL_NAME, combined_results, cost_samples)
+    path = save_report(report, combined_results)
+    print(
+        f"Report written to {path} (.md/.csv/.json) - {len(combined_results)} results total",
+        file=sys.stderr,
+    )
 
 
 if __name__ == "__main__":
