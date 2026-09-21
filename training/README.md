@@ -56,7 +56,11 @@ training/
       Early Stopping griff nicht — bei nur 217 Beispielen noch kein
       Overfitting messbar. Gemergtes Modell (bf16, 3,09GB) liegt in
       `artifacts/model/merged/`, Adapter in `artifacts/model/adapter/`.
-- [ ] Eval-Harness gegen das fein-getunte Modell
+- [~] Eval-Harness gegen das fein-getunte Modell — **Zwischenstand in
+      [`RESULTS.md`](RESULTS.md)**: ohne Beschränkung nur 23-36 % gültige
+      Antworten (Groq ~99 %), mit schema-beschränktem Decoding 100 % gültig und
+      im Budget, dafür ~3,4x langsamer. Offen: Lauf 2 des Fine-Tunings
+      (Colab-GPU-Kontingent gesperrt) und die Groq-Baseline für elite/boss.
 - [x] Quantisierung + Ollama-Serving — bf16-Modell per `llama.cpp` nach GGUF
       konvertiert und auf Q4_K_M quantisiert (2,94GB → 935MB), als
       `qwen2.5-enemy-generator` in Ollama importiert

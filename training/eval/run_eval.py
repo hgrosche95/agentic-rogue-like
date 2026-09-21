@@ -68,6 +68,13 @@ def main() -> None:
         help="override the Ollama model's own temperature for this run",
     )
     parser.add_argument(
+        "--tiers",
+        nargs="+",
+        choices=["early", "mid", "elite", "boss"],
+        default=None,
+        help="only run these budget tiers (results still merge into the label's report)",
+    )
+    parser.add_argument(
         "--constrained",
         action="store_true",
         help="schema-constrained decoding via Ollama's `format` parameter",
@@ -91,7 +98,11 @@ def main() -> None:
             file=sys.stderr,
         )
 
-    contexts = build_test_contexts(repeats=args.repeats, settings=settings)
+    contexts = build_test_contexts(
+        repeats=args.repeats,
+        settings=settings,
+        tiers=tuple(args.tiers) if args.tiers else None,
+    )
     print(f"Running {len(contexts)} calls against {model_name} ({label})...", file=sys.stderr)
 
     if args.model == "ollama":

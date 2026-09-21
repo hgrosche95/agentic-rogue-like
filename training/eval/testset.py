@@ -37,7 +37,9 @@ class EvalContext:
 
 
 def build_test_contexts(
-    repeats: int = 5, settings: tuple[str, ...] = SETTING_PRESETS
+    repeats: int = 5,
+    settings: tuple[str, ...] = SETTING_PRESETS,
+    tiers: tuple[str, ...] | None = None,
 ) -> list[EvalContext]:
     """One EvalContext per (tier, setting), repeated `repeats` times.
 
@@ -50,9 +52,15 @@ def build_test_contexts(
     on). Note those all sit in the fine-tuning *train* split, so a fine-tuned
     model scored on them is scored on prompts it memorized - pass
     data_gen.contexts.TEST_SETTINGS to measure generalization instead.
+
+    `tiers` restricts the run to some budget tiers (default: all four) - used to
+    fill a gap in an existing report (results merge by label) without spending
+    quota re-measuring tiers that are already covered.
     """
     contexts = []
     for tier, floor, elite, boss in _TIERS:
+        if tiers is not None and tier not in tiers:
+            continue
         budget = budget_for(floor=floor, num_floors=_NUM_FLOORS, elite=elite, boss=boss)
         for setting in settings:
             for _ in range(repeats):
