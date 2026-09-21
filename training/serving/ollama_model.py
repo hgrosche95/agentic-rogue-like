@@ -48,20 +48,36 @@ class _RawResponse:
 
 
 class _BoundOllamaModel:
-    def __init__(self, model_name: str, schema: type[BaseModel], include_raw: bool) -> None:
+    def __init__(
+        self,
+        model_name: str,
+        schema: type[BaseModel],
+        include_raw: bool,
+        temperature: float | None,
+        constrain_output: bool,
+    ) -> None:
         self._model_name = model_name
         self._schema = schema
         self._include_raw = include_raw
+        self._temperature = temperature
+        self._constrain_output = constrain_output
 
     def invoke(self, prompt: str) -> BaseModel | dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": self._model_name,
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+        }
+        if self._temperature is not None:
+            payload["options"] = {"temperature": self._temperature}
+        if self._constrain_output:
+            # Grammar-constrained decoding: the model can't close the JSON
+            # object before every required field is written. Doesn't touch the
+            # prompt, so it stays in the format the model was trained on
+            # (unlike tool-calling).
+            payload["format"] = self._schema.model_json_schema()
         response = httpx.post(
-            f"{OLLAMA_BASE_URL}/api/chat",
-            json={
-                "model": self._model_name,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False,
-            },
-            timeout=REQUEST_TIMEOUT_SECONDS,
+            f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=REQUEST_TIMEOUT_SECONDS
         )
         response.raise_for_status()
         data = response.json()
@@ -84,10 +100,20 @@ class OllamaChatModel:
     narrowed to what generate_enemy()/the eval harness actually call:
     with_structured_output(schema, include_raw=...).invoke(prompt)."""
 
-    def __init__(self, model_name: str = DEFAULT_MODEL_NAME) -> None:
+    def __init__(
+        self,
+        model_name: str = DEFAULT_MODEL_NAME,
+        temperature: float | None = None,
+        constrain_output: bool = False,
+    ) -> None:
+        # temperature=None -> use the one baked into the Ollama model's Modelfile.
         self._model_name = model_name
+        self._temperature = temperature
+        self._constrain_output = constrain_output
 
     def with_structured_output(
         self, schema: type[BaseModel], include_raw: bool = False
     ) -> _BoundOllamaModel:
-        return _BoundOllamaModel(self._model_name, schema, include_raw)
+        return _BoundOllamaModel(
+            self._model_name, schema, include_raw, self._temperature, self._constrain_output
+        )

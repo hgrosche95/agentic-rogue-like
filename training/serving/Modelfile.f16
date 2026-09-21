@@ -1,0 +1,6 @@
+FROM ../artifacts/model/gguf/qwen2.5-1.5b-enemy-f16.gguf
+
+# Diagnostic variant: the same fine-tuned weights as Modelfile, but NOT
+# quantized - used to tell "the fine-tune is weak" apart from "Q4_K_M washed
+# the fine-tune out". Same temperature so the comparison is like for like.
+PARAMETER temperature 0.9

@@ -36,18 +36,25 @@ class EvalContext:
     budget: EnemyBudget
 
 
-def build_test_contexts(repeats: int = 5) -> list[EvalContext]:
+def build_test_contexts(
+    repeats: int = 5, settings: tuple[str, ...] = SETTING_PRESETS
+) -> list[EvalContext]:
     """One EvalContext per (tier, setting), repeated `repeats` times.
 
     Repeats matter here in a way a single sample can't cover: budget
     compliance and diversity are rates/distributions, not pass/fail - one
     generation per context would only ever show "compliant" or "not", never
     how often either happens.
+
+    `settings` defaults to the presets (what the Groq baseline was measured
+    on). Note those all sit in the fine-tuning *train* split, so a fine-tuned
+    model scored on them is scored on prompts it memorized - pass
+    data_gen.contexts.TEST_SETTINGS to measure generalization instead.
     """
     contexts = []
     for tier, floor, elite, boss in _TIERS:
         budget = budget_for(floor=floor, num_floors=_NUM_FLOORS, elite=elite, boss=boss)
-        for setting in SETTING_PRESETS:
+        for setting in settings:
             for _ in range(repeats):
                 contexts.append(
                     EvalContext(

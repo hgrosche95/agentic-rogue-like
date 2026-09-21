@@ -121,20 +121,25 @@ def _jsonable_to_result(data: dict) -> CallResult:
 def load_previous_results(label: str) -> list[CallResult]:
     """Empty list if this label has no report yet - a first run for a label
     isn't a merge, just a save."""
-    path = (REPORTS_DIR / label).with_suffix(".json")
+    path = _report_path(label, ".json")
     if not path.exists():
         return []
     data = json.loads(path.read_text(encoding="utf-8"))
     return [_jsonable_to_result(d) for d in data]
 
 
+def _report_path(label: str, extension: str) -> Path:
+    # Not Path.with_suffix(): a label like "temp0.2" would have its ".2"
+    # mistaken for a file extension and silently truncated.
+    return REPORTS_DIR / f"{label}{extension}"
+
+
 def save_report(report: Report, raw_results: list[CallResult]) -> Path:
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    base = REPORTS_DIR / report.label
 
-    base.with_suffix(".md").write_text(render_markdown(report), encoding="utf-8")
-    render_csv(report, base.with_suffix(".csv"))
-    base.with_suffix(".json").write_text(
+    _report_path(report.label, ".md").write_text(render_markdown(report), encoding="utf-8")
+    render_csv(report, _report_path(report.label, ".csv"))
+    _report_path(report.label, ".json").write_text(
         json.dumps([_result_to_jsonable(r) for r in raw_results], indent=2), encoding="utf-8"
     )
-    return base.with_suffix(".md")
+    return _report_path(report.label, ".md")

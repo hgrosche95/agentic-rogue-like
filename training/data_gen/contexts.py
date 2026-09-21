@@ -55,6 +55,11 @@ _SPLIT_SETTINGS: dict[str, tuple[str, ...]] = {
 }
 
 
+# The settings the fine-tuned model never saw during training - what eval/
+# uses to measure generalization instead of memorized prompts.
+TEST_SETTINGS: tuple[str, ...] = _SPLIT_SETTINGS["test"]
+
+
 @dataclass(frozen=True)
 class DataContext:
     tier: str
