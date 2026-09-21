@@ -57,6 +57,15 @@ training/
       Overfitting messbar. Gemergtes Modell (bf16, 3,09GB) liegt in
       `artifacts/model/merged/`, Adapter in `artifacts/model/adapter/`.
 - [ ] Eval-Harness gegen das fein-getunte Modell
-- [ ] Quantisierung + Ollama-Serving
+- [x] Quantisierung + Ollama-Serving — bf16-Modell per `llama.cpp` nach GGUF
+      konvertiert und auf Q4_K_M quantisiert (2,94GB → 935MB), als
+      `qwen2.5-enemy-generator` in Ollama importiert
+      ([`serving/Modelfile`](serving/Modelfile)).
+      [`serving/ollama_model.py`](serving/ollama_model.py) ist ein
+      `encounter_agent._model()`-kompatibler Wrapper (`with_structured_output(...).invoke(...)`),
+      bewusst **ohne** Ollamas Tool-Calling — das Modell wurde auf rohen
+      JSON-Text trainiert, nicht auf ein Tool-Call-Format. Läuft nachweislich
+      durch den echten Produktions-Graphen. Erster Befund: das Modell lässt
+      gelegentlich `attack_name` weg — wird in Schritt 6 sauber gemessen.
 - [ ] Integration in `encounter_agent.py` hinter konfigurierbarem Switch
 - [ ] Ergebnisse im Haupt-README dokumentieren

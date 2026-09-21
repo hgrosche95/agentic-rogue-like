@@ -1,0 +1,11 @@
+FROM ../artifacts/model/gguf/qwen2.5-1.5b-enemy-Q4_K_M.gguf
+
+# Matches Groq's temperature in encounter_agent._model() (see MODEL_CHOICE.md /
+# the training pipeline) - same creative range the training data was sampled at.
+PARAMETER temperature 0.9
+
+# No custom prompt TEMPLATE here on purpose: the GGUF carries the model's own
+# chat_template (embedded by convert_hf_to_gguf.py from the merged HF model),
+# the same one used to build the training data via tokenizer.apply_chat_template()
+# in the fine-tuning notebook. As long as callers send plain user/assistant
+# messages with no "tools", Ollama renders it identically to training.

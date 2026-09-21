@@ -10,6 +10,12 @@ dependencies = [
 
 [tool.uv.sources]
 agentic-rogue-like = { path = "..", editable = true }
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 # This project is a script/notebook collection, not an importable package -
 # uv_build (the main project's build backend) would otherwise demand a
@@ -21,6 +27,16 @@ package = false
 dev = [
     "pytest>=9.1.1",
     "ruff>=0.14.0",
+]
+# Only needed for the one-off HF -> GGUF conversion in step 7 (`uv sync --group gguf`) -
+# CPU-only torch, kept out of the default group so a plain `uv sync` stays light.
+gguf = [
+    "numpy~=2.2.6",
+    "sentencepiece>=0.1.98,<0.3.0",
+    "transformers==4.57.6",
+    "gguf>=0.1.0",
+    "protobuf>=4.21.0,<5.0.0",
+    "torch==2.11.0",
 ]
 
 [tool.ruff]
