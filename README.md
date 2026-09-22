@@ -48,6 +48,15 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       getroffen, ...) auf den statischen Pool zurück — in einem echten Lauf
       bereits beobachtet und mit `monkeypatch` deterministisch getestet.
       Relikte und Events als weitere Content-Typen fehlen noch.
+- [x] **Encounter-Agent-Destillation** — Groqs Cloud-Call (`openai/gpt-oss-20b`)
+      lässt sich per `ENCOUNTER_AGENT_MODEL_SOURCE=ollama` gegen ein selbst
+      fein-getuntes Qwen2.5-1.5B tauschen, lokal per Ollama serviert, kein
+      API-Key/Netz/Tageslimit nötig. Zwei Trainingsläufe, volle Auswertung
+      gegen die Groq-Baseline (Gültigkeit, Budget-Treue, Diversität,
+      Kosten/Latenz) in [`training/RESULTS.md`](training/RESULTS.md) — inkl.
+      des ehrlichen Kompromisses (Lauf 2 löst das Gültigkeitsproblem
+      vollständig, opfert dafür Antwortvielfalt) und warum das bewusst nur
+      lokal läuft, nicht im Azure-Deployment (Kostenrechnung dort).
 - [ ] **Narrator-Agent** — verpackt generierte/mechanische Ergebnisse in
       Flavor-Text.
 - [ ] **Difficulty-Agent** — passt zukünftige Encounter-Budgets an den
@@ -75,6 +84,9 @@ src/agentic_rogue_like/
 
 frontend/           React + Vite + TypeScript — Dungeon-Map, Kampf, Event-Prompts
 tests/              pytest-Suite (Engine, Kampf, API, Encounter-Agent/-Schema)
+training/           Eigenes uv-Projekt: Fine-Tuning-Pipeline für den Encounter-Agent
+                    (Datengenerierung, Colab-Notebook, Eval-Harness, GGUF/Ollama-Serving,
+                    siehe training/README.md und training/RESULTS.md)
 ```
 
 ## Warum so gebaut
@@ -91,7 +103,9 @@ Balance nachvollziehbar ist, bevor ein Agent anfängt, Content hineinzugeneriere
 
 Python, Pydantic (State + Tool-Schemas), LangGraph + Groq (Agent), FastAPI +
 Uvicorn (Web-API), React + Vite + TypeScript (Frontend), pytest, ruff,
-Docker, Azure Container Apps + Static Web Apps (Deployment).
+Docker, Azure Container Apps + Static Web Apps (Deployment). Optional statt
+Groq: ein selbst per LoRA/QLoRA fein-getuntes Qwen2.5-1.5B, quantisiert
+(GGUF) und lokal über Ollama serviert — siehe `training/`.
 
 ## Entwicklung
 
@@ -110,6 +124,15 @@ mit zusätzlich gesetztem `ENCOUNTER_AGENT_ENABLED=1` generiert die Engine
 Gegner live über Groq statt aus dem statischen Pool. `pytest` lädt keine
 `.env` und setzt das Flag nie, damit die Test-Suite schnell und ohne
 Netzwerk bleibt.
+
+Statt Groq lässt sich auch ein selbst fein-getuntes, lokal per
+[Ollama](https://ollama.com) serviertes Modell nutzen:
+`ENCOUNTER_AGENT_MODEL_SOURCE=ollama` (Standard: `groq`), optional
+`ENCOUNTER_AGENT_OLLAMA_MODEL=<tag>` für einen bestimmten Ollama-Modell-Tag.
+Braucht einen lokal laufenden Ollama-Server auf demselben Rechner — Details,
+Trainings-Pipeline und volle Auswertung gegen die Groq-Baseline in
+[`training/README.md`](training/README.md) und
+[`training/RESULTS.md`](training/RESULTS.md).
 
 ### Web (API + Frontend)
 

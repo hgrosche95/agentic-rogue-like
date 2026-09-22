@@ -80,4 +80,5 @@ training/
       Fallback auf den statischen Pool unverändert — deckt Ollama-Ausfälle
       automatisch mit ab. Live gegen den echten `enemy_for_node()`-Pfad und
       den laufenden Ollama-Server verifiziert.
-- [ ] Ergebnisse im Haupt-README dokumentieren
+- [x] Ergebnisse im Haupt-README dokumentiert — siehe dort Status
+      "Encounter-Agent-Destillation" und den Abschnitt "Entwicklung".

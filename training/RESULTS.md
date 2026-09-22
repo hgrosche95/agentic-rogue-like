@@ -147,6 +147,22 @@ Diagnose-Variante).
 - **Schema-Beschränkung + Lauf 2 zusammen** wurde nicht gemessen - macht die Diversität eher nicht schlechter
   (sie greift nur bei sonst fehlenden Feldern ein), aber ungeprüft ist ungeprüft.
 
+## Einsatzbereich: lokal, nicht deployed
+
+Der `ENCOUNTER_AGENT_MODEL_SOURCE=ollama`-Switch funktioniert nur, wenn Spiel-Engine und Ollama-Server auf
+derselben Maschine laufen (`localhost:11434`) - also für lokales Spielen/Entwickeln, nicht automatisch für
+die nach Azure Container Apps deployte Version. Bewusste Entscheidung, **nicht** für Azure einzurichten:
+
+- Das aktuelle Deployment kann bei Inaktivität auf null Instanzen herunterskalieren, weil ein Groq-Aufruf
+  kaum Speicher/CPU braucht - kostet im Leerlauf praktisch nichts.
+- Ollama bräuchte das Modell dauerhaft im Speicher (sonst ~3-4s Nachladezeit pro Kaltstart), also mindestens
+  eine dauerhaft laufende Instanz. Grob überschlagen (2 vCPU/4 GiB, Azure-Idle-Tarif, Stand 2026-09):
+  ~$50/Monat, abzüglich eines kleinen Anteils aus dem kostenlosen Kontingent (180.000 vCPU-Sekunden/Monat).
+  Nur eine Größenordnung, keine belastbare Kalkulation - abhängig von echter Auslastung/Konfiguration.
+- Damit ist der Kostenvorteil aus dem Vergleich oben ("$0 statt $0,15/1000 Aufrufe") **nur lokal gültig**.
+  In Azure würde er sich umkehren: Groqs Cent-Beträge gegen niedrige zweistellige Dollar-Beträge pro Monat,
+  nur um Latenz zu sparen.
+
 ## Bekannte Lücken und Vorbehalte
 
 - **Kosten** gemessen aus Tokenzahlen (320,6 ein / 427,8 aus pro Aufruf, gemittelt über alle 4 Tiers) mal
