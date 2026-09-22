@@ -49,18 +49,18 @@ training/
       `artifacts/dataset/data_card.md`.
 - [x] Basismodell-Entscheidung — Qwen2.5-1.5B-Instruct, siehe
       [`MODEL_CHOICE.md`](MODEL_CHOICE.md).
-- [x] Fine-Tuning (Colab, LoRA/QLoRA) — Notebook
-      [`notebook/finetune_qwen.ipynb`](notebook/finetune_qwen.ipynb) (Rang 16,
-      Alpha 32, Dropout 0,05, q/k/v/o_proj, 3 Epochen + Early Stopping) in
-      Colab durchgelaufen. Val-Loss sank alle 3 Epochen (1,26 → 0,57 → 0,54),
-      Early Stopping griff nicht — bei nur 217 Beispielen noch kein
-      Overfitting messbar. Gemergtes Modell (bf16, 3,09GB) liegt in
-      `artifacts/model/merged/`, Adapter in `artifacts/model/adapter/`.
-- [~] Eval-Harness gegen das fein-getunte Modell — **Zwischenstand in
-      [`RESULTS.md`](RESULTS.md)**: ohne Beschränkung nur 23-36 % gültige
-      Antworten (Groq ~99 %), mit schema-beschränktem Decoding 100 % gültig und
-      im Budget, dafür ~3,4x langsamer. Offen: Lauf 2 des Fine-Tunings
-      (Colab-GPU-Kontingent gesperrt) und die Groq-Baseline für elite/boss.
+- [x] Fine-Tuning (Colab, LoRA/QLoRA) — zwei Läufe, beide in
+      [`notebook/finetune_qwen.ipynb`](notebook/finetune_qwen.ipynb) (Lauf 2
+      ist der aktuelle Stand der Datei; Lauf-1-Konfiguration in `RESULTS.md`
+      dokumentiert). Modelle liegen in `artifacts/model/merged/` +
+      `merged-v2/` bzw. `adapter/` + `adapter-v2/`.
+- [x] Eval-Harness gegen das fein-getunte Modell — **volles Ergebnis in
+      [`RESULTS.md`](RESULTS.md)**: Lauf 1 brauchte schema-beschränktes
+      Decoding als Krücke (sonst 23-36 % statt 100 % gültig). Lauf 2 behebt
+      die Ursache selbst (100 % gültig ganz ohne Beschränkung, gesehen wie
+      ungesehen), tauscht das aber gegen eingebrochene Diversität (early-Tier:
+      alle 75 Antworten mit `hp=32`). Groq-Baseline jetzt vollständig
+      (alle 4 Tiers, 310 Calls).
 - [x] Quantisierung + Ollama-Serving — bf16-Modell per `llama.cpp` nach GGUF
       konvertiert und auf Q4_K_M quantisiert (2,94GB → 935MB), als
       `qwen2.5-enemy-generator` in Ollama importiert

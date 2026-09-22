@@ -1,0 +1,2 @@
+FROM ../artifacts/model/gguf/qwen2.5-1.5b-enemy-v2-f16.gguf
+PARAMETER temperature 0.9
