@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import random
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from langchain_groq import ChatGroq
 from langgraph.graph import END, StateGraph
@@ -25,6 +25,7 @@ from ..enemies import pick_enemy
 from ..models import DEFAULT_SETTING, Enemy
 from .budgets import budget_for
 from .encounter_schema import BudgetViolation, EnemyBudget, EnemyProposal, validate_proposal
+from .ollama_model import OllamaChatModel
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,21 @@ class EncounterState(TypedDict):
     proposal: EnemyProposal | None
 
 
-def _model() -> ChatGroq:
+def _model() -> Any:
+    # Return type is Any on purpose: ChatGroq and OllamaChatModel share no
+    # common base class, only the duck-typed with_structured_output(schema,
+    # include_raw=...).invoke(prompt) interface that generate_enemy() and the
+    # eval harness actually call.
+    #
+    # ENCOUNTER_AGENT_MODEL_SOURCE picks the source - "groq" (default) or
+    # "ollama", the fine-tuned model served locally (see training/RESULTS.md
+    # for how it compares). ENCOUNTER_AGENT_OLLAMA_MODEL overrides which
+    # imported Ollama model tag to use, since training produced more than one
+    # candidate (see OllamaChatModel's DEFAULT_MODEL_NAME for the current pick).
+    if os.environ.get("ENCOUNTER_AGENT_MODEL_SOURCE") == "ollama":
+        model_name = os.environ.get("ENCOUNTER_AGENT_OLLAMA_MODEL")
+        return OllamaChatModel(model_name) if model_name else OllamaChatModel()
+
     # max_retries=0: the graph's own retry loop already caps attempts, and
     # stacking the client's retries on top would multiply the wait before
     # enemy_for_node() can fall back to the static pool.

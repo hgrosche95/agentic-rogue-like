@@ -65,11 +65,19 @@ training/
       konvertiert und auf Q4_K_M quantisiert (2,94GB → 935MB), als
       `qwen2.5-enemy-generator` in Ollama importiert
       ([`serving/Modelfile`](serving/Modelfile)).
-      [`serving/ollama_model.py`](serving/ollama_model.py) ist ein
-      `encounter_agent._model()`-kompatibler Wrapper (`with_structured_output(...).invoke(...)`),
-      bewusst **ohne** Ollamas Tool-Calling — das Modell wurde auf rohen
-      JSON-Text trainiert, nicht auf ein Tool-Call-Format. Läuft nachweislich
-      durch den echten Produktions-Graphen. Erster Befund: das Modell lässt
-      gelegentlich `attack_name` weg — wird in Schritt 6 sauber gemessen.
-- [ ] Integration in `encounter_agent.py` hinter konfigurierbarem Switch
+      [`../src/agentic_rogue_like/agent/ollama_model.py`](../src/agentic_rogue_like/agent/ollama_model.py)
+      ist ein `encounter_agent._model()`-kompatibler Wrapper
+      (`with_structured_output(...).invoke(...)`), bewusst **ohne** Ollamas
+      Tool-Calling — das Modell wurde auf rohen JSON-Text trainiert, nicht auf
+      ein Tool-Call-Format. Lebt im Hauptpackage, nicht hier, weil er zur
+      Laufzeit im Spiel läuft (siehe Schritt "Integration"). Läuft
+      nachweislich durch den echten Produktions-Graphen. Erster Befund (Lauf 1): das Modell lässt
+      gelegentlich `attack_name` weg — vollständig ausgewertet in
+      [`RESULTS.md`](RESULTS.md).
+- [x] Integration in `encounter_agent.py` hinter konfigurierbarem Switch —
+      `ENCOUNTER_AGENT_MODEL_SOURCE=ollama` (Standard: `groq`),
+      `ENCOUNTER_AGENT_OLLAMA_MODEL` überschreibt den Modell-Tag. Bestehender
+      Fallback auf den statischen Pool unverändert — deckt Ollama-Ausfälle
+      automatisch mit ab. Live gegen den echten `enemy_for_node()`-Pfad und
+      den laufenden Ollama-Server verifiziert.
 - [ ] Ergebnisse im Haupt-README dokumentieren

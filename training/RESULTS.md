@@ -64,7 +64,7 @@ Warum es gerade das *letzte* Feld trifft, wissen wir nicht sicher.
 
 ## Lauf 1, Notlösung: schema-beschränktes Decoding
 
-Ollamas `format`-Parameter (`serving/ollama_model.py`, Flag `--constrained` im Eval) übersetzt das
+Ollamas `format`-Parameter (`src/agentic_rogue_like/agent/ollama_model.py`, Flag `--constrained` im Eval) übersetzt das
 `EnemyProposal`-Schema in eine Grammatik. Bei jedem Token sind nur noch Fortsetzungen erlaubt, die zum Schema
 passen; ein Objekt ohne `attack_name` kann nicht mehr geschlossen werden. Dasselbe Modell, derselbe Prompt, keine
 Zusatzlatenz (3,6 s mit und ohne). **Es bringt dem Modell nichts bei** und prüft das Budget nicht - dass alle 604

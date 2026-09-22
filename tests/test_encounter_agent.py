@@ -2,9 +2,11 @@ import random
 from unittest.mock import patch
 
 import pytest
+from langchain_groq import ChatGroq
 
 from agentic_rogue_like.agent import encounter_agent
 from agentic_rogue_like.agent.encounter_schema import BudgetViolation, EnemyBudget, EnemyProposal
+from agentic_rogue_like.agent.ollama_model import DEFAULT_MODEL_NAME, OllamaChatModel
 
 
 class _AlwaysOverpowered:
@@ -114,3 +116,32 @@ def test_enemy_for_node_falls_back_when_the_agent_never_meets_its_budget(monkeyp
     enemy = _enemy_for_node(_AlwaysOverpowered())
 
     assert enemy.hp != 999
+
+
+def test_model_defaults_to_groq(monkeypatch) -> None:
+    monkeypatch.delenv("ENCOUNTER_AGENT_MODEL_SOURCE", raising=False)
+    # ChatGroq() needs a key to construct (not to actually call) - pytest
+    # deliberately never loads .env, see README.md.
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+
+    assert isinstance(encounter_agent._model(), ChatGroq)
+
+
+def test_model_source_ollama_uses_the_default_model_name(monkeypatch) -> None:
+    monkeypatch.setenv("ENCOUNTER_AGENT_MODEL_SOURCE", "ollama")
+    monkeypatch.delenv("ENCOUNTER_AGENT_OLLAMA_MODEL", raising=False)
+
+    model = encounter_agent._model()
+
+    assert isinstance(model, OllamaChatModel)
+    assert model._model_name == DEFAULT_MODEL_NAME
+
+
+def test_model_source_ollama_respects_model_override(monkeypatch) -> None:
+    monkeypatch.setenv("ENCOUNTER_AGENT_MODEL_SOURCE", "ollama")
+    monkeypatch.setenv("ENCOUNTER_AGENT_OLLAMA_MODEL", "qwen2.5-enemy-generator")
+
+    model = encounter_agent._model()
+
+    assert isinstance(model, OllamaChatModel)
+    assert model._model_name == "qwen2.5-enemy-generator"

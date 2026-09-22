@@ -2,13 +2,18 @@
 served Ollama model - lets the game/eval-harness swap Groq for the
 fine-tuned local model with a pure configuration change, not a code change.
 
+Lives in the main package (not training/) because it's runtime code: the
+fine-tuning pipeline stops at producing a GGUF file, this is what
+encounter_agent.py actually talks to once ENCOUNTER_AGENT_MODEL_SOURCE=ollama.
+Only needs httpx + pydantic, both already main-package dependencies.
+
 Deliberately does NOT use Ollama's tool-calling/structured-output support:
 the fine-tuned model was trained on plain JSON text as the assistant's reply
-(see data_gen/dataset.py's to_training_record()), not on any tool-call wire
-format. Asking Ollama to wrap this in its tool-calling machinery would be
-asking the model to do something it was never trained to do - so this sends
-a plain chat message and parses/validates the JSON text response itself,
-exactly like training did.
+(see training/data_gen/dataset.py's to_training_record()), not on any
+tool-call wire format. Asking Ollama to wrap this in its tool-calling
+machinery would be asking the model to do something it was never trained to
+do - so this sends a plain chat message and parses/validates the JSON text
+response itself, exactly like training did.
 """
 
 from __future__ import annotations
@@ -21,7 +26,9 @@ from pydantic import BaseModel
 T = TypeVar("T", bound=BaseModel)
 
 OLLAMA_BASE_URL = "http://localhost:11434"
-DEFAULT_MODEL_NAME = "qwen2.5-enemy-generator"
+# The run-2 fine-tune (LoRA on all-linear, loss on completion only): 100%
+# schema-valid unconstrained in eval, vs. run 1's 23-36% - see training/RESULTS.md.
+DEFAULT_MODEL_NAME = "qwen2.5-enemy-generator-v2"
 REQUEST_TIMEOUT_SECONDS = 60.0
 
 

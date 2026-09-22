@@ -19,11 +19,15 @@ from functools import partial
 from pathlib import Path
 
 import httpx
+from agentic_rogue_like.agent.ollama_model import (
+    DEFAULT_MODEL_NAME,
+    OLLAMA_BASE_URL,
+    OllamaChatModel,
+)
 from agentic_rogue_like.models import SETTING_PRESETS
 from dotenv import load_dotenv
 
 from data_gen.contexts import TEST_SETTINGS
-from serving.ollama_model import DEFAULT_MODEL_NAME, OLLAMA_BASE_URL, OllamaChatModel
 
 from .harness import measure_cost_samples, run_harness
 from .metrics import compute_report
