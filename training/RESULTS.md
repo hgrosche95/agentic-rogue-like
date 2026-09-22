@@ -1,9 +1,9 @@
 # Ergebnisse: Groq gpt-oss-20b vs. fein-getuntes Qwen2.5-1.5B
 
-**Stand: Zwischenstand (2026-09-21)** - nach Lauf 1 des Fine-Tunings. Offen sind Lauf 2
-(Colab-GPU-Kontingent gerade erschöpft) und die Groq-Baseline für die Tiers elite/boss
-(siehe "Bekannte Lücken"). Alle Zahlen stammen aus `artifacts/eval_reports/*.md` und sind mit
-`uv run python -m eval.run_eval ...` reproduzierbar (die Berichte selbst sind gitignored).
+**Stand: Zwischenstand (2026-09-22)** - nach Lauf 1 des Fine-Tunings. Die Groq-Baseline ist jetzt
+vollständig (alle 4 Tiers, 310 Calls). Offen ist Lauf 2 des Fine-Tunings (Colab-GPU-Kontingent war
+erschöpft, siehe "Bekannte Lücken"). Alle Zahlen stammen aus `artifacts/eval_reports/*.md` und sind
+mit `uv run python -m eval.run_eval ...` reproduzierbar (die Berichte selbst sind gitignored).
 
 ## Kurzfassung
 
@@ -19,12 +19,14 @@
 
 | | Groq gpt-oss-20b | Fine-Tune Q4, ohne Beschränkung | Fine-Tune Q4, **mit** Beschränkung |
 |---|---|---|---|
-| Gültige Antworten (Schema) | 98,75 % (n=160, nur early/mid) | 22,7 % gesehen / 35,9 % ungesehen (n=300/304) | **100 % / 100 %** (n=300/304) |
+| Gültige Antworten (Schema) | **98,7 %** (n=310, alle 4 Tiers) | 22,7 % gesehen / 35,9 % ungesehen (n=300/304) | **100 % / 100 %** (n=300/304) |
 | Im Budget, wenn gültig (1. Versuch) | 100 % | 100 % | 100 % |
-| Eindeutige Namen je Tier (early/mid) | 0,75 / 0,73 | ~1,0 | 0,97-1,0 |
-| Eindeutige Angriffsnamen (early/mid) | 0,93 / 1,0 | ~1,0 | 0,75-0,91 |
-| Latenz p50 / p95 | 1,08 / 1,57 s | 3,6 / 3,9 s | 3,6-3,7 / 3,9-4,1 s |
-| Kosten / 1000 Aufrufe | $0,14 (gemessene Tokens x Listenpreis) | $0 (lokal) | $0 (lokal) |
+| Eindeutige Namen je Tier | 0,75 / 0,73 / 0,82 / 0,88 | ~1,0 | 0,97-1,0 |
+| Eindeutige Angriffsnamen je Tier | 0,93 / 1,00 / 0,92 / 0,96 | ~1,0 | 0,75-0,91 |
+| Latenz p50 / p95 | **1,09 / 1,78 s** | 3,6 / 3,9 s | 3,6-3,7 / 3,9-4,1 s |
+| Kosten / 1000 Aufrufe | **$0,15** (gemessene Tokens x Listenpreis) | $0 (lokal) | $0 (lokal) |
+
+Tier-Reihenfolge überall early/mid/elite/boss. Groq-N pro Tier: 118/42/75/75.
 
 "Gesehen" = die fünf `SETTING_PRESETS`, die alle im Trainings-Split liegen (das Modell kennt diese Prompts
 wörtlich). "Ungesehen" = `candy kingdom`, `swamp witch coven` (Test-Split, nie trainiert). Der Vergleich mit Groq
@@ -91,14 +93,20 @@ Download. Die kostenlose Colab-GPU war zum Zeitpunkt dieses Stands gesperrt.
 
 ## Bekannte Lücken und Vorbehalte
 
-- **Groq-Baseline ohne elite/boss:** Ein Fehler im Eval-Harness (Ergebnisse gleichen Labels wurden überschrieben,
-  behoben) hat die erste vollständige Messung vernichtet; die aktuelle Baseline enthält nur early (118) und mid (42).
-  Nachholen: `uv run python -m eval.run_eval --model groq --tiers elite boss --repeats 15` (150 Aufrufe, braucht
-  freies Groq-Tageslimit).
-- **Kosten** gemessen aus Tokenzahlen (~321 ein / ~399 aus pro Aufruf) mal Groq-Listenpreis vom 2026-09-17;
-  Hardware und Strom des lokalen Modells sind nicht eingerechnet.
+- **Fine-Tune Lauf 2 steht noch aus** - Colabs kostenlose GPU war zum Zeitpunkt dieses Stands gesperrt
+  (Tageskontingent). Sobald verfügbar: Notebook laufen lassen, Schnelltest-Ergebnis prüfen, bei Erfolg
+  neu quantisieren/importieren und die Eval-Läufe (`finetuned-seen`/`finetuned-heldout`, mit und ohne
+  `--constrained`) gegen `qwen2.5-enemy-generator-v2` wiederholen.
+- **Kosten** gemessen aus Tokenzahlen (320,6 ein / 427,8 aus pro Aufruf, gemittelt über alle 4 Tiers) mal
+  Groq-Listenpreis vom 2026-09-17; Hardware und Strom des lokalen Modells sind nicht eingerechnet.
 - **Latenz** sequenziell, eine Anfrage nach der anderen, Groq über das Netz, Ollama auf deiner CPU.
 - **Stichprobengröße:** bei n~300 liegt die Unsicherheit einer Rate um 50 % bei etwa ±3 Prozentpunkten, bei den
-  n=80-Diagnoseläufen bei ±5.
+  n=80-Diagnoseläufen bei ±5. Die Groq-Tiers early (118) und mid (42) sind unterschiedlich groß, weil sie aus
+  zwei zusammengeführten Läufen stammen (ein Überschreibungs-Bug im Eval-Harness kostete einen Teil des
+  ersten mid-Laufs, seither behoben, siehe `eval/report.py`).
 - **Diversität:** Elite-Gegner des Fine-Tunes haben in beiden Läufen **immer denselben Angriffswert**
-  (Streuung 0,0), eine echte Schwäche. Die HP-/Angriffswerte streuen bei allen Modellen nur wenig.
+  (Streuung 0,0), eine echte Schwäche. Bei Groq zeigte sich in einer frühen, kleinen Stichprobe (n=25)
+  dasselbe Muster bei Boss-Gegnern - mit der jetzigen vollen Stichprobe (n=75) liegt die Streuung dort bei
+  0,80, war also ein Artefakt der kleinen Stichprobe, kein echter Befund. Die Elite-Beobachtung beim
+  Fine-Tune ist mit n=75 (gesehen) bzw. n=76 (ungesehen) bereits groß genug, um kein reines Stichprobenrauschen
+  zu sein.
