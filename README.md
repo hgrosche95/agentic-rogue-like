@@ -16,6 +16,12 @@ funktioniert: Das deterministische Spiel und die Agenten-Schicht sind bewusst
 strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 "was feste Spiellogik bleibt" sichtbar bleibt, statt zu verschwimmen.
 
+## Screenshots
+
+| Start | Karte | Kampf |
+| --- | --- | --- |
+| ![Einstellung wählen](docs/screenshots/start.png) | ![Dungeon-Karte](docs/screenshots/map.png) | ![Kartenbasierter Kampf](docs/screenshots/combat.png) |
+
 ## Status
 
 - [x] **Skelett** — Projekt-Setup, Kern-Datenmodelle (`RunState`,

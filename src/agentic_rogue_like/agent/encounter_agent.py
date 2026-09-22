@@ -15,17 +15,15 @@ from __future__ import annotations
 import logging
 import os
 import random
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
-from langchain_groq import ChatGroq
-from langgraph.graph import END, StateGraph
-from langgraph.graph.state import CompiledStateGraph
+if TYPE_CHECKING:
+    from langgraph.graph.state import CompiledStateGraph
 
 from ..enemies import pick_enemy
 from ..models import DEFAULT_SETTING, Enemy
 from .budgets import budget_for
 from .encounter_schema import BudgetViolation, EnemyBudget, EnemyProposal, validate_proposal
-from .ollama_model import OllamaChatModel
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +51,18 @@ def _model() -> Any:
     # imported Ollama model tag to use, since training produced more than one
     # candidate (see OllamaChatModel's DEFAULT_MODEL_NAME for the current pick).
     if os.environ.get("ENCOUNTER_AGENT_MODEL_SOURCE") == "ollama":
+        # Lazy for the same reason as the langchain_groq import below: this
+        # module pulls in httpx, and the agent is off in the common case.
+        from .ollama_model import OllamaChatModel
+
         model_name = os.environ.get("ENCOUNTER_AGENT_OLLAMA_MODEL")
         return OllamaChatModel(model_name) if model_name else OllamaChatModel()
+
+    # Imported lazily: langchain_groq is only needed once the encounter
+    # agent actually runs (see enemy_for_node's ENCOUNTER_AGENT_ENABLED
+    # check) - importing it at module scope would pull it into every
+    # process that imports this module, agent disabled or not.
+    from langchain_groq import ChatGroq
 
     # max_retries=0: the graph's own retry loop already caps attempts, and
     # stacking the client's retries on top would multiply the wait before
@@ -107,6 +115,9 @@ def _route_after_validation(state: EncounterState) -> str:
 
 
 def build_graph() -> CompiledStateGraph:
+    # Same lazy-import reasoning as _model() above, for langgraph.
+    from langgraph.graph import END, StateGraph
+
     graph = StateGraph(EncounterState)
     graph.add_node("generate_enemy", generate_enemy)
     graph.add_node("validate_budget", validate_budget)

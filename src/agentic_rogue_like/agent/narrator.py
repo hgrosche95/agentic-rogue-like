@@ -17,8 +17,10 @@ from __future__ import annotations
 
 import logging
 import os
+from typing import TYPE_CHECKING
 
-from langchain_groq import ChatGroq
+if TYPE_CHECKING:
+    from langchain_groq import ChatGroq
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,11 @@ MAX_LENGTH = 120
 
 
 def _model() -> ChatGroq:
+    # Imported lazily - see encounter_agent.py's _model() for why: this
+    # keeps langchain_groq out of every import of this module when the
+    # agent is disabled (the common case for a cold container start).
+    from langchain_groq import ChatGroq
+
     return ChatGroq(
         model="openai/gpt-oss-20b",
         temperature=0.9,
