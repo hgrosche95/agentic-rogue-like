@@ -57,12 +57,13 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 - [x] **Encounter-Agent-Destillation** — Groqs Cloud-Call (`openai/gpt-oss-20b`)
       lässt sich per `ENCOUNTER_AGENT_MODEL_SOURCE=ollama` gegen ein selbst
       fein-getuntes Qwen2.5-1.5B tauschen, lokal per Ollama serviert, kein
-      API-Key/Netz/Tageslimit nötig. Zwei Trainingsläufe, volle Auswertung
+      API-Key/Netz/Tageslimit nötig. Drei Trainingsläufe, volle Auswertung
       gegen die Groq-Baseline (Gültigkeit, Budget-Treue, Diversität,
       Kosten/Latenz) in [`training/RESULTS.md`](training/RESULTS.md) — inkl.
-      des ehrlichen Kompromisses (Lauf 2 löst das Gültigkeitsproblem
-      vollständig, opfert dafür Antwortvielfalt) und warum das bewusst nur
-      lokal läuft, nicht im Azure-Deployment (Kostenrechnung dort).
+      des kontraintuitiven Ergebnisses, dass das *schwächer* trainierte Modell
+      mit schema-beschränktem Decoding beide "sauberen" Trainingslösungen
+      schlägt, und warum das bewusst nur lokal läuft, nicht im
+      Azure-Deployment (Kostenrechnung dort).
 - [ ] **Narrator-Agent** — verpackt generierte/mechanische Ergebnisse in
       Flavor-Text.
 - [ ] **Difficulty-Agent** — passt zukünftige Encounter-Budgets an den

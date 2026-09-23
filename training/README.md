@@ -49,18 +49,19 @@ training/
       `artifacts/dataset/data_card.md`.
 - [x] Basismodell-Entscheidung — Qwen2.5-1.5B-Instruct, siehe
       [`MODEL_CHOICE.md`](MODEL_CHOICE.md).
-- [x] Fine-Tuning (Colab, LoRA/QLoRA) — zwei Läufe, beide in
-      [`notebook/finetune_qwen.ipynb`](notebook/finetune_qwen.ipynb) (Lauf 2
-      ist der aktuelle Stand der Datei; Lauf-1-Konfiguration in `RESULTS.md`
-      dokumentiert). Modelle liegen in `artifacts/model/merged/` +
-      `merged-v2/` bzw. `adapter/` + `adapter-v2/`.
+- [x] Fine-Tuning (Colab, LoRA/QLoRA) — drei Läufe, alle über dasselbe
+      [`notebook/finetune_qwen.ipynb`](notebook/finetune_qwen.ipynb) (die
+      Datei zeigt Lauf 3; die Konfigurationen von Lauf 1 und 2 sind in
+      `RESULTS.md` dokumentiert). Modelle liegen in `artifacts/model/merged*/`
+      bzw. `adapter*/`.
 - [x] Eval-Harness gegen das fein-getunte Modell — **volles Ergebnis in
-      [`RESULTS.md`](RESULTS.md)**: Lauf 1 brauchte schema-beschränktes
-      Decoding als Krücke (sonst 23-36 % statt 100 % gültig). Lauf 2 behebt
-      die Ursache selbst (100 % gültig ganz ohne Beschränkung, gesehen wie
-      ungesehen), tauscht das aber gegen eingebrochene Diversität (early-Tier:
-      alle 75 Antworten mit `hp=32`). Groq-Baseline jetzt vollständig
-      (alle 4 Tiers, 310 Calls).
+      [`RESULTS.md`](RESULTS.md)**, alle drei Läufe mit identischen Parametern
+      gegen die vollständige Groq-Baseline (310 Calls) gemessen. Kurz: Lauf 2
+      und 3 lernen das Schema zuverlässig ein, verlieren dabei aber massiv
+      Antwortvielfalt; Lauf 3 zeigt, dass das an der LoRA-Kapazität liegt und
+      nicht an der Trainingsdauer. Am besten schneidet ausgerechnet Lauf 1 mit
+      schema-beschränktem Decoding ab — schemakonform per Konstruktion und
+      vielfältiger als Groq selbst. Das ist deshalb die Voreinstellung.
 - [x] Quantisierung + Ollama-Serving — bf16-Modell per `llama.cpp` nach GGUF
       konvertiert und auf Q4_K_M quantisiert (2,94GB → 935MB), als
       `qwen2.5-enemy-generator` in Ollama importiert

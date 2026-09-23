@@ -1,45 +1,59 @@
 # Ergebnisse: Groq gpt-oss-20b vs. fein-getuntes Qwen2.5-1.5B
 
-**Stand: 2026-09-22, nach Lauf 2 des Fine-Tunings.** Groq-Baseline vollständig (alle 4 Tiers, 310 Calls).
-Beide Fine-Tuning-Läufe sind durchgelaufen und vollständig gegen Groq gemessen. Alle Zahlen stammen aus
+**Stand: 2026-09-23, nach drei Fine-Tuning-Läufen.** Groq-Baseline vollständig (alle 4 Tiers, 310 Calls),
+alle drei Läufe mit identischen Parametern gegen sie gemessen. Alle Zahlen stammen aus
 `artifacts/eval_reports/*.md` und sind mit `uv run python -m eval.run_eval ...` reproduzierbar (die
 Berichte selbst sind gitignored).
 
 ## Kurzfassung
 
-- **Lauf 1** löste das Gültigkeitsproblem nur mit einer Krücke (schema-beschränktes Decoding); ohne sie
-  fehlte in 23-36 % der Antworten das Feld `attack_name`.
-- **Lauf 2** hat die eigentliche Ursache behoben: **100 % gültige Antworten, ganz ohne Beschränkung**,
-  auf gesehenen wie ungesehenen Settings (604 von 604 Aufrufen). Das ist der eigentliche Erfolg.
-- **Aber:** Lauf 2 hat ein Problem gegen ein anderes getauscht. Die **Antwortvielfalt ist eingebrochen** -
-  im early-Tier hatten **alle 75 Antworten exakt `hp=32`**, und der Name "Neon Wraith" taucht in 300
-  Antworten 38-mal auf. Details und Einordnung unten.
-- **Latenz** bleibt der Preis: ~3,5-3,7 s statt Groqs ~1,1 s (auf einer normalen CPU, ohne GPU), etwa
-  dreimal langsamer.
+- **Lauf 1** (Attention-only-LoRA) war für sich unbrauchbar: nur 23-36 % schemakonforme Antworten, fast
+  immer fehlte `attack_name`. Mit schema-beschränktem Decoding wurde daraus 100 % - damals als "Krücke"
+  eingeordnet.
+- **Lauf 2** (LoRA auf allen linearen Schichten, Loss nur auf der Antwort, 5 Epochen) behob die Ursache
+  im Training: 100 % gültig ganz ohne Beschränkung. Handelte sich dafür aber einen **Einbruch der
+  Antwortvielfalt** ein.
+- **Lauf 3** sollte klären, ob der Einbruch an der Kapazität oder der Trainingsdauer lag, und hielt alles
+  aus Lauf 2 bis auf die Epochen (3 statt 5). Antwort: **an der Dauer lag es nicht.** Die Diversität blieb
+  gleich schlecht, und die Gültigkeit fiel sogar leicht (96,7 % / 99,3 %).
+- **Das überraschende Ergebnis:** Über alle Achsen gewinnt ausgerechnet die vermeintliche Krücke.
+  **Lauf 1 + Beschränkung** ist schemakonform per Konstruktion und hat **0,95 eindeutige Namen** - mehr
+  als Groq selbst (0,67) und doppelt so viel wie Lauf 2/3 (0,45-0,56). Es ist deshalb die Voreinstellung
+  in `ollama_model.py`.
+- **Latenz** bleibt der Preis: ~3,6 s statt Groqs ~1,1 s (normale CPU, ohne GPU), etwa dreimal langsamer.
 - **Kosten:** $0 statt ~$0,15 pro 1000 Aufrufe. Absolut winzig - der eigentliche Gewinn ist die
   Unabhängigkeit von API-Key, Netz und Tageslimit (Groqs 200k-Tokens/Tag-Limit hat die Entwicklung diese
   Woche mehrfach ausgebremst).
 
 ## Vergleich
 
-| | Groq gpt-oss-20b | Lauf 1, ohne Beschränkung | Lauf 1, **mit** Beschränkung | **Lauf 2, ohne Beschränkung** |
-|---|---|---|---|---|
-| Gültige Antworten (Schema) | **98,7 %** (n=310) | 22,7 % / 35,9 % (n=300/304) | 100 % / 100 % | **100 % / 100 %** (n=300/304) |
-| Im Budget, wenn gültig (1. Versuch) | 100 % | 100 % | 100 % | **100 %** |
-| Eindeutige Namen (gesamt) | 0,67 | ~1,0 (der validen) | 0,95 / 0,94 | **0,45 / 0,56** |
-| Eindeutige Angriffsnamen (gesamt) | 0,87 | ~1,0 (der validen) | 0,71 / 0,60 | 0,78 / 0,81 |
-| HP-Streuung, early-Tier | 1,59 | - | 1,44 | **0,00 (gesehen)** / 0,50 (ungesehen) |
-| Attack-Streuung, elite-Tier | 0,26 | - | 0,00 | **0,90 / 0,99** |
-| Latenz p50 / p95 | **1,09 / 1,78 s** | 3,6 / 3,9 s | 3,6-3,7 / 3,9-4,1 s | 3,5-3,6 / 3,7-3,8 s |
-| Kosten / 1000 Aufrufe | **$0,15** | $0 (lokal) | $0 (lokal) | $0 (lokal) |
+Werte als "gesehen / ungesehen", wo getrennt gemessen. Alle Fine-Tune-Zahlen aus je 300 (gesehen) bzw.
+304 (ungesehen) Aufrufen, Groq aus 310.
 
-Tier-Reihenfolge überall early/mid/elite/boss, Werte "gesehen / ungesehen" wo unterschiedlich gemessen.
-Groq-N pro Tier: 118/42/75/75.
+| | Groq | Lauf 1 ohne Beschr. | **Lauf 1 + Beschr.** | Lauf 2 (5 Ep) | Lauf 3 (3 Ep) |
+|---|---|---|---|---|---|
+| Gültige Antworten | 98,7 % | 22,7 / 35,9 % | **100 / 100 %** | 100 / 100 % | 96,7 / 99,3 % |
+| Im Budget, wenn gültig | 100 % | 100 % | **100 %** | 100 % | 100 % |
+| Eindeutige Namen | 0,67 | ~1,0 (der validen) | **0,95 / 0,94** | 0,45 / 0,56 | 0,56 / 0,52 |
+| Anteil häufigster Name | 12,7 % | - | **1,0 %** | 12,7 / 6,6 % | 6,2 / 13,2 % |
+| Verschiedene HP-Werte je Tier | 5/4/7/7 | - | **4/4/9/7** | 1/3/6/2 | 1/3/6/2 |
+| Latenz p50 | **1,09 s** | 3,6 s | 3,6 s | 3,5 s | 3,6 s |
+| Kosten / 1000 Aufrufe | $0,15 | $0 | **$0** | $0 | $0 |
+
+Zur Lesart der Diversitätsmaße: Die **Unique-Quote** sinkt mechanisch mit wachsender Stichprobe und taugt
+nur für gleich große Stichproben (hier gegeben). Der **Anteil des häufigsten Namens** ist robuster. Die
+**Anzahl verschiedener HP-Werte je Tier** (Reihenfolge early/mid/elite/boss) ist aussagekräftiger als eine
+Standardabweichung über alle Tiers hinweg, weil jedes Tier eine andere Budget-Spanne hat (16/21/26/41
+mögliche Werte).
 
 "Gesehen" = die fünf `SETTING_PRESETS`, die alle im Trainings-Split liegen (das Modell kennt diese Prompts
 wörtlich). "Ungesehen" = `candy kingdom`, `swamp witch coven` (Test-Split, nie trainiert). Der Vergleich mit Groq
-ist auf "gesehen" fair, "ungesehen" ist der ehrliche Generalisierungswert. Bei Gültigkeit gibt es in beiden Läufen
-keine Lücke zwischen gesehen/ungesehen; bei der Diversität in Lauf 2 auch nicht (beide schwach).
+ist auf "gesehen" fair, "ungesehen" ist der ehrliche Generalisierungswert. Eine Lücke zwischen beiden gibt es
+in keinem Lauf - weder bei der Gültigkeit noch bei der Diversität.
+
+**Wichtige Einschränkung:** Der Harness misst Vielfalt, nicht Qualität. Dass Lauf 1 + Beschränkung mehr
+verschiedene Namen erzeugt als Groq, heißt nicht, dass es die besseren Namen sind - nur, dass es sich
+seltener wiederholt.
 
 ## Lauf 1: was schiefging, und wie wir es eingegrenzt haben
 
@@ -103,16 +117,51 @@ aggregierte Metrik):
   vorher 0,00) haben sich dagegen verbessert - der Einbruch betrifft vor allem Namen und HP-Werte, nicht
   alles gleichermaßen.
 
-**Wahrscheinliche Ursache (nicht abschließend geprüft):** dieselben zwei Stellschrauben, die das
-Gültigkeitsproblem behoben haben, sind plausible Kandidaten für den neuen Nebeneffekt - mehr LoRA-Kapazität
-plus mehr Trainingsschritte auf nur 217 Beispielen ist ein klassisches Rezept dafür, dass sich ein Modell auf
-wenige, im Training häufig belohnte Muster einschießt, statt zu verallgemeinern. Schema-Beschränkung würde
-das nicht beheben - sie erzwingt nur Vollständigkeit, nicht Abwechslung.
+**Verdacht damals:** dieselben zwei Stellschrauben, die das Gültigkeitsproblem behoben haben - mehr
+LoRA-Kapazität *und* mehr Trainingsschritte auf nur 217 Beispielen. Beide zusammen sind ein klassisches
+Rezept dafür, dass sich ein Modell auf wenige, im Training häufig belohnte Muster einschießt. Welche der
+beiden es war, klärt Lauf 3.
 
-**Einordnung:** kein Rückschritt gegenüber Lauf 1 (Gültigkeit ist strikt besser, ohne Krücke), aber auch kein
-uneingeschränkter Fortschritt. Für den Encounter-Agent ist Namens-/Wert-Wiederholung real spürbar (Spieler
-sehen denselben Gegnernamen wieder), während fehlende Felder den kompletten Fallback auf den statischen Pool
-auslösen. Welches Problem schwerer wiegt, ist eine Produktentscheidung, keine rein technische.
+## Lauf 3: Kapazität von Trainingsdauer getrennt
+
+Lauf 2 hatte gegenüber Lauf 1 drei Dinge gleichzeitig geändert, also war nicht zuzuordnen, welche Änderung
+die Diversität gekostet hat. Die Loss-Maskierung blieb (sie hat das eigentliche Problem gelöst), übrig
+blieben Kapazität und Dauer als Verdächtige. Lauf 3 hält **alles aus Lauf 2 bis auf die Epochen**: wieder
+3 statt 5, Early-Stopping-Geduld 1 statt 2. Ein gezielter Test einer Hypothese, kein Sweep.
+
+**Ergebnis: an der Trainingsdauer lag es nicht.**
+
+| | Lauf 2 (5 Epochen) | Lauf 3 (3 Epochen) |
+|---|---|---|
+| Gültige Antworten | 100 / 100 % | 96,7 / 99,3 % |
+| Eindeutige Namen | 0,45 / 0,56 | 0,56 / 0,52 |
+| Anteil häufigster Name | 12,7 / 6,6 % | 6,2 / 13,2 % |
+| Verschiedene HP-Werte je Tier | 1/3/6/2 | 1/3/6/2 |
+
+Die Diversität bleibt praktisch unverändert - der early-Tier kollabiert weiterhin auf einen einzigen
+HP-Wert, und die Unique-Quoten schwanken in beide Richtungen, ohne Trend. Gleichzeitig kostet die kürzere
+Trainingszeit etwas Gültigkeit. Damit bleibt als Ursache die **LoRA-Kapazität** (alle linearen Schichten
+statt nur Attention) beziehungsweise die Kombination aus Kapazität und Antwort-Loss - nicht die Dauer.
+
+**Und der eigentliche Befund:** Stellt man alle Varianten nebeneinander (Tabelle oben), gewinnt ausgerechnet
+die vermeintliche Krücke. Lauf 1 + Beschränkung ist schemakonform per Konstruktion **und** hat die mit
+Abstand beste Diversität: 0,95 eindeutige Namen gegen 0,45-0,56, häufigster Name 1,0 % gegen 6-13 %,
+4/4/9/7 verschiedene HP-Werte gegen 1/3/6/2. Selbst gegenüber Groq (0,67 / 12,7 % / 5/4/7/7) steht es besser
+da.
+
+**Erklärungsversuch (Hypothese, nicht gemessen):** Der Attention-only-Adapter aus Lauf 1 hat das Modell kaum
+verschoben - es blieb nah an der breiten Verteilung des Basismodells und konnte nur das Format nicht
+zuverlässig treffen. Genau diese eine fehlende Eigenschaft liefert die Grammatik-Beschränkung nach, ohne die
+Inhaltsverteilung anzufassen. Lauf 2 und 3 haben das Format dagegen *eintrainiert* und dabei zusammen mit dem
+Format auch das enge Vokabular und die konkreten Zahlenwerte der 217 Beispiele übernommen. Formulierung für
+den Merksatz: Ein Decoder-Constraint erzwingt Struktur, ohne Vielfalt zu kosten; Training erzwingt Struktur,
+indem es Vielfalt kostet.
+
+**Konsequenz für die Produktion:** `DEFAULT_MODEL_NAME` in `src/agentic_rogue_like/agent/ollama_model.py`
+zeigt auf `qwen2.5-enemy-generator` (Lauf 1), und `_model()` setzt `constrain_output=True`. Die Beschränkung
+bleibt auch dann an, wenn per `ENCOUNTER_AGENT_OLLAMA_MODEL` ein anderes Modell gewählt wird: Für Modelle,
+die sie nicht brauchen, kostet sie nichts messbares (gleiche Latenz), schließt aber einen kompletten
+Fehlermodus aus.
 
 ## Trainingsentscheidungen (Lauf 1)
 
@@ -132,20 +181,20 @@ auslösen. Welches Problem schwerer wiegt, ist eine Produktentscheidung, keine r
   Adapter darauf gemergt wird (3,09 GB).
 - **Quantisierung:** GGUF f16 (2,94 GB) → Q4_K_M (935 MB), in Ollama als `qwen2.5-enemy-generator`.
 
-Lauf 2 nutzt dieselbe Daten-/Modellbasis und denselben Merge-/Quantisierungs-Ablauf; Änderungen sind oben
-unter "Lauf 2" aufgeführt. Modelle: `qwen2.5-enemy-generator-v2` (Q4_K_M) und `-v2-f16` (unquantisiert,
-Diagnose-Variante).
+Lauf 2 und 3 nutzen dieselbe Daten-/Modellbasis und denselben Merge-/Quantisierungs-Ablauf; ihre Änderungen
+sind oben in den jeweiligen Abschnitten aufgeführt. Ollama-Modelle: `qwen2.5-enemy-generator` (Lauf 1,
+Voreinstellung), `-v2`, `-v3` sowie `-f16`/`-v2-f16` als unquantisierte Diagnose-Varianten.
 
 ## Offene Fragen
 
-- **Woran der Diversitäts-Einbruch in Lauf 2 genau liegt**, ist nicht bewiesen, nur die naheliegendste
-  Erklärung (siehe oben). Ließe sich eingrenzen: z. B. LoRA auf allen linearen Schichten, aber nur 3 Epochen
-  (Kapazität isoliert von Trainingsdauer) - das wäre kein Sweep über viele Kombinationen, sondern ein
-  gezielter dritter Lauf, der genau diese eine Frage beantwortet.
-- **Ob ein dritter Lauf lohnt**, hängt davon ab, ob die Diversitäts-Schwäche für den tatsächlichen Einsatz im
-  Spiel schwerer wiegt als die jetzt gelöste Gültigkeits-Schwäche - siehe Einordnung oben.
-- **Schema-Beschränkung + Lauf 2 zusammen** wurde nicht gemessen - macht die Diversität eher nicht schlechter
-  (sie greift nur bei sonst fehlenden Feldern ein), aber ungeprüft ist ungeprüft.
+- **Warum genau die höhere LoRA-Kapazität die Vielfalt kostet**, ist nicht gemessen, nur plausibel erklärt
+  (siehe Lauf 3). Ein Mittelweg wäre testbar, etwa all-linear bei Rang 4 oder 8 statt 16, oder
+  Attention-only mit Antwort-Loss - also Format lernen, ohne so viel Verteilung zu verlieren. Beides je ein
+  gezielter Lauf, kein Sweep.
+- **Schema-Beschränkung zusammen mit Lauf 2/3** wurde nicht gemessen. Sie dürfte deren Diversität nicht
+  verbessern (sie erzwingt Vollständigkeit, nicht Abwechslung), aber ungeprüft ist ungeprüft.
+- **Ob die höhere Namensvielfalt von Lauf 1 auch bessere Namen bedeutet**, misst der Harness nicht. Dafür
+  bräuchte es ein Qualitätsurteil, etwa ein LLM-as-judge gegen die Groq-Antworten oder schlicht Hinsehen.
 
 ## Einsatzbereich: lokal, nicht deployed
 

@@ -53,10 +53,14 @@ def _model() -> Any:
     if os.environ.get("ENCOUNTER_AGENT_MODEL_SOURCE") == "ollama":
         # Lazy for the same reason as the langchain_groq import below: this
         # module pulls in httpx, and the agent is off in the common case.
-        from .ollama_model import OllamaChatModel
+        from .ollama_model import DEFAULT_MODEL_NAME, OllamaChatModel
 
-        model_name = os.environ.get("ENCOUNTER_AGENT_OLLAMA_MODEL")
-        return OllamaChatModel(model_name) if model_name else OllamaChatModel()
+        # constrain_output=True on purpose: the default model needs it to be
+        # schema-valid at all, and for models that don't it costs nothing
+        # measurable (same latency in eval) while ruling out a whole failure
+        # mode. So it stays on whichever model is configured.
+        model_name = os.environ.get("ENCOUNTER_AGENT_OLLAMA_MODEL") or DEFAULT_MODEL_NAME
+        return OllamaChatModel(model_name, constrain_output=True)
 
     # Imported lazily: langchain_groq is only needed once the encounter
     # agent actually runs (see enemy_for_node's ENCOUNTER_AGENT_ENABLED

@@ -139,9 +139,18 @@ def test_model_source_ollama_uses_the_default_model_name(monkeypatch) -> None:
 
 def test_model_source_ollama_respects_model_override(monkeypatch) -> None:
     monkeypatch.setenv("ENCOUNTER_AGENT_MODEL_SOURCE", "ollama")
-    monkeypatch.setenv("ENCOUNTER_AGENT_OLLAMA_MODEL", "qwen2.5-enemy-generator")
+    monkeypatch.setenv("ENCOUNTER_AGENT_OLLAMA_MODEL", "some-other-tag")
 
     model = encounter_agent._model()
 
     assert isinstance(model, OllamaChatModel)
-    assert model._model_name == "qwen2.5-enemy-generator"
+    assert model._model_name == "some-other-tag"
+
+
+def test_model_source_ollama_constrains_output(monkeypatch) -> None:
+    """The default model is only schema-valid with constrained decoding, and
+    it costs nothing for models that don't need it - so it stays on."""
+    monkeypatch.setenv("ENCOUNTER_AGENT_MODEL_SOURCE", "ollama")
+    monkeypatch.setenv("ENCOUNTER_AGENT_OLLAMA_MODEL", "some-other-tag")
+
+    assert encounter_agent._model()._constrain_output is True

@@ -26,9 +26,13 @@ from pydantic import BaseModel
 T = TypeVar("T", bound=BaseModel)
 
 OLLAMA_BASE_URL = "http://localhost:11434"
-# The run-2 fine-tune (LoRA on all-linear, loss on completion only): 100%
-# schema-valid unconstrained in eval, vs. run 1's 23-36% - see training/RESULTS.md.
-DEFAULT_MODEL_NAME = "qwen2.5-enemy-generator-v2"
+# The run-1 fine-tune (attention-only LoRA). On its own it only produces
+# schema-valid JSON 23-36% of the time, but paired with constrained decoding
+# it is schema-valid by construction *and* keeps far more of the base model's
+# variety than the later runs that trained the schema in: 0.95 unique names
+# vs 0.45-0.56, and its most frequent name covers 1% of answers vs 6-13%.
+# See training/RESULTS.md for the full comparison across all three runs.
+DEFAULT_MODEL_NAME = "qwen2.5-enemy-generator"
 REQUEST_TIMEOUT_SECONDS = 60.0
 
 
