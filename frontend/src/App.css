@@ -19,6 +19,9 @@
   --hp-empty: #2a2214;
   --glow-cyan: 0 0 10px rgba(79, 216, 224, 0.55);
   --glow-red: 0 0 10px rgba(198, 90, 58, 0.5);
+  /* combat: warm human lab vs. cold AI grid */
+  --warm: #ff9a4d;
+  --ai-red: #ff4d6a;
 }
 
 body {
@@ -43,7 +46,30 @@ body {
 /* Combat gets a wide, landscape "card table" layout instead of the
    mobile-friendly single column the rest of the app uses. */
 .game.is-wide {
-  max-width: 960px;
+  max-width: 1120px;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  /* in combat the title, setting badge and map button share one row, so
+     the arena and the cards get the vertical space */
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  column-gap: 0.8rem;
+}
+
+.game.is-wide > * {
+  grid-column: 1 / -1;
+}
+
+.game.is-wide > h1,
+.game.is-wide > .setting-badge,
+.game.is-wide > .map-toggle-row {
+  grid-column: auto;
+  margin-bottom: 0.8rem;
+}
+
+.game.is-wide > .map-toggle-row {
+  justify-self: end;
 }
 
 .game h1 {
@@ -615,78 +641,111 @@ button:disabled {
   margin-bottom: 1.1rem;
 }
 
-/* -- arena split: player and monster as mirrored, facing panels -- */
-.arena-split {
-  display: flex;
-  align-items: stretch;
-  gap: 1rem;
-  background: var(--panel-deep);
-  border: 2px solid var(--line);
-  border-radius: 8px;
-  padding: 0.9rem 1.1rem;
-  margin: 0 auto 1.2rem;
-  max-width: 640px;
-  box-shadow: inset 0 0 0 1px rgba(236, 223, 192, 0.04);
+/* -- HUD: both fighters' vitals, drawn onto the arena's upper corners.
+   The column gap keeps the middle clear for the monitor (33.5%-66.5%). -- */
+.combat-hud {
+  position: absolute;
+  top: 3%;
+  left: 1.5%;
+  right: 1.5%;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 38%;
+  align-items: start;
+  pointer-events: none;
 }
 
-.combatant {
-  flex: 1 1 0;
-  min-width: 0;
+.hud-side {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 0.4rem;
+  gap: 0.25rem;
+  min-width: 0;
+  max-width: 100%;
+  justify-self: start;
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  background: rgba(10, 8, 6, 0.6);
 }
 
-.combatant-enemy {
+.hud-side.is-enemy {
+  justify-self: end;
   align-items: flex-end;
   text-align: right;
+  background: rgba(4, 10, 16, 0.65);
 }
 
-.arena-divider {
-  flex-shrink: 0;
-  width: 2px;
-  align-self: stretch;
-  background: linear-gradient(180deg, transparent, var(--line), transparent);
-}
-
-.combatant-name {
+.hud-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: "Rajdhani", sans-serif;
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: clamp(0.8rem, 1.4cqw, 1.05rem);
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+}
+
+.hud-side .stat-figure {
+  font-size: 0.7rem;
+}
+
+.hud-side .block-badge,
+.hud-side .armor-badge,
+.hud-side .intent-badge {
+  font-size: 0.6rem;
+  padding: 0.05rem 0.5rem;
+}
+
+.is-player .hud-name {
+  color: var(--warm);
+}
+
+.is-enemy .hud-name {
   color: var(--cyan);
 }
 
-.combatant-enemy-head {
-  display: flex;
-  flex-direction: row-reverse;
-  align-items: center;
-  gap: 0.5rem;
+.hud-bar {
+  display: block;
+  width: clamp(90px, 16cqw, 170px);
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--hp-empty);
+  border: 1px solid var(--line);
 }
 
-.monster-icon {
-  flex-shrink: 0;
-  filter: drop-shadow(0 0 6px rgba(198, 90, 58, 0.4));
+.hud-bar > span {
+  display: block;
+  height: 100%;
+  transition: width 0.5s cubic-bezier(0.3, 0.7, 0.3, 1);
 }
 
-.combatant-vitals {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
+.hud-bar.is-player > span {
+  background: linear-gradient(90deg, #8a3a12, var(--warm));
+  box-shadow: 0 0 8px rgba(255, 154, 77, 0.5);
 }
 
-.combatant-enemy .combatant-vitals {
-  flex-direction: row-reverse;
+.hud-bar.is-enemy {
+  background: #07131c;
+  border-color: #16303e;
 }
 
-.combatant-badges {
+.hud-bar.is-enemy > span {
+  margin-left: auto;
+  background: linear-gradient(90deg, var(--ai-red), #ff8aa0);
+  box-shadow: 0 0 8px rgba(255, 77, 106, 0.5);
+}
+
+.hud-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  align-items: center;
+  gap: 0.4rem;
 }
 
-.combatant-enemy .combatant-badges {
+.is-enemy .hud-meta {
   justify-content: flex-end;
 }
 
@@ -702,24 +761,353 @@ button:disabled {
 }
 
 .intent-badge.type-attack {
-  background: rgba(198, 90, 58, 0.18);
-  color: var(--maroon);
-  border-color: var(--maroon);
+  background: rgba(255, 77, 106, 0.12);
+  color: var(--ai-red);
+  border-color: var(--ai-red);
 }
 
 .intent-badge.type-defend {
-  background: rgba(74, 138, 130, 0.18);
-  color: var(--sky);
-  border-color: var(--sky);
+  background: rgba(79, 216, 224, 0.12);
+  color: var(--cyan);
+  border-color: var(--cyan);
 }
 
-.enemy-name {
-  color: var(--maroon);
+/* -- arena: three stacked full-frame renders from one Blender camera.
+   The percentages below (fighter origins, popup spots, monitor glass) are
+   measured from that camera, so they stay right at any size. -- */
+.arena-stage {
+  position: relative;
+  aspect-ratio: 1920 / 800;
+  /* capped by viewport height so field and hand stay on screen below it */
+  width: min(100%, calc(40vh * 2.4));
+  margin-inline: auto;
+  overflow: hidden;
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  background: #000;
+  margin-bottom: 1rem;
+  container-type: inline-size;
 }
 
-.enemy-hp-fill {
-  background: linear-gradient(90deg, var(--maroon), #e0805a);
-  box-shadow: var(--glow-red);
+.arena-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+.arena-player {
+  transform-origin: 25% 60%;
+}
+
+.arena-enemy {
+  transform-origin: 77% 60%;
+}
+
+.arena-player.is-lunging {
+  animation: arena-lunge-right 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.arena-enemy.is-lunging {
+  animation: arena-lunge-left 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.arena-enemy.is-hit {
+  animation: arena-hit-enemy 0.5s ease-out 0.18s both;
+}
+
+.arena-player.is-hit {
+  animation: arena-hit-player 0.5s ease-out 0.18s both;
+}
+
+.arena-player.is-healed {
+  animation: arena-heal 0.9s ease-out;
+}
+
+@keyframes arena-lunge-right {
+  40% {
+    transform: translateX(14%);
+  }
+}
+
+@keyframes arena-lunge-left {
+  40% {
+    transform: translateX(-14%);
+  }
+}
+
+@keyframes arena-hit-enemy {
+  0%,
+  100% {
+    transform: none;
+    filter: none;
+  }
+  15% {
+    transform: translateX(1.2%);
+    filter: brightness(2.2) drop-shadow(-6px 0 0 var(--cyan)) drop-shadow(6px 0 0 var(--ai-red));
+  }
+  35% {
+    transform: translateX(-1%);
+    filter: brightness(1.4) drop-shadow(-3px 0 0 var(--cyan)) drop-shadow(3px 0 0 var(--ai-red));
+  }
+  60% {
+    transform: translateX(0.5%);
+    filter: none;
+  }
+}
+
+@keyframes arena-hit-player {
+  0%,
+  100% {
+    transform: none;
+    filter: none;
+  }
+  15% {
+    transform: translateX(-1.2%);
+    filter: brightness(1.8) sepia(1) saturate(4) hue-rotate(160deg);
+  }
+  40% {
+    transform: translateX(0.8%);
+    filter: none;
+  }
+  65% {
+    transform: translateX(-0.4%);
+  }
+}
+
+@keyframes arena-heal {
+  0%,
+  100% {
+    filter: none;
+  }
+  40% {
+    filter: brightness(1.5) drop-shadow(0 0 18px #ffd36b);
+  }
+}
+
+.arena-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.arena-popup {
+  position: absolute;
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 700;
+  font-size: 3.6cqw;
+  line-height: 1;
+  animation: arena-popup 1.1s ease-out 0.2s both;
+}
+
+.arena-popup.is-player {
+  left: 25%;
+  top: 20%;
+}
+
+.arena-popup.is-enemy {
+  left: 76.5%;
+  top: 24%;
+}
+
+.arena-popup.is-damage.is-enemy {
+  color: #ffd2a8;
+  text-shadow: 0 0 14px var(--warm), 0 3px 0 #000;
+}
+
+.arena-popup.is-damage.is-player {
+  color: #c8f6ff;
+  text-shadow: 0 0 14px var(--cyan), 0 3px 0 #000;
+}
+
+.arena-popup.is-heal {
+  color: #ffe08a;
+  text-shadow: 0 0 14px #ffd36b, 0 3px 0 #000;
+}
+
+@keyframes arena-popup {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 0) scale(0.5);
+  }
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -18%) scale(1.3);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -160%) scale(1);
+  }
+}
+
+.arena-slash {
+  position: absolute;
+  left: 68%;
+  top: 54%;
+  width: 18%;
+  height: 0.5cqw;
+  border-radius: 3px;
+  background: linear-gradient(90deg, transparent, #ffe0b0, var(--warm));
+  box-shadow: 0 0 18px var(--warm);
+  transform-origin: left;
+  animation: arena-slash 0.45s ease-out 0.12s both;
+}
+
+@keyframes arena-slash {
+  0% {
+    opacity: 1;
+    transform: rotate(-24deg) scaleX(0);
+  }
+  35% {
+    opacity: 1;
+    transform: rotate(-24deg) scaleX(1);
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(-24deg) scaleX(1);
+  }
+}
+
+.arena-pixel {
+  position: absolute;
+  left: 76%;
+  top: 52%;
+  width: 0.8cqw;
+  height: 0.8cqw;
+  background: var(--cyan);
+  border: 1px solid #05080b;
+  animation: arena-pixel 0.8s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.arena-pixel.is-dark {
+  background: #1a2e3e;
+}
+
+@keyframes arena-pixel {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) rotate(400deg);
+  }
+}
+
+.arena-beam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0.5cqw;
+  background: var(--cyan);
+  box-shadow: 0 0 30px 8px rgba(77, 225, 255, 0.7);
+  animation: arena-beam 0.55s linear 0.1s both;
+}
+
+@keyframes arena-beam {
+  from {
+    left: 74%;
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    left: 20%;
+    opacity: 0;
+  }
+}
+
+/* -- the monitor hanging over the arena: fills the rendered glass -- */
+.arena-monitor {
+  position: absolute;
+  left: 33.54%;
+  top: 5.8%;
+  width: 32.93%;
+  height: 32.39%;
+  box-sizing: border-box;
+  padding: 0.7cqw 1cqw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: max(10px, 1.05cqw);
+  line-height: 1.45;
+  color: #7fb8c8;
+  text-shadow: 0 0 6px rgba(77, 225, 255, 0.45);
+}
+
+.arena-monitor::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px);
+}
+
+.monitor-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.3cqw;
+  color: var(--cyan);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.monitor-title i {
+  width: 0.55cqw;
+  height: 0.55cqw;
+  border-radius: 50%;
+  background: var(--ai-red);
+  animation: monitor-blink 1.2s infinite;
+}
+
+@keyframes monitor-blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+.monitor-lines {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.monitor-line {
+  margin: 0;
+}
+
+.monitor-line:last-child {
+  color: #c8f6ff;
+}
+
+/* -- a played card's flight from hand to slot (see cardFlight.ts) -- */
+.card-flight {
+  position: fixed;
+  z-index: 50;
+  margin: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-player,
+  .arena-enemy {
+    animation: none !important;
+  }
+  .arena-slash,
+  .arena-pixel,
+  .arena-beam {
+    display: none;
+  }
 }
 
 /* -- the field: its own centered row, above the hand -- */
@@ -1061,9 +1449,21 @@ button:disabled {
   margin: 0 0 0.8rem;
 }
 
+/* -- right column of the table: end turn stacked over the discard piles -- */
+.table-side {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
 .end-turn-button {
   display: block;
   width: 100%;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
   background: var(--panel-deep);
   color: var(--ink);
   border-color: var(--line);

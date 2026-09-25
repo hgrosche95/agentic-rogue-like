@@ -89,7 +89,8 @@ function App() {
     <main className={`game${inCombat ? " is-wide" : ""}`}>
       <h1>agentic-rogue-like</h1>
       <p className="setting-badge">{run.setting}</p>
-      <PlayerStats player={run.player} floor={run.floor} />
+      {/* in combat the HUD and the arena monitor show this instead */}
+      {!inCombat && <PlayerStats player={run.player} floor={run.floor} />}
 
       {inCombat ? (
         <div className="map-toggle-row">
@@ -136,7 +137,7 @@ function App() {
         </div>
       )}
 
-      <HistoryLog history={run.history} />
+      {!inCombat && <HistoryLog history={run.history} />}
       {error && <p className="error">{error}</p>}
 
       {run.status !== "ongoing" && <EndScreen run={run} onRestart={() => setRun(null)} />}
@@ -155,6 +156,7 @@ function App() {
         <CombatPanel
           combat={run.pending_combat}
           player={run.player}
+          log={run.history}
           disabled={isLoading}
           onPlayCard={(handIndex, slotIndex) =>
             runAction(() => playCard(run.run_id, handIndex, slotIndex))
