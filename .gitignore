@@ -19,3 +19,6 @@ frontend/dist
 # Training pipeline: large/generated, not meant to be committed
 training/artifacts/
 training/.ipynb_checkpoints/
+
+# Blender auto-backups (created on every save)
+*.blend1
