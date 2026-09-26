@@ -16,7 +16,7 @@ def starter_deck() -> list[Card]:
     cards = [
         Card(
             id=f"strike-{i}",
-            name="Strike",
+            name="Exploit",
             type=CardType.ATTACK,
             value=6,
             description="Deal 6 damage (plus your attack stat).",
@@ -26,7 +26,7 @@ def starter_deck() -> list[Card]:
     cards += [
         Card(
             id=f"defend-{i}",
-            name="Defend",
+            name="Firewall",
             type=CardType.BLOCK,
             value=5,
             description="Gain 5 block until your next turn.",
@@ -34,12 +34,12 @@ def starter_deck() -> list[Card]:
         for i in range(3)
     ]
     cards.append(
-        Card(id="mend-0", name="Mend", type=CardType.HEAL, value=4, description="Heal 4 HP.")
+        Card(id="mend-0", name="Hotfix", type=CardType.HEAL, value=4, description="Heal 4 HP.")
     )
     cards.append(
         Card(
             id="amplifier-0",
-            name="Amplifier",
+            name="Overclock",
             type=CardType.AMPLIFIER,
             value=25,
             description="Permanent. Action cards played to its right are 25% more effective.",
@@ -48,7 +48,7 @@ def starter_deck() -> list[Card]:
     cards.append(
         Card(
             id="armor-0",
-            name="Armor",
+            name="Encryption",
             type=CardType.ARMOR,
             value=1,
             description="Permanent. Reduce incoming damage by 1.",
@@ -57,7 +57,7 @@ def starter_deck() -> list[Card]:
     cards.append(
         Card(
             id="recycling-0",
-            name="Recycling",
+            name="Garbage Collector",
             type=CardType.RECYCLING,
             value=0,
             description=(
@@ -69,7 +69,7 @@ def starter_deck() -> list[Card]:
     cards.append(
         Card(
             id="more-0",
-            name="More",
+            name="Prefetch",
             type=CardType.DRAW_BONUS,
             value=1,
             description="Permanent. Draw 1 extra card each turn.",
@@ -78,7 +78,7 @@ def starter_deck() -> list[Card]:
     cards.append(
         Card(
             id="final-strike-0",
-            name="Final Strike",
+            name="Kernel Panic",
             type=CardType.FINAL_STRIKE,
             value=5,
             description=(
