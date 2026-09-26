@@ -1,15 +1,23 @@
 import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import type { HpExchange } from "../hooks/useHpExchange";
 import { CombatMonitor } from "./CombatMonitor";
+import { EnemyMonster } from "./EnemyMonster";
 
-// Three full-frame layers rendered from the same Blender camera
+// Full-frame layers rendered from the same Blender camera
 // (assets/blender/arena.blend): stacking them reproduces the scene exactly,
-// while the two fighters stay separate elements that can be animated.
+// while the player stays a separate element that can be animated. The enemy
+// is LLM-generated, so it is drawn procedurally in the same frame instead.
 const LAYERS = {
   background: "/assets/lab-background.webp",
   player: "/assets/lab-player.webp",
-  enemy: "/assets/lab-enemy.webp",
 };
+
+export interface ArenaEnemy {
+  name: string;
+  maxHp: number;
+  attack: number;
+  setting: string;
+}
 
 const PIXEL_COUNT = 16;
 
@@ -68,10 +76,12 @@ function PortalRift() {
 // `children` is drawn on top of the scene - the HUD lives there, in the two
 // upper corners left free by the monitor.
 export function CombatArena({
+  enemy,
   exchange,
   log,
   children,
 }: {
+  enemy: ArenaEnemy;
   exchange: HpExchange | null;
   log: string[];
   children?: ReactNode;
@@ -80,19 +90,20 @@ export function CombatArena({
   const enemyStruck = exchange !== null && exchange.playerDelta < 0;
   const playerHealed = exchange !== null && exchange.playerDelta > 0;
   const playerRef = useRef<HTMLImageElement>(null);
-  const enemyRef = useRef<HTMLImageElement>(null);
+  const enemyRef = useRef<SVGSVGElement>(null);
 
   // Replay the fighters' one-shot animations on every HP change, even when
   // two hits in a row keep the same class. Restarting them in place instead
   // of remounting the <img> matters: a fresh <img> paints empty for a frame
   // or two until the PNG is decoded again, which made the fighters flicker.
+  // setAttribute rather than className, since the enemy is an <svg>.
   useLayoutEffect(() => {
-    for (const img of [playerRef.current, enemyRef.current]) {
-      if (!img) continue;
-      const className = img.className;
-      img.className = "arena-layer";
-      void img.offsetWidth; // flush styles so the re-added classes start fresh
-      img.className = className;
+    for (const el of [playerRef.current, enemyRef.current]) {
+      if (!el) continue;
+      const className = el.getAttribute("class") ?? "";
+      el.setAttribute("class", "arena-layer");
+      void el.getBoundingClientRect(); // flush styles so the re-added classes start fresh
+      el.setAttribute("class", className);
     }
   }, [exchange?.id]);
 
@@ -111,11 +122,13 @@ export function CombatArena({
         />
       </div>
       <div className="arena-idle is-enemy">
-        <img
+        <EnemyMonster
           ref={enemyRef}
           className={classes("arena-layer", "arena-enemy", enemyStruck && "is-lunging", playerStruck && "is-hit")}
-          src={LAYERS.enemy}
-          alt=""
+          name={enemy.name}
+          maxHp={enemy.maxHp}
+          attack={enemy.attack}
+          setting={enemy.setting}
         />
       </div>
       <CombatMonitor lines={log} />
