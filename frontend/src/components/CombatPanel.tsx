@@ -64,6 +64,14 @@ export function CombatPanel({
   const [commands, setCommands] = useState<HackerCommand[]>([]);
   const [typing, setTyping] = useState(false);
   const busy = disabled || typing;
+  // The card just played, shown as already gone from the hand (and, for a
+  // permanent card, as lying in its slot) until the server answers, so the
+  // table doesn't sit still through the typing and the round trip and then
+  // jump. Once nothing is in flight any more it is dropped - the server's
+  // state has replaced it, or the move failed and the card stays in hand.
+  const [played, setPlayed] = useState<{ handIndex: number; slotIndex: number } | null>(null);
+  const pending = busy ? played : null;
+  const pendingCard = pending && combat.hand.find((c) => c.hand_index === pending.handIndex);
   const handRef = useRef<HTMLDivElement>(null);
 
   function selectCard(handIndex: number) {
@@ -75,6 +83,7 @@ export function CombatPanel({
     const card = handRef.current?.querySelector<HTMLElement>(`[data-hand-index="${selectedHandIndex}"]`);
     if (card) flyCard(card, slot);
     setSelectedHandIndex(null);
+    setPlayed({ handIndex: selectedHandIndex, slotIndex });
     const handIndex = selectedHandIndex;
     const played = combat.hand.find((c) => c.hand_index === handIndex);
     if (!played) {
@@ -142,7 +151,12 @@ export function CombatPanel({
         <span className="zone-label">Field</span>
         <div className="field">
           {combat.field.map((card, slotIndex) =>
-            card === null ? (
+            card === null && pendingCard && pending?.slotIndex === slotIndex &&
+            PERMANENT_CARD_TYPES.includes(pendingCard.type) ? (
+              <div key={slotIndex} className={`field-slot is-occupied is-landing type-${pendingCard.type}`}>
+                <CardFace card={pendingCard} />
+              </div>
+            ) : card === null ? (
               <button
                 key={slotIndex}
                 className={`field-slot is-empty${selectedHandIndex !== null ? " is-targetable" : ""}`}
@@ -170,7 +184,7 @@ export function CombatPanel({
               <button
                 key={card.hand_index}
                 data-hand-index={card.hand_index}
-                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}`}
+                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}`}
                 disabled={busy}
                 onClick={() => selectCard(card.hand_index)}
               >
