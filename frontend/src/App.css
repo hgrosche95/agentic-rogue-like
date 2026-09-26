@@ -1409,10 +1409,14 @@ button:disabled {
   border-color: var(--green);
 }
 
-/* -- field slots: same card face, shrunk, no description -- */
+/* -- field slots: card-sized even when empty, so the field doesn't jump
+   when a card lands on it (content-box: buttons default to border-box);
+   played cards show their face without the description -- */
 .field-slot {
-  width: 68px;
-  height: 92px;
+  box-sizing: content-box;
+  width: 112px;
+  height: 156px;
+  padding: 0;
   border-radius: 8px;
   flex-shrink: 0;
 }
