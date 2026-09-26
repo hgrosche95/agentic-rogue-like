@@ -934,16 +934,61 @@ button:disabled {
   transform-origin: 77% 60%;
 }
 
-.arena-player.is-lunging {
-  animation: arena-lunge-right 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+/* typing a played card in: the resting pose and the lifted-hands pose
+   take turns (see CombatArena) */
+.arena-keystroke.is-lifted {
+  opacity: 0;
+}
+
+.arena-keystroke.is-down {
+  animation: arena-keystroke 0.16s steps(1) infinite;
+}
+
+.arena-keystroke.is-up {
+  animation: arena-keystroke 0.16s steps(1) -0.08s infinite;
+}
+
+@keyframes arena-keystroke {
+  50% {
+    opacity: 0;
+  }
+}
+
+.arena-keystroke.is-up {
+  opacity: 1;
+}
+
+/* the keys light up under his fingers (keyboard bounds from the blend) */
+.arena-keys-flicker {
+  position: absolute;
+  left: 28.2%;
+  top: 57.2%;
+  width: 6.1%;
+  height: 7.8%;
+  border-radius: 30%;
+  background: radial-gradient(closest-side, rgba(143, 242, 239, 0.7), transparent);
+  mix-blend-mode: screen;
+  animation: arena-keys-flicker 0.12s steps(2, jump-none) infinite;
+}
+
+@keyframes arena-keys-flicker {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* he attacks from the keyboard: a quick burst of keystrokes, no lunge */
+.arena-player.is-striking {
+  animation: arena-typing 0.36s steps(6, jump-none);
 }
 
 .arena-enemy.is-lunging {
   animation: arena-lunge-left 0.55s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* lands once the pulse has run down the cable and out of the rift */
 .arena-enemy.is-hit {
-  animation: arena-hit-enemy 0.5s ease-out 0.18s both;
+  animation: arena-hit-enemy 0.5s ease-out 0.5s both;
 }
 
 .arena-player.is-hit {
@@ -954,9 +999,16 @@ button:disabled {
   animation: arena-heal 0.9s ease-out;
 }
 
-@keyframes arena-lunge-right {
-  40% {
-    transform: translateX(14%);
+@keyframes arena-typing {
+  0%,
+  100% {
+    transform: none;
+  }
+  33% {
+    transform: translateY(0.35%);
+  }
+  66% {
+    transform: translateY(-0.15%);
   }
 }
 
@@ -1080,7 +1132,41 @@ button:disabled {
   background: linear-gradient(90deg, transparent, #ffe0b0, var(--warm));
   box-shadow: 0 0 18px var(--warm);
   transform-origin: left;
-  animation: arena-slash 0.45s ease-out 0.12s both;
+  animation: arena-slash 0.45s ease-out 0.45s both;
+}
+
+/* the attack's pulse racing down the cable (see CablePulse) */
+.arena-cable {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 4px var(--cyan)) drop-shadow(0 0 10px var(--cyan));
+}
+
+.arena-cable polyline {
+  fill: none;
+  stroke: var(--cyan-bright);
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 14 200;
+  animation: arena-cable-pulse 0.45s ease-in 0.1s both;
+}
+
+@keyframes arena-cable-pulse {
+  from {
+    stroke-dashoffset: 14;
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  to {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
 }
 
 @keyframes arena-slash {
@@ -1217,6 +1303,22 @@ button:disabled {
   color: #c8f6ff;
 }
 
+/* commands Dr. Chronos hacks in for each played card (see hackerCommands.ts) */
+.monitor-line.is-command {
+  color: var(--gold);
+  text-shadow: 0 0 6px rgba(224, 168, 63, 0.45);
+}
+
+.monitor-cursor {
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: currentColor;
+  animation: monitor-blink 0.9s steps(1) infinite;
+}
+
 /* -- a played card's flight from hand to slot (see cardFlight.ts) -- */
 .card-flight {
   position: fixed;
@@ -1228,11 +1330,17 @@ button:disabled {
 @media (prefers-reduced-motion: reduce) {
   .arena-player,
   .arena-enemy,
-  .arena-idle {
+  .arena-idle,
+  .arena-keystroke {
     animation: none !important;
+  }
+  .arena-keystroke.is-up {
+    opacity: 0;
   }
   .arena-rift,
   .arena-slash,
+  .arena-cable,
+  .arena-keys-flicker,
   .arena-pixel,
   .arena-beam {
     display: none;
