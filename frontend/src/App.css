@@ -1320,7 +1320,10 @@ button:disabled {
 }
 
 /* -- a played card's flight from hand to slot (see cardFlight.ts) -- */
-.card-flight {
+/* body > : the clone keeps its .hand-card class, whose later
+   position: relative would otherwise put it back into the page flow, at the
+   bottom of <body>, making the page scrollable while it flies */
+body > .card-flight {
   position: fixed;
   z-index: 50;
   margin: 0;
@@ -1591,6 +1594,29 @@ button:disabled {
 .end-turn-button:disabled {
   opacity: 1;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* a card that was just played folds out of the hand right away, so the rest
+   slide together smoothly instead of jumping once the server answers */
+.hand-card.is-played {
+  width: 0;
+  margin-right: -0.5rem;
+  border-width: 0;
+  opacity: 0;
+  box-shadow: none;
+  transition: width 0.25s ease, margin-right 0.25s ease, border-width 0.25s ease, opacity 0.15s ease;
+}
+
+/* a permanent card waiting on the server shows up in its slot as the flying
+   copy lands there */
+.field-slot.is-landing {
+  animation: slot-landing 0.2s ease-out 0.5s both;
+}
+
+@keyframes slot-landing {
+  from {
+    opacity: 0;
+  }
 }
 
 .field-slot.is-occupied .card-header {
