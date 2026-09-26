@@ -6,9 +6,9 @@ import { CombatMonitor } from "./CombatMonitor";
 // (assets/blender/arena.blend): stacking them reproduces the scene exactly,
 // while the two fighters stay separate elements that can be animated.
 const LAYERS = {
-  background: "/assets/lab-background.png",
-  player: "/assets/lab-player.png",
-  enemy: "/assets/lab-enemy.png",
+  background: "/assets/lab-background.webp",
+  player: "/assets/lab-player.webp",
+  enemy: "/assets/lab-enemy.webp",
 };
 
 const PIXEL_COUNT = 16;
