@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import type { HpExchange } from "../hooks/useHpExchange";
 import { CombatMonitor } from "./CombatMonitor";
 
@@ -79,17 +79,32 @@ export function CombatArena({
   const playerStruck = exchange !== null && exchange.enemyDelta < 0;
   const enemyStruck = exchange !== null && exchange.playerDelta < 0;
   const playerHealed = exchange !== null && exchange.playerDelta > 0;
+  const playerRef = useRef<HTMLImageElement>(null);
+  const enemyRef = useRef<HTMLImageElement>(null);
+
+  // Replay the fighters' one-shot animations on every HP change, even when
+  // two hits in a row keep the same class. Restarting them in place instead
+  // of remounting the <img> matters: a fresh <img> paints empty for a frame
+  // or two until the PNG is decoded again, which made the fighters flicker.
+  useLayoutEffect(() => {
+    for (const img of [playerRef.current, enemyRef.current]) {
+      if (!img) continue;
+      const className = img.className;
+      img.className = "arena-layer";
+      void img.offsetWidth; // flush styles so the re-added classes start fresh
+      img.className = className;
+    }
+  }, [exchange?.id]);
 
   return (
     <div className="arena-stage">
       <img className="arena-layer" src={LAYERS.background} alt="" />
       <PortalRift />
       {/* The wrappers carry the looping idle motion; the images inside keep the
-          one-shot combat animations, so both can run at once. key remounts the
-          fighters on every HP change so their CSS animations replay. */}
+          one-shot combat animations, so both can run at once. */}
       <div className="arena-idle is-player">
         <img
-          key={`player-${exchange?.id}`}
+          ref={playerRef}
           className={classes("arena-layer", "arena-player", playerStruck && "is-lunging", enemyStruck && "is-hit", playerHealed && "is-healed")}
           src={LAYERS.player}
           alt="Dr. Chronos"
@@ -97,7 +112,7 @@ export function CombatArena({
       </div>
       <div className="arena-idle is-enemy">
         <img
-          key={`enemy-${exchange?.id}`}
+          ref={enemyRef}
           className={classes("arena-layer", "arena-enemy", enemyStruck && "is-lunging", playerStruck && "is-hit")}
           src={LAYERS.enemy}
           alt=""
