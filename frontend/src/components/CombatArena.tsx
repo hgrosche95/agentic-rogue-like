@@ -29,6 +29,7 @@ export interface ArenaEnemy {
 }
 
 const PIXEL_COUNT = 16;
+const DEATH_PIXEL_COUNT = 28;
 
 function classes(...names: (string | false)[]): string {
   return names.filter(Boolean).join(" ");
@@ -72,6 +73,28 @@ function CablePulse() {
   );
 }
 
+// The defeated enemy coming apart: a flash as it collapses and a cloud of
+// voxels drifting up from where it stood. Delayed in CSS until the killing
+// blow has landed.
+function DeathBurst() {
+  return (
+    <div className="arena-fx is-death" aria-hidden="true">
+      <span className="arena-death-flash" />
+      {Array.from({ length: DEATH_PIXEL_COUNT }, (_, i) => {
+        const angle = (i * 137.5 * Math.PI) / 180;
+        const style = {
+          "--dx": `${Math.cos(angle) * (30 + ((i * 23) % 90))}px`,
+          "--dy": `${-60 - ((i * 37) % 110)}px`,
+          left: `${70 + ((i * 7) % 13)}%`,
+          top: `${40 + ((i * 11) % 42)}%`,
+          animationDelay: `${1200 + ((i * 53) % 500)}ms`,
+        } as CSSProperties;
+        return <span key={i} className={`arena-pixel is-dissolving${i % 3 === 0 ? " is-dark" : ""}`} style={style} />;
+      })}
+    </div>
+  );
+}
+
 // Living energy over the dimensional rift baked into the background: a glow
 // strip whose streaks flow along the tear, bent by an animated turbulence
 // filter. Pure CSS/SVG, so it costs no extra download.
@@ -100,6 +123,8 @@ export function CombatArena({
   log,
   commands,
   typing,
+  slain = false,
+  onContinue,
   children,
 }: {
   enemy: ArenaEnemy;
@@ -107,6 +132,8 @@ export function CombatArena({
   log: string[];
   commands: HackerCommand[];
   typing: boolean;
+  slain?: boolean;
+  onContinue?: () => void;
   children?: ReactNode;
 }) {
   const playerStruck = exchange !== null && exchange.enemyDelta < 0;
@@ -153,7 +180,7 @@ export function CombatArena({
         <img className={classes("arena-layer", "arena-keystroke", "is-lifted", typing && "is-up")} src={LAYERS.playerTyping} alt="" />
         {typing && <span className="arena-keys-flicker" />}
       </div>
-      <div className="arena-idle is-enemy">
+      <div className={classes("arena-idle", "is-enemy", slain && "is-dying")}>
         <EnemyMonster
           ref={enemyRef}
           className={classes("arena-layer", "arena-enemy", enemyStruck && "is-lunging", playerStruck && "is-hit")}
@@ -179,6 +206,15 @@ export function CombatArena({
         </div>
       )}
       {children}
+      {slain && <DeathBurst />}
+      {slain && (
+        <div className="arena-victory">
+          <span className="arena-victory-title">{enemy.name} defeated</span>
+          <button type="button" className="arena-continue" onClick={onContinue}>
+            Continue
+          </button>
+        </div>
+      )}
     </div>
   );
 }

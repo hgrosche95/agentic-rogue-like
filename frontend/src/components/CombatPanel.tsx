@@ -48,16 +48,20 @@ export function CombatPanel({
   player,
   log,
   disabled,
+  enemySlain = false,
   onPlayCard,
   onEndTurn,
+  onContinue,
 }: {
   combat: PendingCombatView;
   setting: string;
   player: PlayerState;
   log: string[];
   disabled: boolean;
+  enemySlain?: boolean;
   onPlayCard: (handIndex: number, slotIndex: number) => void;
   onEndTurn: () => void;
+  onContinue?: () => void;
 }) {
   const [selectedHandIndex, setSelectedHandIndex] = useState<number | null>(null);
   const exchange = useHpExchange(player.hp, combat.enemy_hp);
@@ -115,6 +119,8 @@ export function CombatPanel({
         log={log}
         commands={commands}
         typing={typing}
+        slain={enemySlain}
+        onContinue={onContinue}
       >
         <div className="combat-hud">
           <div className="hud-side is-player">
@@ -136,9 +142,13 @@ export function CombatPanel({
               {combat.enemy_block > 0 && (
                 <span className="block-badge enemy-block-badge">Block {combat.enemy_block}</span>
               )}
-              <span className={`intent-badge type-${combat.enemy_intent}`}>
-                {combat.enemy_intent === "attack" ? "Attacking" : "Defending"} · {combat.enemy_intent_value}
-              </span>
+              {enemySlain ? (
+                <span className="intent-badge is-defeated">Defeated</span>
+              ) : (
+                <span className={`intent-badge type-${combat.enemy_intent}`}>
+                  {combat.enemy_intent === "attack" ? "Attacking" : "Defending"} · {combat.enemy_intent_value}
+                </span>
+              )}
               <span className="stat-figure">
                 {combat.enemy_hp}/{combat.enemy_max_hp}
               </span>
@@ -206,9 +216,11 @@ export function CombatPanel({
       </div>
 
       <p className="field-hint">
-        {selectedHandIndex === null
-          ? "Select a card from your hand, then play it onto an empty field slot."
-          : "Choose an empty slot to play the selected card."}
+        {enemySlain
+          ? "Enemy defeated."
+          : selectedHandIndex === null
+            ? "Select a card from your hand, then play it onto an empty field slot."
+            : "Choose an empty slot to play the selected card."}
       </p>
     </div>
   );

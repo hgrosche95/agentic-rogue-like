@@ -8,6 +8,7 @@ import {
   listSettings,
   playCard,
   resolveCurrentNode,
+  type PendingCombatView,
   type RunView,
 } from "./api";
 import { CombatPanel } from "./components/CombatPanel";
@@ -27,7 +28,12 @@ function App() {
   const [settings, setSettings] = useState<string[]>(FALLBACK_SETTINGS);
   const [selectedSetting, setSelectedSetting] = useState(FALLBACK_SETTINGS[0]);
   const [isMapOpen, setIsMapOpen] = useState(false);
-  const inCombat = Boolean(run?.pending_combat);
+  // The server closes a won fight in the same response as the killing blow.
+  // Keep showing that fight - enemy at 0 HP - so the arena can play the enemy's
+  // death and wait for the player to move on instead of cutting away at once.
+  const [slainCombat, setSlainCombat] = useState<PendingCombatView | null>(null);
+  const combat = run?.pending_combat ?? slainCombat;
+  const inCombat = Boolean(combat);
 
   useEffect(() => {
     if (!inCombat) setIsMapOpen(false);
@@ -48,7 +54,14 @@ function App() {
     setIsLoading(true);
     setError(null);
     try {
-      setRun(await action());
+      const next = await action();
+      const fight = run?.pending_combat;
+      setSlainCombat(
+        fight && !next.pending_combat && next.player.hp > 0
+          ? { ...fight, enemy_hp: 0, enemy_block: 0 }
+          : null,
+      );
+      setRun(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -140,7 +153,7 @@ function App() {
       {!inCombat && <HistoryLog history={run.history} />}
       {error && <p className="error">{error}</p>}
 
-      {run.status !== "ongoing" && <EndScreen run={run} onRestart={() => setRun(null)} />}
+      {run.status !== "ongoing" && !slainCombat && <EndScreen run={run} onRestart={() => setRun(null)} />}
 
       {run.status === "ongoing" && run.pending_event && (
         <EventPrompt
@@ -152,13 +165,15 @@ function App() {
         />
       )}
 
-      {run.status === "ongoing" && run.pending_combat && (
+      {combat && (run.status === "ongoing" || slainCombat) && (
         <CombatPanel
-          combat={run.pending_combat}
+          combat={combat}
           setting={run.setting}
           player={run.player}
           log={run.history}
-          disabled={isLoading}
+          disabled={isLoading || slainCombat !== null}
+          enemySlain={slainCombat !== null}
+          onContinue={() => setSlainCombat(null)}
           onPlayCard={(handIndex, slotIndex) =>
             runAction(() => playCard(run.run_id, handIndex, slotIndex))
           }
@@ -168,14 +183,14 @@ function App() {
 
       {run.status === "ongoing" &&
         !run.pending_event &&
-        !run.pending_combat &&
+        !combat &&
         !run.node_resolved && (
           <button disabled={isLoading} onClick={() => runAction(() => resolveCurrentNode(run.run_id))}>
             Continue
           </button>
         )}
 
-      {run.status === "ongoing" && run.node_resolved && run.available_choices.length > 0 && (
+      {run.status === "ongoing" && !slainCombat && run.node_resolved && run.available_choices.length > 0 && (
         <p className="map-hint">Choose your next room on the map above.</p>
       )}
     </main>
