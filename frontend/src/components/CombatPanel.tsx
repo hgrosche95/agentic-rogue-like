@@ -44,6 +44,7 @@ function HpBar({ hp, max, side }: { hp: number; max: number; side: "player" | "e
 
 export function CombatPanel({
   combat,
+  setting,
   player,
   log,
   disabled,
@@ -51,6 +52,7 @@ export function CombatPanel({
   onEndTurn,
 }: {
   combat: PendingCombatView;
+  setting: string;
   player: PlayerState;
   log: string[];
   disabled: boolean;
@@ -92,7 +94,19 @@ export function CombatPanel({
 
   return (
     <div className="combat-panel">
-      <CombatArena exchange={exchange} log={log} commands={commands} typing={typing}>
+      <CombatArena
+        enemy={{
+          name: combat.enemy_name,
+          maxHp: combat.enemy_max_hp,
+          // an enemy's intent value is always its attack stat (api.py)
+          attack: combat.enemy_intent_value,
+          setting,
+        }}
+        exchange={exchange}
+        log={log}
+        commands={commands}
+        typing={typing}
+      >
         <div className="combat-hud">
           <div className="hud-side is-player">
             <span className="hud-name">Dr. Chronos</span>
