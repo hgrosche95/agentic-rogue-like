@@ -8,7 +8,9 @@ Route handlers are plain `def`, not `async def`, on purpose: `resolve_node`
 can call the encounter agent, which makes a *synchronous* Groq call that can
 take several seconds (see agent/encounter_agent.py). FastAPI runs sync route
 functions in a worker thread, so a slow generation only blocks the request
-that triggered it, not the whole server's event loop.
+that triggered it, not the whole server's event loop. To keep that wait off
+the player's click in the first place, create_run/choose_next_node start the
+reachable rooms' generation in the background (see prefetch.py).
 
 For local dev, run `uv run agentic-rogue-like-api` (see `dev()` below)
 instead of pointing uvicorn at this module directly - that's what loads
@@ -255,7 +257,9 @@ def create_run(request: NewRunRequest) -> RunView:
     seed = request.seed if request.seed is not None else random.randint(0, 1_000_000)
     run = new_run(seed, setting=request.setting)
     run_id = create_session(run, random.Random(seed))
-    return _run_view(run_id, get_session(run_id))
+    session = get_session(run_id)
+    session.prefetch.warm(run)
+    return _run_view(run_id, session)
 
 
 @app.get("/runs/{run_id}")
@@ -277,12 +281,15 @@ def resolve_current_node(run_id: str) -> RunView:
     if node.visited:
         raise HTTPException(status_code=409, detail="node already resolved")
 
+    prefetch = session.prefetch
     if node.type is NodeType.EVENT:
-        session.pending_event = start_event(run, session.rng)
+        session.pending_event = start_event(run, session.rng, narrator=prefetch.narrator)
     elif node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
-        session.combat = start_combat_node(run, session.rng)
+        session.combat = start_combat_node(
+            run, session.rng, prefetched_enemy=prefetch.take_enemy(node.id)
+        )
     else:
-        resolve_node(run, session.rng)
+        resolve_node(run, session.rng, narrator=prefetch.narrator)
 
     return _run_view(run_id, session)
 
@@ -349,6 +356,7 @@ def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
         raise HTTPException(status_code=400, detail="node_id is not reachable from here")
 
     run.current_node_id = request.node_id
+    session.prefetch.warm(run)
     return _run_view(run_id, session)
 
 

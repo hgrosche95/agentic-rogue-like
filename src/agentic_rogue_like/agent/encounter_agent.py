@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import random
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
@@ -170,6 +171,7 @@ def enemy_for_node(
     boss: bool,
     rng: random.Random,
     setting: str = DEFAULT_SETTING,
+    prefetched: Callable[[], Enemy] | None = None,
 ) -> Enemy:
     """Agent-generated enemy, degrading to the static pool if the agent can't deliver.
 
@@ -182,11 +184,19 @@ def enemy_for_node(
     The static pool ignores `setting` - it's a fixed, pre-balanced fallback,
     not something worth theming - so a disabled or failed agent still means
     generic dungeon enemies regardless of what the player picked.
+
+    `prefetched`, if given, stands in for the live agent call: the web API
+    starts generation in the background while the player is still on the map
+    (see prefetch.py) and hands the result in here, so its errors land in the
+    same fallback as a live call's. Its placeholder id is swapped for
+    `enemy_id` so ids still come from `rng` exactly as before.
     """
     if os.environ.get("ENCOUNTER_AGENT_ENABLED") != "1":
         return pick_enemy(floor=floor, num_floors=num_floors, elite=elite, boss=boss, rng=rng)
 
     try:
+        if prefetched is not None:
+            return prefetched().model_copy(update={"id": enemy_id})
         return generate_balanced_enemy(
             enemy_id=enemy_id,
             floor=floor,
