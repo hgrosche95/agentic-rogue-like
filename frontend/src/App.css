@@ -779,7 +779,7 @@ button:disabled {
   position: relative;
   aspect-ratio: 1920 / 800;
   /* capped by viewport height so field and hand stay on screen below it */
-  width: min(100%, calc(40vh * 2.4));
+  width: min(100%, calc(35vh * 2.4));
   margin-inline: auto;
   overflow: hidden;
   border: 2px solid var(--line);
