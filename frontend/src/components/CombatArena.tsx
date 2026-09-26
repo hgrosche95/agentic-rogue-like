@@ -45,6 +45,26 @@ function PixelBurst() {
   );
 }
 
+// Living energy over the dimensional rift baked into the background: a glow
+// strip whose streaks flow along the tear, bent by an animated turbulence
+// filter. Pure CSS/SVG, so it costs no extra download.
+function PortalRift() {
+  return (
+    <div className="arena-rift" aria-hidden="true">
+      <svg className="arena-rift-defs" width="0" height="0">
+        <filter id="arena-rift-warp" x="-20%" y="0" width="140%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.02 0.09" numOctaves="2" seed="3">
+            <animate attributeName="baseFrequency" dur="7s" values="0.02 0.09;0.03 0.06;0.02 0.09" repeatCount="indefinite" />
+          </feTurbulence>
+          <feDisplacementMap in="SourceGraphic" scale="14" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </svg>
+      <span className="arena-rift-glow" />
+      <span className="arena-rift-streaks" />
+    </div>
+  );
+}
+
 // `children` is drawn on top of the scene - the HUD lives there, in the two
 // upper corners left free by the monitor.
 export function CombatArena({
@@ -63,19 +83,26 @@ export function CombatArena({
   return (
     <div className="arena-stage">
       <img className="arena-layer" src={LAYERS.background} alt="" />
-      {/* key remounts the fighters on every HP change so their CSS animations replay */}
-      <img
-        key={`player-${exchange?.id}`}
-        className={classes("arena-layer", "arena-player", playerStruck && "is-lunging", enemyStruck && "is-hit", playerHealed && "is-healed")}
-        src={LAYERS.player}
-        alt="Dr. Chronos"
-      />
-      <img
-        key={`enemy-${exchange?.id}`}
-        className={classes("arena-layer", "arena-enemy", enemyStruck && "is-lunging", playerStruck && "is-hit")}
-        src={LAYERS.enemy}
-        alt=""
-      />
+      <PortalRift />
+      {/* The wrappers carry the looping idle motion; the images inside keep the
+          one-shot combat animations, so both can run at once. key remounts the
+          fighters on every HP change so their CSS animations replay. */}
+      <div className="arena-idle is-player">
+        <img
+          key={`player-${exchange?.id}`}
+          className={classes("arena-layer", "arena-player", playerStruck && "is-lunging", enemyStruck && "is-hit", playerHealed && "is-healed")}
+          src={LAYERS.player}
+          alt="Dr. Chronos"
+        />
+      </div>
+      <div className="arena-idle is-enemy">
+        <img
+          key={`enemy-${exchange?.id}`}
+          className={classes("arena-layer", "arena-enemy", enemyStruck && "is-lunging", playerStruck && "is-hit")}
+          src={LAYERS.enemy}
+          alt=""
+        />
+      </div>
       <CombatMonitor lines={log} />
       {exchange && (
         <div key={exchange.id} className="arena-fx" aria-hidden="true">
