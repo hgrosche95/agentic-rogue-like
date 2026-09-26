@@ -7,6 +7,7 @@ import {
   type PlayerState,
 } from "../api";
 import { flyCard } from "../cardFlight";
+import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { CombatArena } from "./CombatArena";
 
@@ -64,6 +65,9 @@ export function CombatPanel({
 }) {
   const [selectedHandIndex, setSelectedHandIndex] = useState<number | null>(null);
   const exchange = useHpExchange(player.hp, combat.enemy_hp);
+  const [commands, setCommands] = useState<HackerCommand[]>([]);
+  const [typing, setTyping] = useState(false);
+  const busy = disabled || typing;
   const handRef = useRef<HTMLDivElement>(null);
 
   function selectCard(handIndex: number) {
@@ -74,8 +78,22 @@ export function CombatPanel({
     if (selectedHandIndex === null) return;
     const card = handRef.current?.querySelector<HTMLElement>(`[data-hand-index="${selectedHandIndex}"]`);
     if (card) flyCard(card, slot);
-    onPlayCard(selectedHandIndex, slotIndex);
     setSelectedHandIndex(null);
+    const handIndex = selectedHandIndex;
+    const played = combat.hand.find((c) => c.hand_index === handIndex);
+    if (!played) {
+      onPlayCard(handIndex, slotIndex);
+      return;
+    }
+    // Dr. Chronos types the card in as a command first; it only goes to the
+    // server - and hits - once he is done typing.
+    const text = commandFor(played, combat.enemy_name);
+    setCommands((sent) => [...sent, { at: log.length, text }]);
+    setTyping(true);
+    window.setTimeout(() => {
+      setTyping(false);
+      onPlayCard(handIndex, slotIndex);
+    }, TYPING_MS + 150);
   }
 
   return (
@@ -90,6 +108,8 @@ export function CombatPanel({
         }}
         exchange={exchange}
         log={log}
+        commands={commands}
+        typing={typing}
         slain={enemySlain}
         onContinue={onContinue}
       >
@@ -136,7 +156,7 @@ export function CombatPanel({
               <button
                 key={slotIndex}
                 className={`field-slot is-empty${selectedHandIndex !== null ? " is-targetable" : ""}`}
-                disabled={disabled || selectedHandIndex === null}
+                disabled={busy || selectedHandIndex === null}
                 onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
               >
                 {slotIndex + 1}
@@ -161,7 +181,7 @@ export function CombatPanel({
                 key={card.hand_index}
                 data-hand-index={card.hand_index}
                 className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}`}
-                disabled={disabled}
+                disabled={busy}
                 onClick={() => selectCard(card.hand_index)}
               >
                 <CardFace card={card} />
@@ -171,7 +191,7 @@ export function CombatPanel({
         </div>
 
         <div className="table-side">
-          <button className="end-turn-button" disabled={disabled} onClick={onEndTurn}>
+          <button className="end-turn-button" disabled={busy} onClick={onEndTurn}>
             End turn
           </button>
           <div className="side-piles">
