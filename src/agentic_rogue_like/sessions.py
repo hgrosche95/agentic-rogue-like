@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from .combat import CombatState
 from .events import GameEvent
 from .models import RunState
+from .prefetch import Prefetch
 
 
 @dataclass
@@ -26,6 +27,7 @@ class RunSession:
     rng: random.Random
     pending_event: GameEvent | None = field(default=None)
     combat: CombatState | None = field(default=None)
+    prefetch: Prefetch = field(default_factory=Prefetch)
 
 
 _sessions: dict[str, RunSession] = {}

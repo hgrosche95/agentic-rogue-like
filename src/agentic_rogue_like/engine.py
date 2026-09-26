@@ -20,9 +20,23 @@ from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
 from .events import EventOption, GameEvent, random_event
 from .map_gen import NUM_FLOORS, generate_map
-from .models import DEFAULT_SETTING, MapNode, NodeType, PlayerState, RunState, RunStatus
+from .models import (
+    DEFAULT_SETTING,
+    Enemy,
+    MapNode,
+    NodeType,
+    PlayerState,
+    RunState,
+    RunStatus,
+)
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
+# (setting, situation) -> flavor text or None. Defaults to a live narrate()
+# call; the web API passes one that reads background-prefetched text instead.
+Narrator = Callable[[str, str], str | None]
+
+REST_SITUATION = "a weary adventurer resting and tending their wounds"
+SHOP_SITUATION = "a traveling merchant offering strange wares for sale"
 
 
 def new_run(seed: int, setting: str = DEFAULT_SETTING) -> RunState:
@@ -37,7 +51,7 @@ def available_choices(run: RunState) -> list[str]:
     return run.nodes[run.current_node_id].connections
 
 
-def start_event(run: RunState, rng: random.Random) -> GameEvent:
+def start_event(run: RunState, rng: random.Random, narrator: Narrator | None = None) -> GameEvent:
     """First half of resolving an EVENT node: draw the event, record its text.
 
     Split out from `resolve_node` so a caller that can't supply an option
@@ -49,7 +63,7 @@ def start_event(run: RunState, rng: random.Random) -> GameEvent:
     run.floor = node.floor
 
     event = random_event(rng)
-    flavor = narrate(run.setting, event.description)
+    flavor = (narrator or narrate)(run.setting, event.description)
     if flavor:
         # EVENT_POOL entries are shared singletons re-picked by every run -
         # replace() makes a themed copy instead of mutating the pool itself.
@@ -80,7 +94,11 @@ def _finish_combat(
         run.history.append(f"You loot {reward} gold from the {enemy_name}.")
 
 
-def start_combat_node(run: RunState, rng: random.Random) -> CombatState:
+def start_combat_node(
+    run: RunState,
+    rng: random.Random,
+    prefetched_enemy: Callable[[], Enemy] | None = None,
+) -> CombatState:
     """First step of resolving a COMBAT/ELITE/BOSS node the interactive way.
 
     Mirrors start_event: picks the enemy and shuffles/draws an opening hand,
@@ -100,6 +118,7 @@ def start_combat_node(run: RunState, rng: random.Random) -> CombatState:
         boss=node.type is NodeType.BOSS,
         rng=rng,
         setting=run.setting,
+        prefetched=prefetched_enemy,
     )
     state, log = _start_combat(run.player.deck, enemy, rng)
     run.history.extend(log)
@@ -127,11 +146,12 @@ def resolve_node(
     run: RunState,
     rng: random.Random,
     choose_event_option: ChooseEventOption | None = None,
+    narrator: Narrator | None = None,
 ) -> None:
     node = run.nodes[run.current_node_id]
 
     if node.type is NodeType.EVENT:
-        event = start_event(run, rng)
+        event = start_event(run, rng, narrator)
         option = choose_event_option(event) if choose_event_option else rng.choice(event.options)
         apply_event_choice(run, option, rng)
         return
@@ -154,7 +174,7 @@ def resolve_node(
         _finish_combat(run, node, enemy.name, victory, rng)
 
     elif node.type is NodeType.REST:
-        flavor = narrate(run.setting, "a weary adventurer resting and tending their wounds")
+        flavor = (narrator or narrate)(run.setting, REST_SITUATION)
         if flavor:
             run.history.append(flavor)
         healed = min(15, run.player.max_hp - run.player.hp)
@@ -162,7 +182,7 @@ def resolve_node(
         run.history.append(f"You rest and recover {healed} HP.")
 
     elif node.type is NodeType.SHOP:
-        flavor = narrate(run.setting, "a traveling merchant offering strange wares for sale")
+        flavor = (narrator or narrate)(run.setting, SHOP_SITUATION)
         if flavor:
             run.history.append(flavor)
         # TODO(Phase 3): the shop is announced but sells nothing until there
