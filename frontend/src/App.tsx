@@ -155,6 +155,7 @@ function App() {
       {run.status === "ongoing" && run.pending_combat && (
         <CombatPanel
           combat={run.pending_combat}
+          setting={run.setting}
           player={run.player}
           log={run.history}
           disabled={isLoading}
