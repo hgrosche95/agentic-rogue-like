@@ -779,7 +779,7 @@ button:disabled {
   position: relative;
   aspect-ratio: 1920 / 800;
   /* capped by viewport height so field and hand stay on screen below it */
-  width: min(100%, calc(40vh * 2.4));
+  width: min(100%, calc(35vh * 2.4));
   margin-inline: auto;
   overflow: hidden;
   border: 2px solid var(--line);
@@ -1371,21 +1371,36 @@ button:disabled {
 }
 
 /* -- the table below it: deck | hand | graveyard/banished -- */
+/* equal outer columns keep the hand centered under the field, whatever
+   the deck and the end-turn side measure */
 .battlefield {
-  display: flex;
-  align-items: flex-end;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: end;
   gap: 1.1rem;
   margin-bottom: 0.7rem;
 }
 
+.battlefield > .pile {
+  justify-self: start;
+}
+
+.battlefield > .table-side {
+  justify-self: end;
+}
+
 .hand-zone {
-  flex: 1;
   min-width: 0;
+}
+
+.hand-zone > .zone-label {
+  text-align: center;
 }
 
 .hand {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.5rem;
 }
 
@@ -1517,12 +1532,25 @@ button:disabled {
   border-color: var(--green);
 }
 
-/* -- field slots: same card face, shrunk, no description -- */
+/* -- field slots: card-sized even when empty, so the field doesn't jump
+   when a card lands on it (content-box: buttons default to border-box);
+   played cards show their face without the description -- */
 .field-slot {
-  width: 68px;
-  height: 92px;
+  box-sizing: content-box;
+  width: 112px;
+  height: 156px;
+  padding: 0;
   border-radius: 8px;
   flex-shrink: 0;
+}
+
+/* on narrow screens the five slots shrink together instead of overflowing */
+.field .field-slot {
+  flex: 0 1 112px;
+  min-width: 0;
+  width: auto;
+  height: auto;
+  aspect-ratio: 112 / 156;
 }
 
 .field-slot.is-empty {
