@@ -11,13 +11,16 @@ import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { CombatArena } from "./CombatArena";
 
-function CardFace({ card }: { card: Card }) {
+// on the field the ∞ badge already says "permanent", so the effect text
+// drops that prefix and keeps the room for what the card does
+function CardFace({ card, onField = false }: { card: Card; onField?: boolean }) {
   const isPermanent = PERMANENT_CARD_TYPES.includes(card.type);
+  const description = onField ? card.description.replace(/^Permanent\.\s*/, "") : card.description;
   return (
     <>
       <div className="card-header">{card.name}</div>
       <span className="card-rank">{isPermanent ? "∞" : card.value}</span>
-      <div className="card-body">{card.description}</div>
+      <div className="card-body">{description}</div>
     </>
   );
 }
@@ -164,7 +167,7 @@ export function CombatPanel({
             card === null && pendingCard && pending?.slotIndex === slotIndex &&
             PERMANENT_CARD_TYPES.includes(pendingCard.type) ? (
               <div key={slotIndex} className={`field-slot is-occupied is-landing type-${pendingCard.type}`}>
-                <CardFace card={pendingCard} />
+                <CardFace card={pendingCard} onField />
               </div>
             ) : card === null ? (
               <button
@@ -177,7 +180,7 @@ export function CombatPanel({
               </button>
             ) : (
               <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
-                <CardFace card={card} />
+                <CardFace card={card} onField />
               </div>
             ),
           )}
