@@ -16,10 +16,30 @@ import { DungeonMap } from "./components/DungeonMap";
 import { EndScreen } from "./components/EndScreen";
 import { EventPrompt } from "./components/EventPrompt";
 import { HistoryLog } from "./components/HistoryLog";
+import { IntroScreen } from "./components/IntroScreen";
 import { PlayerStats } from "./components/PlayerStats";
 import { SettingPicker } from "./components/SettingPicker";
 
 const FALLBACK_SETTINGS = ["dungeon"];
+const INTRO_SEEN_KEY = "agentic-rogue-like:intro-seen";
+
+// The intro plays once per browser; storage can be blocked (private mode),
+// and then it simply plays again next time.
+function hasSeenIntro(): boolean {
+  try {
+    return localStorage.getItem(INTRO_SEEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberIntroSeen() {
+  try {
+    localStorage.setItem(INTRO_SEEN_KEY, "1");
+  } catch {
+    // Nothing to do - see hasSeenIntro.
+  }
+}
 
 function App() {
   const [run, setRun] = useState<RunView | null>(null);
@@ -28,6 +48,7 @@ function App() {
   const [settings, setSettings] = useState<string[]>(FALLBACK_SETTINGS);
   const [selectedSetting, setSelectedSetting] = useState(FALLBACK_SETTINGS[0]);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [isIntroOpen, setIsIntroOpen] = useState(() => !hasSeenIntro());
   // The server closes a won fight in the same response as the killing blow.
   // Keep showing that fight - enemy at 0 HP - so the arena can play the enemy's
   // death and wait for the player to move on instead of cutting away at once.
@@ -69,6 +90,19 @@ function App() {
     }
   }
 
+  if (run === null && isIntroOpen) {
+    return (
+      <main className="game">
+        <IntroScreen
+          onDone={() => {
+            rememberIntroSeen();
+            setIsIntroOpen(false);
+          }}
+        />
+      </main>
+    );
+  }
+
   if (run === null) {
     return (
       <main className="game">
@@ -86,6 +120,9 @@ function App() {
           Start run
         </button>
         {error && <p className="error">{error}</p>}
+        <button type="button" className="replay-intro" disabled={isLoading} onClick={() => setIsIntroOpen(true)}>
+          Replay intro
+        </button>
       </main>
     );
   }

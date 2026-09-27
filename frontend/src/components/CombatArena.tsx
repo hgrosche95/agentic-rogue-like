@@ -98,7 +98,7 @@ function DeathBurst() {
 // Living energy over the dimensional rift baked into the background: a glow
 // strip whose streaks flow along the tear, bent by an animated turbulence
 // filter. Pure CSS/SVG, so it costs no extra download.
-function PortalRift() {
+export function PortalRift() {
   return (
     <div className="arena-rift" aria-hidden="true">
       <svg className="arena-rift-defs" width="0" height="0">
