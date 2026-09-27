@@ -18,9 +18,9 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 
 ## Screenshots
 
-| Start | Karte | Kampf |
+| Intro | Karte | Kampf |
 | --- | --- | --- |
-| ![Einstellung wählen](docs/screenshots/start.png) | ![Dungeon-Karte](docs/screenshots/map.png) | ![Kartenbasierter Kampf](docs/screenshots/combat.png) |
+| ![Story-Intro mit Dr. Chronos und der Nachricht der AGI](docs/screenshots/intro.png) | ![Dungeon-Karte](docs/screenshots/map.png) | ![Kampf in der Arena gegen einen prozedural gezeichneten Gegner](docs/screenshots/combat.png) |
 
 ## Status
 
@@ -35,11 +35,17 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       als klickbare Dungeon-Map statt im Terminal. Ergänzt die CLI, ersetzt
       sie nicht — `cli.py` funktioniert unverändert weiter. Deployment nach
       Azure (Container Apps + Static Web Apps) via GitHub Actions.
+- [x] **Arena und Story** — ein kurzes Story-Intro beim ersten Besuch
+      (überspringbar, auf dem Startbildschirm wiederholbar); gekämpft wird
+      in einer Arena aus einer Blender-Szene, in der Dr. Chronos seine
+      Angriffe an einer Tastatur einhackt. Weil die Gegner erst zur Laufzeit
+      entstehen, zeichnet `EnemyMonster.tsx` jeden als SVG aus Name (Seed),
+      Max-HP (Größe), Angriff (Stacheln, Zähne) und Setting (Farben, Motiv).
 - [x] **Kartenbasierter Kampf** — kein Energie-System; das Feld mit 5 Slots
-      ist die Ressource. Aktionskarten (Angriff/Block/Heilung, später mehr)
+      ist die Ressource. Aktionskarten (Exploit, Firewall, Hotfix, Kernel Panic)
       brauchen einen freien Slot, wirken sofort und wandern in den
-      Friedhof; permanente Karten (Verstärker, Rüstung, Recycling, Mehr)
-      belegen ihren Slot dauerhaft und wirken positionsabhängig — z. B.
+      Friedhof; permanente Karten (Overclock, Encryption, Garbage Collector,
+      Prefetch) belegen ihren Slot dauerhaft und wirken positionsabhängig — z. B.
       "Aktionskarten rechts von mir sind 25% effektiver". Nicht gespielte
       Handkarten bleiben für die nächste Runde erhalten statt zu verfallen.
       `cli.py` und die Tests spielen automatisiert (`auto_resolve_combat` —
@@ -64,8 +70,12 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       mit schema-beschränktem Decoding beide "sauberen" Trainingslösungen
       schlägt, und warum das bewusst nur lokal läuft, nicht im
       Azure-Deployment (Kostenrechnung dort).
-- [ ] **Narrator-Agent** — verpackt generierte/mechanische Ergebnisse in
-      Flavor-Text.
+- [x] **Narrator** — eine Zeile Flavor-Text für Event-, Rast- und
+      Shop-Räume (`agent/narrator.py`). Bewusst kein voller Agent: kein
+      Budget zu schützen, also kein Schema und kein Retry; die Zahlen hängt
+      immer die Spiellogik an. `prefetch.py` erzeugt Gegner und Flavor-Text
+      für erreichbare Räume schon im Hintergrund, solange man auf die Karte
+      schaut.
 - [ ] **Difficulty-Agent** — passt zukünftige Encounter-Budgets an den
       Run-Verlauf an.
 - [ ] **Politur** — Tests, die sicherstellen, dass agenten-generierter
@@ -80,16 +90,19 @@ src/agentic_rogue_like/
 ├── models.py       Pydantic-Datenmodelle (RunState, PlayerState, MapNode, Enemy, Card, ...)
 ├── map_gen.py      Prozedurale Etagen-/Node-Map
 ├── combat.py       Kartenbasierter Kampf: Deck/Hand/Feld, Zieh-/Ablagelogik
-├── cards.py        Platzhalter-Startdeck (Aktions- + permanente Karten)
+├── cards.py        Startdeck mit IT-Namen (Exploit, Firewall, Hotfix, ...; Aktions- + permanente Karten)
 ├── events.py       Event-/Rest-/Shop-Auflösung
 ├── enemies.py      Statischer Gegner-Pool (Fallback für den Encounter-Agent)
 ├── engine.py       Der deterministische Kern-Loop, den CLI und API beide treiben
-├── agent/          LangGraph-Encounter-Agent + sein Tool-Schema
+├── agent/          LangGraph-Encounter-Agent, Tool-Schema, Etagen-Budgets, Narrator, Ollama-Anbindung
+├── prefetch.py     Erzeugt LLM-Inhalte erreichbarer Räume im Hintergrund
+├── balance_sim.py  Bot-Simulation für das Balancing (uv run balance-sim)
 ├── cli.py          Terminal-Frontend (input()/print()-Loop)
 ├── api.py          FastAPI-HTTP-Frontend fürs Web-UI (uvicorn agentic_rogue_like.api:app)
 └── sessions.py      Hält Run-Zustand zwischen HTTP-Requests am Leben
 
-frontend/           React + Vite + TypeScript — Dungeon-Map, Kampf, Event-Prompts
+frontend/           React + Vite + TypeScript — Intro, Dungeon-Map, Kampf-Arena, Event-Prompts
+balance/            Beispiel-Varianten (JSON) für den Balancing-Simulator
 tests/              pytest-Suite (Engine, Kampf, API, Encounter-Agent/-Schema)
 training/           Eigenes uv-Projekt: Fine-Tuning-Pipeline für den Encounter-Agent
                     (Datengenerierung, Colab-Notebook, Eval-Harness, GGUF/Ollama-Serving,
@@ -180,5 +193,6 @@ Backend-Image (`Dockerfile`, `uv`) direkt in der Azure Container Registry,
 aktualisiert die Azure Container App darauf, baut danach das Frontend gegen
 die frisch deployte API-URL und published es nach Azure Static Web Apps.
 Login läuft über OIDC/Federated Credentials — kein Passwort oder
-Registry-Secret im Repo. Es gibt aktuell kein separates CI-Test-Gate vor dem
+Registry-Secret im Repo. Zwei Deploys laufen nie gleichzeitig
+(`concurrency`): ein neuer Push wartet, bis der laufende fertig ist. Es gibt aktuell kein separates CI-Test-Gate vor dem
 Deploy; `pytest` läuft nur manuell/lokal.
