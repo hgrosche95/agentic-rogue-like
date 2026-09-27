@@ -1,0 +1,28 @@
+{
+    "budgets": {
+        "early": {
+            "min_hp": 40,
+            "max_hp": 55,
+            "min_attack": 8,
+            "max_attack": 11
+        },
+        "mid": {
+            "min_hp": 60,
+            "max_hp": 80,
+            "min_attack": 11,
+            "max_attack": 14
+        },
+        "elite": {
+            "min_hp": 85,
+            "max_hp": 105,
+            "min_attack": 14,
+            "max_attack": 18
+        },
+        "boss": {
+            "min_hp": 120,
+            "max_hp": 140,
+            "min_attack": 14,
+            "max_attack": 18
+        }
+    }
+}

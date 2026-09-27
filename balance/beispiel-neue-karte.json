@@ -1,0 +1,4 @@
+{
+  "extra_cards": [{"name": "Rootkit", "type": "attack", "value": 12}],
+  "cards": {"Exploit": {"value": 5}}
+}
