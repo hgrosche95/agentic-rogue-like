@@ -9,6 +9,14 @@ on:
 # GitHub-issued OIDC token for a short-lived Azure access token - no
 # long-lived client secret has to live as a GitHub secret).
 # packages: write lets this workflow push to ghcr.io using GITHUB_TOKEN.
+# Never two deploys at once: with two merges in quick succession, the older
+# run could otherwise finish last and put its older image/frontend live.
+# A second run waits instead of cancelling; if one is already waiting, the
+# newest replaces it (it contains all commits anyway).
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 permissions:
   id-token: write
   contents: read
