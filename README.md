@@ -158,6 +158,21 @@ Die API erlaubt standardmäßig nur `http://localhost:5173` per CORS
 und in Produktion ohne Rebuild). Das Frontend liest seinerseits die
 API-Adresse aus `VITE_API_BASE_URL` zur Build-Zeit.
 
+## Balancing testen
+
+`uv run balance-sim` spielt mit einem Bot tausende Kämpfe und komplette Runs
+durch (ohne LLM, Gegner zufällig innerhalb der Budgets aus
+`agent/budgets.py`) und zeigt pro Gegnerstufe Siegquote, Züge pro Kampf und
+verlorene HP, dazu die Run-Siegquote und auf welcher Etage Runs enden.
+
+Für neue Karten oder Anpassungen eine Variante als JSON anlegen (nur was sich
+ändert, Beispiele in `balance/`) und neben die aktuellen Werte stellen:
+
+```bash
+uv run balance-sim --compare balance/gegner-staerker.json
+uv run balance-sim --compare balance/beispiel-neue-karte.json --bot naive
+```
+
 ## Deployment
 
 Jeder Push auf `master` löst `.github/workflows/deploy.yml` aus: baut das
