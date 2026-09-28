@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   PERMANENT_CARD_TYPES,
   type HandCardView,
@@ -29,14 +29,34 @@ function HpBar({ hp, max, side }: { hp: number; max: number; side: "player" | "e
   return (
     <span className={`hud-bar is-${side}`}>
       <span style={{ width: `${percent}%` }} />
+      <em>
+        {hp} / {max}
+      </em>
     </span>
   );
+}
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0].toUpperCase())
+    .join("");
+}
+
+// The hand fans out like cards held in a hand: each one turned a little
+// further from the middle and dropped along an arc.
+function fanStyle(index: number, count: number): CSSProperties {
+  const k = index - (count - 1) / 2;
+  return { "--rot": `${k * 3}deg`, "--lift": `${k * k * 4}px` } as CSSProperties;
 }
 
 export function CombatPanel({
   combat,
   setting,
   player,
+  era,
   log,
   disabled,
   enemySlain = false,
@@ -47,6 +67,7 @@ export function CombatPanel({
   combat: PendingCombatView;
   setting: string;
   player: PlayerState;
+  era: string;
   log: string[];
   disabled: boolean;
   enemySlain?: boolean;
@@ -160,23 +181,66 @@ export function CombatPanel({
         typing={typing}
         slain={enemySlain}
         onContinue={onContinue}
-      >
-        <div className="combat-hud">
-          <div className="hud-side is-player">
-            <span className="hud-name">Dr. Chronos</span>
+      />
+
+      {/* the rift keeps going below the scene, between the two sides of the table */}
+      <div className="combat-seam" aria-hidden="true" />
+
+      <div className="combat-row">
+        <div className="vs-hud is-player">
+          <span className="vs-portrait" aria-hidden="true">
+            <span>DC</span>
+          </span>
+          <div className="vs-body">
+            <span className="hud-name">
+              Dr. Chronos <small>Human · {era}</small>
+            </span>
             <HpBar hp={player.hp} max={player.max_hp} side="player" />
             <div className="hud-meta">
-              <span className="stat-figure">
-                {player.hp}/{player.max_hp}
-              </span>
               {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
               {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
+              <ArtifactBar artifacts={player.artifacts} compact />
             </div>
-            <ArtifactBar artifacts={player.artifacts} compact />
           </div>
+        </div>
 
-          <div className="hud-side is-enemy">
-            <span className="hud-name">{combat.enemy_name}</span>
+        <div className="field-zone">
+          <div className="zone-head">
+            <span className="zone-label">Execution stack</span>
+            <span className="zone-label">
+              Hand {combat.hand.length}/{combat.max_hand_size}
+            </span>
+          </div>
+          <div className="field">
+            {combat.field.map((card, slotIndex) =>
+              card === null && pendingCard && pending?.slotIndex === slotIndex &&
+              PERMANENT_CARD_TYPES.includes(pendingCard.type) ? (
+                <div key={slotIndex} className={`field-slot is-occupied is-landing type-${pendingCard.type}`}>
+                  <CardFace card={pendingCard} onField />
+                </div>
+              ) : card === null ? (
+                <button
+                  key={slotIndex}
+                  className={`field-slot is-empty${selectedHandIndex !== null && discarding === null ? " is-targetable" : ""}`}
+                  disabled={busy || selectedHandIndex === null || discarding !== null}
+                  onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
+                >
+                  {String(slotIndex + 1).padStart(2, "0")}
+                </button>
+              ) : (
+                <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
+                  <CardFace card={card} onField />
+                </div>
+              ),
+            )}
+          </div>
+        </div>
+
+        <div className="vs-hud is-enemy">
+          <div className="vs-body">
+            <span className="hud-name">
+              {combat.enemy_name} <small>AI construct · {era}</small>
+            </span>
             <HpBar hp={combat.enemy_hp} max={combat.enemy_max_hp} side="enemy" />
             <div className="hud-meta">
               {combat.enemy_block > 0 && (
@@ -186,56 +250,27 @@ export function CombatPanel({
                 <span className="intent-badge is-defeated">Defeated</span>
               ) : (
                 <span className={`intent-badge type-${combat.enemy_intent}`}>
-                  {combat.enemy_intent === "attack" ? "Attacking" : "Defending"} · {combat.enemy_intent_value}
+                  Next: {combat.enemy_intent === "attack" ? "Attack" : "Defend"} {combat.enemy_intent_value}
                 </span>
               )}
-              <span className="stat-figure">
-                {combat.enemy_hp}/{combat.enemy_max_hp}
-              </span>
             </div>
           </div>
-        </div>
-      </CombatArena>
-
-      <div className="field-zone">
-        <span className="zone-label">Field</span>
-        <div className="field">
-          {combat.field.map((card, slotIndex) =>
-            card === null && pendingCard && pending?.slotIndex === slotIndex &&
-            PERMANENT_CARD_TYPES.includes(pendingCard.type) ? (
-              <div key={slotIndex} className={`field-slot is-occupied is-landing type-${pendingCard.type}`}>
-                <CardFace card={pendingCard} onField />
-              </div>
-            ) : card === null ? (
-              <button
-                key={slotIndex}
-                className={`field-slot is-empty${selectedHandIndex !== null && discarding === null ? " is-targetable" : ""}`}
-                disabled={busy || selectedHandIndex === null || discarding !== null}
-                onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
-              >
-                {slotIndex + 1}
-              </button>
-            ) : (
-              <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
-                <CardFace card={card} onField />
-              </div>
-            ),
-          )}
+          <span className="vs-portrait" aria-hidden="true">
+            <span>{initials(combat.enemy_name)}</span>
+          </span>
         </div>
       </div>
 
       <div className="battlefield">
-        <Pile label="Deck" count={combat.draw_count} kind="deck" />
+        <Pile label="Source" count={combat.draw_count} kind="deck" />
 
         <div className="hand-zone">
-          <span className="zone-label">
-            Hand {combat.hand.length}/{combat.max_hand_size}
-          </span>
           <div className="hand" ref={handRef}>
-            {combat.hand.map((card: HandCardView) => (
+            {combat.hand.map((card: HandCardView, i) => (
               <button
                 key={card.hand_index}
                 data-hand-index={card.hand_index}
+                style={fanStyle(i, combat.hand.length)}
                 className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : ""}`}
                 disabled={busy}
                 onMouseEnter={() => sfx.play("hover")}
@@ -256,13 +291,13 @@ export function CombatPanel({
             {discarding === null ? "End turn" : "Discard & end turn"}
           </button>
           {discarding !== null && (
-            <button className="end-turn-button" disabled={busy} onClick={() => setDiscarding(null)}>
+            <button className="end-turn-button is-cancel" disabled={busy} onClick={() => setDiscarding(null)}>
               Cancel
             </button>
           )}
           <div className="side-piles">
-            <Pile label="Graveyard" count={combat.discard_count} kind="graveyard" />
-            <Pile label="Banished" count={combat.banished_count} kind="banished" />
+            <Pile label="Cache" count={combat.discard_count} kind="graveyard" />
+            <Pile label="Purged" count={combat.banished_count} kind="banished" />
           </div>
         </div>
       </div>
@@ -273,8 +308,8 @@ export function CombatPanel({
           : discarding !== null
             ? `Hand limit is ${combat.max_hand_size}: pick ${excess} card(s) to discard (${discarding.length}/${excess}).`
             : selectedHandIndex === null
-            ? "Select a card from your hand, then play it onto an empty field slot."
-            : "Choose an empty slot to play the selected card."}
+            ? "Select a card from your hand, then play it onto an empty slot of the stack."
+            : "Choose an empty slot to run the selected card."}
       </p>
     </div>
   );

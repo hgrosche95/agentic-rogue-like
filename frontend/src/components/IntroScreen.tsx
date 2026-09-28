@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { PortalRift } from "./CombatArena";
+import { ArenaGrade, PortalRift } from "./CombatArena";
 
 // Where the camera looks while a beat is on screen. The lab is the combat
 // arena's own render (see CombatArena), so the intro stages the story in the
@@ -100,6 +100,7 @@ export function IntroScreen({ onDone }: { onDone: () => void }) {
             <img className="arena-layer" src="/assets/lab-rig.webp" alt="" />
             <img className="arena-layer" src="/assets/lab-player.webp" alt="" />
           </div>
+          <ArenaGrade />
           {shot !== "night" && (
             <div className="intro-glass">
               <span className="intro-glass-alert">1 new message</span>

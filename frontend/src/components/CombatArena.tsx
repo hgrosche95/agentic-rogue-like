@@ -116,6 +116,19 @@ export function PortalRift() {
   );
 }
 
+// A color grade over the rendered scene so it sits in the UI's rift palette:
+// shadows lifted to violet, the lab pushed toward magenta, the machine world
+// toward cyan. Blend layers, so the renders themselves stay untouched.
+export function ArenaGrade() {
+  return (
+    <div className="arena-grade" aria-hidden="true">
+      <span className="arena-grade-lift" />
+      <span className="arena-grade-human" />
+      <span className="arena-grade-ai" />
+    </div>
+  );
+}
+
 // `children` is drawn on top of the scene - the HUD lives there, in the two
 // upper corners left free by the monitor.
 export function CombatArena({
@@ -196,6 +209,7 @@ export function CombatArena({
           setting={enemy.setting}
         />
       </div>
+      <ArenaGrade />
       <CombatMonitor lines={log} commands={commands} />
       {exchange && (
         <div key={exchange.id} className="arena-fx" aria-hidden="true">
