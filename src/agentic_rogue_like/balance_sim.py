@@ -20,12 +20,13 @@ A variant file only lists what changes, e.g.:
       "cards": {"Exploit": {"value": 5}},
       "extra_cards": [{"name": "Rootkit", "type": "attack", "value": 12}],
       "remove_cards": ["Hotfix"],
-      "rewards": false
+      "rewards": false,
+      "artifacts": false
     }
 
 `extra_cards` entries take every Card field (hits, exhaust, scaling, ...).
 `"rewards": false` plays runs without the after-fight card reward, i.e.
-with the starter deck only.
+with the starter deck only, `"artifacts": false` without artifacts.
 """
 
 from __future__ import annotations
@@ -40,6 +41,7 @@ from pathlib import Path
 
 from .agent.budgets import _BUDGETS
 from .agent.encounter_schema import EnemyBudget
+from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
 from .cards import reward_card, roll_card_reward, starter_deck
 from .combat import (
     MAX_AUTO_PLAYS_PER_TURN,
@@ -77,6 +79,7 @@ class SimConfig:
     player_attack: int = 3
     deck_factory: Callable[[], list[Card]] = starter_deck
     rewards: bool = True
+    artifacts: bool = True
 
     def new_player(self) -> PlayerState:
         return PlayerState(
@@ -100,6 +103,7 @@ def load_variant(path: Path) -> SimConfig:
     base.player_hp = player.get("hp", base.player_hp)
     base.player_attack = player.get("attack", base.player_attack)
     base.rewards = raw.get("rewards", base.rewards)
+    base.artifacts = raw.get("artifacts", base.artifacts)
 
     card_overrides: dict[str, dict] = raw.get("cards", {})
     extra: list[dict] = raw.get("extra_cards", [])
@@ -283,7 +287,7 @@ def fight(
     player: PlayerState, enemy: Enemy, tier: str, bot: Bot, rng: random.Random
 ) -> FightResult:
     hp_before = player.hp
-    state, _ = start_combat(player.deck, enemy, rng)
+    state, _ = start_combat(player.deck, enemy, rng, player.artifacts)
     turns = 0
     while turns < MAX_AUTO_TURNS and state.enemy_hp > 0 and player.hp > 0:
         turns += 1
@@ -315,14 +319,23 @@ class RunResult:
 
 
 def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -> RunResult:
-    """A full run on a real generated map, picking a random path forward."""
+    """A full run on a real generated map, picking a random path forward.
+
+    Both bots pick artifacts at random - there's no obvious "best" one to
+    hard-code, and a random pick keeps the numbers an average over all of them.
+    """
     rng = random.Random(seed)
     nodes = generate_map(seed)
     player = cfg.new_player()
     node = nodes["0-0"]
     fights: list[FightResult] = []
+    steps = 0
 
     while True:
+        if cfg.artifacts and steps % ARTIFACT_EVERY_STEPS == 0:
+            offer = roll_artifact_offer(rng, player.artifacts)
+            if offer:
+                gain_artifact(player, rng.choice(offer))
         if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
             tier = tier_for(node.floor, node.type)
             result = fight(player, random_enemy(cfg.budgets[tier], tier, rng), tier, bot, rng)
@@ -331,17 +344,19 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 return RunResult(False, node.floor, fights)
             if node.type is NodeType.BOSS:
                 return RunResult(True, node.floor, fights)
+            heal(player, total(player.artifacts, "heal_after_combat"))
             if cfg.rewards:
                 offer = roll_card_reward(rng, elite=node.type is NodeType.ELITE)
                 pick = offer[pick_reward(offer, bot_name, rng)]
                 player.deck.append(reward_card(pick, player.deck))
         elif node.type is NodeType.REST:
-            player.hp = min(player.hp + REST_HEAL, player.max_hp)
+            heal(player, REST_HEAL + total(player.artifacts, "rest_heal"))
         elif node.type is NodeType.EVENT:
             rng.choice(random_event(rng).options).effect(player, rng)
             if player.hp <= 0:
                 return RunResult(False, node.floor, fights)
         node = nodes[rng.choice(node.connections)]
+        steps += 1
 
 
 # --------------------------------------------------------------------------- report
@@ -445,11 +460,14 @@ def main(argv: list[str] | None = None) -> None:
         default=[],
         help="Variante(n) neben die aktuellen Werte stellen (mehrfach möglich)",
     )
+    parser.add_argument("--no-artifacts", action="store_true", help="Runs ohne Artefakte")
     args = parser.parse_args(argv)
 
     base = load_variant(args.variant) if args.variant else SimConfig()
     if args.no_rewards:
         base.rewards = False
+    if args.no_artifacts:
+        base.artifacts = False
     cfgs = [base, *(load_variant(p) for p in args.compare)]
     bot = BOTS[args.bot]
     print(f"Bot: {args.bot}, {args.fights} Kämpfe/Stufe, {args.runs} Runs, Seed {args.seed}")

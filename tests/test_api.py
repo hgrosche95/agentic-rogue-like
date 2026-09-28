@@ -5,6 +5,13 @@ from agentic_rogue_like.api import app
 client = TestClient(app)
 
 
+def _resolve(run_id: str):
+    """POST /resolve, first taking the first artifact if one is on offer."""
+    if client.get(f"/runs/{run_id}").json()["artifact_offer"] is not None:
+        client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0})
+    return client.post(f"/runs/{run_id}/resolve")
+
+
 def _play_combat(run_id: str, run: dict) -> dict:
     turns = 0
     while run["pending_combat"] is not None:
@@ -35,7 +42,7 @@ def _play_full_run(seed: int) -> dict:
     steps = 0
 
     while run["status"] == "ongoing":
-        run = client.post(f"/runs/{run_id}/resolve").json()
+        run = _resolve(run_id).json()
 
         if run["pending_event"] is not None:
             run = client.post(
@@ -88,8 +95,8 @@ def test_resolve_twice_without_choosing_next_node_is_rejected() -> None:
     run = client.post("/runs", json={"seed": 1}).json()
     run_id = run["run_id"]
 
-    client.post(f"/runs/{run_id}/resolve")
-    response = client.post(f"/runs/{run_id}/resolve")
+    _resolve(run_id)
+    response = _resolve(run_id)
 
     assert response.status_code == 409
 
@@ -104,7 +111,7 @@ def _won_fight(seed: int) -> tuple[str, dict]:
     """Seeds where the first fight is won, so a card reward is pending."""
     run = client.post("/runs", json={"seed": seed}).json()
     run_id = run["run_id"]
-    run = _play_combat(run_id, client.post(f"/runs/{run_id}/resolve").json())
+    run = _play_combat(run_id, _resolve(run_id).json())
     return run_id, run
 
 
@@ -147,7 +154,7 @@ def test_card_reward_rejects_bad_index() -> None:
 
 def test_end_turn_requires_discarding_down_to_the_hand_limit() -> None:
     run_id = client.post("/runs", json={"seed": 3}).json()["run_id"]
-    run = client.post(f"/runs/{run_id}/resolve").json()
+    run = _resolve(run_id).json()
 
     # Holding every card grows the hand past the limit after one turn.
     while len(run["pending_combat"]["hand"]) <= run["pending_combat"]["max_hand_size"]:

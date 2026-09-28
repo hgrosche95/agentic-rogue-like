@@ -7,6 +7,7 @@ import {
 } from "../api";
 import { cardSound, hitsOf, sfx } from "../audio";
 import { flyCard } from "../cardFlight";
+import { ArtifactBar } from "./ArtifactBar";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { CardFace } from "./CardFace";
@@ -171,6 +172,7 @@ export function CombatPanel({
               {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
               {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
             </div>
+            <ArtifactBar artifacts={player.artifacts} />
           </div>
 
           <div className="hud-side is-enemy">

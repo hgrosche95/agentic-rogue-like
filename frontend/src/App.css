@@ -2437,3 +2437,77 @@ body > .card-flight {
     animation: none;
   }
 }
+
+/* -- artifacts: the pick-one-of-three screen and the installed chips -- */
+.artifact-offer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.artifact-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 190px;
+  min-height: 130px;
+  padding: 0.9rem 0.8rem;
+  text-align: left;
+  background: var(--panel-deep);
+  color: var(--ink);
+  border: 2px solid var(--gold);
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(224, 168, 63, 0.3), 0 3px 10px rgba(0, 0, 0, 0.5);
+  animation: reward-deal 0.35s ease-out both;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.artifact-card:hover:not(:disabled) {
+  transform: translateY(-4px);
+  box-shadow: 0 0 18px rgba(224, 168, 63, 0.55), 0 8px 18px rgba(0, 0, 0, 0.55);
+}
+
+.artifact-name {
+  font-family: "Rajdhani", sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--gold);
+}
+
+.artifact-description {
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--ink-dim);
+}
+
+.artifact-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+
+.hud-side .artifact-bar {
+  margin: 0.1rem 0 0;
+}
+
+.artifact-chip {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.66rem;
+  font-weight: 600;
+  padding: 0.12rem 0.45rem;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  background: rgba(224, 168, 63, 0.08);
+  cursor: help;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .artifact-card {
+    animation: none;
+  }
+}

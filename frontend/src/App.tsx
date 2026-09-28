@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import {
+  chooseArtifact,
   chooseCardReward,
   chooseEventOption,
   chooseNextNode,
@@ -13,6 +14,8 @@ import {
   type RunView,
 } from "./api";
 import { music, sfx, type Mood } from "./audio";
+import { ArtifactBar } from "./components/ArtifactBar";
+import { ArtifactScreen } from "./components/ArtifactScreen";
 import { AudioControls } from "./components/AudioControls";
 import { CombatPanel } from "./components/CombatPanel";
 import { DungeonMap } from "./components/DungeonMap";
@@ -167,6 +170,7 @@ function App() {
       <p className="setting-badge">{run.setting}</p>
       {/* in combat the HUD and the arena monitor show this instead */}
       {!inCombat && <PlayerStats player={run.player} floor={run.floor} />}
+      {!inCombat && <ArtifactBar artifacts={run.player.artifacts} />}
 
       {inCombat ? (
         <div className="map-toggle-row">
@@ -257,10 +261,20 @@ function App() {
         />
       )}
 
+      {run.status === "ongoing" && !combat && run.artifact_offer && (
+        <ArtifactScreen
+          offer={run.artifact_offer}
+          owned={run.player.artifacts.length}
+          disabled={isLoading}
+          onPick={(artifactIndex) => runAction(() => chooseArtifact(run.run_id, artifactIndex))}
+        />
+      )}
+
       {run.status === "ongoing" &&
         !run.pending_event &&
         !combat &&
         !run.card_reward &&
+        !run.artifact_offer &&
         !run.node_resolved && (
           <button
             disabled={isLoading}

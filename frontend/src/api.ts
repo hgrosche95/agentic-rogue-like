@@ -44,12 +44,20 @@ export interface Card {
   exhaust: boolean;
 }
 
+// A passive bonus for the rest of the run. Only the text is shown - the
+// numbers behind it are applied server-side (see artifacts.py).
+export interface Artifact {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export interface PlayerState {
   hp: number;
   max_hp: number;
   attack: number;
   gold: number;
-  relics: { id: string; name: string; description: string }[];
+  artifacts: Artifact[];
   deck: Card[];
 }
 
@@ -108,6 +116,7 @@ export interface RunView {
   pending_event: PendingEventView | null;
   pending_combat: PendingCombatView | null;
   card_reward: Card[] | null;
+  artifact_offer: Artifact[] | null;
   nodes: Record<string, MapNode>;
 }
 
@@ -156,6 +165,13 @@ export function chooseCardReward(runId: string, cardIndex: number | null): Promi
   return request<RunView>(`/runs/${runId}/card-reward`, {
     method: "POST",
     body: JSON.stringify({ card_index: cardIndex }),
+  });
+}
+
+export function chooseArtifact(runId: string, artifactIndex: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/artifact`, {
+    method: "POST",
+    body: JSON.stringify({ artifact_index: artifactIndex }),
   });
 }
 

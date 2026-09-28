@@ -35,7 +35,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from .models import PERMANENT_CARD_TYPES, Card, CardType, Enemy, PlayerState, Scaling
+from .artifacts import every_nth_turn, heal, total
+from .models import PERMANENT_CARD_TYPES, Artifact, Card, CardType, Enemy, PlayerState, Scaling
 
 HAND_SIZE = 5  # opening hand
 CARDS_PER_TURN = 3  # drawn at the end of every turn, on top of what's left
@@ -64,6 +65,10 @@ class CombatState(BaseModel):
     banished_pile: list[Card] = Field(default_factory=list)
     field: list[Card | None] = Field(default_factory=lambda: [None] * FIELD_SIZE)
     player_block: int = 0
+    # The player's artifacts, copied in at the start so every hook below can
+    # read them without being handed the PlayerState.
+    artifacts: list[Artifact] = Field(default_factory=list)
+    turn: int = 1
 
 
 def _draw(state: CombatState, count: int, rng: random.Random) -> int:
@@ -80,17 +85,28 @@ def _draw(state: CombatState, count: int, rng: random.Random) -> int:
 
 
 def cards_per_turn(state: CombatState) -> int:
+    """Cards drawn for turn `state.turn`."""
     draw_bonus = sum(c.value for c in state.field if c and c.type is CardType.DRAW_BONUS)
-    return CARDS_PER_TURN + draw_bonus
+    artifact_bonus = every_nth_turn(state.artifacts, "extra_draw", "extra_draw_every", state.turn)
+    return max(0, CARDS_PER_TURN + draw_bonus + artifact_bonus)
+
+
+def max_hand_size(state: CombatState) -> int:
+    return MAX_HAND_SIZE + total(state.artifacts, "max_hand")
+
+
+def enemy_attack(state: CombatState) -> int:
+    """The enemy's attack stat after artifacts - before the d6 roll and block."""
+    return max(0, state.enemy.attack + total(state.artifacts, "enemy_attack"))
 
 
 def excess_hand_cards(state: CombatState) -> int:
     """How many cards have to be discarded before the turn can end."""
-    return max(0, len(state.hand) - MAX_HAND_SIZE)
+    return max(0, len(state.hand) - max_hand_size(state))
 
 
 def _discard_excess(state: CombatState, discard: list[int] | None) -> str:
-    """Discard the hand down to MAX_HAND_SIZE.
+    """Discard the hand down to the hand limit (max_hand_size).
 
     `discard` names the hand indices to throw away and has to match the excess
     exactly; None lets the bots skip the choice and drops the most recently
@@ -125,7 +141,10 @@ def _damage_enemy(state: CombatState, damage: int) -> tuple[int, int]:
 
 
 def start_combat(
-    deck: list[Card], enemy: Enemy, rng: random.Random
+    deck: list[Card],
+    enemy: Enemy,
+    rng: random.Random,
+    artifacts: list[Artifact] | None = None,
 ) -> tuple[CombatState, list[str]]:
     """Shuffle a *copy* of `deck` into the draw pile and draw an opening hand.
 
@@ -133,6 +152,10 @@ def start_combat(
     below are the combat-scoped working copy that gets folded back once the
     fight ends.
     """
+    artifacts = list(artifacts or [])
+    hp_percent = total(artifacts, "enemy_hp_percent")
+    if hp_percent:
+        enemy = enemy.model_copy(update={"hp": max(1, round(enemy.hp * (100 + hp_percent) / 100))})
     draw_pile = list(deck)
     rng.shuffle(draw_pile)
     state = CombatState(
@@ -143,9 +166,15 @@ def start_combat(
         hand=[],
         discard_pile=[],
         field=[None] * FIELD_SIZE,
+        player_block=total(artifacts, "start_block"),
+        artifacts=artifacts,
     )
-    _draw(state, HAND_SIZE, rng)
-    return state, [f"A {enemy.name} appears! ({enemy.hp} HP)"]
+    _draw(state, HAND_SIZE + total(artifacts, "opening_hand"), rng)
+    log = [f"A {enemy.name} appears! ({enemy.hp} HP)"]
+    if opening := total(artifacts, "opening_damage"):
+        _, dealt = _damage_enemy(state, opening)
+        log.append(f"Your artifacts strike first for {dealt} damage.")
+    return state, log
 
 
 def _amplifier_multiplier(state: CombatState, slot_index: int) -> float:
@@ -253,13 +282,19 @@ def _apply_action_effect(
             absorbed += a
             dealt += d
         what = f"{hits}x {damage} damage" if hits > 1 else f"{damage} damage"
+        leech = ""
+        if healed := heal(player, total(state.artifacts, "lifesteal")):
+            leech = f" You leech {healed} HP."
         if absorbed > 0:
             return (
                 f"You play {card.name}, dealing {what} - {state.enemy.name}'s "
                 f"block absorbs {absorbed}, {dealt} gets through. {state.enemy.name} at "
-                f"{state.enemy_hp} HP."
+                f"{state.enemy_hp} HP.{leech}"
             )
-        return f"You play {card.name}, dealing {what}. {state.enemy.name} at {state.enemy_hp} HP."
+        return (
+            f"You play {card.name}, dealing {what}. {state.enemy.name} at "
+            f"{state.enemy_hp} HP.{leech}"
+        )
 
     if card.type is CardType.DRAW:
         drawn = _draw(state, card.value, rng)
@@ -281,14 +316,13 @@ def _apply_action_effect(
         return f"You play {card.name}, restoring {_names(returned)} from the banished pile."
 
     if card.type is CardType.BLOCK:
-        amount = round(card.value * multiplier)
+        amount = round((card.value + total(state.artifacts, "block_bonus")) * multiplier)
         state.player_block += amount
         return f"You play {card.name}, gaining {amount} block."
 
     if card.type is CardType.HEAL:
-        amount = round(card.value * multiplier)
-        healed = min(amount, player.max_hp - player.hp)
-        player.hp += healed
+        amount = round((card.value + total(state.artifacts, "heal_bonus")) * multiplier)
+        healed = heal(player, amount)
         return f"You play {card.name}, healing {healed} HP."
 
     # FINAL_STRIKE
@@ -343,14 +377,19 @@ def end_turn(
         gained = fortify * permanent_count(state)
         state.player_block += gained
         log.append(f"Your mainframe raises {gained} block.")
+    turn_block = every_nth_turn(state.artifacts, "turn_block", "turn_block_every", state.turn)
+    if turn_block:
+        state.player_block += turn_block
+        log.append(f"Your artifacts raise {turn_block} block.")
 
     if state.enemy_intent is EnemyIntentType.DEFEND:
         state.enemy_block += state.enemy.attack
         log.append(f"{state.enemy.name} braces itself, gaining {state.enemy.attack} block.")
     else:
         armor = sum(1 for c in state.field if c is not None and c.type is CardType.ARMOR)
+        armor += total(state.artifacts, "armor")
         reduction = state.player_block + armor
-        raw_damage = state.enemy.attack + rng.randint(1, 6)
+        raw_damage = enemy_attack(state) + rng.randint(1, 6)
         blocked = min(raw_damage, reduction)
         taken = raw_damage - blocked
         player.hp = max(player.hp - taken, 0)
@@ -367,8 +406,18 @@ def end_turn(
                 f"You are at {player.hp} HP."
             )
 
+        if thorns := total(state.artifacts, "thorns"):
+            _, dealt = _damage_enemy(state, thorns)
+            log.append(
+                f"The attack backfires: {state.enemy.name} takes {dealt} damage. "
+                f"{state.enemy.name} at {state.enemy_hp} HP."
+            )
+            if state.enemy_hp <= 0:
+                return log
+
     state.player_block = 0
     state.enemy_intent = _roll_enemy_intent(rng)
+    state.turn += 1
     # Unplayed hand cards carry over to next turn; a fixed number of cards
     # is drawn on top, so holding cards back grows the hand (up to the limit).
     _draw(state, cards_per_turn(state), rng)
@@ -381,7 +430,7 @@ def auto_resolve_combat(
     """Play out a full fight non-interactively: dump the hand into the first
     empty field slot each turn, then end the turn, until someone runs out of HP.
     """
-    state, log = start_combat(deck, enemy, rng)
+    state, log = start_combat(deck, enemy, rng, player.artifacts)
 
     for _ in range(MAX_AUTO_TURNS):
         if state.enemy_hp <= 0 or player.hp <= 0:
