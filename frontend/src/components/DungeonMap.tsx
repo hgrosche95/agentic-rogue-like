@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { MapNode } from "../api";
+import { sfx } from "../audio";
 import { NODE_STYLE } from "../nodeTypes";
 
 // Bergpfad on narrow screens: floors climb bottom-to-top, siblings spread
@@ -137,6 +138,9 @@ export function DungeonMap({
               role={isReachable ? "button" : undefined}
               tabIndex={isReachable && !disabled ? 0 : undefined}
               aria-label={`${style.label}, floor ${node.floor}`}
+              onMouseEnter={() => {
+                if (isReachable && !disabled) sfx.play("hover");
+              }}
               onClick={() => {
                 if (isReachable && !disabled) onChoose(node.id);
               }}

@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   PERMANENT_CARD_TYPES,
   type HandCardView,
   type PendingCombatView,
   type PlayerState,
 } from "../api";
+import { cardSound, hitsOf, sfx } from "../audio";
 import { flyCard } from "../cardFlight";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useHpExchange } from "../hooks/useHpExchange";
@@ -66,13 +67,35 @@ export function CombatPanel({
   const pending = busy ? played : null;
   const pendingCard = pending && combat.hand.find((c) => c.hand_index === pending.handIndex);
   const handRef = useRef<HTMLDivElement>(null);
+  // What the table looked like when the turn was ended, to tell once the
+  // server answers whether the daemon fired and the enemy's blow got through.
+  const endTurnFrom = useRef<{ combat: PendingCombatView; hp: number } | null>(null);
+
+  useEffect(() => {
+    const before = endTurnFrom.current;
+    if (!before || before.combat === combat) return;
+    endTurnFrom.current = null;
+    if (before.combat.field.some((card) => card?.type === "turret")) sfx.play("daemon_tick");
+    if (before.combat.enemy_intent !== "attack" || enemySlain) return;
+    sfx.play("enemy_attack", { delayMs: 150 });
+    // a hit through the block is voiced by the HP exchange (useHpExchange)
+    if (player.hp >= before.hp && before.combat.player_block > 0) sfx.play("block_absorb", { delayMs: 300 });
+  }, [combat, player.hp, enemySlain]);
+
+  function endTurn() {
+    sfx.play("click");
+    endTurnFrom.current = { combat, hp: player.hp };
+    onEndTurn();
+  }
 
   function selectCard(handIndex: number) {
+    sfx.play("select");
     setSelectedHandIndex((current) => (current === handIndex ? null : handIndex));
   }
 
   function playIntoSlot(slotIndex: number, slot: HTMLElement) {
     if (selectedHandIndex === null) return;
+    endTurnFrom.current = null;
     const card = handRef.current?.querySelector<HTMLElement>(`[data-hand-index="${selectedHandIndex}"]`);
     if (card) flyCard(card, slot);
     setSelectedHandIndex(null);
@@ -88,8 +111,12 @@ export function CombatPanel({
     const text = commandFor(played, combat.enemy_name);
     setCommands((sent) => [...sent, { at: log.length, text }]);
     setTyping(true);
+    sfx.play("typing", { durationMs: TYPING_MS });
     window.setTimeout(() => {
       setTyping(false);
+      // Enter, and the command runs
+      sfx.play("enter");
+      sfx.play(cardSound(played.type), { hits: hitsOf(played.description), delayMs: 40 });
       onPlayCard(handIndex, slotIndex);
     }, TYPING_MS + 150);
   }
@@ -185,6 +212,7 @@ export function CombatPanel({
                 data-hand-index={card.hand_index}
                 className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}`}
                 disabled={busy}
+                onMouseEnter={() => sfx.play("hover")}
                 onClick={() => selectCard(card.hand_index)}
               >
                 <CardFace card={card} />
@@ -194,7 +222,7 @@ export function CombatPanel({
         </div>
 
         <div className="table-side">
-          <button className="end-turn-button" disabled={busy} onClick={onEndTurn}>
+          <button className="end-turn-button" disabled={busy} onClick={endTurn}>
             End turn
           </button>
           <div className="side-piles">

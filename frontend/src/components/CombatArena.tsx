@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { sfx } from "../audio";
 import type { HpExchange } from "../hooks/useHpExchange";
 import { CombatMonitor } from "./CombatMonitor";
 import { EnemyMonster } from "./EnemyMonster";
@@ -157,6 +158,11 @@ export function CombatArena({
     }
   }, [exchange?.id]);
 
+  // The enemy comes apart once the killing blow has landed (see DeathBurst).
+  useEffect(() => {
+    if (slain) sfx.play("enemy_defeated", { delayMs: 1100 });
+  }, [slain]);
+
   return (
     <div className="arena-stage">
       <img className="arena-layer" src={LAYERS.background} alt="" />
@@ -210,7 +216,14 @@ export function CombatArena({
       {slain && (
         <div className="arena-victory">
           <span className="arena-victory-title">{enemy.name} defeated</span>
-          <button type="button" className="arena-continue" onClick={onContinue}>
+          <button
+            type="button"
+            className="arena-continue"
+            onClick={() => {
+              sfx.play("click");
+              onContinue?.();
+            }}
+          >
             Continue
           </button>
         </div>

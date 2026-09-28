@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { sfx } from "../audio";
 
 export interface HpExchange {
   id: number;
@@ -25,6 +26,15 @@ export function useHpExchange(playerHp: number, enemyHp: number): HpExchange | n
       enemyDelta: enemyHp - previous.enemyHp,
     });
   }
+
+  // The hits are voiced here, where they are known; the card's own effect
+  // already sounded when its command ran (CombatPanel).
+  useEffect(() => {
+    if (!exchange) return;
+    if (exchange.enemyDelta < 0) sfx.play("impact");
+    // after the enemy's wind-up (CombatPanel's end of turn)
+    if (exchange.playerDelta < 0) sfx.play("player_hit", { delayMs: 260 });
+  }, [exchange]);
 
   return exchange;
 }

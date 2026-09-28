@@ -55,6 +55,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 - [x] **Deck-Building** — nach jedem Sieg eine von drei Karten wählen
       (`/runs/{id}/card-reward`); 17 Belohnungskarten mit Abwurfkosten,
       Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
+- [x] **Sound und Musik** — Soundeffekte und Hintergrundmusik, komplett
+      prozedural mit der Web Audio API erzeugt (siehe *Audio* unten).
 - [ ] **Encounter-Agent** — ein LangGraph-Agent, der Gegner über constrained
       Tool-Calls generiert und gegen ein Etagen-Budget validiert, mit
       Retry-Schleife bei Budget-Verstoß. Für Gegner voll eingeklinkt: die
@@ -104,7 +106,7 @@ src/agentic_rogue_like/
 ├── api.py          FastAPI-HTTP-Frontend fürs Web-UI (uvicorn agentic_rogue_like.api:app)
 └── sessions.py      Hält Run-Zustand zwischen HTTP-Requests am Leben
 
-frontend/           React + Vite + TypeScript — Intro, Dungeon-Map, Kampf-Arena, Event-Prompts
+frontend/           React + Vite + TypeScript — Intro, Dungeon-Map, Kampf-Arena, Event-Prompts, prozedurales Audio
 balance/            Beispiel-Varianten (JSON) für den Balancing-Simulator
 tests/              pytest-Suite (Engine, Kampf, API, Encounter-Agent/-Schema)
 training/           Eigenes uv-Projekt: Fine-Tuning-Pipeline für den Encounter-Agent
@@ -173,6 +175,23 @@ Die API erlaubt standardmäßig nur `http://localhost:5173` per CORS
 (`FRONTEND_ORIGINS`-Env-Var, kommagetrennt — so läuft dasselbe Image lokal
 und in Produktion ohne Rebuild). Das Frontend liest seinerseits die
 API-Adresse aus `VITE_API_BASE_URL` zur Build-Zeit.
+
+### Audio
+
+Alle Klänge entstehen zur Laufzeit mit der Web Audio API
+(`frontend/src/audio/`) — Oszillatoren, gefiltertes Rauschen, ein Bitcrusher
+und ein kleiner Step-Sequencer, keine Audio-Dateien. Weil Dr. Chronos jede
+Karte als Shell-Befehl eintippt, klackert beim Spielen erst die Tastatur, nach
+Enter folgt ein digitaler Effekt je Kartentyp: Glitch-Datenstoß für Angriffe
+(ein Impuls pro Treffer), Absturz mit Bluescreen-Brummen für Kernel Panic,
+Schild-Synth für Blocks, Arpeggio für Heilung, Festplatten-Seek bzw.
+Rückspulen für Zieh- und Rückhol-Karten, Boot-Piepen für Permanente. Die Musik
+wechselt mit weichem Übergang zwischen einem ruhigen Loop (Intro, Karte,
+Events), einem treibenden für Kämpfe und einem härteren für den Boss. Der
+AudioContext startet erst mit dem ersten Klick oder Tastendruck
+(Autoplay-Regeln der Browser); Stummschalter und getrennte Lautstärken für
+Musik und Effekte sitzen oben rechts und werden in `localStorage` gemerkt.
+API: `sfx.play("attack", { hits: 3 })`, `music.setMood("combat")`.
 
 ## Balancing testen
 

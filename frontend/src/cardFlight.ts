@@ -1,9 +1,13 @@
+import { sfx } from "./audio";
+
 // Flies a copy of a hand card into a field slot. Imperative on purpose: the
 // clone lives outside React's tree, so it keeps flying while React re-renders
 // the hand from the server's response underneath it. Action cards resolve
 // instantly and never show up in the field, so the flight ends by fading out
 // at the slot instead of handing over to a rendered card.
 export function flyCard(card: HTMLElement, slot: HTMLElement): void {
+  // reduced motion skips the flight, not its sound
+  sfx.play("card_flight");
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
   const from = card.getBoundingClientRect();

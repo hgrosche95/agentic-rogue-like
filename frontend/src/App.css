@@ -254,6 +254,102 @@ body {
   stroke: var(--cyan);
 }
 
+/* ---------- audio controls ---------- */
+.map-toggle-row {
+  gap: 0.4rem;
+}
+
+.audio-controls {
+  position: relative;
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* outside combat the controls sit in the frame's top-right corner */
+.audio-controls.is-floating {
+  position: absolute;
+  top: 0.9rem;
+  right: 1rem;
+  z-index: 12;
+}
+
+/* on phones the combat header needs two rows: the title, then the setting
+   badge with the map and audio buttons */
+@media (max-width: 600px) {
+  .game.is-wide {
+    grid-template-columns: auto 1fr;
+  }
+  .game.is-wide > h1 {
+    grid-column: 1 / -1;
+  }
+}
+
+.game:not(.is-wide) > h1 {
+  padding-right: 84px;
+}
+
+.game > .intro {
+  margin-top: 2.4rem;
+}
+
+.icon-btn .knob {
+  fill: var(--panel-deep);
+}
+
+.icon-btn:hover:not(:disabled) .needle {
+  stroke: var(--cyan-bright);
+}
+
+.icon-btn.is-muted .dial {
+  stroke: var(--maroon);
+}
+
+.audio-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 0.55rem;
+  min-width: 230px;
+  padding: 0.7rem 0.8rem;
+  background: var(--panel-deep);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6), var(--glow-cyan);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-dim);
+}
+
+.audio-panel label {
+  display: grid;
+  grid-template-columns: 4.6rem 1fr 2rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.audio-panel input[type="range"] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--cyan);
+}
+
+.audio-value {
+  text-align: right;
+  color: var(--cyan);
+  font-variant-numeric: tabular-nums;
+}
+
+.audio-muted-hint {
+  margin: 0;
+  color: var(--maroon);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .map-overlay {
   position: absolute;
   inset: 0;
