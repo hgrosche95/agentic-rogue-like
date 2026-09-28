@@ -1,13 +1,14 @@
 import type { NodeType } from "./api";
 
-// Plain letters, not dingbat symbols (swords/skull/crown): those render as
-// fixed-color emoji on most platforms and ignore the `color` CSS below,
-// which broke the whole point of color-coding node types by hand.
-export const NODE_STYLE: Record<NodeType, { symbol: string; label: string; color: string }> = {
-  combat: { symbol: "C", label: "Fight", color: "var(--tangerine)" },
-  elite: { symbol: "E", label: "Elite fight", color: "var(--maroon)" },
-  event: { symbol: "?", label: "Event", color: "var(--violet)" },
-  shop: { symbol: "$", label: "Shop", color: "var(--gold)" },
-  rest: { symbol: "R", label: "Rest", color: "var(--green)" },
-  boss: { symbol: "B", label: "Boss", color: "var(--maroon)" },
+// The map draws each type as a colored coin with an SVG icon (see NodeIcon
+// in DungeonMap). Icons are drawn shapes or plain characters, never dingbat
+// symbols (swords/skull/crown): those render as fixed-color emoji on most
+// platforms and ignore the CSS colors that tell node types apart.
+export const NODE_STYLE: Record<NodeType, { symbol: string; label: string }> = {
+  combat: { symbol: "C", label: "Fight" },
+  elite: { symbol: "E", label: "Elite fight" },
+  event: { symbol: "?", label: "Event" },
+  shop: { symbol: "$", label: "Shop" },
+  rest: { symbol: "R", label: "Rest" },
+  boss: { symbol: "B", label: "Boss" },
 };
