@@ -12,6 +12,8 @@ import {
   type PendingCombatView,
   type RunView,
 } from "./api";
+import { music, sfx, type Mood } from "./audio";
+import { AudioControls } from "./components/AudioControls";
 import { CombatPanel } from "./components/CombatPanel";
 import { DungeonMap } from "./components/DungeonMap";
 import { EndScreen } from "./components/EndScreen";
@@ -57,6 +59,18 @@ function App() {
   const [slainCombat, setSlainCombat] = useState<PendingCombatView | null>(null);
   const combat = run?.pending_combat ?? slainCombat;
   const inCombat = Boolean(combat);
+  const mood: Mood =
+    run?.status === "defeat"
+      ? "silence"
+      : inCombat
+        ? run?.current_node.type === "boss"
+          ? "boss"
+          : "combat"
+        : "map";
+
+  useEffect(() => {
+    music.setMood(mood);
+  }, [mood]);
 
   useEffect(() => {
     if (!inCombat) setIsMapOpen(false);
@@ -87,6 +101,7 @@ function App() {
       setRun(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      sfx.play("error");
     } finally {
       setIsLoading(false);
     }
@@ -95,6 +110,7 @@ function App() {
   if (run === null && isIntroOpen) {
     return (
       <main className="game">
+        <AudioControls className="is-floating" />
         <IntroScreen
           onDone={() => {
             rememberIntroSeen();
@@ -108,6 +124,7 @@ function App() {
   if (run === null) {
     return (
       <main className="game">
+        <AudioControls className="is-floating" />
         <h1>agentic-rogue-like</h1>
         <SettingPicker
           settings={settings}
@@ -117,7 +134,10 @@ function App() {
         />
         <button
           disabled={isLoading || selectedSetting.trim() === ""}
-          onClick={() => runAction(() => createRun(selectedSetting))}
+          onClick={() => {
+            sfx.play("select");
+            runAction(() => createRun(selectedSetting));
+          }}
         >
           Start run
         </button>
@@ -134,11 +154,15 @@ function App() {
     currentNodeId: run.current_node.id,
     reachableIds: run.available_choices.map((n) => n.id),
     disabled: isLoading,
-    onChoose: (nodeId: string) => runAction(() => chooseNextNode(run.run_id, nodeId)),
+    onChoose: (nodeId: string) => {
+      sfx.play("map_select");
+      runAction(() => chooseNextNode(run.run_id, nodeId));
+    },
   };
 
   return (
     <main className={`game${inCombat ? " is-wide" : ""}`}>
+      {!inCombat && <AudioControls className="is-floating" />}
       <h1>agentic-rogue-like</h1>
       <p className="setting-badge">{run.setting}</p>
       {/* in combat the HUD and the arena monitor show this instead */}
@@ -150,7 +174,10 @@ function App() {
             type="button"
             className="icon-btn"
             aria-label="Show map"
-            onClick={() => setIsMapOpen(true)}
+            onClick={() => {
+              sfx.play("click");
+              setIsMapOpen(true);
+            }}
           >
             <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
               <circle className="dial" cx="10" cy="10" r="7" />
@@ -162,6 +189,7 @@ function App() {
               <line className="needle" x1="10" y1="10" x2="12.6" y2="12.6" />
             </svg>
           </button>
+          <AudioControls />
         </div>
       ) : (
         <DungeonMap {...mapProps} />
@@ -234,7 +262,13 @@ function App() {
         !combat &&
         !run.card_reward &&
         !run.node_resolved && (
-          <button disabled={isLoading} onClick={() => runAction(() => resolveCurrentNode(run.run_id))}>
+          <button
+            disabled={isLoading}
+            onClick={() => {
+              sfx.play("click");
+              runAction(() => resolveCurrentNode(run.run_id));
+            }}
+          >
             Continue
           </button>
         )}
