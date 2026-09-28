@@ -41,17 +41,46 @@ class CardType(StrEnum):
     BLOCK = "block"
     HEAL = "heal"
     FINAL_STRIKE = "final_strike"
+    DRAW = "draw"  # draw `value` cards
+    RETRIEVE = "retrieve"  # graveyard -> hand, the `value` most recent cards
+    RESTORE = "restore"  # banished pile -> hand, the `value` most recent cards
     # Permanent cards: occupy a field slot for the rest of the fight instead
     # of being discarded, passively affecting play based on their position.
     AMPLIFIER = "amplifier"
     ARMOR = "armor"
     RECYCLING = "recycling"
     DRAW_BONUS = "draw_bonus"
+    DAMAGE_BOOST = "damage_boost"  # attacks +value per permanent on the field
+    TURRET = "turret"  # deals `value` damage at the end of every turn
+    FORTIFY = "fortify"  # +value block per permanent at the end of every turn
 
 
 PERMANENT_CARD_TYPES = frozenset(
-    {CardType.AMPLIFIER, CardType.ARMOR, CardType.RECYCLING, CardType.DRAW_BONUS}
+    {
+        CardType.AMPLIFIER,
+        CardType.ARMOR,
+        CardType.RECYCLING,
+        CardType.DRAW_BONUS,
+        CardType.DAMAGE_BOOST,
+        CardType.TURRET,
+        CardType.FORTIFY,
+    }
 )
+
+
+class Scaling(StrEnum):
+    """What an attack card's `scale_value` bonus is counted per."""
+
+    PERMANENT = "permanent"  # permanent cards on the field
+    GRAVEYARD = "graveyard"  # cards in the discard pile
+    BANISHED = "banished"  # cards in the banished pile
+
+
+class Rarity(StrEnum):
+    STARTER = "starter"
+    COMMON = "common"
+    UNCOMMON = "uncommon"
+    RARE = "rare"
 
 
 class Card(BaseModel):
@@ -60,6 +89,15 @@ class Card(BaseModel):
     type: CardType
     value: int
     description: str
+    rarity: Rarity = Rarity.STARTER
+    # Optional mechanics on top of the type's base effect - all default to
+    # "off", so a plain Card(...) still behaves exactly like before.
+    exhaust: bool = False  # one-shot: banished after use instead of discarded
+    discard_cost: int = 0  # discard this many random other hand cards first
+    hits: int = 1  # attacks only: the damage is dealt this many times
+    draw: int = 0  # draw this many cards after the effect
+    scaling: Scaling | None = None  # attacks only: +scale_value per ...
+    scale_value: int = 0
 
 
 class PlayerState(BaseModel):
@@ -116,3 +154,6 @@ class RunState(BaseModel):
     current_node_id: str | None = None
     history: list[str] = Field(default_factory=list)
     setting: str = DEFAULT_SETTING
+    # Cards offered after a won fight, waiting for the player to pick one
+    # (or skip) - the run can't move on to the next room until then.
+    card_reward: list[Card] | None = None

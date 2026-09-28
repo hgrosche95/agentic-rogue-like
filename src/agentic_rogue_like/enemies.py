@@ -18,18 +18,18 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
     # these read high compared to the old dice-combat numbers) - a test
     # pins that invariant down so this pool can't quietly drift out of it.
     "early": [
-        Enemy(id="rat-swarm", name="Rat Swarm", hp=30, attack=7, attack_name="Swarm Bite"),
-        Enemy(id="cave-slime", name="Cave Slime", hp=35, attack=6, attack_name="Acid Splash"),
+        Enemy(id="rat-swarm", name="Rat Swarm", hp=40, attack=10, attack_name="Swarm Bite"),
+        Enemy(id="cave-slime", name="Cave Slime", hp=46, attack=9, attack_name="Acid Splash"),
     ],
     "mid": [
-        Enemy(id="bandit", name="Bandit", hp=45, attack=12, attack_name="Dagger Strike"),
-        Enemy(id="wild-boar", name="Wild Boar", hp=50, attack=13, attack_name="Tusk Charge"),
+        Enemy(id="bandit", name="Bandit", hp=58, attack=12, attack_name="Dagger Strike"),
+        Enemy(id="wild-boar", name="Wild Boar", hp=66, attack=13, attack_name="Tusk Charge"),
     ],
     "elite": [
-        Enemy(id="ogre", name="Ogre", hp=85, attack=19, attack_name="Club Smash"),
+        Enemy(id="ogre", name="Ogre", hp=88, attack=15, attack_name="Club Smash"),
     ],
     "boss": [
-        Enemy(id="the-warden", name="The Warden", hp=160, attack=24, attack_name="Iron Verdict"),
+        Enemy(id="the-warden", name="The Warden", hp=120, attack=17, attack_name="Iron Verdict"),
     ],
 }
 

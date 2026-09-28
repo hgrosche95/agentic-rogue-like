@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 from .engine import available_choices, new_run, resolve_node
 from .events import EventOption, GameEvent
-from .models import RunState, RunStatus
+from .models import Card, RunState, RunStatus
 
 
 def _prompt_index(count: int) -> int:
@@ -24,6 +24,15 @@ def _choose_event_option(event: GameEvent) -> EventOption:
     for i, option in enumerate(event.options, start=1):
         print(f"  {i}. {option.label}")
     return event.options[_prompt_index(len(event.options))]
+
+
+def _choose_card(offer: list[Card]) -> int | None:
+    print("\nChoose a card to add to your deck:")
+    for i, card in enumerate(offer, start=1):
+        print(f"  {i}. {card.name} ({card.rarity.value}) - {card.description}")
+    print(f"  {len(offer) + 1}. Skip")
+    choice = _prompt_index(len(offer) + 1)
+    return None if choice == len(offer) else choice
 
 
 def _choose_next_node(run: RunState, choices: list[str]) -> str:
@@ -46,7 +55,9 @@ def main() -> None:
 
     try:
         while run.status is RunStatus.ONGOING:
-            resolve_node(run, rng, choose_event_option=_choose_event_option)
+            resolve_node(
+                run, rng, choose_event_option=_choose_event_option, choose_card=_choose_card
+            )
             for line in run.history[last_printed:]:
                 print(line)
             last_printed = len(run.history)

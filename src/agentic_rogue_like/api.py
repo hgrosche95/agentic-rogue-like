@@ -33,6 +33,7 @@ from pydantic import BaseModel, field_validator
 from .engine import (
     apply_event_choice,
     available_choices,
+    choose_card_reward,
     end_combat_turn,
     finalize_combat,
     new_run,
@@ -44,6 +45,7 @@ from .engine import (
 from .models import (
     MAX_CUSTOM_SETTING_LENGTH,
     SETTING_PRESETS,
+    Card,
     CardType,
     MapNode,
     NodeType,
@@ -88,6 +90,20 @@ class CardView(BaseModel):
     type: str
     value: int
     description: str
+    rarity: str
+    exhaust: bool
+
+    @classmethod
+    def of(cls, card: Card) -> CardView:
+        return cls(
+            id=card.id,
+            name=card.name,
+            type=card.type.value,
+            value=card.value,
+            description=card.description,
+            rarity=card.rarity.value,
+            exhaust=card.exhaust,
+        )
 
 
 class HandCardView(CardView):
@@ -123,6 +139,7 @@ class RunView(BaseModel):
     available_choices: list[MapNode]
     pending_event: PendingEventView | None
     pending_combat: PendingCombatView | None
+    card_reward: list[CardView] | None
     # Every node in the run, not just the current/reachable ones - the
     # frontend draws the whole dungeon graph, not just the next step.
     nodes: dict[str, MapNode]
@@ -160,6 +177,11 @@ class PlayCardRequest(BaseModel):
     slot_index: int
 
 
+class CardRewardRequest(BaseModel):
+    # None skips the reward.
+    card_index: int | None
+
+
 class ChooseNodeRequest(BaseModel):
     node_id: str
 
@@ -167,7 +189,12 @@ class ChooseNodeRequest(BaseModel):
 def _run_view(run_id: str, session: RunSession) -> RunView:
     run = session.run
     node = run.nodes[run.current_node_id]
-    node_resolved = node.visited and session.pending_event is None and session.combat is None
+    node_resolved = (
+        node.visited
+        and session.pending_event is None
+        and session.combat is None
+        and run.card_reward is None
+    )
 
     pending_event = None
     if session.pending_event is not None:
@@ -191,28 +218,10 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_intent=combat.enemy_intent.value,
             enemy_intent_value=combat.enemy.attack,
             hand=[
-                HandCardView(
-                    hand_index=i,
-                    id=card.id,
-                    name=card.name,
-                    type=card.type.value,
-                    value=card.value,
-                    description=card.description,
-                )
+                HandCardView(hand_index=i, **CardView.of(card).model_dump())
                 for i, card in enumerate(combat.hand)
             ],
-            field=[
-                None
-                if card is None
-                else CardView(
-                    id=card.id,
-                    name=card.name,
-                    type=card.type.value,
-                    value=card.value,
-                    description=card.description,
-                )
-                for card in combat.field
-            ],
+            field=[None if card is None else CardView.of(card) for card in combat.field],
             player_block=combat.player_block,
             armor=sum(1 for c in combat.field if c is not None and c.type is CardType.ARMOR),
             draw_count=len(combat.draw_pile),
@@ -236,6 +245,9 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         available_choices=choices,
         pending_event=pending_event,
         pending_combat=pending_combat,
+        card_reward=(
+            None if run.card_reward is None else [CardView.of(c) for c in run.card_reward]
+        ),
         nodes=run.nodes,
     )
 
@@ -322,7 +334,8 @@ def end_turn_endpoint(run_id: str) -> RunView:
 
     end_combat_turn(session.run, session.combat, session.rng)
 
-    if session.run.player.hp <= 0:
+    # A Daemon permanent can finish the enemy off during the end of the turn.
+    if session.run.player.hp <= 0 or session.combat.enemy_hp <= 0:
         finalize_combat(session.run, session.combat, session.rng)
         session.combat = None
 
@@ -344,13 +357,30 @@ def choose_event_option(run_id: str, request: EventChoiceRequest) -> RunView:
     return _run_view(run_id, session)
 
 
+@app.post("/runs/{run_id}/card-reward")
+def choose_card_reward_endpoint(run_id: str, request: CardRewardRequest) -> RunView:
+    session = _get_session_or_404(run_id)
+    if session.run.card_reward is None:
+        raise HTTPException(status_code=409, detail="no card reward pending")
+    try:
+        choose_card_reward(session.run, request.card_index)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _run_view(run_id, session)
+
+
 @app.post("/runs/{run_id}/choose-node")
 def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
     session = _get_session_or_404(run_id)
     run = session.run
     node = run.nodes[run.current_node_id]
 
-    if not node.visited or session.pending_event is not None or session.combat is not None:
+    if (
+        not node.visited
+        or session.pending_event is not None
+        or session.combat is not None
+        or run.card_reward is not None
+    ):
         raise HTTPException(status_code=409, detail="current node is not resolved yet")
     if request.node_id not in available_choices(run):
         raise HTTPException(status_code=400, detail="node_id is not reachable from here")

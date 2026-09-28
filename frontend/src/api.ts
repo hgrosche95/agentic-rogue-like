@@ -10,17 +10,28 @@ export type CardType =
   | "block"
   | "heal"
   | "final_strike"
+  | "draw"
+  | "retrieve"
+  | "restore"
   | "amplifier"
   | "armor"
   | "recycling"
-  | "draw_bonus";
+  | "draw_bonus"
+  | "damage_boost"
+  | "turret"
+  | "fortify";
 
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
   "armor",
   "recycling",
   "draw_bonus",
+  "damage_boost",
+  "turret",
+  "fortify",
 ];
+
+export type Rarity = "starter" | "common" | "uncommon" | "rare";
 
 export interface Card {
   id: string;
@@ -28,6 +39,9 @@ export interface Card {
   type: CardType;
   value: number;
   description: string;
+  rarity: Rarity;
+  // one-shot: banished for the rest of the fight after it is played
+  exhaust: boolean;
 }
 
 export interface PlayerState {
@@ -92,6 +106,7 @@ export interface RunView {
   available_choices: MapNode[];
   pending_event: PendingEventView | null;
   pending_combat: PendingCombatView | null;
+  card_reward: Card[] | null;
   nodes: Record<string, MapNode>;
 }
 
@@ -133,6 +148,13 @@ export function chooseNextNode(runId: string, nodeId: string): Promise<RunView> 
   return request<RunView>(`/runs/${runId}/choose-node`, {
     method: "POST",
     body: JSON.stringify({ node_id: nodeId }),
+  });
+}
+
+export function chooseCardReward(runId: string, cardIndex: number | null): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/card-reward`, {
+    method: "POST",
+    body: JSON.stringify({ card_index: cardIndex }),
   });
 }
 

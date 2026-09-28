@@ -39,5 +39,17 @@ export function commandFor(card: Card, enemyName: string): string {
       return `gc --recycle`;
     case "draw_bonus":
       return `prefetch --cards +${card.value}`;
+    case "draw":
+      return `curl -s ./cards | head -${card.value}`;
+    case "retrieve":
+      return `git reset --soft HEAD~${card.value}`;
+    case "restore":
+      return `undelete --last ${card.value}`;
+    case "damage_boost":
+      return `loadbalance --spread`;
+    case "turret":
+      return `nohup ./daemon --target=${target} &`;
+    case "fortify":
+      return `mainframe --harden`;
   }
 }
