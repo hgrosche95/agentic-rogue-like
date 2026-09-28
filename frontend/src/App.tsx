@@ -18,12 +18,15 @@ import { ArtifactBar } from "./components/ArtifactBar";
 import { ArtifactScreen } from "./components/ArtifactScreen";
 import { AudioControls } from "./components/AudioControls";
 import { CombatPanel } from "./components/CombatPanel";
-import { DungeonMap } from "./components/DungeonMap";
+import { DungeonMap, NodeBadge } from "./components/DungeonMap";
 import { EndScreen } from "./components/EndScreen";
 import { EventPrompt } from "./components/EventPrompt";
 import { HistoryLog } from "./components/HistoryLog";
 import { IntroScreen } from "./components/IntroScreen";
-import { PlayerStats } from "./components/PlayerStats";
+import { Brand, TopBar } from "./components/PlayerStats";
+import { JumpPanel } from "./components/JumpPanel";
+import { eraLabel, numFloorsOf } from "./eras";
+import { NODE_STYLE } from "./nodeTypes";
 import { RewardScreen } from "./components/RewardScreen";
 import { SettingPicker } from "./components/SettingPicker";
 
@@ -55,6 +58,7 @@ function App() {
   const [settings, setSettings] = useState<string[]>(FALLBACK_SETTINGS);
   const [selectedSetting, setSelectedSetting] = useState(FALLBACK_SETTINGS[0]);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [focusedJump, setFocusedJump] = useState<string | null>(null);
   const [isIntroOpen, setIsIntroOpen] = useState(() => !hasSeenIntro());
   // The server closes a won fight in the same response as the killing blow.
   // Keep showing that fight - enemy at 0 HP - so the arena can play the enemy's
@@ -128,8 +132,8 @@ function App() {
     return (
       <main className="game is-title">
         <AudioControls className="is-floating" />
-        <h1>agentic-rogue-like</h1>
-        <p className="title-tagline">A deckbuilding roguelike, dealt by an AI</p>
+        <Brand />
+        <p className="title-tagline">A time-travel deckbuilder against a rogue AGI</p>
         <SettingPicker
           settings={settings}
           selected={selectedSetting}
@@ -147,35 +151,33 @@ function App() {
           Start run
         </button>
         {error && <p className="error">{error}</p>}
-        <button type="button" className="replay-intro" disabled={isLoading} onClick={() => setIsIntroOpen(true)}>
+        <button type="button" className="link-button replay-intro" disabled={isLoading} onClick={() => setIsIntroOpen(true)}>
           Replay intro
         </button>
       </main>
     );
   }
 
+  const numFloors = numFloorsOf(run.nodes);
+  const chooseNode = (nodeId: string) => {
+    sfx.play("map_select");
+    setFocusedJump(null);
+    runAction(() => chooseNextNode(run.run_id, nodeId));
+  };
   const mapProps = {
     nodes: run.nodes,
     currentNodeId: run.current_node.id,
     reachableIds: run.available_choices.map((n) => n.id),
     disabled: isLoading,
-    onChoose: (nodeId: string) => {
-      sfx.play("map_select");
-      runAction(() => chooseNextNode(run.run_id, nodeId));
-    },
+    onChoose: chooseNode,
   };
+  const canJump = run.status === "ongoing" && !slainCombat && run.node_resolved && run.available_choices.length > 0;
+  const room = NODE_STYLE[run.current_node.type];
 
   return (
-    <main className={`game${inCombat ? " is-wide" : ""}`}>
-      {!inCombat && <AudioControls className="is-floating" />}
-      <h1>agentic-rogue-like</h1>
-      <p className="setting-badge">{run.setting}</p>
-      {/* in combat the HUD and the arena monitor show this instead */}
-      {!inCombat && <PlayerStats player={run.player} floor={run.floor} />}
-      {!inCombat && <ArtifactBar artifacts={run.player.artifacts} />}
-
-      {inCombat ? (
-        <div className="map-toggle-row">
+    <main className={`game${inCombat ? " is-combat" : ""}`}>
+      <TopBar player={run.player} floor={run.floor} numFloors={numFloors} setting={run.setting}>
+        {inCombat && (
           <button
             type="button"
             className="icon-btn"
@@ -195,17 +197,15 @@ function App() {
               <line className="needle" x1="10" y1="10" x2="12.6" y2="12.6" />
             </svg>
           </button>
-          <AudioControls />
-        </div>
-      ) : (
-        <DungeonMap {...mapProps} />
-      )}
+        )}
+        <AudioControls />
+      </TopBar>
 
       {inCombat && isMapOpen && (
         <div className="map-overlay">
-          <div className="map-overlay-panel">
-            <div className="map-overlay-head">
-              <span>Map</span>
+          <div className="panel map-overlay-panel">
+            <div className="panel-head">
+              <h2 className="panel-title">Temporal map</h2>
               <button
                 type="button"
                 className="icon-btn is-small"
@@ -223,26 +223,14 @@ function App() {
         </div>
       )}
 
-      {!inCombat && <HistoryLog history={run.history} />}
       {error && <p className="error">{error}</p>}
 
-      {run.status !== "ongoing" && !slainCombat && <EndScreen run={run} onRestart={() => setRun(null)} />}
-
-      {run.status === "ongoing" && run.pending_event && (
-        <EventPrompt
-          event={run.pending_event}
-          disabled={isLoading}
-          onChoose={(optionIndex) =>
-            runAction(() => chooseEventOption(run.run_id, optionIndex))
-          }
-        />
-      )}
-
-      {combat && (run.status === "ongoing" || slainCombat) && (
+      {combat && (run.status === "ongoing" || slainCombat) ? (
         <CombatPanel
           combat={combat}
           setting={run.setting}
           player={run.player}
+          era={eraLabel(run.floor, numFloors)}
           log={run.history}
           disabled={isLoading || slainCombat !== null}
           enemySlain={slainCombat !== null}
@@ -252,46 +240,86 @@ function App() {
           }
           onEndTurn={(discard) => runAction(() => endCombatTurn(run.run_id, discard))}
         />
-      )}
+      ) : (
+        <div className="map-layout">
+          <div className="map-main">
+            {run.status !== "ongoing" && !slainCombat && <EndScreen run={run} onRestart={() => setRun(null)} />}
 
-      {run.status === "ongoing" && !combat && run.card_reward && (
-        <RewardScreen
-          offer={run.card_reward}
-          deckSize={run.player.deck.length}
-          disabled={isLoading}
-          onPick={(cardIndex) => runAction(() => chooseCardReward(run.run_id, cardIndex))}
-        />
-      )}
+            {run.status === "ongoing" && run.pending_event && (
+              <EventPrompt
+                event={run.pending_event}
+                disabled={isLoading}
+                onChoose={(optionIndex) =>
+                  runAction(() => chooseEventOption(run.run_id, optionIndex))
+                }
+              />
+            )}
 
-      {run.status === "ongoing" && !combat && run.artifact_offer && (
-        <ArtifactScreen
-          offer={run.artifact_offer}
-          owned={run.player.artifacts.length}
-          disabled={isLoading}
-          onPick={(artifactIndex) => runAction(() => chooseArtifact(run.run_id, artifactIndex))}
-        />
-      )}
+            {run.status === "ongoing" && run.card_reward && (
+              <RewardScreen
+                offer={run.card_reward}
+                deckSize={run.player.deck.length}
+                disabled={isLoading}
+                onPick={(cardIndex) => runAction(() => chooseCardReward(run.run_id, cardIndex))}
+              />
+            )}
 
-      {run.status === "ongoing" &&
-        !run.pending_event &&
-        !combat &&
-        !run.card_reward &&
-        !run.artifact_offer &&
-        !run.node_resolved && (
-          <button
-            className="is-primary"
-            disabled={isLoading}
-            onClick={() => {
-              sfx.play("click");
-              runAction(() => resolveCurrentNode(run.run_id));
-            }}
-          >
-            Continue
-          </button>
-        )}
+            {run.status === "ongoing" && run.artifact_offer && (
+              <ArtifactScreen
+                offer={run.artifact_offer}
+                owned={run.player.artifacts.length}
+                disabled={isLoading}
+                onPick={(artifactIndex) => runAction(() => chooseArtifact(run.run_id, artifactIndex))}
+              />
+            )}
 
-      {run.status === "ongoing" && !slainCombat && run.node_resolved && run.available_choices.length > 0 && (
-        <p className="map-hint">Choose your next room on the map above.</p>
+            {run.status === "ongoing" &&
+              !run.pending_event &&
+              !run.card_reward &&
+              !run.artifact_offer &&
+              !run.node_resolved && (
+                <section className="panel room-panel">
+                  <NodeBadge type={run.current_node.type} size={44} />
+                  <div className="room-text">
+                    <span className="panel-sub">Arrived in {eraLabel(run.floor, numFloors)}</span>
+                    <h2>{room.label}</h2>
+                    <p>{room.blurb}</p>
+                  </div>
+                  <button
+                    className="is-primary"
+                    disabled={isLoading}
+                    onClick={() => {
+                      sfx.play("click");
+                      runAction(() => resolveCurrentNode(run.run_id));
+                    }}
+                  >
+                    Continue
+                  </button>
+                </section>
+              )}
+
+            <section className="panel map-panel">
+              <div className="panel-head">
+                <h2 className="panel-title">Temporal map</h2>
+                <span className="panel-sub">{canJump ? "Select your next jump" : run.setting}</span>
+              </div>
+              <DungeonMap {...mapProps} onHover={setFocusedJump} />
+            </section>
+          </div>
+
+          <aside className="map-side">
+            <JumpPanel
+              choices={run.available_choices}
+              focusedId={focusedJump}
+              numFloors={numFloors}
+              canJump={canJump}
+              disabled={isLoading}
+              onChoose={chooseNode}
+            />
+            <ArtifactBar artifacts={run.player.artifacts} variant="list" />
+            <HistoryLog history={run.history} />
+          </aside>
+        </div>
       )}
     </main>
   );
