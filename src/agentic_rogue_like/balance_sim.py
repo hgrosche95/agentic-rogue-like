@@ -59,8 +59,8 @@ REST_HEAL = 15  # mirrors engine.resolve_node's REST branch
 class SimConfig:
     name: str = "aktuell"
     budgets: dict[str, EnemyBudget] = field(default_factory=lambda: dict(_BUDGETS))
-    player_hp: int = 50
-    player_attack: int = 5
+    player_hp: int = 60  # mirrors engine.new_run
+    player_attack: int = 3
     deck_factory: Callable[[], list[Card]] = starter_deck
 
     def new_player(self) -> PlayerState:

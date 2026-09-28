@@ -186,6 +186,20 @@ uv run balance-sim --compare balance/gegner-staerker.json
 uv run balance-sim --compare balance/beispiel-neue-karte.json --bot naive
 ```
 
+Aktueller Stand (Smart-Bot, 2000 Runs): Spieler 60 HP / Angriff 3, Exploit
+macht 5 (+3). Vorher waren normale Kämpfe nach 2 Zügen vorbei und der Boss
+eine Wand (0 % Run-Siegquote); jetzt steigt die Kurve gleichmäßig an:
+
+| Stufe | Züge | HP-Verlust im Run | Sieg im Run |
+| --- | --- | --- | --- |
+| early | 2.8 | 7 | 100 % |
+| mid | 3.8 | 13 | 92 % |
+| elite | 5.3 | 25 | 77 % |
+| boss | 5.2 | 27 | 35 % |
+
+Run-Siegquote: 27 % (Smart-Bot), 43 % (Naive-Bot) — ein guter Spieler
+sollte also etwa jeden zweiten bis dritten Run gewinnen.
+
 ## Deployment
 
 Jeder Push auf `master` löst `.github/workflows/deploy.yml` aus: baut das

@@ -9,16 +9,18 @@ from __future__ import annotations
 
 from .encounter_schema import EnemyBudget
 
-# Calibrated for the card-based combat system (combat.py), not the original
-# one-hit-per-turn dice fights: a hand can throw several ~11-damage Strikes
-# in a single turn, so an enemy sized for "roughly one player attack per
-# turn" reads as trivial. Scaled up accordingly - roughly 2x HP, 2-2.5x
-# attack versus the original dice-era numbers.
+# Tuned with `balance-sim` against a 60 HP / 3 attack player whose Exploit
+# deals 8 (5 + attack) - see the README's Balancing section for the numbers.
+# Goal is a rising curve instead of the old "trivial fights, then a wall":
+# early fights last ~3 turns and cost a few HP, mid ~4 turns, elites are a
+# real threat, and the boss is the run's climax but winnable. The boss is
+# deliberately *not* the tankiest-per-tier jump: a run arrives there already
+# worn down, and there is no card progression yet to scale the player up.
 _BUDGETS: dict[str, EnemyBudget] = {
-    "early": EnemyBudget(min_hp=25, max_hp=40, min_attack=6, max_attack=10),
-    "mid": EnemyBudget(min_hp=40, max_hp=60, min_attack=10, max_attack=15),
-    "elite": EnemyBudget(min_hp=70, max_hp=95, min_attack=15, max_attack=22),
-    "boss": EnemyBudget(min_hp=140, max_hp=180, min_attack=20, max_attack=28),
+    "early": EnemyBudget(min_hp=38, max_hp=48, min_attack=9, max_attack=12),
+    "mid": EnemyBudget(min_hp=55, max_hp=70, min_attack=11, max_attack=14),
+    "elite": EnemyBudget(min_hp=80, max_hp=95, min_attack=13, max_attack=16),
+    "boss": EnemyBudget(min_hp=95, max_hp=115, min_attack=14, max_attack=17),
 }
 
 

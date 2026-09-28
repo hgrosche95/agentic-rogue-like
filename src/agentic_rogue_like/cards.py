@@ -18,8 +18,8 @@ def starter_deck() -> list[Card]:
             id=f"strike-{i}",
             name="Exploit",
             type=CardType.ATTACK,
-            value=6,
-            description="Deal 6 damage (plus your attack stat).",
+            value=5,
+            description="Deal 5 damage (plus your attack stat).",
         )
         for i in range(4)
     ]

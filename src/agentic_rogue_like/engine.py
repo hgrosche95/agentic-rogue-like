@@ -40,7 +40,7 @@ SHOP_SITUATION = "a traveling merchant offering strange wares for sale"
 
 
 def new_run(seed: int, setting: str = DEFAULT_SETTING) -> RunState:
-    player = PlayerState(hp=50, max_hp=50, attack=5, gold=0, deck=starter_deck())
+    player = PlayerState(hp=60, max_hp=60, attack=3, gold=0, deck=starter_deck())
     nodes = generate_map(seed)
     return RunState(
         seed=seed, player=player, nodes=nodes, current_node_id="0-0", setting=setting
