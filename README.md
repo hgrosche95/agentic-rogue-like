@@ -52,6 +52,9 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       erste bezahlbare Karte in den ersten freien Slot, dann Rundenende),
       das Web-UI interaktiv Karte für Karte über eigene Endpunkte
       (`/combat/play-card`, `/combat/end-turn`).
+- [x] **Deck-Building** — nach jedem Sieg eine von drei Karten wählen
+      (`/runs/{id}/card-reward`); 17 Belohnungskarten mit Abwurfkosten,
+      Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
 - [ ] **Encounter-Agent** — ein LangGraph-Agent, der Gegner über constrained
       Tool-Calls generiert und gegen ein Etagen-Budget validiert, mit
       Retry-Schleife bei Budget-Verstoß. Für Gegner voll eingeklinkt: die
@@ -187,18 +190,38 @@ uv run balance-sim --compare balance/beispiel-neue-karte.json --bot naive
 ```
 
 Aktueller Stand (Smart-Bot, 2000 Runs): Spieler 60 HP / Angriff 3, Exploit
-macht 5 (+3). Vorher waren normale Kämpfe nach 2 Zügen vorbei und der Boss
-eine Wand (0 % Run-Siegquote); jetzt steigt die Kurve gleichmäßig an:
+macht 5 (+3), nach jedem gewonnenen Kampf kommt eine Karte ins Deck. Die
+Kurve steigt gleichmäßig an, der Boss ist der Höhepunkt:
 
 | Stufe | Züge | HP-Verlust im Run | Sieg im Run |
 | --- | --- | --- | --- |
-| early | 2.8 | 7 | 100 % |
-| mid | 3.8 | 13 | 92 % |
-| elite | 5.3 | 25 | 77 % |
-| boss | 5.2 | 27 | 35 % |
+| early | 2.8 | 8 | 99 % |
+| mid | 3.7 | 14 | 87 % |
+| elite | 4.8 | 23 | 80 % |
+| boss | 4.9 | 29 | 36 % |
 
-Run-Siegquote: 27 % (Smart-Bot), 43 % (Naive-Bot) — ein guter Spieler
-sollte also etwa jeden zweiten bis dritten Run gewinnen.
+Run-Siegquote: 27 % (Smart-Bot), 34 % (Naive-Bot), 13 % ohne
+Kartenbelohnungen (`--no-rewards`) — das Deck-Building trägt also spürbar.
+Die Bots wählen Belohnungen stur nach Seltenheit bzw. zufällig; wer gezielt
+auf eine Strategie baut, sollte deutlich öfter gewinnen.
+
+## Karten
+
+Nach jedem gewonnenen Kampf (außer dem Boss) gibt es drei Karten zur Auswahl
+(oder Überspringen), gewichtet nach Seltenheit — nach Elite-Kämpfen sind
+seltene wahrscheinlicher. Der Pool (`cards.py`) ist um drei Strategien gebaut:
+
+- **Permanente** — Botnet, Load Balancer, Daemon, Mainframe werden stärker,
+  je voller das Feld ist; Kernel Panic kassiert das Feld am Ende ein.
+- **Friedhof** — Brute Force, Fork Bomb, Honeypot und Memory Dump werfen
+  Karten ab (Kosten!), Stack Overflow skaliert damit, Rollback holt zurück.
+- **Einmal-Karten** (1×) — Zero-Day, Sandbox, Backup sind stark, werden aber
+  für den Rest des Kampfes verbannt; Payload wächst mit dem Verbannt-Stapel,
+  Undelete holt eine verbannte Karte zurück.
+
+Karten, die mitten im Zug Karten auf die Hand bringen (ziehen, zurückholen),
+sind absichtlich alle Einmal-Karten: Ohne Energie-System wären sonst
+Endlos-Kombos möglich.
 
 ## Deployment
 

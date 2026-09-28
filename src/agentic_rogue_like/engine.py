@@ -13,7 +13,7 @@ from dataclasses import replace
 
 from .agent.encounter_agent import enemy_for_node
 from .agent.narrator import narrate
-from .cards import starter_deck
+from .cards import reward_card, roll_card_reward, starter_deck
 from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
@@ -22,6 +22,7 @@ from .events import EventOption, GameEvent, random_event
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
     DEFAULT_SETTING,
+    Card,
     Enemy,
     MapNode,
     NodeType,
@@ -31,16 +32,24 @@ from .models import (
 )
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
+# Index into the offered cards, or None to skip the reward.
+ChooseCardReward = Callable[[list[Card]], int | None]
 # (setting, situation) -> flavor text or None. Defaults to a live narrate()
 # call; the web API passes one that reads background-prefetched text instead.
 Narrator = Callable[[str, str], str | None]
+
+PLAYER_HP = 60
+PLAYER_ATTACK = 3
+REST_HEAL = 15
 
 REST_SITUATION = "a weary adventurer resting and tending their wounds"
 SHOP_SITUATION = "a traveling merchant offering strange wares for sale"
 
 
 def new_run(seed: int, setting: str = DEFAULT_SETTING) -> RunState:
-    player = PlayerState(hp=60, max_hp=60, attack=3, gold=0, deck=starter_deck())
+    player = PlayerState(
+        hp=PLAYER_HP, max_hp=PLAYER_HP, attack=PLAYER_ATTACK, gold=0, deck=starter_deck()
+    )
     nodes = generate_map(seed)
     return RunState(
         seed=seed, player=player, nodes=nodes, current_node_id="0-0", setting=setting
@@ -92,6 +101,26 @@ def _finish_combat(
         reward = rng.randint(15, 35)
         run.player.gold += reward
         run.history.append(f"You loot {reward} gold from the {enemy_name}.")
+        run.card_reward = roll_card_reward(rng, elite=node.type is NodeType.ELITE)
+
+
+def choose_card_reward(run: RunState, index: int | None) -> None:
+    """Take card `index` of the pending reward into the deck, or skip it (None).
+
+    Raises ValueError if no reward is pending or the index is out of range.
+    """
+    offer = run.card_reward
+    if offer is None:
+        raise ValueError("no card reward pending")
+    if index is None:
+        run.history.append("You leave the cards behind.")
+    else:
+        if not 0 <= index < len(offer):
+            raise ValueError(f"card index {index} is out of range")
+        card = reward_card(offer[index], run.player.deck)
+        run.player.deck.append(card)
+        run.history.append(f"You add {card.name} to your deck.")
+    run.card_reward = None
 
 
 def start_combat_node(
@@ -147,6 +176,7 @@ def resolve_node(
     rng: random.Random,
     choose_event_option: ChooseEventOption | None = None,
     narrator: Narrator | None = None,
+    choose_card: ChooseCardReward | None = None,
 ) -> None:
     node = run.nodes[run.current_node_id]
 
@@ -172,12 +202,17 @@ def resolve_node(
         victory, log = auto_resolve_combat(run.player.deck, enemy, run.player, rng)
         run.history.extend(log)
         _finish_combat(run, node, enemy.name, victory, rng)
+        if run.card_reward is not None:
+            offer = run.card_reward
+            choose_card_reward(
+                run, choose_card(offer) if choose_card else rng.randrange(len(offer))
+            )
 
     elif node.type is NodeType.REST:
         flavor = (narrator or narrate)(run.setting, REST_SITUATION)
         if flavor:
             run.history.append(flavor)
-        healed = min(15, run.player.max_hp - run.player.hp)
+        healed = min(REST_HEAL, run.player.max_hp - run.player.hp)
         run.player.hp += healed
         run.history.append(f"You rest and recover {healed} HP.")
 

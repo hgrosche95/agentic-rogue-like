@@ -29,7 +29,7 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(id="ogre", name="Ogre", hp=88, attack=15, attack_name="Club Smash"),
     ],
     "boss": [
-        Enemy(id="the-warden", name="The Warden", hp=110, attack=16, attack_name="Iron Verdict"),
+        Enemy(id="the-warden", name="The Warden", hp=120, attack=17, attack_name="Iron Verdict"),
     ],
 }
 

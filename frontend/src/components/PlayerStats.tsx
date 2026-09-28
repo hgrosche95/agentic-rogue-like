@@ -11,6 +11,7 @@ export function PlayerStats({ player, floor }: { player: PlayerState; floor: num
       </span>
       <span className="stat-figure">{player.hp}/{player.max_hp}</span>
       <span className="stat-figure">{player.attack} atk</span>
+      <span className="stat-figure">{player.deck.length} cards</span>
       <span className="stat-gold">{player.gold} gold</span>
     </div>
   );

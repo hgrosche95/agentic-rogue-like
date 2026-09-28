@@ -15,12 +15,13 @@ from .encounter_schema import EnemyBudget
 # early fights last ~3 turns and cost a few HP, mid ~4 turns, elites are a
 # real threat, and the boss is the run's climax but winnable. The boss is
 # deliberately *not* the tankiest-per-tier jump: a run arrives there already
-# worn down, and there is no card progression yet to scale the player up.
+# worn down. Card rewards (one card per won fight) are part of the tuning:
+# without them the same budgets leave the boss nearly out of reach.
 _BUDGETS: dict[str, EnemyBudget] = {
     "early": EnemyBudget(min_hp=38, max_hp=48, min_attack=9, max_attack=12),
-    "mid": EnemyBudget(min_hp=55, max_hp=70, min_attack=11, max_attack=14),
+    "mid": EnemyBudget(min_hp=58, max_hp=72, min_attack=11, max_attack=14),
     "elite": EnemyBudget(min_hp=80, max_hp=95, min_attack=13, max_attack=16),
-    "boss": EnemyBudget(min_hp=95, max_hp=115, min_attack=14, max_attack=17),
+    "boss": EnemyBudget(min_hp=110, max_hp=130, min_attack=15, max_attack=18),
 }
 
 

@@ -69,8 +69,8 @@ function clamp01(value: number): number {
 const f = (n: number) => n.toFixed(1);
 
 // Stat ranges of the encounter budgets (agent/budgets.py), early to boss.
-const HP_RANGE = [38, 115];
-const ATTACK_RANGE = [9, 17];
+const HP_RANGE = [38, 130];
+const ATTACK_RANGE = [9, 18];
 
 // Where the monster stands in the 1920x800 arena frame - the spot the old
 // robot render occupied (feet at y~708, centred on x~1475).

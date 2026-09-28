@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import {
   PERMANENT_CARD_TYPES,
-  type Card,
   type HandCardView,
   type PendingCombatView,
   type PlayerState,
@@ -9,21 +8,8 @@ import {
 import { flyCard } from "../cardFlight";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useHpExchange } from "../hooks/useHpExchange";
+import { CardFace } from "./CardFace";
 import { CombatArena } from "./CombatArena";
-
-// on the field the ∞ badge already says "permanent", so the effect text
-// drops that prefix and keeps the room for what the card does
-function CardFace({ card, onField = false }: { card: Card; onField?: boolean }) {
-  const isPermanent = PERMANENT_CARD_TYPES.includes(card.type);
-  const description = onField ? card.description.replace(/^Permanent\.\s*/, "") : card.description;
-  return (
-    <>
-      <div className="card-header">{card.name}</div>
-      <span className="card-rank">{isPermanent ? "∞" : card.value}</span>
-      <div className="card-body">{description}</div>
-    </>
-  );
-}
 
 function Pile({ label, count, kind }: { label: string; count: number; kind: string }) {
   return (

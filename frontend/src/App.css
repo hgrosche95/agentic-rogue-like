@@ -1675,6 +1675,149 @@ body > .card-flight {
   border-color: var(--green);
 }
 
+/* card flow (draw / graveyard / banished pile) */
+.type-draw .card-header,
+.type-retrieve .card-header,
+.type-restore .card-header {
+  background: var(--cyan-bright);
+}
+.type-draw .card-rank,
+.type-retrieve .card-rank,
+.type-restore .card-rank {
+  color: var(--cyan-bright);
+  border-color: var(--cyan-bright);
+}
+
+.type-damage_boost .card-header,
+.type-turret .card-header {
+  background: var(--warm);
+}
+.type-damage_boost .card-rank,
+.type-turret .card-rank {
+  color: var(--warm);
+  border-color: var(--warm);
+}
+
+.type-fortify .card-header {
+  background: var(--sky);
+}
+.type-fortify .card-rank {
+  color: var(--sky);
+  border-color: var(--sky);
+}
+
+/* one-shot tag, top right, mirrors the rank badge */
+.card-tag {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.35rem;
+  padding: 0 0.3rem;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--panel-deep);
+  border: 1px solid var(--ai-red);
+  color: var(--ai-red);
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 700;
+  font-size: 0.6rem;
+  line-height: 16px;
+}
+
+/* rarity gem, bottom centre */
+.card-gem {
+  position: absolute;
+  bottom: 0.35rem;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translateX(-50%) rotate(45deg);
+  border: 1px solid var(--panel-deep);
+}
+.card-gem.rarity-common {
+  background: var(--ink-dim);
+}
+.card-gem.rarity-uncommon {
+  background: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+.card-gem.rarity-rare {
+  background: var(--gold);
+  box-shadow: 0 0 8px rgba(224, 168, 63, 0.8);
+}
+
+/* ---------- card reward ---------- */
+.reward-screen {
+  text-align: center;
+  padding: 1.2rem 1rem 1.4rem;
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+}
+
+.reward-screen h2 {
+  font-family: "Michroma", sans-serif;
+  font-weight: 400;
+  font-size: 1.1rem;
+  margin: 0 0 0.3rem;
+}
+
+.reward-hint {
+  color: var(--ink-dim);
+  margin: 0 0 1rem;
+}
+
+.reward-cards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.hand-card.reward-card {
+  width: 140px;
+  height: 196px;
+  animation: reward-deal 0.35s ease-out both;
+}
+
+.reward-card .card-header {
+  font-size: 0.9rem;
+}
+
+.reward-card .card-body {
+  font-size: 0.75rem;
+}
+
+.hand-card.reward-card.rarity-uncommon {
+  border-color: var(--cyan);
+}
+
+.hand-card.reward-card.rarity-rare {
+  border-color: var(--gold);
+  box-shadow: 0 0 14px rgba(224, 168, 63, 0.45), 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
+.hand-card.reward-card:hover:not(:disabled) {
+  transform: translateY(-6px) scale(1.04);
+}
+
+@keyframes reward-deal {
+  from {
+    opacity: 0;
+    transform: translateY(24px) rotate(-3deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hand-card.reward-card {
+    animation: none;
+  }
+}
+
 /* -- field slots: card-sized even when empty, so the field doesn't jump
    when a card lands on it (content-box: buttons default to border-box);
    played cards show their face without the description -- */

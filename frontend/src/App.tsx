@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import {
+  chooseCardReward,
   chooseEventOption,
   chooseNextNode,
   createRun,
@@ -18,6 +19,7 @@ import { EventPrompt } from "./components/EventPrompt";
 import { HistoryLog } from "./components/HistoryLog";
 import { IntroScreen } from "./components/IntroScreen";
 import { PlayerStats } from "./components/PlayerStats";
+import { RewardScreen } from "./components/RewardScreen";
 import { SettingPicker } from "./components/SettingPicker";
 
 const FALLBACK_SETTINGS = ["dungeon"];
@@ -218,9 +220,19 @@ function App() {
         />
       )}
 
+      {run.status === "ongoing" && !combat && run.card_reward && (
+        <RewardScreen
+          offer={run.card_reward}
+          deckSize={run.player.deck.length}
+          disabled={isLoading}
+          onPick={(cardIndex) => runAction(() => chooseCardReward(run.run_id, cardIndex))}
+        />
+      )}
+
       {run.status === "ongoing" &&
         !run.pending_event &&
         !combat &&
+        !run.card_reward &&
         !run.node_resolved && (
           <button disabled={isLoading} onClick={() => runAction(() => resolveCurrentNode(run.run_id))}>
             Continue

@@ -31,11 +31,14 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
-from .models import PERMANENT_CARD_TYPES, Card, CardType, Enemy, PlayerState
+from .models import PERMANENT_CARD_TYPES, Card, CardType, Enemy, PlayerState, Scaling
 
 HAND_SIZE = 5
 FIELD_SIZE = 5
 MAX_AUTO_TURNS = 50
+# Bots stop playing after this many cards in one turn - a backstop so a
+# card combo nobody foresaw can never hang the simulator or the tests.
+MAX_AUTO_PLAYS_PER_TURN = 30
 ENEMY_DEFEND_CHANCE = 0.3
 
 
@@ -57,14 +60,17 @@ class CombatState(BaseModel):
     player_block: int = 0
 
 
-def _draw(state: CombatState, count: int, rng: random.Random) -> None:
+def _draw(state: CombatState, count: int, rng: random.Random) -> int:
+    drawn = 0
     for _ in range(count):
         if not state.draw_pile:
             if not state.discard_pile:
-                return  # deck fully exhausted - nothing left to draw
+                break  # deck fully exhausted - nothing left to draw
             state.draw_pile, state.discard_pile = state.discard_pile, []
             rng.shuffle(state.draw_pile)
         state.hand.append(state.draw_pile.pop())
+        drawn += 1
+    return drawn
 
 
 def _target_hand_size(state: CombatState) -> int:
@@ -136,44 +142,110 @@ def play_card(
         raise ValueError(f"slot {slot_index} is occupied")
 
     card = state.hand.pop(hand_index)
+    # The cost is paid before anything else, so a card like Memory Dump can't
+    # throw away the very cards it is about to draw.
+    cost_line = _pay_discard_cost(state, card, rng)
 
     if card.type in PERMANENT_CARD_TYPES:
         state.field[slot_index] = card
-        return f"You play {card.name} in slot {slot_index + 1} - it stays on the field."
+        return cost_line + f"You play {card.name} in slot {slot_index + 1} - it stays on the field."
 
     # Action card: multiplier/recycling are read from the field *before* the
     # effect runs, so e.g. Final Strike destroying the very Amplifier/
     # Recycling permanent it benefited from still counts that benefit.
     multiplier = _amplifier_multiplier(state, slot_index)
     recycles = _recycles(state, slot_index)
-    line = _apply_action_effect(state, card, multiplier, player)
+    line = cost_line + _apply_action_effect(state, card, multiplier, player, rng)
 
-    if recycles:
+    if card.exhaust:
+        # One-shot beats Recycling - otherwise a Recycling permanent would
+        # turn every one-shot card into an infinitely reusable one.
+        state.banished_pile.append(card)
+        line += " It's used up and banished for the rest of the fight."
+    elif recycles:
         state.draw_pile.append(card)
         rng.shuffle(state.draw_pile)
         line += " It's recycled straight back into the deck."
     else:
         state.discard_pile.append(card)
 
+    if card.draw:
+        drawn = _draw(state, card.draw, rng)
+        line += f" You draw {drawn} card(s)."
+
     return line
 
 
+def _pay_discard_cost(state: CombatState, card: Card, rng: random.Random) -> str:
+    if card.discard_cost <= 0 or not state.hand:
+        return ""
+    count = min(card.discard_cost, len(state.hand))
+    discarded = rng.sample(state.hand, count)
+    for c in discarded:
+        state.hand.remove(c)
+        state.discard_pile.append(c)
+    names = ", ".join(c.name for c in discarded)
+    return f"You discard {names}. "
+
+
+def permanent_count(state: CombatState) -> int:
+    return sum(1 for c in state.field if c is not None)
+
+
+def attack_damage(
+    state: CombatState, card: Card, player: PlayerState, multiplier: float = 1.0
+) -> int:
+    """Damage of one hit of an ATTACK card - also what the UI/bots preview."""
+    base = card.value + player.attack
+    if card.scaling is Scaling.PERMANENT:
+        base += card.scale_value * permanent_count(state)
+    elif card.scaling is Scaling.GRAVEYARD:
+        base += card.scale_value * len(state.discard_pile)
+    elif card.scaling is Scaling.BANISHED:
+        base += card.scale_value * len(state.banished_pile)
+    boost = sum(c.value for c in state.field if c and c.type is CardType.DAMAGE_BOOST)
+    base += boost * permanent_count(state)
+    return round(base * multiplier)
+
+
 def _apply_action_effect(
-    state: CombatState, card: Card, multiplier: float, player: PlayerState
+    state: CombatState, card: Card, multiplier: float, player: PlayerState, rng: random.Random
 ) -> str:
     if card.type is CardType.ATTACK:
-        damage = round((card.value + player.attack) * multiplier)
-        absorbed, dealt = _damage_enemy(state, damage)
+        damage = attack_damage(state, card, player, multiplier)
+        hits = max(card.hits, 1)
+        absorbed = dealt = 0
+        for _ in range(hits):
+            a, d = _damage_enemy(state, damage)
+            absorbed += a
+            dealt += d
+        what = f"{hits}x {damage} damage" if hits > 1 else f"{damage} damage"
         if absorbed > 0:
             return (
-                f"You play {card.name}, dealing {damage} damage - {state.enemy.name}'s "
+                f"You play {card.name}, dealing {what} - {state.enemy.name}'s "
                 f"block absorbs {absorbed}, {dealt} gets through. {state.enemy.name} at "
                 f"{state.enemy_hp} HP."
             )
-        return (
-            f"You play {card.name}, dealing {dealt} damage. "
-            f"{state.enemy.name} at {state.enemy_hp} HP."
-        )
+        return f"You play {card.name}, dealing {what}. {state.enemy.name} at {state.enemy_hp} HP."
+
+    if card.type is CardType.DRAW:
+        drawn = _draw(state, card.value, rng)
+        return f"You play {card.name}, drawing {drawn} card(s)."
+
+    if card.type is CardType.RETRIEVE:
+        returned = _take_recent(state.discard_pile, card.value)
+        state.hand.extend(returned)
+        return f"You play {card.name}, pulling {_names(returned)} back from the graveyard."
+
+    if card.type is CardType.RESTORE:
+        # Restore cards never restore each other - two of them could
+        # otherwise fetch one another back forever.
+        restorable = [c for c in state.banished_pile if c.type is not CardType.RESTORE]
+        returned = _take_recent(restorable, card.value)
+        for c in returned:
+            state.banished_pile.remove(c)
+        state.hand.extend(returned)
+        return f"You play {card.name}, restoring {_names(returned)} from the banished pile."
 
     if card.type is CardType.BLOCK:
         amount = round(card.value * multiplier)
@@ -198,8 +270,38 @@ def _apply_action_effect(
     )
 
 
+def _take_recent(pile: list[Card], count: int) -> list[Card]:
+    """Pop the `count` most recently added cards - the top of the pile."""
+    count = max(0, min(count, len(pile)))
+    taken = pile[len(pile) - count :]
+    del pile[len(pile) - count :]
+    return taken
+
+
+def _names(cards: list[Card]) -> str:
+    return ", ".join(c.name for c in cards) if cards else "nothing"
+
+
 def end_turn(state: CombatState, player: PlayerState, rng: random.Random) -> list[str]:
     log: list[str] = []
+
+    # Permanents that act on their own resolve before the enemy does, so a
+    # Daemon can finish a fight and a Mainframe's block is up in time.
+    turret = sum(c.value for c in state.field if c and c.type is CardType.TURRET)
+    if turret:
+        absorbed, dealt = _damage_enemy(state, turret)
+        log.append(
+            f"Your daemons hit {state.enemy.name} for {dealt} damage"
+            + (f" ({absorbed} blocked)" if absorbed else "")
+            + f". {state.enemy.name} at {state.enemy_hp} HP."
+        )
+        if state.enemy_hp <= 0:
+            return log
+    fortify = sum(c.value for c in state.field if c and c.type is CardType.FORTIFY)
+    if fortify:
+        gained = fortify * permanent_count(state)
+        state.player_block += gained
+        log.append(f"Your mainframe raises {gained} block.")
 
     if state.enemy_intent is EnemyIntentType.DEFEND:
         state.enemy_block += state.enemy.attack
@@ -243,7 +345,9 @@ def auto_resolve_combat(
     for _ in range(MAX_AUTO_TURNS):
         if state.enemy_hp <= 0 or player.hp <= 0:
             break
-        while state.hand:
+        for _ in range(MAX_AUTO_PLAYS_PER_TURN):
+            if not state.hand:
+                break
             empty_slot = next((i for i, c in enumerate(state.field) if c is None), None)
             if empty_slot is None:
                 break

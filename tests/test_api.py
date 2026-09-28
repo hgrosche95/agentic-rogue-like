@@ -40,6 +40,9 @@ def _play_full_run(seed: int) -> dict:
 
         run = _play_combat(run_id, run)
 
+        if run["card_reward"] is not None:
+            run = client.post(f"/runs/{run_id}/card-reward", json={"card_index": 0}).json()
+
         if run["status"] != "ongoing":
             break
 
@@ -91,3 +94,48 @@ def test_unknown_run_id_returns_404() -> None:
     response = client.get("/runs/does-not-exist")
 
     assert response.status_code == 404
+
+
+def _won_fight(seed: int) -> tuple[str, dict]:
+    """Seeds where the first fight is won, so a card reward is pending."""
+    run = client.post("/runs", json={"seed": seed}).json()
+    run_id = run["run_id"]
+    run = _play_combat(run_id, client.post(f"/runs/{run_id}/resolve").json())
+    return run_id, run
+
+
+def test_card_reward_blocks_moving_on_until_picked() -> None:
+    run_id, run = _won_fight(3)
+    assert run["status"] == "ongoing"
+    assert run["card_reward"] is not None and len(run["card_reward"]) == 3
+    assert not run["node_resolved"]
+
+    next_id = run["current_node"]["connections"][0]
+    blocked = client.post(f"/runs/{run_id}/choose-node", json={"node_id": next_id})
+    assert blocked.status_code == 409
+
+    deck_size = len(run["player"]["deck"])
+    picked = run["card_reward"][1]
+    run = client.post(f"/runs/{run_id}/card-reward", json={"card_index": 1}).json()
+    assert run["card_reward"] is None
+    assert run["node_resolved"]
+    assert len(run["player"]["deck"]) == deck_size + 1
+    assert run["player"]["deck"][-1]["name"] == picked["name"]
+    ids = [c["id"] for c in run["player"]["deck"]]
+    assert len(ids) == len(set(ids))
+
+
+def test_card_reward_can_be_skipped() -> None:
+    run_id, run = _won_fight(3)
+    deck_size = len(run["player"]["deck"])
+    run = client.post(f"/runs/{run_id}/card-reward", json={"card_index": None}).json()
+    assert run["card_reward"] is None
+    assert len(run["player"]["deck"]) == deck_size
+    again = client.post(f"/runs/{run_id}/card-reward", json={"card_index": 0})
+    assert again.status_code == 409
+
+
+def test_card_reward_rejects_bad_index() -> None:
+    run_id, _ = _won_fight(3)
+    response = client.post(f"/runs/{run_id}/card-reward", json={"card_index": 7})
+    assert response.status_code == 400

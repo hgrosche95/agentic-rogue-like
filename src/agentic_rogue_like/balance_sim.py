@@ -19,8 +19,13 @@ A variant file only lists what changes, e.g.:
       "player": {"hp": 50, "attack": 5},
       "cards": {"Exploit": {"value": 5}},
       "extra_cards": [{"name": "Rootkit", "type": "attack", "value": 12}],
-      "remove_cards": ["Hotfix"]
+      "remove_cards": ["Hotfix"],
+      "rewards": false
     }
+
+`extra_cards` entries take every Card field (hits, exhaust, scaling, ...).
+`"rewards": false` plays runs without the after-fight card reward, i.e.
+with the starter deck only.
 """
 
 from __future__ import annotations
@@ -35,8 +40,9 @@ from pathlib import Path
 
 from .agent.budgets import _BUDGETS
 from .agent.encounter_schema import EnemyBudget
-from .cards import starter_deck
+from .cards import reward_card, roll_card_reward, starter_deck
 from .combat import (
+    MAX_AUTO_PLAYS_PER_TURN,
     MAX_AUTO_TURNS,
     CombatState,
     EnemyIntentType,
@@ -46,7 +52,15 @@ from .combat import (
 )
 from .events import random_event
 from .map_gen import NUM_FLOORS, generate_map
-from .models import PERMANENT_CARD_TYPES, Card, CardType, Enemy, NodeType, PlayerState
+from .models import (
+    PERMANENT_CARD_TYPES,
+    Card,
+    CardType,
+    Enemy,
+    NodeType,
+    PlayerState,
+    Rarity,
+)
 
 TIERS = ("early", "mid", "elite", "boss")
 REST_HEAL = 15  # mirrors engine.resolve_node's REST branch
@@ -62,6 +76,7 @@ class SimConfig:
     player_hp: int = 60  # mirrors engine.new_run
     player_attack: int = 3
     deck_factory: Callable[[], list[Card]] = starter_deck
+    rewards: bool = True
 
     def new_player(self) -> PlayerState:
         return PlayerState(
@@ -84,6 +99,7 @@ def load_variant(path: Path) -> SimConfig:
     player = raw.get("player", {})
     base.player_hp = player.get("hp", base.player_hp)
     base.player_attack = player.get("attack", base.player_attack)
+    base.rewards = raw.get("rewards", base.rewards)
 
     card_overrides: dict[str, dict] = raw.get("cards", {})
     extra: list[dict] = raw.get("extra_cards", [])
@@ -98,15 +114,7 @@ def load_variant(path: Path) -> SimConfig:
             cards.pop(idx)
         cards = [c.model_copy(update=card_overrides.get(c.name, {})) for c in cards]
         for i, spec in enumerate(extra):
-            cards.append(
-                Card(
-                    id=f"extra-{i}",
-                    name=spec["name"],
-                    type=CardType(spec["type"]),
-                    value=spec["value"],
-                    description=spec.get("description", ""),
-                )
-            )
+            cards.append(Card(**{"id": f"extra-{i}", "description": "", **spec}))
         return cards
 
     base.deck_factory = deck
@@ -138,7 +146,9 @@ Bot = Callable[[CombatState, PlayerState, random.Random], None]
 
 def naive_bot(state: CombatState, player: PlayerState, rng: random.Random) -> None:
     """combat.auto_resolve_combat's policy: hand card 0 into the first free slot."""
-    while state.hand and state.enemy_hp > 0:
+    for _ in range(MAX_AUTO_PLAYS_PER_TURN):
+        if not state.hand or state.enemy_hp <= 0:
+            return
         slot = next((i for i, c in enumerate(state.field) if c is None), None)
         if slot is None:
             return
@@ -180,7 +190,9 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
     """A reasonable human-ish policy: set up permanents, block only against an
     attack intent, heal only when hurt, fire Final Strike when it kills or the
     field is clogged, otherwise hit as hard as possible."""
-    while state.hand and state.enemy_hp > 0:
+    for _ in range(MAX_AUTO_PLAYS_PER_TURN):
+        if not state.hand or state.enemy_hp <= 0:
+            return
         played = False
         # 1. permanents first - they pay off for the rest of the fight.
         for idx, card in enumerate(state.hand):
@@ -198,7 +210,13 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
             return  # can't happen with _permanent_slot keeping one slot free
 
         permanents = sum(1 for c in state.field if c is not None)
-        order: list[CardType] = [CardType.ATTACK]
+        # card flow first - it only makes the rest of the turn better
+        order: list[CardType] = [CardType.DRAW]
+        if state.discard_pile:
+            order.append(CardType.RETRIEVE)
+        if state.banished_pile:
+            order.append(CardType.RESTORE)
+        order.append(CardType.ATTACK)
         if state.enemy_intent is EnemyIntentType.ATTACK:
             order.append(CardType.BLOCK)
         if player.hp < player.max_hp:
@@ -222,9 +240,14 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
                 break
         if not played:
             # Unplayed cards stay in hand and shrink next turn's draw, so
-            # holding a Firewall/Hotfix is worse than playing it anyway.
+            # holding a Firewall/Hotfix is worse than playing it anyway -
+            # but one-shot cards are kept for when they matter.
             idx = next(
-                (i for i, c in enumerate(state.hand) if c.type is not CardType.FINAL_STRIKE),
+                (
+                    i
+                    for i, c in enumerate(state.hand)
+                    if c.type is not CardType.FINAL_STRIKE and not c.exhaust
+                ),
                 None,
             )
             if idx is None:
@@ -233,6 +256,16 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
 
 
 BOTS: dict[str, Bot] = {"smart": smart_bot, "naive": naive_bot}
+
+_RARITY_RANK = {Rarity.RARE: 3, Rarity.UNCOMMON: 2, Rarity.COMMON: 1, Rarity.STARTER: 0}
+
+
+def pick_reward(offer: list[Card], bot_name: str, rng: random.Random) -> int:
+    """Smart takes the rarest card on offer, naive a random one."""
+    if bot_name == "naive":
+        return rng.randrange(len(offer))
+    best = max(_RARITY_RANK[c.rarity] for c in offer)
+    return rng.choice([i for i, c in enumerate(offer) if _RARITY_RANK[c.rarity] == best])
 
 
 # --------------------------------------------------------------------------- simulation
@@ -281,7 +314,7 @@ class RunResult:
     fights: list[FightResult]
 
 
-def simulate_run(cfg: SimConfig, bot: Bot, seed: int) -> RunResult:
+def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -> RunResult:
     """A full run on a real generated map, picking a random path forward."""
     rng = random.Random(seed)
     nodes = generate_map(seed)
@@ -298,6 +331,10 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int) -> RunResult:
                 return RunResult(False, node.floor, fights)
             if node.type is NodeType.BOSS:
                 return RunResult(True, node.floor, fights)
+            if cfg.rewards:
+                offer = roll_card_reward(rng, elite=node.type is NodeType.ELITE)
+                pick = offer[pick_reward(offer, bot_name, rng)]
+                player.deck.append(reward_card(pick, player.deck))
         elif node.type is NodeType.REST:
             player.hp = min(player.hp + REST_HEAL, player.max_hp)
         elif node.type is NodeType.EVENT:
@@ -339,9 +376,11 @@ class Report:
     death_floors: dict[int, int]
 
 
-def build_report(cfg: SimConfig, bot: Bot, fights: int, runs: int, seed: int) -> Report:
+def build_report(
+    cfg: SimConfig, bot: Bot, fights: int, runs: int, seed: int, bot_name: str = "smart"
+) -> Report:
     fresh = {t: TierStats.of(r) for t, r in fresh_fights(cfg, bot, fights, seed).items()}
-    run_results = [simulate_run(cfg, bot, seed * 100_003 + i) for i in range(runs)]
+    run_results = [simulate_run(cfg, bot, seed * 100_003 + i, bot_name) for i in range(runs)]
     in_run = {
         t: TierStats.of([f for r in run_results for f in r.fights if f.tier == t]) for t in TIERS
     }
@@ -395,6 +434,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--variant", type=Path, help="statt der aktuellen Werte diese Variante")
     parser.add_argument(
+        "--no-rewards",
+        action="store_true",
+        help="Runs ohne Kartenbelohnung nach Kämpfen (nur Starterdeck)",
+    )
+    parser.add_argument(
         "--compare",
         type=Path,
         action="append",
@@ -404,10 +448,12 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     base = load_variant(args.variant) if args.variant else SimConfig()
+    if args.no_rewards:
+        base.rewards = False
     cfgs = [base, *(load_variant(p) for p in args.compare)]
     bot = BOTS[args.bot]
     print(f"Bot: {args.bot}, {args.fights} Kämpfe/Stufe, {args.runs} Runs, Seed {args.seed}")
-    reports = [build_report(c, bot, args.fights, args.runs, args.seed) for c in cfgs]
+    reports = [build_report(c, bot, args.fights, args.runs, args.seed, args.bot) for c in cfgs]
     print_reports(reports, cfgs)
 
 
