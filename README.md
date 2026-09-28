@@ -46,8 +46,9 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       brauchen einen freien Slot, wirken sofort und wandern in den
       Friedhof; permanente Karten (Overclock, Encryption, Garbage Collector,
       Prefetch) belegen ihren Slot dauerhaft und wirken positionsabhängig — z. B.
-      "Aktionskarten rechts von mir sind 25% effektiver". Nicht gespielte
-      Handkarten bleiben für die nächste Runde erhalten statt zu verfallen.
+      "Aktionskarten rechts von mir sind 25% effektiver". Man startet mit
+      5 Handkarten und zieht jede Runde 3 nach (Prefetch: +1); nicht gespielte
+      Karten bleiben auf der Hand, am Rundenende wird auf 8 abgeworfen.
       `cli.py` und die Tests spielen automatisiert (`auto_resolve_combat` —
       erste bezahlbare Karte in den ersten freien Slot, dann Rundenende),
       das Web-UI interaktiv Karte für Karte über eigene Endpunkte
@@ -209,18 +210,22 @@ uv run balance-sim --compare balance/beispiel-neue-karte.json --bot naive
 ```
 
 Aktueller Stand (Smart-Bot, 2000 Runs): Spieler 60 HP / Angriff 3, Exploit
-macht 5 (+3), nach jedem gewonnenen Kampf kommt eine Karte ins Deck. Die
-Kurve steigt gleichmäßig an, der Boss ist der Höhepunkt:
+macht 5 (+3), Starthand 5, danach 3 Karten pro Runde, Handlimit 8; nach
+jedem gewonnenen Kampf kommt eine Karte ins Deck. Die Kurve steigt
+gleichmäßig an, der Boss ist der Höhepunkt:
 
 | Stufe | Züge | HP-Verlust im Run | Sieg im Run |
 | --- | --- | --- | --- |
-| early | 2.8 | 8 | 99 % |
-| mid | 3.7 | 14 | 87 % |
-| elite | 4.8 | 23 | 80 % |
-| boss | 4.9 | 29 | 36 % |
+| early | 3.1 | 7 | 99 % |
+| mid | 4.2 | 15 | 85 % |
+| elite | 5.2 | 24 | 77 % |
+| boss | 5.4 | 28 | 37 % |
 
-Run-Siegquote: 27 % (Smart-Bot), 34 % (Naive-Bot), 13 % ohne
+Run-Siegquote: 26 % (Smart-Bot), 17 % (Naive-Bot), 12 % ohne
 Kartenbelohnungen (`--no-rewards`) — das Deck-Building trägt also spürbar.
+Seit nur noch 3 Karten pro Runde nachkommen, liegen die Gegner-Budgets rund
+20 % niedriger als beim alten "auf 5 auffüllen", und der Naive-Bot fällt
+deutlich stärker ab (vorher 34 %): Welche Karte man wann spielt, zählt mehr.
 Die Bots wählen Belohnungen stur nach Seltenheit bzw. zufällig; wer gezielt
 auf eine Strategie baut, sollte deutlich öfter gewinnen.
 

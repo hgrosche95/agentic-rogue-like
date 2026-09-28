@@ -244,7 +244,7 @@ function App() {
           onPlayCard={(handIndex, slotIndex) =>
             runAction(() => playCard(run.run_id, handIndex, slotIndex))
           }
-          onEndTurn={() => runAction(() => endCombatTurn(run.run_id))}
+          onEndTurn={(discard) => runAction(() => endCombatTurn(run.run_id, discard))}
         />
       )}
 

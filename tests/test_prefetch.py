@@ -78,7 +78,11 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
                     json={"hand_index": 0, "slot_index": combat["field"].index(None)},
                 ).json()
             else:
-                run = client.post(f"/runs/{run_id}/combat/end-turn").json()
+                excess = max(0, len(combat["hand"]) - combat["max_hand_size"])
+                run = client.post(
+                    f"/runs/{run_id}/combat/end-turn",
+                    json={"discard_indices": list(range(excess))},
+                ).json()
         if run["card_reward"] is not None:
             run = client.post(f"/runs/{run_id}/card-reward", json={"card_index": None}).json()
         if run["status"] == "ongoing":

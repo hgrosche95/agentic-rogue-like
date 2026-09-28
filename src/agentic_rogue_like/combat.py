@@ -1,5 +1,9 @@
 """Deck-based combat: draw a hand, play cards onto a 5-slot field, end the turn.
 
+A fight opens with HAND_SIZE cards; every turn end draws CARDS_PER_TURN more
+(plus Prefetch bonuses) on top of whatever is still in hand, after the hand
+has been discarded down to MAX_HAND_SIZE.
+
 No energy resource - the field itself is the constraint. Action cards
 (Strike, Defend, ...) need an empty slot to be played into, resolve
 immediately, and go to the discard pile; permanent cards occupy the slot
@@ -33,7 +37,9 @@ from pydantic import BaseModel, Field
 
 from .models import PERMANENT_CARD_TYPES, Card, CardType, Enemy, PlayerState, Scaling
 
-HAND_SIZE = 5
+HAND_SIZE = 5  # opening hand
+CARDS_PER_TURN = 3  # drawn at the end of every turn, on top of what's left
+MAX_HAND_SIZE = 8  # discard down to this at the end of the turn
 FIELD_SIZE = 5
 MAX_AUTO_TURNS = 50
 # Bots stop playing after this many cards in one turn - a backstop so a
@@ -73,9 +79,36 @@ def _draw(state: CombatState, count: int, rng: random.Random) -> int:
     return drawn
 
 
-def _target_hand_size(state: CombatState) -> int:
+def cards_per_turn(state: CombatState) -> int:
     draw_bonus = sum(c.value for c in state.field if c and c.type is CardType.DRAW_BONUS)
-    return HAND_SIZE + draw_bonus
+    return CARDS_PER_TURN + draw_bonus
+
+
+def excess_hand_cards(state: CombatState) -> int:
+    """How many cards have to be discarded before the turn can end."""
+    return max(0, len(state.hand) - MAX_HAND_SIZE)
+
+
+def _discard_excess(state: CombatState, discard: list[int] | None) -> str:
+    """Discard the hand down to MAX_HAND_SIZE.
+
+    `discard` names the hand indices to throw away and has to match the excess
+    exactly; None lets the bots skip the choice and drops the most recently
+    drawn cards. Raises ValueError before touching the hand if it doesn't fit.
+    """
+    excess = excess_hand_cards(state)
+    if discard is None:
+        discard = list(range(len(state.hand) - excess, len(state.hand)))
+    if len(set(discard)) != len(discard) or len(discard) != excess:
+        raise ValueError(f"discard exactly {excess} card(s) to end the turn")
+    if any(not 0 <= i < len(state.hand) for i in discard):
+        raise ValueError("discard index is out of range")
+    if not discard:
+        return ""
+    discarded = [state.hand[i] for i in sorted(discard)]
+    for i in sorted(discard, reverse=True):
+        state.discard_pile.append(state.hand.pop(i))
+    return f"Your hand is too full - you discard {_names(discarded)}."
 
 
 def _roll_enemy_intent(rng: random.Random) -> EnemyIntentType:
@@ -282,8 +315,16 @@ def _names(cards: list[Card]) -> str:
     return ", ".join(c.name for c in cards) if cards else "nothing"
 
 
-def end_turn(state: CombatState, player: PlayerState, rng: random.Random) -> list[str]:
+def end_turn(
+    state: CombatState,
+    player: PlayerState,
+    rng: random.Random,
+    discard: list[int] | None = None,
+) -> list[str]:
+    """`discard`: hand indices to discard down to MAX_HAND_SIZE (see _discard_excess)."""
     log: list[str] = []
+    if line := _discard_excess(state, discard):
+        log.append(line)
 
     # Permanents that act on their own resolve before the enemy does, so a
     # Daemon can finish a fight and a Mainframe's block is up in time.
@@ -328,9 +369,9 @@ def end_turn(state: CombatState, player: PlayerState, rng: random.Random) -> lis
 
     state.player_block = 0
     state.enemy_intent = _roll_enemy_intent(rng)
-    # Unplayed hand cards carry over to next turn - only top up to the
-    # target hand size instead of discarding and redrawing from scratch.
-    _draw(state, max(0, _target_hand_size(state) - len(state.hand)), rng)
+    # Unplayed hand cards carry over to next turn; a fixed number of cards
+    # is drawn on top, so holding cards back grows the hand (up to the limit).
+    _draw(state, cards_per_turn(state), rng)
     return log
 
 

@@ -28,8 +28,9 @@ import random
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
+from .combat import MAX_HAND_SIZE
 from .engine import (
     apply_event_choice,
     available_choices,
@@ -122,6 +123,7 @@ class PendingCombatView(BaseModel):
     field: list[CardView | None]
     player_block: int
     armor: int
+    max_hand_size: int
     draw_count: int
     discard_count: int
     banished_count: int
@@ -177,6 +179,12 @@ class PlayCardRequest(BaseModel):
     slot_index: int
 
 
+class EndTurnRequest(BaseModel):
+    # Hand indices to discard when the hand is over the limit - exactly the
+    # excess, see combat.MAX_HAND_SIZE.
+    discard_indices: list[int] = Field(default_factory=list)
+
+
 class CardRewardRequest(BaseModel):
     # None skips the reward.
     card_index: int | None
@@ -224,6 +232,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             field=[None if card is None else CardView.of(card) for card in combat.field],
             player_block=combat.player_block,
             armor=sum(1 for c in combat.field if c is not None and c.type is CardType.ARMOR),
+            max_hand_size=MAX_HAND_SIZE,
             draw_count=len(combat.draw_pile),
             discard_count=len(combat.discard_pile),
             banished_count=len(combat.banished_pile),
@@ -327,12 +336,16 @@ def play_card_endpoint(run_id: str, request: PlayCardRequest) -> RunView:
 
 
 @app.post("/runs/{run_id}/combat/end-turn")
-def end_turn_endpoint(run_id: str) -> RunView:
+def end_turn_endpoint(run_id: str, request: EndTurnRequest | None = None) -> RunView:
     session = _get_session_or_404(run_id)
     if session.combat is None:
         raise HTTPException(status_code=409, detail="no combat in progress")
 
-    end_combat_turn(session.run, session.combat, session.rng)
+    discard = request.discard_indices if request else []
+    try:
+        end_combat_turn(session.run, session.combat, session.rng, discard)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # A Daemon permanent can finish the enemy off during the end of the turn.
     if session.run.player.hp <= 0 or session.combat.enemy_hp <= 0:

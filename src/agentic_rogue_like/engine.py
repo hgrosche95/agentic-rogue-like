@@ -161,8 +161,12 @@ def play_combat_card(
     run.history.append(_play_combat_card(state, hand_index, slot_index, run.player, rng))
 
 
-def end_combat_turn(run: RunState, state: CombatState, rng: random.Random) -> None:
-    run.history.extend(_end_combat_turn(state, run.player, rng))
+def end_combat_turn(
+    run: RunState, state: CombatState, rng: random.Random, discard: list[int] | None = None
+) -> None:
+    """Raises ValueError (via combat.end_turn) if `discard` doesn't bring the
+    hand down to exactly the hand limit."""
+    run.history.extend(_end_combat_turn(state, run.player, rng, discard))
 
 
 def finalize_combat(run: RunState, state: CombatState, rng: random.Random) -> None:

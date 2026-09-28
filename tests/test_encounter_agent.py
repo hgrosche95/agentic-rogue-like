@@ -57,8 +57,8 @@ class _WellBehaved:
         return EnemyProposal(
             name="Crystal Wisp",
             description="Glows faintly.",
-            hp=42,
-            attack=10,
+            hp=36,
+            attack=9,
             attack_name="Prism Flare",
         )
 

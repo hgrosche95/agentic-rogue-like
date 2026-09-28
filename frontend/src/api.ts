@@ -89,6 +89,7 @@ export interface PendingCombatView {
   field: (Card | null)[];
   player_block: number;
   armor: number;
+  max_hand_size: number;
   draw_count: number;
   discard_count: number;
   banished_count: number;
@@ -165,6 +166,9 @@ export function playCard(runId: string, handIndex: number, slotIndex: number): P
   });
 }
 
-export function endCombatTurn(runId: string): Promise<RunView> {
-  return request<RunView>(`/runs/${runId}/combat/end-turn`, { method: "POST" });
+export function endCombatTurn(runId: string, discardIndices: number[] = []): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/combat/end-turn`, {
+    method: "POST",
+    body: JSON.stringify({ discard_indices: discardIndices }),
+  });
 }

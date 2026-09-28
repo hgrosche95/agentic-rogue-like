@@ -50,10 +50,20 @@ export function CombatPanel({
   disabled: boolean;
   enemySlain?: boolean;
   onPlayCard: (handIndex: number, slotIndex: number) => void;
-  onEndTurn: () => void;
+  onEndTurn: (discardIndices: number[]) => void;
   onContinue?: () => void;
 }) {
   const [selectedHandIndex, setSelectedHandIndex] = useState<number | null>(null);
+  // Over the hand limit, ending the turn first asks which cards to discard.
+  // The picks belong to the table they were made on, so any new state from
+  // the server (a card played, a turn ended) drops them; null while not choosing.
+  const [discardChoice, setDiscardChoice] = useState<{ on: PendingCombatView; picks: number[] } | null>(
+    null,
+  );
+  const discarding = discardChoice?.on === combat ? discardChoice.picks : null;
+  const setDiscarding = (picks: number[] | null) =>
+    setDiscardChoice(picks === null ? null : { on: combat, picks });
+  const excess = Math.max(0, combat.hand.length - combat.max_hand_size);
   const exchange = useHpExchange(player.hp, combat.enemy_hp);
   const [commands, setCommands] = useState<HackerCommand[]>([]);
   const [typing, setTyping] = useState(false);
@@ -84,12 +94,24 @@ export function CombatPanel({
 
   function endTurn() {
     sfx.play("click");
+    if (excess > 0 && discarding === null) {
+      setSelectedHandIndex(null);
+      setDiscarding([]);
+      return;
+    }
+    if (discarding !== null && discarding.length !== excess) return;
     endTurnFrom.current = { combat, hp: player.hp };
-    onEndTurn();
+    onEndTurn(discarding ?? []);
+    setDiscarding(null);
   }
 
   function selectCard(handIndex: number) {
     sfx.play("select");
+    if (discarding !== null) {
+      if (discarding.includes(handIndex)) setDiscarding(discarding.filter((i) => i !== handIndex));
+      else if (discarding.length < excess) setDiscarding([...discarding, handIndex]);
+      return;
+    }
     setSelectedHandIndex((current) => (current === handIndex ? null : handIndex));
   }
 
@@ -185,8 +207,8 @@ export function CombatPanel({
             ) : card === null ? (
               <button
                 key={slotIndex}
-                className={`field-slot is-empty${selectedHandIndex !== null ? " is-targetable" : ""}`}
-                disabled={busy || selectedHandIndex === null}
+                className={`field-slot is-empty${selectedHandIndex !== null && discarding === null ? " is-targetable" : ""}`}
+                disabled={busy || selectedHandIndex === null || discarding !== null}
                 onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
               >
                 {slotIndex + 1}
@@ -204,13 +226,15 @@ export function CombatPanel({
         <Pile label="Deck" count={combat.draw_count} kind="deck" />
 
         <div className="hand-zone">
-          <span className="zone-label">Hand</span>
+          <span className="zone-label">
+            Hand {combat.hand.length}/{combat.max_hand_size}
+          </span>
           <div className="hand" ref={handRef}>
             {combat.hand.map((card: HandCardView) => (
               <button
                 key={card.hand_index}
                 data-hand-index={card.hand_index}
-                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}`}
+                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : ""}`}
                 disabled={busy}
                 onMouseEnter={() => sfx.play("hover")}
                 onClick={() => selectCard(card.hand_index)}
@@ -222,9 +246,18 @@ export function CombatPanel({
         </div>
 
         <div className="table-side">
-          <button className="end-turn-button" disabled={busy} onClick={endTurn}>
-            End turn
+          <button
+            className="end-turn-button"
+            disabled={busy || (discarding !== null && discarding.length !== excess)}
+            onClick={endTurn}
+          >
+            {discarding === null ? "End turn" : "Discard & end turn"}
           </button>
+          {discarding !== null && (
+            <button className="end-turn-button" disabled={busy} onClick={() => setDiscarding(null)}>
+              Cancel
+            </button>
+          )}
           <div className="side-piles">
             <Pile label="Graveyard" count={combat.discard_count} kind="graveyard" />
             <Pile label="Banished" count={combat.banished_count} kind="banished" />
@@ -235,7 +268,9 @@ export function CombatPanel({
       <p className="field-hint">
         {enemySlain
           ? "Enemy defeated."
-          : selectedHandIndex === null
+          : discarding !== null
+            ? `Hand limit is ${combat.max_hand_size}: pick ${excess} card(s) to discard (${discarding.length}/${excess}).`
+            : selectedHandIndex === null
             ? "Select a card from your hand, then play it onto an empty field slot."
             : "Choose an empty slot to play the selected card."}
       </p>

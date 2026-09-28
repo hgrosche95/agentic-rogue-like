@@ -239,9 +239,9 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
                 played = True
                 break
         if not played:
-            # Unplayed cards stay in hand and shrink next turn's draw, so
-            # holding a Firewall/Hotfix is worse than playing it anyway -
-            # but one-shot cards are kept for when they matter.
+            # Unplayed cards stay in hand, but the hand is capped at the
+            # end of the turn, so a Firewall/Hotfix is played rather than
+            # hoarded - one-shot cards are kept for when they matter.
             idx = next(
                 (
                     i

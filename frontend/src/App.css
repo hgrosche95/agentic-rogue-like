@@ -1672,6 +1672,13 @@ body > .card-flight {
   box-shadow: var(--glow-cyan), 0 8px 18px rgba(0, 0, 0, 0.55);
 }
 
+.hand-card.is-discarding {
+  transform: translateY(6px);
+  opacity: 0.55;
+  border-color: var(--ai-red);
+  box-shadow: 0 0 10px rgba(255, 77, 106, 0.5), 0 8px 18px rgba(0, 0, 0, 0.55);
+}
+
 .card-header {
   padding: 0.45rem 0.4rem 0.3rem 2.15rem;
   font-family: "Rajdhani", sans-serif;

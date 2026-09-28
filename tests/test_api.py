@@ -17,7 +17,11 @@ def _play_combat(run_id: str, run: dict) -> dict:
                 json={"hand_index": combat["hand"][0]["hand_index"], "slot_index": empty_slot},
             ).json()
         else:
-            run = client.post(f"/runs/{run_id}/combat/end-turn").json()
+            excess = max(0, len(combat["hand"]) - combat["max_hand_size"])
+            run = client.post(
+                f"/runs/{run_id}/combat/end-turn",
+                json={"discard_indices": list(range(excess))},
+            ).json()
 
         turns += 1
         assert turns < 200, "combat did not terminate"
@@ -139,3 +143,22 @@ def test_card_reward_rejects_bad_index() -> None:
     run_id, _ = _won_fight(3)
     response = client.post(f"/runs/{run_id}/card-reward", json={"card_index": 7})
     assert response.status_code == 400
+
+
+def test_end_turn_requires_discarding_down_to_the_hand_limit() -> None:
+    run_id = client.post("/runs", json={"seed": 3}).json()["run_id"]
+    run = client.post(f"/runs/{run_id}/resolve").json()
+
+    # Holding every card grows the hand past the limit after one turn.
+    while len(run["pending_combat"]["hand"]) <= run["pending_combat"]["max_hand_size"]:
+        run = client.post(f"/runs/{run_id}/combat/end-turn").json()
+        assert run["pending_combat"] is not None, "fight ended before the hand filled up"
+
+    combat = run["pending_combat"]
+    excess = len(combat["hand"]) - combat["max_hand_size"]
+    assert client.post(f"/runs/{run_id}/combat/end-turn").status_code == 400
+
+    run = client.post(
+        f"/runs/{run_id}/combat/end-turn", json={"discard_indices": list(range(excess))}
+    ).json()
+    assert any("you discard" in line for line in run["history"][-3:])
