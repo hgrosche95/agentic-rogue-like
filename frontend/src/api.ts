@@ -44,12 +44,20 @@ export interface Card {
   exhaust: boolean;
 }
 
+// A passive bonus for the rest of the run. Only the text is shown - the
+// numbers behind it are applied server-side (see artifacts.py).
+export interface Artifact {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export interface PlayerState {
   hp: number;
   max_hp: number;
   attack: number;
   gold: number;
-  relics: { id: string; name: string; description: string }[];
+  artifacts: Artifact[];
   deck: Card[];
 }
 
@@ -89,6 +97,7 @@ export interface PendingCombatView {
   field: (Card | null)[];
   player_block: number;
   armor: number;
+  max_hand_size: number;
   draw_count: number;
   discard_count: number;
   banished_count: number;
@@ -107,6 +116,7 @@ export interface RunView {
   pending_event: PendingEventView | null;
   pending_combat: PendingCombatView | null;
   card_reward: Card[] | null;
+  artifact_offer: Artifact[] | null;
   nodes: Record<string, MapNode>;
 }
 
@@ -158,6 +168,13 @@ export function chooseCardReward(runId: string, cardIndex: number | null): Promi
   });
 }
 
+export function chooseArtifact(runId: string, artifactIndex: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/artifact`, {
+    method: "POST",
+    body: JSON.stringify({ artifact_index: artifactIndex }),
+  });
+}
+
 export function playCard(runId: string, handIndex: number, slotIndex: number): Promise<RunView> {
   return request<RunView>(`/runs/${runId}/combat/play-card`, {
     method: "POST",
@@ -165,6 +182,9 @@ export function playCard(runId: string, handIndex: number, slotIndex: number): P
   });
 }
 
-export function endCombatTurn(runId: string): Promise<RunView> {
-  return request<RunView>(`/runs/${runId}/combat/end-turn`, { method: "POST" });
+export function endCombatTurn(runId: string, discardIndices: number[] = []): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/combat/end-turn`, {
+    method: "POST",
+    body: JSON.stringify({ discard_indices: discardIndices }),
+  });
 }

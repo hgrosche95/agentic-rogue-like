@@ -3,8 +3,10 @@ import random
 import pytest
 
 from agentic_rogue_like.combat import (
+    CARDS_PER_TURN,
     FIELD_SIZE,
     HAND_SIZE,
+    MAX_HAND_SIZE,
     EnemyIntentType,
     auto_resolve_combat,
     end_turn,
@@ -142,7 +144,7 @@ def test_draw_bonus_increases_cards_drawn_at_end_of_turn() -> None:
 
     end_turn(state, player, random.Random(2))
 
-    assert len(state.hand) == HAND_SIZE + 1
+    assert len(state.hand) == HAND_SIZE - 1 + CARDS_PER_TURN + 1
 
 
 def test_unplayed_hand_cards_carry_over_the_turn() -> None:
@@ -153,6 +155,66 @@ def test_unplayed_hand_cards_carry_over_the_turn() -> None:
     end_turn(state, player, random.Random(2))
 
     assert kept_card in state.hand
+
+
+def test_end_turn_draws_a_fixed_number_on_top_of_the_hand() -> None:
+    player = _player([STRIKE] * 20)
+    state, _ = start_combat(player.deck, _enemy(hp=999, attack=0), random.Random(1))
+
+    end_turn(state, player, random.Random(2))
+
+    assert len(state.hand) == HAND_SIZE + CARDS_PER_TURN
+
+
+def _overfull_hand() -> tuple:
+    player = _player([STRIKE] * 10 + [DEFEND] * 10)
+    state, _ = start_combat(player.deck, _enemy(hp=999, attack=0), random.Random(1))
+    while len(state.hand) <= MAX_HAND_SIZE:
+        end_turn(state, player, random.Random(2))
+    return player, state
+
+
+def test_end_turn_discards_the_chosen_cards_down_to_the_hand_limit() -> None:
+    player, state = _overfull_hand()
+    excess = len(state.hand) - MAX_HAND_SIZE
+    chosen = state.hand[:excess]
+    discard_before = len(state.discard_pile)
+
+    log = end_turn(state, player, random.Random(2), discard=list(range(excess)))
+
+    assert len(state.discard_pile) == discard_before + excess
+    assert state.discard_pile[-excess:] == chosen
+    assert len(state.hand) == MAX_HAND_SIZE + CARDS_PER_TURN
+    assert "discard" in log[0]
+
+
+def test_end_turn_without_a_choice_drops_the_newest_cards() -> None:
+    player, state = _overfull_hand()
+    kept = state.hand[:MAX_HAND_SIZE]
+
+    end_turn(state, player, random.Random(2))
+
+    assert state.hand[:MAX_HAND_SIZE] == kept
+
+
+@pytest.mark.parametrize("discard", [[], [0], [0, 0, 0], [0, 1, 99]])
+def test_end_turn_rejects_a_wrong_discard_without_changing_anything(discard: list[int]) -> None:
+    player, state = _overfull_hand()
+    assert len(state.hand) - MAX_HAND_SIZE == 3
+    before = state.model_copy(deep=True)
+
+    with pytest.raises(ValueError):
+        end_turn(state, player, random.Random(2), discard=discard)
+
+    assert state == before
+
+
+def test_end_turn_rejects_a_discard_when_the_hand_fits() -> None:
+    player = _player(_basic_deck())
+    state, _ = start_combat(player.deck, _enemy(attack=0), random.Random(1))
+
+    with pytest.raises(ValueError):
+        end_turn(state, player, random.Random(2), discard=[0])
 
 
 def test_final_strike_destroys_all_permanents_for_damage() -> None:

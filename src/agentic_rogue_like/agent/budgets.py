@@ -16,12 +16,15 @@ from .encounter_schema import EnemyBudget
 # real threat, and the boss is the run's climax but winnable. The boss is
 # deliberately *not* the tankiest-per-tier jump: a run arrives there already
 # worn down. Card rewards (one card per won fight) are part of the tuning:
-# without them the same budgets leave the boss nearly out of reach.
+# without them the same budgets leave the boss nearly out of reach. So is the
+# draw rule (5-card opening hand, 3 cards per turn, hand limit 8): it feeds
+# fewer cards per turn than the old top-up-to-5, and enemies were scaled
+# down ~20% to keep the same curve.
 _BUDGETS: dict[str, EnemyBudget] = {
-    "early": EnemyBudget(min_hp=38, max_hp=48, min_attack=9, max_attack=12),
-    "mid": EnemyBudget(min_hp=58, max_hp=72, min_attack=11, max_attack=14),
-    "elite": EnemyBudget(min_hp=80, max_hp=95, min_attack=13, max_attack=16),
-    "boss": EnemyBudget(min_hp=110, max_hp=130, min_attack=15, max_attack=18),
+    "early": EnemyBudget(min_hp=32, max_hp=40, min_attack=7, max_attack=10),
+    "mid": EnemyBudget(min_hp=48, max_hp=60, min_attack=9, max_attack=12),
+    "elite": EnemyBudget(min_hp=64, max_hp=76, min_attack=11, max_attack=13),
+    "boss": EnemyBudget(min_hp=90, max_hp=105, min_attack=12, max_attack=14),
 }
 
 

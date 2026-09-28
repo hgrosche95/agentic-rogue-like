@@ -28,10 +28,37 @@ class RunStatus(StrEnum):
     DEFEAT = "defeat"
 
 
-class Relic(BaseModel):
+class Artifact(BaseModel):
+    """A passive bonus for the rest of the run - see artifacts.py.
+
+    Every field is a bonus that defaults to "off", so an artifact only lists
+    what it changes. attack and max_hp are applied to the player once, when
+    the artifact is picked up; everything else is read by the engine and
+    combat.py at their hook points.
+    """
+
     id: str
     name: str
     description: str
+    attack: int = 0
+    max_hp: int = 0
+    extra_draw: int = 0  # cards drawn at the end of the turn ...
+    extra_draw_every: int = 1  # ... on every Nth turn only
+    opening_hand: int = 0
+    max_hand: int = 0
+    start_block: int = 0
+    opening_damage: int = 0  # dealt to the enemy when the fight starts
+    enemy_hp_percent: int = 0  # enemies start the fight with this % more HP
+    enemy_attack: int = 0  # added to every enemy attack
+    armor: int = 0  # subtracted from every enemy attack
+    thorns: int = 0  # damage back to the enemy whenever it attacks
+    turn_block: int = 0  # block gained at the end of the turn ...
+    turn_block_every: int = 1  # ... on every Nth turn only
+    block_bonus: int = 0  # added to block cards
+    heal_bonus: int = 0  # added to heal cards
+    lifesteal: int = 0  # healed per attack card played
+    heal_after_combat: int = 0
+    rest_heal: int = 0
 
 
 class CardType(StrEnum):
@@ -105,7 +132,7 @@ class PlayerState(BaseModel):
     max_hp: int
     attack: int = 5
     gold: int = 0
-    relics: list[Relic] = Field(default_factory=list)
+    artifacts: list[Artifact] = Field(default_factory=list)
     deck: list[Card] = Field(default_factory=list)
 
     @property
@@ -157,3 +184,8 @@ class RunState(BaseModel):
     # Cards offered after a won fight, waiting for the player to pick one
     # (or skip) - the run can't move on to the next room until then.
     card_reward: list[Card] | None = None
+    # Map steps taken so far - every ARTIFACT_EVERY_STEPS of them (and once
+    # at the start) the player is offered artifacts, and has to pick one
+    # before the room they arrived in can be entered.
+    steps: int = 0
+    artifact_offer: list[Artifact] | None = None

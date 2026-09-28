@@ -6,9 +6,9 @@ import random
 
 from dotenv import load_dotenv
 
-from .engine import available_choices, new_run, resolve_node
+from .engine import available_choices, move_to, new_run, resolve_node
 from .events import EventOption, GameEvent
-from .models import Card, RunState, RunStatus
+from .models import Artifact, Card, RunState, RunStatus
 
 
 def _prompt_index(count: int) -> int:
@@ -35,6 +35,13 @@ def _choose_card(offer: list[Card]) -> int | None:
     return None if choice == len(offer) else choice
 
 
+def _choose_artifact(offer: list[Artifact]) -> int:
+    print("\nChoose an artifact:")
+    for i, artifact in enumerate(offer, start=1):
+        print(f"  {i}. {artifact.name} - {artifact.description}")
+    return _prompt_index(len(offer))
+
+
 def _choose_next_node(run: RunState, choices: list[str]) -> str:
     print("\nPaths ahead:")
     for i, node_id in enumerate(choices, start=1):
@@ -56,7 +63,11 @@ def main() -> None:
     try:
         while run.status is RunStatus.ONGOING:
             resolve_node(
-                run, rng, choose_event_option=_choose_event_option, choose_card=_choose_card
+                run,
+                rng,
+                choose_event_option=_choose_event_option,
+                choose_card=_choose_card,
+                choose_artifact_option=_choose_artifact,
             )
             for line in run.history[last_printed:]:
                 print(line)
@@ -65,7 +76,7 @@ def main() -> None:
             if run.status is not RunStatus.ONGOING:
                 break
 
-            run.current_node_id = _choose_next_node(run, available_choices(run))
+            move_to(run, _choose_next_node(run, available_choices(run)))
     except (EOFError, KeyboardInterrupt):
         print("\nRun abandoned.")
         return

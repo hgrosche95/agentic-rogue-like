@@ -13,6 +13,13 @@ from agentic_rogue_like.sessions import get_session
 client = TestClient(app)
 
 
+def _resolve(run_id: str):
+    """POST /resolve, first taking the first artifact if one is on offer."""
+    if client.get(f"/runs/{run_id}").json()["artifact_offer"] is not None:
+        client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0})
+    return client.post(f"/runs/{run_id}/resolve")
+
+
 def _prefetched_enemy(**kwargs) -> Enemy:
     return Enemy(
         id=kwargs["enemy_id"], name="Prefetched Wisp", hp=12, attack=3, attack_name="Glimmer"
@@ -36,7 +43,7 @@ def agent_enabled(monkeypatch):
 def _walk_to_first_combat(run: dict) -> dict:
     run_id = run["run_id"]
     for _ in range(100):
-        run = client.post(f"/runs/{run_id}/resolve").json()
+        run = _resolve(run_id).json()
         if run["pending_combat"] is not None:
             return run
         if run["pending_event"] is not None:
@@ -67,7 +74,7 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
     run_id = run["run_id"]
 
     while run["status"] == "ongoing":
-        run = client.post(f"/runs/{run_id}/resolve").json()
+        run = _resolve(run_id).json()
         if run["pending_event"] is not None:
             run = client.post(f"/runs/{run_id}/event-choice", json={"option_index": 0}).json()
         while run["pending_combat"] is not None:
@@ -78,7 +85,11 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
                     json={"hand_index": 0, "slot_index": combat["field"].index(None)},
                 ).json()
             else:
-                run = client.post(f"/runs/{run_id}/combat/end-turn").json()
+                excess = max(0, len(combat["hand"]) - combat["max_hand_size"])
+                run = client.post(
+                    f"/runs/{run_id}/combat/end-turn",
+                    json={"discard_indices": list(range(excess))},
+                ).json()
         if run["card_reward"] is not None:
             run = client.post(f"/runs/{run_id}/card-reward", json={"card_index": None}).json()
         if run["status"] == "ongoing":

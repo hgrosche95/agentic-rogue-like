@@ -13,6 +13,7 @@ from dataclasses import replace
 
 from .agent.encounter_agent import enemy_for_node
 from .agent.narrator import narrate
+from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
 from .cards import reward_card, roll_card_reward, starter_deck
 from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
@@ -22,6 +23,7 @@ from .events import EventOption, GameEvent, random_event
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
     DEFAULT_SETTING,
+    Artifact,
     Card,
     Enemy,
     MapNode,
@@ -34,6 +36,8 @@ from .models import (
 ChooseEventOption = Callable[[GameEvent], EventOption]
 # Index into the offered cards, or None to skip the reward.
 ChooseCardReward = Callable[[list[Card]], int | None]
+# Index into the offered artifacts - picking one is not optional.
+ChooseArtifact = Callable[[list[Artifact]], int]
 # (setting, situation) -> flavor text or None. Defaults to a live narrate()
 # call; the web API passes one that reads background-prefetched text instead.
 Narrator = Callable[[str, str], str | None]
@@ -51,13 +55,41 @@ def new_run(seed: int, setting: str = DEFAULT_SETTING) -> RunState:
         hp=PLAYER_HP, max_hp=PLAYER_HP, attack=PLAYER_ATTACK, gold=0, deck=starter_deck()
     )
     nodes = generate_map(seed)
-    return RunState(
+    run = RunState(
         seed=seed, player=player, nodes=nodes, current_node_id="0-0", setting=setting
     )
+    # Its own rng, so offering artifacts doesn't shift the run rng's sequence
+    # (enemies, events, rewards) compared to a run without them.
+    run.artifact_offer = roll_artifact_offer(random.Random(f"{seed}-artifacts-0"), [])
+    return run
 
 
 def available_choices(run: RunState) -> list[str]:
     return run.nodes[run.current_node_id].connections
+
+
+def move_to(run: RunState, node_id: str) -> None:
+    """Step onto `node_id`; every ARTIFACT_EVERY_STEPS steps an artifact offer waits there."""
+    run.current_node_id = node_id
+    run.steps += 1
+    if run.steps % ARTIFACT_EVERY_STEPS == 0:
+        rng = random.Random(f"{run.seed}-artifacts-{run.steps}")
+        run.artifact_offer = roll_artifact_offer(rng, run.player.artifacts) or None
+
+
+def choose_artifact(run: RunState, index: int) -> None:
+    """Take artifact `index` of the pending offer.
+
+    Raises ValueError if no offer is pending or the index is out of range.
+    """
+    offer = run.artifact_offer
+    if offer is None:
+        raise ValueError("no artifact offer pending")
+    if not 0 <= index < len(offer):
+        raise ValueError(f"artifact index {index} is out of range")
+    gain_artifact(run.player, offer[index])
+    run.history.append(f"You install {offer[index].name}: {offer[index].description}")
+    run.artifact_offer = None
 
 
 def start_event(run: RunState, rng: random.Random, narrator: Narrator | None = None) -> GameEvent:
@@ -101,6 +133,8 @@ def _finish_combat(
         reward = rng.randint(15, 35)
         run.player.gold += reward
         run.history.append(f"You loot {reward} gold from the {enemy_name}.")
+        if healed := heal(run.player, total(run.player.artifacts, "heal_after_combat")):
+            run.history.append(f"Your artifacts patch you up for {healed} HP.")
         run.card_reward = roll_card_reward(rng, elite=node.type is NodeType.ELITE)
 
 
@@ -149,7 +183,7 @@ def start_combat_node(
         setting=run.setting,
         prefetched=prefetched_enemy,
     )
-    state, log = _start_combat(run.player.deck, enemy, rng)
+    state, log = _start_combat(run.player.deck, enemy, rng, run.player.artifacts)
     run.history.extend(log)
     return state
 
@@ -161,8 +195,12 @@ def play_combat_card(
     run.history.append(_play_combat_card(state, hand_index, slot_index, run.player, rng))
 
 
-def end_combat_turn(run: RunState, state: CombatState, rng: random.Random) -> None:
-    run.history.extend(_end_combat_turn(state, run.player, rng))
+def end_combat_turn(
+    run: RunState, state: CombatState, rng: random.Random, discard: list[int] | None = None
+) -> None:
+    """Raises ValueError (via combat.end_turn) if `discard` doesn't bring the
+    hand down to exactly the hand limit."""
+    run.history.extend(_end_combat_turn(state, run.player, rng, discard))
 
 
 def finalize_combat(run: RunState, state: CombatState, rng: random.Random) -> None:
@@ -177,7 +215,15 @@ def resolve_node(
     choose_event_option: ChooseEventOption | None = None,
     narrator: Narrator | None = None,
     choose_card: ChooseCardReward | None = None,
+    choose_artifact_option: ChooseArtifact | None = None,
 ) -> None:
+    if run.artifact_offer is not None:
+        offer = run.artifact_offer
+        choose_artifact(
+            run,
+            choose_artifact_option(offer) if choose_artifact_option else rng.randrange(len(offer)),
+        )
+
     node = run.nodes[run.current_node_id]
 
     if node.type is NodeType.EVENT:
@@ -212,8 +258,7 @@ def resolve_node(
         flavor = (narrator or narrate)(run.setting, REST_SITUATION)
         if flavor:
             run.history.append(flavor)
-        healed = min(REST_HEAL, run.player.max_hp - run.player.hp)
-        run.player.hp += healed
+        healed = heal(run.player, REST_HEAL + total(run.player.artifacts, "rest_heal"))
         run.history.append(f"You rest and recover {healed} HP.")
 
     elif node.type is NodeType.SHOP:

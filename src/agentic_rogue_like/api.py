@@ -28,14 +28,17 @@ import random
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
+from .combat import EnemyIntentType, enemy_attack, max_hand_size
 from .engine import (
     apply_event_choice,
     available_choices,
+    choose_artifact,
     choose_card_reward,
     end_combat_turn,
     finalize_combat,
+    move_to,
     new_run,
     play_combat_card,
     resolve_node,
@@ -45,6 +48,7 @@ from .engine import (
 from .models import (
     MAX_CUSTOM_SETTING_LENGTH,
     SETTING_PRESETS,
+    Artifact,
     Card,
     CardType,
     MapNode,
@@ -122,6 +126,7 @@ class PendingCombatView(BaseModel):
     field: list[CardView | None]
     player_block: int
     armor: int
+    max_hand_size: int
     draw_count: int
     discard_count: int
     banished_count: int
@@ -140,6 +145,8 @@ class RunView(BaseModel):
     pending_event: PendingEventView | None
     pending_combat: PendingCombatView | None
     card_reward: list[CardView] | None
+    # Artifacts to pick one from before the current room can be entered.
+    artifact_offer: list[Artifact] | None
     # Every node in the run, not just the current/reachable ones - the
     # frontend draws the whole dungeon graph, not just the next step.
     nodes: dict[str, MapNode]
@@ -175,6 +182,16 @@ class EventChoiceRequest(BaseModel):
 class PlayCardRequest(BaseModel):
     hand_index: int
     slot_index: int
+
+
+class EndTurnRequest(BaseModel):
+    # Hand indices to discard when the hand is over the limit - exactly the
+    # excess, see combat.MAX_HAND_SIZE.
+    discard_indices: list[int] = Field(default_factory=list)
+
+
+class ArtifactChoiceRequest(BaseModel):
+    artifact_index: int
 
 
 class CardRewardRequest(BaseModel):
@@ -216,7 +233,11 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_max_hp=combat.enemy.hp,
             enemy_block=combat.enemy_block,
             enemy_intent=combat.enemy_intent.value,
-            enemy_intent_value=combat.enemy.attack,
+            enemy_intent_value=(
+                enemy_attack(combat)
+                if combat.enemy_intent is EnemyIntentType.ATTACK
+                else combat.enemy.attack
+            ),
             hand=[
                 HandCardView(hand_index=i, **CardView.of(card).model_dump())
                 for i, card in enumerate(combat.hand)
@@ -224,6 +245,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             field=[None if card is None else CardView.of(card) for card in combat.field],
             player_block=combat.player_block,
             armor=sum(1 for c in combat.field if c is not None and c.type is CardType.ARMOR),
+            max_hand_size=max_hand_size(combat),
             draw_count=len(combat.draw_pile),
             discard_count=len(combat.discard_pile),
             banished_count=len(combat.banished_pile),
@@ -248,6 +270,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         card_reward=(
             None if run.card_reward is None else [CardView.of(c) for c in run.card_reward]
         ),
+        artifact_offer=run.artifact_offer,
         nodes=run.nodes,
     )
 
@@ -292,6 +315,8 @@ def resolve_current_node(run_id: str) -> RunView:
     # combat mid-fight and hand the player a brand new hand and full energy.
     if node.visited:
         raise HTTPException(status_code=409, detail="node already resolved")
+    if run.artifact_offer is not None:
+        raise HTTPException(status_code=409, detail="choose an artifact first")
 
     prefetch = session.prefetch
     if node.type is NodeType.EVENT:
@@ -327,12 +352,16 @@ def play_card_endpoint(run_id: str, request: PlayCardRequest) -> RunView:
 
 
 @app.post("/runs/{run_id}/combat/end-turn")
-def end_turn_endpoint(run_id: str) -> RunView:
+def end_turn_endpoint(run_id: str, request: EndTurnRequest | None = None) -> RunView:
     session = _get_session_or_404(run_id)
     if session.combat is None:
         raise HTTPException(status_code=409, detail="no combat in progress")
 
-    end_combat_turn(session.run, session.combat, session.rng)
+    discard = request.discard_indices if request else []
+    try:
+        end_combat_turn(session.run, session.combat, session.rng, discard)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     # A Daemon permanent can finish the enemy off during the end of the turn.
     if session.run.player.hp <= 0 or session.combat.enemy_hp <= 0:
@@ -369,6 +398,18 @@ def choose_card_reward_endpoint(run_id: str, request: CardRewardRequest) -> RunV
     return _run_view(run_id, session)
 
 
+@app.post("/runs/{run_id}/artifact")
+def choose_artifact_endpoint(run_id: str, request: ArtifactChoiceRequest) -> RunView:
+    session = _get_session_or_404(run_id)
+    if session.run.artifact_offer is None:
+        raise HTTPException(status_code=409, detail="no artifact offer pending")
+    try:
+        choose_artifact(session.run, request.artifact_index)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _run_view(run_id, session)
+
+
 @app.post("/runs/{run_id}/choose-node")
 def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
     session = _get_session_or_404(run_id)
@@ -385,7 +426,7 @@ def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
     if request.node_id not in available_choices(run):
         raise HTTPException(status_code=400, detail="node_id is not reachable from here")
 
-    run.current_node_id = request.node_id
+    move_to(run, request.node_id)
     session.prefetch.warm(run)
     return _run_view(run_id, session)
 

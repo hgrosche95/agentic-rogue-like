@@ -46,8 +46,9 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       brauchen einen freien Slot, wirken sofort und wandern in den
       Friedhof; permanente Karten (Overclock, Encryption, Garbage Collector,
       Prefetch) belegen ihren Slot dauerhaft und wirken positionsabhängig — z. B.
-      "Aktionskarten rechts von mir sind 25% effektiver". Nicht gespielte
-      Handkarten bleiben für die nächste Runde erhalten statt zu verfallen.
+      "Aktionskarten rechts von mir sind 25% effektiver". Man startet mit
+      5 Handkarten und zieht jede Runde 3 nach (Prefetch: +1); nicht gespielte
+      Karten bleiben auf der Hand, am Rundenende wird auf 8 abgeworfen.
       `cli.py` und die Tests spielen automatisiert (`auto_resolve_combat` —
       erste bezahlbare Karte in den ersten freien Slot, dann Rundenende),
       das Web-UI interaktiv Karte für Karte über eigene Endpunkte
@@ -55,6 +56,9 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 - [x] **Deck-Building** — nach jedem Sieg eine von drei Karten wählen
       (`/runs/{id}/card-reward`); 17 Belohnungskarten mit Abwurfkosten,
       Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
+- [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
+      drei wählen, danach alle 3 Schritte auf der Map ein weiteres
+      (`/runs/{id}/artifact`). 20 Stück in `artifacts.py`, siehe *Artefakte* unten.
 - [x] **Sound und Musik** — Soundeffekte und Hintergrundmusik, komplett
       prozedural mit der Web Audio API erzeugt (siehe *Audio* unten).
 - [ ] **Encounter-Agent** — ein LangGraph-Agent, der Gegner über constrained
@@ -96,6 +100,7 @@ src/agentic_rogue_like/
 ├── map_gen.py      Prozedurale Etagen-/Node-Map
 ├── combat.py       Kartenbasierter Kampf: Deck/Hand/Feld, Zieh-/Ablagelogik
 ├── cards.py        Startdeck mit IT-Namen (Exploit, Firewall, Hotfix, ...; Aktions- + permanente Karten)
+├── artifacts.py    Artefakt-Pool und -Angebote (passive Run-Boni)
 ├── events.py       Event-/Rest-/Shop-Auflösung
 ├── enemies.py      Statischer Gegner-Pool (Fallback für den Encounter-Agent)
 ├── engine.py       Der deterministische Kern-Loop, den CLI und API beide treiben
@@ -209,20 +214,58 @@ uv run balance-sim --compare balance/beispiel-neue-karte.json --bot naive
 ```
 
 Aktueller Stand (Smart-Bot, 2000 Runs): Spieler 60 HP / Angriff 3, Exploit
-macht 5 (+3), nach jedem gewonnenen Kampf kommt eine Karte ins Deck. Die
-Kurve steigt gleichmäßig an, der Boss ist der Höhepunkt:
+macht 5 (+3), Starthand 5, danach 3 Karten pro Runde, Handlimit 8; nach
+jedem gewonnenen Kampf kommt eine Karte ins Deck, am Start und alle 3
+Schritte ein Artefakt (die Bots wählen es zufällig). Die Kurve steigt
+gleichmäßig an, der Boss ist der Höhepunkt:
 
 | Stufe | Züge | HP-Verlust im Run | Sieg im Run |
 | --- | --- | --- | --- |
-| early | 2.8 | 8 | 99 % |
-| mid | 3.7 | 14 | 87 % |
-| elite | 4.8 | 23 | 80 % |
-| boss | 4.9 | 29 | 36 % |
+| early | 2.8 | 6 | 99 % |
+| mid | 3.8 | 10 | 94 % |
+| elite | 4.8 | 17 | 91 % |
+| boss | 5.7 | 22 | 78 % |
 
-Run-Siegquote: 27 % (Smart-Bot), 34 % (Naive-Bot), 13 % ohne
-Kartenbelohnungen (`--no-rewards`) — das Deck-Building trägt also spürbar.
-Die Bots wählen Belohnungen stur nach Seltenheit bzw. zufällig; wer gezielt
+Run-Siegquote: 67 % (Smart-Bot), 59 % (Naive-Bot). Ohne Artefakte
+(`--no-artifacts`) sind es 26 % — die Artefakte sollen dem Spieler helfen,
+die Gegner-Budgets sind deshalb bewusst nicht mitgewachsen. Jedes einzelne
+Artefakt hebt die Siegquote um 11–25 Prozentpunkte; wer ein neues baut,
+sollte in diesem Band landen.
+Die Bots wählen Karten stur nach Seltenheit bzw. zufällig; wer gezielt
 auf eine Strategie baut, sollte deutlich öfter gewinnen.
+
+## Artefakte
+
+Artefakte wirken passiv für den Rest des Runs. Zu Beginn wählt man eins aus
+drei, danach alle 3 Schritte auf der Map ein weiteres, wieder aus drei
+(`ARTIFACT_EVERY_STEPS` in `artifacts.py`). Jedes Artefakt ist nur ein Satz
+Zahlen (`models.Artifact`), den Engine und Kampf an festen Stellen
+aufsummieren: Starthand, Rundenende, gegnerischer Angriff, nach dem Kampf,
+am Rastplatz. Ein neues Artefakt ist deshalb ein Eintrag in `ARTIFACT_POOL`,
+kein neuer Code.
+
+| Artefakt | Effekt |
+| --- | --- |
+| Cache Line | Jeden 2. Zug 1 Karte mehr ziehen |
+| Self-Healing Script | Nach jedem gewonnenen Kampf 6 HP heilen |
+| Overclocked CPU | Jeden Zug 1 Karte mehr, aber Gegner treffen um 1 stärker |
+| Tunnel Vision | +4 ATK, aber jeden 2. Zug 1 Karte weniger |
+| Heat Sink | Jeden Kampf mit 8 Block beginnen |
+| Extra RAM | Handlimit +2, jeden 3. Zug 1 Karte mehr |
+| Backdoor | Zu Kampfbeginn 10 Schaden am Gegner |
+| Tarpit | Greift der Gegner an, nimmt er 4 Schaden |
+| Titanium Chassis | +15 max. HP |
+| Firmware Patch | Block-Karten geben 2 Block mehr |
+| Medkit.exe | Heil-Karten heilen 4 HP mehr |
+| Sharpened Payloads | +2 ATK |
+| Hardened Kernel | Eingehender Angriffsschaden −2 |
+| Sleep Mode | Rastplätze heilen 15 HP mehr, nach jedem Sieg 3 HP |
+| Glass Cannon | +4 ATK, aber −12 max. HP |
+| Lag Spike | Gegner starten mit 15 % weniger HP |
+| Watchdog Timer | Jeden 2. Zug 5 Block, bevor der Gegner handelt |
+| Quick Boot | Starthand +2 Karten |
+| Rate Limiter | Gegner treffen um 3 schwächer, aber −1 ATK |
+| Vampire Process | Jede gespielte Angriffskarte heilt 1 HP |
 
 ## Karten
 
