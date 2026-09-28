@@ -23,12 +23,13 @@ import { EndScreen } from "./components/EndScreen";
 import { EventPrompt } from "./components/EventPrompt";
 import { HistoryLog } from "./components/HistoryLog";
 import { IntroScreen } from "./components/IntroScreen";
+import { LoadingIndicator } from "./components/LoadingIndicator";
 import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
 import { eraLabel, numFloorsOf } from "./eras";
-import { NODE_STYLE } from "./nodeTypes";
 import { RewardScreen } from "./components/RewardScreen";
 import { SettingPicker } from "./components/SettingPicker";
+import { NODE_STYLE } from "./nodeTypes";
 
 const FALLBACK_SETTINGS = ["dungeon"];
 const INTRO_SEEN_KEY = "agentic-rogue-like:intro-seen";
@@ -54,11 +55,16 @@ function rememberIntroSeen() {
 function App() {
   const [run, setRun] = useState<RunView | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState("Loading...");
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<string[]>(FALLBACK_SETTINGS);
   const [selectedSetting, setSelectedSetting] = useState(FALLBACK_SETTINGS[0]);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  // Hovering a room on the map previews it in the next-jump panel. Clicking
+  // only selects it; moving there needs a confirm (the panel's button or a
+  // second click), so a misclick can't send the player down the wrong path.
   const [focusedJump, setFocusedJump] = useState<string | null>(null);
+  const [plannedNodeId, setPlannedNodeId] = useState<string | null>(null);
   const [isIntroOpen, setIsIntroOpen] = useState(() => !hasSeenIntro());
   // The server closes a won fight in the same response as the killing blow.
   // Keep showing that fight - enemy at 0 HP - so the arena can play the enemy's
@@ -94,7 +100,8 @@ function App() {
       });
   }, []);
 
-  async function runAction(action: () => Promise<RunView>) {
+  async function runAction(action: () => Promise<RunView>, label = "Loading...") {
+    setLoadingLabel(label);
     setIsLoading(true);
     setError(null);
     try {
@@ -145,12 +152,13 @@ function App() {
           disabled={isLoading || selectedSetting.trim() === ""}
           onClick={() => {
             sfx.play("select");
-            runAction(() => createRun(selectedSetting));
+            runAction(() => createRun(selectedSetting), "Building the dungeon...");
           }}
         >
           Start run
         </button>
         {error && <p className="error">{error}</p>}
+        <LoadingIndicator active={isLoading} label={loadingLabel} />
         <button type="button" className="link-button replay-intro" disabled={isLoading} onClick={() => setIsIntroOpen(true)}>
           Replay intro
         </button>
@@ -159,17 +167,29 @@ function App() {
   }
 
   const numFloors = numFloorsOf(run.nodes);
-  const chooseNode = (nodeId: string) => {
+  // Only a room that is still reachable counts as planned - after moving
+  // on (or any other state change) a stale selection simply drops out.
+  const planned = run.available_choices.find((n) => n.id === plannedNodeId) ?? null;
+
+  function confirmMove(nodeId: string) {
     sfx.play("map_select");
+    setPlannedNodeId(null);
     setFocusedJump(null);
-    runAction(() => chooseNextNode(run.run_id, nodeId));
-  };
+    runAction(() => chooseNextNode(run!.run_id, nodeId), "Jumping through time...");
+  }
+
   const mapProps = {
     nodes: run.nodes,
     currentNodeId: run.current_node.id,
     reachableIds: run.available_choices.map((n) => n.id),
+    selectedId: planned?.id ?? null,
     disabled: isLoading,
-    onChoose: chooseNode,
+    onChoose: (nodeId: string) => {
+      // A second click on the selected room confirms it.
+      if (nodeId === planned?.id) return confirmMove(nodeId);
+      sfx.play("select");
+      setPlannedNodeId(nodeId);
+    },
   };
   const canJump = run.status === "ongoing" && !slainCombat && run.node_resolved && run.available_choices.length > 0;
   const room = NODE_STYLE[run.current_node.type];
@@ -223,6 +243,7 @@ function App() {
         </div>
       )}
 
+      <LoadingIndicator active={isLoading} label={loadingLabel} />
       {error && <p className="error">{error}</p>}
 
       {combat && (run.status === "ongoing" || slainCombat) ? (
@@ -290,7 +311,12 @@ function App() {
                     disabled={isLoading}
                     onClick={() => {
                       sfx.play("click");
-                      runAction(() => resolveCurrentNode(run.run_id));
+                      runAction(
+                        () => resolveCurrentNode(run.run_id),
+                        ["combat", "elite", "boss"].includes(run.current_node.type)
+                          ? "Generating the enemy..."
+                          : "Entering the room...",
+                      );
                     }}
                   >
                     Continue
@@ -310,13 +336,15 @@ function App() {
           <aside className="map-side">
             <JumpPanel
               choices={run.available_choices}
+              plannedId={planned?.id ?? null}
               focusedId={focusedJump}
               numFloors={numFloors}
               canJump={canJump}
               disabled={isLoading}
-              onChoose={chooseNode}
+              onChoose={confirmMove}
+              onCancel={() => setPlannedNodeId(null)}
             />
-            <ArtifactBar artifacts={run.player.artifacts} variant="list" />
+            <ArtifactBar artifacts={run.player.artifacts} />
             <HistoryLog history={run.history} />
           </aside>
         </div>

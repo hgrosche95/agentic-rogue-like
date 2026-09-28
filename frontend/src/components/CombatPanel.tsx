@@ -199,7 +199,7 @@ export function CombatPanel({
             <div className="hud-meta">
               {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
               {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
-              <ArtifactBar artifacts={player.artifacts} />
+              <ArtifactBar artifacts={player.artifacts} compact />
             </div>
           </div>
         </div>

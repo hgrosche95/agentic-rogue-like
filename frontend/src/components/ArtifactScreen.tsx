@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { Artifact } from "../api";
 import { sfx } from "../audio";
+import { ArtifactIcon } from "./ArtifactIcon";
 
 export function ArtifactScreen({
   offer,
@@ -38,6 +39,9 @@ export function ArtifactScreen({
               onPick(index);
             }}
           >
+            <span className="artifact-badge is-large">
+              <ArtifactIcon id={artifact.id} size={30} />
+            </span>
             <span className="artifact-name">{artifact.name}</span>
             <span className="artifact-description">{artifact.description}</span>
           </button>

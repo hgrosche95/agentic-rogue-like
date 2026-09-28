@@ -9,7 +9,7 @@ import { NODE_STYLE } from "../nodeTypes";
 // (desktop) screens the same graph lies down sideways instead - eras run
 // left-to-right - so it fits the viewport without scrolling.
 const VERTICAL = { SIBLING_W: 70, FLOOR_H: 84, PAD_X: 34, PAD_TOP: 44, PAD_BOTTOM: 30, LABEL: 38 };
-const HORIZONTAL = { FLOOR_W: 112, SIBLING_H: 76, PAD_X: 40, PAD_TOP: 76, PAD_BOTTOM: 34 };
+const HORIZONTAL = { FLOOR_W: 112, SIBLING_H: 76, PAD_X: 40, PAD_TOP: 88, PAD_BOTTOM: 34 };
 const HORIZONTAL_QUERY = "(min-width: 900px)";
 const NODE_R = 15;
 const BOSS_R = 21;
@@ -102,6 +102,7 @@ export function DungeonMap({
   nodes,
   currentNodeId,
   reachableIds,
+  selectedId = null,
   onChoose,
   onHover,
   disabled,
@@ -109,6 +110,8 @@ export function DungeonMap({
   nodes: Record<string, MapNode>;
   currentNodeId: string;
   reachableIds: string[];
+  // A reachable room the player clicked and still has to confirm.
+  selectedId?: string | null;
   onChoose: (nodeId: string) => void;
   onHover?: (nodeId: string | null) => void;
   disabled: boolean;
@@ -209,6 +212,7 @@ export function DungeonMap({
             isVisited && "is-visited",
             isPassed && "is-passed",
             isReachable && "is-reachable",
+            node.id === selectedId && "is-selected",
           ]
             .filter(Boolean)
             .join(" ");
@@ -243,8 +247,9 @@ export function DungeonMap({
               }}
             >
               {/* the transform attribute places the node; CSS animates this inner group */}
-              <g className="map-node-body">
+<g className="map-node-body">
                 {(isCurrent || isReachable) && <circle className="map-node-halo" r={r + 11} />}
+                {node.id === selectedId && <circle className="map-node-target" r={r + 13} />}
                 <Diamond r={r} className="map-node-shape" />
                 <Diamond r={r - 5} className="map-node-inner" />
                 <g transform={node.type === "boss" ? "scale(1.3)" : undefined}>

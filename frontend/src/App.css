@@ -877,7 +877,8 @@ button.is-primary:hover:not(:disabled),
   transform: scale(1.18);
 }
 
-.map-node.is-reachable:focus-visible {
+/* the diamond itself shows focus (below), not the browser's box */
+.map-node:focus {
   outline: none;
 }
 
@@ -1037,16 +1038,28 @@ button.is-primary:hover:not(:disabled),
   align-items: flex-start;
 }
 
-.artifact-list i {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  margin: 4px 4px 0;
-  border-radius: 4px;
-  transform: rotate(45deg);
-  border: 1px solid var(--gold);
-  background: rgba(255, 209, 102, 0.2);
-  box-shadow: 0 0 10px rgba(255, 209, 102, 0.4);
+.artifact-icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.artifact-badge {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  color: var(--gold);
+  border: 1px solid rgba(255, 209, 102, 0.6);
+  border-radius: 10px;
+  background: rgba(255, 209, 102, 0.12);
+  box-shadow: 0 0 12px rgba(255, 209, 102, 0.25);
+}
+
+.artifact-badge.is-large {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
 }
 
 .artifact-list b {
@@ -2174,6 +2187,9 @@ button.is-primary:hover:not(:disabled),
 }
 
 .artifact-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: var(--gold);
   text-transform: none;
   letter-spacing: 0.02em;
@@ -3028,7 +3044,7 @@ body > .card-flight {
   gap: 0.45rem;
   width: 210px;
   min-height: 150px;
-  padding: 2.6rem 1rem 1rem;
+  padding: 1.1rem 1rem 1rem;
   text-align: left;
   overflow: hidden;
   background: linear-gradient(170deg, rgba(90, 70, 170, 0.9), rgba(40, 28, 95, 0.95));
@@ -3038,18 +3054,6 @@ body > .card-flight {
   animation: reward-deal 0.45s cubic-bezier(0.3, 1.3, 0.5, 1) both;
 }
 
-.artifact-card::before {
-  content: "";
-  position: absolute;
-  top: 1rem;
-  left: 1.1rem;
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  transform: rotate(45deg);
-  background: var(--gold);
-  box-shadow: 0 0 14px var(--gold);
-}
 
 .artifact-card:hover:not(:disabled) {
   transform: translateY(-6px);
@@ -3093,6 +3097,101 @@ body > .card-flight {
   .end-screen,
   .reward-screen,
   .room-panel {
+    animation: none;
+  }
+}
+
+/* -- a room selected on the map, waiting for the jump to be confirmed -- */
+.map-node.is-selected .map-node-body {
+  transform: scale(1.2);
+}
+
+.map-node.is-selected .map-node-shape {
+  stroke: #fff;
+  stroke-width: 3;
+}
+
+.map-node-target {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: map-spin 4s linear infinite reverse;
+}
+
+.jump-panel.is-planned {
+  border-color: rgba(0, 229, 255, 0.5);
+  box-shadow: var(--shadow-panel), 0 0 30px rgba(0, 229, 255, 0.2);
+}
+
+.jump-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.jump-actions button:not(.is-primary) {
+  padding: 0.55rem 0.9rem;
+  font-size: 0.85rem;
+}
+
+.jump-actions .is-primary {
+  flex: 1;
+}
+
+/* -- loading: a small toast pinned to the bottom while a request runs -- */
+.loading-indicator {
+  position: fixed;
+  left: 50%;
+  bottom: 1.2rem;
+  z-index: 50;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  max-width: calc(100vw - 32px);
+  padding: 0.6rem 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  background: rgba(47, 36, 114, 0.92);
+  border: 1px solid rgba(0, 229, 255, 0.45);
+  border-radius: 999px;
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.25), 0 12px 30px rgba(10, 5, 40, 0.5);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.loading-slow {
+  color: var(--text-dim);
+}
+
+.loading-spinner {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: var(--accent);
+  border-right-color: var(--accent-2);
+  border-radius: 50%;
+  animation: loading-spin 0.8s linear infinite;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation-duration: 2.4s;
+  }
+  .map-node-target {
     animation: none;
   }
 }
