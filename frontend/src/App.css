@@ -1213,55 +1213,6 @@ button:disabled {
   pointer-events: none;
 }
 
-.arena-popup {
-  position: absolute;
-  font-family: "Rajdhani", sans-serif;
-  font-weight: 700;
-  font-size: 3.6cqw;
-  line-height: 1;
-  animation: arena-popup 1.1s ease-out 0.2s both;
-}
-
-.arena-popup.is-player {
-  left: 25%;
-  top: 20%;
-}
-
-.arena-popup.is-enemy {
-  left: 76.5%;
-  top: 24%;
-}
-
-.arena-popup.is-damage.is-enemy {
-  color: #ffd2a8;
-  text-shadow: 0 0 14px var(--warm), 0 3px 0 #000;
-}
-
-.arena-popup.is-damage.is-player {
-  color: #c8f6ff;
-  text-shadow: 0 0 14px var(--cyan), 0 3px 0 #000;
-}
-
-.arena-popup.is-heal {
-  color: #ffe08a;
-  text-shadow: 0 0 14px #ffd36b, 0 3px 0 #000;
-}
-
-@keyframes arena-popup {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, 0) scale(0.5);
-  }
-  18% {
-    opacity: 1;
-    transform: translate(-50%, -18%) scale(1.3);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(-50%, -160%) scale(1);
-  }
-}
-
 .arena-slash {
   position: absolute;
   left: 68%;

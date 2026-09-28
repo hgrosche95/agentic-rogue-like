@@ -23,7 +23,7 @@ export function RewardScreen({
           <button
             key={card.id}
             className={`hand-card reward-card type-${card.type} rarity-${card.rarity}`}
-            style={{ animationDelay: `${index * 90}ms` }}
+            style={{ animationDelay: `${index * 220}ms` }}
             disabled={disabled}
             onClick={() => onPick(index)}
           >

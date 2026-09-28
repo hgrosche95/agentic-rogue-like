@@ -92,6 +92,7 @@ class CardView(BaseModel):
     description: str
     rarity: str
     exhaust: bool
+    hits: int
 
     @classmethod
     def of(cls, card: Card) -> CardView:
@@ -103,6 +104,7 @@ class CardView(BaseModel):
             description=card.description,
             rarity=card.rarity.value,
             exhaust=card.exhaust,
+            hits=max(card.hits, 1),
         )
 
 

@@ -55,6 +55,20 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 - [x] **Deck-Building** — nach jedem Sieg eine von drei Karten wählen
       (`/runs/{id}/card-reward`); 17 Belohnungskarten mit Abwurfkosten,
       Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
+- [x] **Effekte und Game Feel** — `frontend/src/fx/` leitet aus jeder
+      Serverantwort (HP-/Hand-/Feld-Diff plus die neuen Log-Zeilen) Effekte
+      ab: Screen-Shake nach Schaden skaliert (stark bei Kernel Panic und
+      Boss-Treffern), Glitch-Projektile und Hit-Flashes, DDoS als
+      Mehrfachtreffer mit Kombo-Anzeige, Zero-Day als Strahl, Botnet-Drohnen
+      aus den Permanenten, Kernel Panic als Bluescreen mit zerfallenden
+      Karten, Hex-Firewall (splittert, wenn sie einen Treffer schluckt),
+      grüner Code beim Heilen, rot/blau/grüne Schadenszahlen, Karten, die
+      sichtbar aus Deck, Friedhof oder Verbannt-Stapel in die Hand fliegen,
+      sich auflösende Einmal-Karten, bootende Permanente, feuernde Daemons,
+      Mainframe-Block, aufdeckende Belohnungskarten sowie Übergänge für
+      Kampfstart, Gegner-Tod, Sieg und Niederlage. Nur CSS, SVG, Canvas und
+      Web Animations API; bei `prefers-reduced-motion` entfallen Shake,
+      Blitze und Partikel.
 - [ ] **Encounter-Agent** — ein LangGraph-Agent, der Gegner über constrained
       Tool-Calls generiert und gegen ein Etagen-Budget validiert, mit
       Retry-Schleife bei Budget-Verstoß. Für Gegner voll eingeklinkt: die
@@ -105,6 +119,7 @@ src/agentic_rogue_like/
 └── sessions.py      Hält Run-Zustand zwischen HTTP-Requests am Leben
 
 frontend/           React + Vite + TypeScript — Intro, Dungeon-Map, Kampf-Arena, Event-Prompts
+                    (Kampfeffekte in frontend/src/fx/)
 balance/            Beispiel-Varianten (JSON) für den Balancing-Simulator
 tests/              pytest-Suite (Engine, Kampf, API, Encounter-Agent/-Schema)
 training/           Eigenes uv-Projekt: Fine-Tuning-Pipeline für den Encounter-Agent

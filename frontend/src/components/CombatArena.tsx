@@ -35,15 +35,6 @@ function classes(...names: (string | false)[]): string {
   return names.filter(Boolean).join(" ");
 }
 
-function DamagePopup({ side, delta }: { side: "player" | "enemy"; delta: number }) {
-  const isHeal = delta > 0;
-  return (
-    <span className={`arena-popup is-${side} ${isHeal ? "is-heal" : "is-damage"}`}>
-      {isHeal ? `+${delta}` : delta}
-    </span>
-  );
-}
-
 // Voxel shards knocked out of the enemy. Spread with the golden angle rather
 // than Math.random() so rendering stays pure and every hit looks the same.
 function PixelBurst() {
@@ -193,8 +184,7 @@ export function CombatArena({
       <CombatMonitor lines={log} commands={commands} />
       {exchange && (
         <div key={exchange.id} className="arena-fx" aria-hidden="true">
-          {exchange.enemyDelta !== 0 && <DamagePopup side="enemy" delta={exchange.enemyDelta} />}
-          {exchange.playerDelta !== 0 && <DamagePopup side="player" delta={exchange.playerDelta} />}
+          {/* damage/heal numbers come from fx/ (useCombatFx) */}
           {playerStruck && (
             <>
               <CablePulse />

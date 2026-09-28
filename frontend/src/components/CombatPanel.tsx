@@ -6,6 +6,7 @@ import {
   type PlayerState,
 } from "../api";
 import { flyCard } from "../cardFlight";
+import { fx, useCombatFx } from "../fx";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { CardFace } from "./CardFace";
@@ -38,6 +39,7 @@ export function CombatPanel({
   log,
   disabled,
   enemySlain = false,
+  isBoss = false,
   onPlayCard,
   onEndTurn,
   onContinue,
@@ -48,6 +50,7 @@ export function CombatPanel({
   log: string[];
   disabled: boolean;
   enemySlain?: boolean;
+  isBoss?: boolean;
   onPlayCard: (handIndex: number, slotIndex: number) => void;
   onEndTurn: () => void;
   onContinue?: () => void;
@@ -66,6 +69,8 @@ export function CombatPanel({
   const pending = busy ? played : null;
   const pendingCard = pending && combat.hand.find((c) => c.hand_index === pending.handIndex);
   const handRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useCombatFx(panelRef, combat, player.hp, log, { boss: isBoss, slain: enemySlain });
 
   function selectCard(handIndex: number) {
     setSelectedHandIndex((current) => (current === handIndex ? null : handIndex));
@@ -83,6 +88,7 @@ export function CombatPanel({
       onPlayCard(handIndex, slotIndex);
       return;
     }
+    fx.cardPlayed(played, card ?? null, slot);
     // Dr. Chronos types the card in as a command first; it only goes to the
     // server - and hits - once he is done typing.
     const text = commandFor(played, combat.enemy_name);
@@ -95,7 +101,7 @@ export function CombatPanel({
   }
 
   return (
-    <div className="combat-panel">
+    <div className="combat-panel" ref={panelRef}>
       <CombatArena
         enemy={{
           name: combat.enemy_name,

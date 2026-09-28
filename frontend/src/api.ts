@@ -42,6 +42,8 @@ export interface Card {
   rarity: Rarity;
   // one-shot: banished for the rest of the fight after it is played
   exhaust: boolean;
+  // how many times an attack hits (DDoS, Fork Bomb); 1 for everything else
+  hits: number;
 }
 
 export interface PlayerState {

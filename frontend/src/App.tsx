@@ -212,6 +212,7 @@ function App() {
           log={run.history}
           disabled={isLoading || slainCombat !== null}
           enemySlain={slainCombat !== null}
+          isBoss={run.current_node.type === "boss"}
           onContinue={() => setSlainCombat(null)}
           onPlayCard={(handIndex, slotIndex) =>
             runAction(() => playCard(run.run_id, handIndex, slotIndex))

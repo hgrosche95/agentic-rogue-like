@@ -3,7 +3,7 @@ import type { RunView } from "../api";
 export function EndScreen({ run, onRestart }: { run: RunView; onRestart: () => void }) {
   const won = run.status === "victory";
   return (
-    <div className="end-screen">
+    <div className={`end-screen ${won ? "is-victory" : "is-defeat"}`}>
       <h2>{won ? "Victory!" : "You have fallen."}</h2>
       <p>
         Reached floor {run.floor} with {run.player.gold} gold.
