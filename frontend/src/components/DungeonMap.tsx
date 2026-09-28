@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { MapNode } from "../api";
+import type { MapNode, NodeType } from "../api";
 import { sfx } from "../audio";
 import { NODE_STYLE } from "../nodeTypes";
 
@@ -7,9 +7,11 @@ import { NODE_STYLE } from "../nodeTypes";
 // left-right - a vertical ascent the player scrolls through. On wide
 // (desktop) screens the same graph lies down sideways instead - floors run
 // left-to-right - so it fits the viewport without scrolling.
-const VERTICAL = { SIBLING_W: 62, FLOOR_H: 72, PAD: 26 };
-const HORIZONTAL = { FLOOR_W: 88, SIBLING_H: 54, PAD: 28 };
+const VERTICAL = { SIBLING_W: 68, FLOOR_H: 78, PAD: 40 };
+const HORIZONTAL = { FLOOR_W: 94, SIBLING_H: 62, PAD: 46 };
 const HORIZONTAL_QUERY = "(min-width: 900px)";
+const NODE_R = 15;
+const BOSS_R = 21;
 
 function useIsHorizontal(): boolean {
   const [matches, setMatches] = useState(
@@ -28,19 +30,55 @@ function nodeIndex(id: string): number {
   return Number(id.split("-")[1]);
 }
 
-// Crossed swords, drawn as plain strokes (not a dingbat/emoji glyph) so the
-// color stays controllable per node state - see the comment in nodeTypes.ts.
-function SwordGlyph({ className = "" }: { className?: string }) {
-  return (
-    <>
-      <line className={`map-node-icon ${className}`} x1="-7" y1="7" x2="6" y2="-6" />
-      <line className={`map-node-icon ${className}`} x1="7" y1="7" x2="-6" y2="-6" />
-      <line className={`map-node-icon ${className}`} x1="3" y1="-3.5" x2="6.5" y2="-1" />
-      <line className={`map-node-icon ${className}`} x1="-3" y1="-3.5" x2="-6.5" y2="-1" />
-      <circle className={`map-node-icon-pommel ${className}`} cx="-7" cy="7" r="1.4" />
-      <circle className={`map-node-icon-pommel ${className}`} cx="7" cy="7" r="1.4" />
-    </>
-  );
+// The icon on a node's coin, drawn in a 16x16 box around the origin. Shapes
+// rather than dingbat/emoji glyphs, so the color stays controllable per node
+// state - see the comment in nodeTypes.ts.
+export function NodeIcon({ type }: { type: NodeType }) {
+  switch (type) {
+    case "combat":
+      return (
+        <g className="node-icon is-stroke">
+          <line x1="-6" y1="6" x2="5.5" y2="-5.5" />
+          <line x1="6" y1="6" x2="-5.5" y2="-5.5" />
+          <line x1="-6.5" y1="2" x2="-2" y2="6.5" />
+          <line x1="6.5" y1="2" x2="2" y2="6.5" />
+        </g>
+      );
+    case "elite":
+      return (
+        <g className="node-icon">
+          <path d="M-6 1.5 a6 6 0 1 1 12 0 v1.8 h-2 v2.9 h-8 v-2.9 h-2 z" />
+          <circle className="node-icon-hole" cx="-2.4" cy="0.6" r="1.8" />
+          <circle className="node-icon-hole" cx="2.4" cy="0.6" r="1.8" />
+        </g>
+      );
+    case "rest":
+      return (
+        <g className="node-icon">
+          <path d="M0 -7.5 C4.5 -3 5.5 0.5 3.4 3.4 C2 5.2 -2 5.2 -3.4 3.4 C-5.4 0.6 -3.2 -2 -1.6 -3.2 C-1.2 -1.6 -0.4 -0.8 0.6 -0.6 C-0.2 -3 0 -5.2 0 -7.5 Z" />
+          <line className="node-icon-log" x1="-5.5" y1="6.2" x2="5.5" y2="4.6" />
+        </g>
+      );
+    case "boss":
+      return (
+        <g className="node-icon is-crown">
+          <path d="M-8 4.5 L-8.5 -4.5 L-4 -0.5 L0 -7 L4 -0.5 L8.5 -4.5 L8 4.5 Z" />
+          <circle className="node-icon-hole" cx="0" cy="1.6" r="1.6" />
+        </g>
+      );
+    default:
+      return <text className="node-icon-text">{NODE_STYLE[type].symbol}</text>;
+  }
+}
+
+// A trail between two rooms: a gentle S-curve along the direction the floors run.
+function trail(from: { x: number; y: number }, to: { x: number; y: number }, horizontal: boolean): string {
+  if (horizontal) {
+    const mx = (from.x + to.x) / 2;
+    return `M ${from.x} ${from.y} C ${mx} ${from.y}, ${mx} ${to.y}, ${to.x} ${to.y}`;
+  }
+  const my = (from.y + to.y) / 2;
+  return `M ${from.x} ${from.y} C ${from.x} ${my}, ${to.x} ${my}, ${to.x} ${to.y}`;
 }
 
 export function DungeonMap({
@@ -95,40 +133,40 @@ export function DungeonMap({
 
   const reachable = new Set(reachableIds);
   const allNodes = Object.values(nodes);
+  const currentFloor = nodes[currentNodeId]?.floor ?? 0;
+  // the boss sits at the end of the graph, drawn last so it overlaps nothing
+  const drawOrder = [...allNodes].sort((a, b) => Number(a.type === "boss") - Number(b.type === "boss"));
 
   return (
-    <div className="dungeon-map">
+    <div className={`dungeon-map${disabled ? " is-busy" : ""}`}>
       <svg className="dungeon-map-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Dungeon map">
         {allNodes.flatMap((node) => {
           const from = pos(node);
           return node.connections.map((targetId) => {
             const target = nodes[targetId];
             if (!target) return null;
-            const to = pos(target);
             const walked = node.visited && target.visited;
-            return (
-              <line
-                key={`${node.id}->${targetId}`}
-                x1={from.x}
-                y1={from.y}
-                x2={to.x}
-                y2={to.y}
-                className={walked ? "map-path is-walked" : "map-path"}
-              />
-            );
+            const isNext = node.id === currentNodeId && reachable.has(targetId);
+            const classes = ["map-path", walked && "is-walked", isNext && "is-next"].filter(Boolean).join(" ");
+            return <path key={`${node.id}->${targetId}`} d={trail(from, pos(target), isHorizontal)} className={classes} />;
           });
         })}
 
-        {allNodes.map((node) => {
+        {drawOrder.map((node) => {
           const { x, y } = pos(node);
           const isCurrent = node.id === currentNodeId;
           const isReachable = reachable.has(node.id);
+          const isVisited = node.visited && !isCurrent;
+          // rooms on floors already behind you that you never entered
+          const isPassed = !node.visited && !isCurrent && node.floor <= currentFloor;
           const style = NODE_STYLE[node.type];
+          const r = node.type === "boss" ? BOSS_R : NODE_R;
           const classes = [
             "map-node",
             `type-${node.type}`,
             isCurrent && "is-current",
-            node.visited && !isCurrent && "is-visited",
+            isVisited && "is-visited",
+            isPassed && "is-passed",
             isReachable && "is-reachable",
             node.id === selectedId && "is-selected",
           ]
@@ -155,20 +193,24 @@ export function DungeonMap({
                 }
               }}
             >
-              {isCurrent && <circle className="map-node-ring" r={17} />}
-              {node.id === selectedId && <circle className="map-node-target" r={18} />}
-              <circle className="map-node-circle" r={13} />
-              {node.visited && !isCurrent ? (
-                <path className="map-node-check" d="M -6 0 L -1.5 5 L 7 -6" />
-              ) : node.type === "combat" ? (
-                <SwordGlyph />
-              ) : (
-                <text className="map-node-symbol">{style.symbol}</text>
-              )}
+              {/* the transform attribute places the node; CSS animates this inner group */}
+              <g className="map-node-body" style={{ animationDelay: `${(nodeIndex(node.id) * 0.23 + node.floor * 0.11) % 1.2}s` }}>
+                {(isCurrent || isReachable) && <circle className="map-node-halo" r={r + 6} />}
+                {node.id === selectedId && <circle className="map-node-target" r={r + 7} />}
+                <circle className="map-node-base" r={r} cy={3} />
+                <circle className="map-node-circle" r={r} />
+                <circle className="map-node-shine" r={r - 4} />
+                <g transform={node.type === "boss" ? "scale(1.25)" : undefined}>
+                  {isVisited ? <path className="map-node-check" d="M -6 0 L -1.5 5 L 7 -6" /> : <NodeIcon type={node.type} />}
+                </g>
+              </g>
               {isCurrent && (
-                <text className="you-are-here" y={24}>
-                  you
-                </text>
+                <g className="map-you" transform={`translate(0 ${-r - 7})`}>
+                  <g className="map-you-bob">
+                    <path className="map-you-pin" d="M 0 4 L -5.5 -3 A 7.5 7.5 0 1 1 5.5 -3 Z" transform="translate(0 -8)" />
+                    <circle className="map-you-dot" cy={-16} r={2.8} />
+                  </g>
+                </g>
               )}
             </g>
           );
@@ -176,15 +218,16 @@ export function DungeonMap({
       </svg>
 
       <div className="map-legend">
-        {(Object.keys(NODE_STYLE) as (keyof typeof NODE_STYLE)[]).map((type) => (
+        {(Object.keys(NODE_STYLE) as NodeType[]).map((type) => (
           <span key={type} className={`legend-item type-${type}`}>
-            {type === "combat" ? (
-              <svg className="legend-icon" viewBox="-8 -8 16 16" width="14" height="14" aria-hidden="true">
-                <SwordGlyph />
-              </svg>
-            ) : (
-              <span aria-hidden="true">{NODE_STYLE[type].symbol}</span>
-            )}
+            <svg className="legend-icon" viewBox="-12 -12 24 24" width="22" height="22" aria-hidden="true">
+              <g className="map-node-body">
+                <circle className="map-node-circle" r={10.5} />
+                <g transform="scale(0.72)">
+                  <NodeIcon type={type} />
+                </g>
+              </g>
+            </svg>
             {NODE_STYLE[type].label}
           </span>
         ))}

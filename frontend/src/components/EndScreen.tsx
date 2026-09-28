@@ -8,12 +8,13 @@ export function EndScreen({ run, onRestart }: { run: RunView; onRestart: () => v
     sfx.play(won ? "victory" : "defeat");
   }, [won]);
   return (
-    <div className="end-screen">
+    <div className={`end-screen ${won ? "is-won" : "is-lost"}`}>
       <h2>{won ? "Victory!" : "You have fallen."}</h2>
       <p>
         Reached floor {run.floor} with {run.player.gold} gold.
       </p>
       <button
+        className="is-primary"
         onClick={() => {
           sfx.play("click");
           onRestart();

@@ -218,7 +218,7 @@ export function CombatArena({
           <span className="arena-victory-title">{enemy.name} defeated</span>
           <button
             type="button"
-            className="arena-continue"
+            className="is-primary arena-continue"
             onClick={() => {
               sfx.play("click");
               onContinue?.();

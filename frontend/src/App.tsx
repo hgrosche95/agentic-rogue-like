@@ -133,9 +133,10 @@ function App() {
 
   if (run === null) {
     return (
-      <main className="game">
+      <main className="game is-title">
         <AudioControls className="is-floating" />
         <h1>agentic-rogue-like</h1>
+        <p className="title-tagline">A deckbuilding roguelike, dealt by an AI</p>
         <SettingPicker
           settings={settings}
           selected={selectedSetting}
@@ -143,6 +144,7 @@ function App() {
           disabled={isLoading}
         />
         <button
+          className="is-primary start-run"
           disabled={isLoading || selectedSetting.trim() === ""}
           onClick={() => {
             sfx.play("select");
@@ -298,6 +300,7 @@ function App() {
         !run.artifact_offer &&
         !run.node_resolved && (
           <button
+            className="is-primary"
             disabled={isLoading}
             onClick={() => {
               sfx.play("click");

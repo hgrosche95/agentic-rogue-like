@@ -137,7 +137,7 @@ export function IntroScreen({ onDone }: { onDone: () => void }) {
             <i key={i} className={i === step ? "is-active" : undefined} />
           ))}
         </span>
-        <button type="button" className={onMessage && !isTyping ? "intro-accept" : undefined} onClick={advance}>
+        <button type="button" className={onMessage && !isTyping ? "is-primary intro-accept" : "is-primary"} onClick={advance}>
           {!onMessage ? "Continue" : isTyping ? "Show all" : "Accept the challenge"}
         </button>
       </div>
