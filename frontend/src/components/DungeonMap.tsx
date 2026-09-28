@@ -47,12 +47,15 @@ export function DungeonMap({
   nodes,
   currentNodeId,
   reachableIds,
+  selectedId = null,
   onChoose,
   disabled,
 }: {
   nodes: Record<string, MapNode>;
   currentNodeId: string;
   reachableIds: string[];
+  // A reachable room the player clicked and still has to confirm.
+  selectedId?: string | null;
   onChoose: (nodeId: string) => void;
   disabled: boolean;
 }) {
@@ -127,6 +130,7 @@ export function DungeonMap({
             isCurrent && "is-current",
             node.visited && !isCurrent && "is-visited",
             isReachable && "is-reachable",
+            node.id === selectedId && "is-selected",
           ]
             .filter(Boolean)
             .join(" ");
@@ -152,6 +156,7 @@ export function DungeonMap({
               }}
             >
               {isCurrent && <circle className="map-node-ring" r={17} />}
+              {node.id === selectedId && <circle className="map-node-target" r={18} />}
               <circle className="map-node-circle" r={13} />
               {node.visited && !isCurrent ? (
                 <path className="map-node-check" d="M -6 0 L -1.5 5 L 7 -6" />
@@ -159,15 +164,6 @@ export function DungeonMap({
                 <SwordGlyph />
               ) : (
                 <text className="map-node-symbol">{style.symbol}</text>
-              )}
-              {isCurrent && (
-                <line
-                  className="map-node-needle"
-                  x1={0}
-                  y1={0}
-                  x2={isHorizontal ? 10 : 0}
-                  y2={isHorizontal ? 0 : -10}
-                />
               )}
               {isCurrent && (
                 <text className="you-are-here" y={24}>
