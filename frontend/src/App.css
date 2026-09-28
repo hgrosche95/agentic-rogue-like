@@ -849,6 +849,36 @@ body {
   margin-bottom: 0;
 }
 
+/* a room clicked on the map, waiting for Go (App's path confirm); the
+   circle itself shows focus, so no browser box on top */
+.map-node {
+  outline: none;
+}
+
+.map-node.is-selected .map-node-body {
+  animation: none;
+  transform: translateY(-4px) scale(1.2);
+}
+
+.map-node.is-selected .map-node-circle {
+  stroke: var(--c-yellow);
+  stroke-width: 4;
+}
+
+.map-node-target {
+  fill: none;
+  stroke: var(--outline);
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+}
+
+.map-hint {
+  margin: -0.4rem 0 1rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--ink-dim);
+}
+
 /* ---------- log ---------- */
 .history-log {
   position: relative;
@@ -2837,7 +2867,7 @@ body > .card-flight {
   gap: 0.5rem;
   width: 200px;
   min-height: 150px;
-  padding: 2.4rem 0.9rem 1rem;
+  padding: 1rem 0.9rem;
   text-align: left;
   background: linear-gradient(180deg, #fff, #fff8e1);
   color: var(--ink);
@@ -2848,19 +2878,6 @@ body > .card-flight {
 }
 
 /* a gem sitting on the card's top edge */
-.artifact-card::before {
-  content: "";
-  position: absolute;
-  top: 0.6rem;
-  left: 0.9rem;
-  width: 22px;
-  height: 22px;
-  transform: rotate(45deg);
-  border-radius: 5px;
-  border: 3px solid var(--outline);
-  background: linear-gradient(135deg, #fff6c4, var(--c-yellow) 50%, #f08c00);
-}
-
 .artifact-card:hover:not(:disabled) {
   transform: translateY(-8px) rotate(-1.5deg) scale(1.03);
   box-shadow: 0 0 0 3px var(--c-yellow), 0 0 24px rgba(255, 201, 60, 0.9), 0 11px 0 var(--outline);
@@ -2908,18 +2925,79 @@ body > .card-flight {
   cursor: help;
 }
 
-.artifact-chip::before {
-  content: "";
-  width: 0.55em;
-  height: 0.55em;
-  transform: rotate(45deg);
-  border: 1.5px solid var(--outline);
-  background: var(--c-yellow);
-}
-
 .hud-side .artifact-chip {
   font-size: 0.64rem;
   padding: 0.02rem 0.45rem 0.02rem 0.35rem;
+}
+
+.artifact-icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.artifact-badge {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  color: var(--outline);
+  border: 2px solid var(--outline);
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fff6c4, var(--c-yellow));
+}
+
+.artifact-badge.is-large {
+  width: 50px;
+  height: 50px;
+  align-self: center;
+  border-width: 3px;
+}
+
+.artifact-card .artifact-name {
+  text-align: center;
+}
+
+.artifact-list {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.9rem;
+  background: #fff;
+  border: 3px solid var(--outline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-hard);
+}
+
+.artifact-list-title {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.artifact-list ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.6rem 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.artifact-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.artifact-row .artifact-name {
+  display: block;
+  font-size: 1rem;
+}
+
+.artifact-row .artifact-description {
+  display: block;
+  font-size: 0.8rem;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2938,4 +3016,72 @@ body > .card-flight {
   .reward-screen {
     animation: none;
   }
+}
+
+/* -- loading: a small toast pinned to the bottom while a request runs -- */
+.loading-indicator {
+  position: fixed;
+  left: 50%;
+  bottom: 1.2rem;
+  z-index: 50;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: calc(100vw - 32px);
+  padding: 0.55rem 0.9rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--outline);
+  border-radius: 999px;
+  box-shadow: var(--shadow-hard), var(--shadow-soft);
+}
+
+.loading-slow {
+  color: var(--ink-dim);
+}
+
+.loading-spinner {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 3px solid var(--line-soft);
+  border-top-color: var(--c-purple);
+  border-radius: 50%;
+  animation: loading-spin 0.8s linear infinite;
+}
+
+@keyframes loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+/* -- confirm step between clicking a room and moving there -- */
+.path-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin: -0.4rem 0 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.path-confirm strong {
+  color: var(--c-purple);
+}
+
+.path-confirm .is-secondary {
+  background: transparent;
+  color: var(--ink-dim);
 }

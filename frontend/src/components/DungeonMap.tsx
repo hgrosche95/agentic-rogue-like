@@ -85,12 +85,15 @@ export function DungeonMap({
   nodes,
   currentNodeId,
   reachableIds,
+  selectedId = null,
   onChoose,
   disabled,
 }: {
   nodes: Record<string, MapNode>;
   currentNodeId: string;
   reachableIds: string[];
+  // A reachable room the player clicked and still has to confirm.
+  selectedId?: string | null;
   onChoose: (nodeId: string) => void;
   disabled: boolean;
 }) {
@@ -165,6 +168,7 @@ export function DungeonMap({
             isVisited && "is-visited",
             isPassed && "is-passed",
             isReachable && "is-reachable",
+            node.id === selectedId && "is-selected",
           ]
             .filter(Boolean)
             .join(" ");
@@ -192,6 +196,7 @@ export function DungeonMap({
               {/* the transform attribute places the node; CSS animates this inner group */}
               <g className="map-node-body" style={{ animationDelay: `${(nodeIndex(node.id) * 0.23 + node.floor * 0.11) % 1.2}s` }}>
                 {(isCurrent || isReachable) && <circle className="map-node-halo" r={r + 6} />}
+                {node.id === selectedId && <circle className="map-node-target" r={r + 7} />}
                 <circle className="map-node-base" r={r} cy={3} />
                 <circle className="map-node-circle" r={r} />
                 <circle className="map-node-shine" r={r - 4} />
