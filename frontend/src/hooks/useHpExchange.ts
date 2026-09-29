@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { sfx } from "../audio";
+import { ENEMY_HIT_MS } from "./useLagged";
 
 export interface HpExchange {
   id: number;
@@ -31,7 +32,8 @@ export function useHpExchange(playerHp: number, enemyHp: number): HpExchange | n
   // already sounded when its command ran (CombatPanel).
   useEffect(() => {
     if (!exchange) return;
-    if (exchange.enemyDelta < 0) sfx.play("impact");
+    // as the pulse comes out of the rift (see useLagged's ENEMY_HIT_MS)
+    if (exchange.enemyDelta < 0) sfx.play("impact", { delayMs: ENEMY_HIT_MS });
     // after the enemy's wind-up (CombatPanel's end of turn)
     if (exchange.playerDelta < 0) sfx.play("player_hit", { delayMs: 260 });
   }, [exchange]);
