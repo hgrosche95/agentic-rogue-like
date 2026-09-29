@@ -2884,6 +2884,39 @@ button.is-primary:hover:not(:disabled),
 /* body > : the clone keeps its .hand-card class, whose later
    position: relative would otherwise put it back into the page flow, at the
    bottom of <body>, making the page scrollable while it flies */
+/* a hand card being dragged (hooks/useCardDrag): a copy follows the
+   pointer; it must not catch the pointer itself, or the slot under it
+   couldn't be found */
+body > .card-drag {
+  position: fixed;
+  z-index: 55;
+  margin: 0;
+  pointer-events: none;
+  transition: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 30px rgba(0, 229, 255, 0.5), 0 24px 40px rgba(10, 5, 40, 0.6);
+}
+
+/* the card's spot in the hand while its copy is in the air */
+.hand .hand-card.is-dragged {
+  opacity: 0.25;
+}
+
+/* touch drags move the card instead of scrolling the page */
+.hand .hand-card {
+  touch-action: none;
+  cursor: grab;
+}
+
+.field-slot.is-empty.is-drop-target {
+  animation: none;
+  color: #fff;
+  border-color: #fff;
+  background: rgba(0, 229, 255, 0.28);
+  box-shadow: inset 0 0 30px rgba(0, 229, 255, 0.6), 0 0 30px rgba(0, 229, 255, 0.6);
+  transform: scale(1.05);
+}
+
 body > .card-flight {
   position: fixed;
   z-index: 50;

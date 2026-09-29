@@ -9,6 +9,7 @@ import { cardSound, hitsOf, sfx } from "../audio";
 import { flyCard } from "../cardFlight";
 import { ArtifactBar } from "./ArtifactBar";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
+import { useCardDrag } from "../hooks/useCardDrag";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { CardFace } from "./CardFace";
@@ -141,14 +142,15 @@ export function CombatPanel({
     setSelectedHandIndex((current) => (current === handIndex ? null : handIndex));
   }
 
-  function playIntoSlot(slotIndex: number, slot: HTMLElement) {
-    if (selectedHandIndex === null) return;
+  // `from` is where the card's flight into the slot starts: the card in the
+  // hand, or the dragged copy where it was dropped.
+  function playIntoSlot(slotIndex: number, slot: HTMLElement, handIndex = selectedHandIndex, from?: HTMLElement) {
+    if (handIndex === null) return;
     endTurnFrom.current = null;
-    const card = handRef.current?.querySelector<HTMLElement>(`[data-hand-index="${selectedHandIndex}"]`);
+    const card = from ?? handRef.current?.querySelector<HTMLElement>(`[data-hand-index="${handIndex}"]`);
     if (card) flyCard(card, slot);
     setSelectedHandIndex(null);
-    setPlayed({ handIndex: selectedHandIndex, slotIndex });
-    const handIndex = selectedHandIndex;
+    setPlayed({ handIndex, slotIndex });
     const played = combat.hand.find((c) => c.hand_index === handIndex);
     if (!played) {
       onPlayCard(handIndex, slotIndex);
@@ -168,6 +170,11 @@ export function CombatPanel({
       onPlayCard(handIndex, slotIndex);
     }, TYPING_MS + 150);
   }
+
+  const drag = useCardDrag({
+    enabled: !busy && discarding === null,
+    onDrop: (handIndex, slotIndex, slot, from) => playIntoSlot(slotIndex, slot, handIndex, from),
+  });
 
   return (
     <div className="combat-panel">
@@ -227,7 +234,8 @@ export function CombatPanel({
               ) : card === null ? (
                 <button
                   key={slotIndex}
-                  className={`field-slot is-empty${selectedHandIndex !== null && discarding === null ? " is-targetable" : ""}`}
+                  data-slot-index={slotIndex}
+                  className={`field-slot is-empty${(selectedHandIndex !== null || drag.dragging !== null) && discarding === null ? " is-targetable" : ""}${drag.hoverSlot === slotIndex ? " is-drop-target" : ""}`}
                   disabled={busy || selectedHandIndex === null || discarding !== null}
                   onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
                 >
@@ -272,10 +280,13 @@ export function CombatPanel({
                 key={card.hand_index}
                 data-hand-index={card.hand_index}
                 style={fanStyle(i, combat.hand.length)}
-                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : ""}`}
+                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : ""}${drag.dragging === card.hand_index ? " is-dragged" : ""}`}
                 disabled={busy}
                 onMouseEnter={() => sfx.play("hover")}
-                onClick={() => selectCard(card.hand_index)}
+                onPointerDown={(event) => drag.onPointerDown(event, card.hand_index)}
+                onClick={() => {
+                  if (!drag.consumeClick()) selectCard(card.hand_index);
+                }}
               >
                 <CardFace card={card} />
               </button>
@@ -309,7 +320,7 @@ export function CombatPanel({
           : discarding !== null
             ? `Hand limit is ${combat.max_hand_size}: pick ${excess} card(s) to discard (${discarding.length}/${excess}).`
             : selectedHandIndex === null
-            ? "Select a card from your hand, then play it onto an empty slot of the stack."
+            ? "Drag a card onto an empty slot of the stack - or click it, then click a slot."
             : "Choose an empty slot to run the selected card."}
       </p>
     </div>

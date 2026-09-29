@@ -20,7 +20,7 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 
 | Intro | Karte | Kampf |
 | --- | --- | --- |
-| ![Story-Intro mit Dr. Chronos und der Nachricht der AGI](docs/screenshots/intro.png) | ![Dungeon-Karte](docs/screenshots/map.png) | ![Kampf in der Arena gegen einen prozedural gezeichneten Gegner](docs/screenshots/combat.png) |
+| ![Story-Intro mit Dr. Chronos und der Nachricht der AGI](docs/screenshots/intro.png) | ![Zeitachsen-Karte mit Vorschau auf den nächsten Sprung](docs/screenshots/map.png) | ![Kampf in der Arena gegen einen prozedural gezeichneten Gegner](docs/screenshots/combat.png) |
 
 ## Status
 
@@ -59,6 +59,20 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 - [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
       drei wählen, danach alle 3 Schritte auf der Map ein weiteres
       (`/runs/{id}/artifact`). 20 Stück in `artifacts.py`, siehe *Artefakte* unten.
+- [x] **Oberfläche ("Rift")** — Zeitreise-Sci-Fi-Look: Glas-Panels auf
+      violettem Grund, Cyan für die Maschinenwelt, Magenta/Orange für das
+      Labor. Die Karte ist eine Zeitachse (Etagen als Jahre 1969 → Ω), ein
+      Klick springt in den nächsten Raum, daneben Vorschau, Artefakte und
+      System-Log. Im Kampf ist die Arena die Bühne: sie blendet ohne Rahmen
+      in die Seite aus, ein Farbfilter zieht die Renders in die Palette, und
+      der Riss läuft als Lichtnaht zwischen Menschen- und KI-Seite nach unten
+      weiter. Karten lassen sich anklicken oder per Drag & Drop (auch per
+      Touch) auf das Feld ziehen; Lebenspunkte ändern sich erst, wenn der
+      Treffer in der Animation einschlägt; die nächste Aktion des Gegners
+      schwebt über seinem Kopf. Belohnungen, Artefakte und Events öffnen als
+      Overlay über der Karte, das Deck ist jederzeit über die Kopfleiste
+      einsehbar, und beim Betreten und Verlassen eines Kampfes öffnet sich
+      der Riss über den ganzen Bildschirm.
 - [x] **Sound und Musik** — Soundeffekte und Hintergrundmusik, komplett
       prozedural mit der Web Audio API erzeugt (siehe *Audio* unten).
 - [ ] **Encounter-Agent** — ein LangGraph-Agent, der Gegner über constrained
@@ -111,7 +125,7 @@ src/agentic_rogue_like/
 ├── api.py          FastAPI-HTTP-Frontend fürs Web-UI (uvicorn agentic_rogue_like.api:app)
 └── sessions.py      Hält Run-Zustand zwischen HTTP-Requests am Leben
 
-frontend/           React + Vite + TypeScript — Intro, Dungeon-Map, Kampf-Arena, Event-Prompts, prozedurales Audio
+frontend/           React + Vite + TypeScript — Intro, Zeitachsen-Karte, Kampf-Arena mit Drag & Drop, Overlays, Deck-Ansicht, prozedurales Audio
 balance/            Beispiel-Varianten (JSON) für den Balancing-Simulator
 tests/              pytest-Suite (Engine, Kampf, API, Encounter-Agent/-Schema)
 training/           Eigenes uv-Projekt: Fine-Tuning-Pipeline für den Encounter-Agent
@@ -281,7 +295,8 @@ seltene wahrscheinlicher. Der Pool (`cards.py`) ist um drei Strategien gebaut:
   Karten ab (Kosten!), Stack Overflow skaliert damit, Rollback holt zurück.
 - **Einmal-Karten** (1×) — Zero-Day, Sandbox, Backup sind stark, werden aber
   für den Rest des Kampfes verbannt; Payload wächst mit dem Verbannt-Stapel,
-  Undelete holt eine verbannte Karte zurück.
+  Undelete holt eine verbannte Karte zurück, System Restore opfert das
+  ganze Feld und holt dafür alle vorher verbannten Karten auf die Hand.
 
 Karten, die mitten im Zug Karten auf die Hand bringen (ziehen, zurückholen),
 sind absichtlich alle Einmal-Karten: Ohne Energie-System wären sonst
