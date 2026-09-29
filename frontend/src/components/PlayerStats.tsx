@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { PlayerState } from "../api";
 import { eraLabel } from "../eras";
+import { PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 
 function BrandGlyph() {
   return (
@@ -42,7 +43,9 @@ export function TopBar({
   setting: string;
   children?: ReactNode;
 }) {
-  const hpPercent = Math.max(0, Math.min(100, (player.hp / player.max_hp) * 100));
+  // in a fight the enemy's hit lands a moment after the server's answer
+  const hp = useLagged(player.hp, PLAYER_HIT_MS);
+  const hpPercent = Math.max(0, Math.min(100, (hp / player.max_hp) * 100));
   return (
     <header className="topbar">
       <Brand subtitle={`Timeline · ${setting}`} />
@@ -55,13 +58,13 @@ export function TopBar({
         </span>
       </div>
       <div className="stats">
-        <div className="stat stat-hp" title={`${player.hp}/${player.max_hp} HP`}>
+        <div className="stat stat-hp" title={`${hp}/${player.max_hp} HP`}>
           <span className="stat-label">Integrity</span>
           <span className="stat-bar">
             <span style={{ width: `${hpPercent}%` }} />
           </span>
           <span className="stat-val">
-            {player.hp}
+            {hp}
             <small>/{player.max_hp}</small>
           </span>
         </div>

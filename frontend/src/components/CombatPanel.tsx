@@ -10,6 +10,7 @@ import { flyCard } from "../cardFlight";
 import { ArtifactBar } from "./ArtifactBar";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useHpExchange } from "../hooks/useHpExchange";
+import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { CardFace } from "./CardFace";
 import { CombatArena } from "./CombatArena";
 
@@ -87,6 +88,9 @@ export function CombatPanel({
     setDiscardChoice(picks === null ? null : { on: combat, picks });
   const excess = Math.max(0, combat.hand.length - combat.max_hand_size);
   const exchange = useHpExchange(player.hp, combat.enemy_hp);
+  // the bars move when the hit lands, not when the server answers
+  const shownPlayerHp = useLagged(player.hp, PLAYER_HIT_MS);
+  const shownEnemyHp = useLagged(combat.enemy_hp, ENEMY_HIT_MS);
   const [commands, setCommands] = useState<HackerCommand[]>([]);
   const [typing, setTyping] = useState(false);
   const busy = disabled || typing;
@@ -174,6 +178,8 @@ export function CombatPanel({
           // an enemy's intent value is always its attack stat (api.py)
           attack: combat.enemy_intent_value,
           setting,
+          intent: combat.enemy_intent,
+          intentValue: combat.enemy_intent_value,
         }}
         exchange={exchange}
         log={log}
@@ -195,7 +201,7 @@ export function CombatPanel({
             <span className="hud-name">
               Dr. Chronos <small>Human · {era}</small>
             </span>
-            <HpBar hp={player.hp} max={player.max_hp} side="player" />
+            <HpBar hp={shownPlayerHp} max={player.max_hp} side="player" />
             <div className="hud-meta">
               {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
               {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
@@ -241,18 +247,13 @@ export function CombatPanel({
             <span className="hud-name">
               {combat.enemy_name} <small>AI construct · {era}</small>
             </span>
-            <HpBar hp={combat.enemy_hp} max={combat.enemy_max_hp} side="enemy" />
+            <HpBar hp={shownEnemyHp} max={combat.enemy_max_hp} side="enemy" />
             <div className="hud-meta">
               {combat.enemy_block > 0 && (
                 <span className="block-badge enemy-block-badge">Block {combat.enemy_block}</span>
               )}
-              {enemySlain ? (
-                <span className="intent-badge is-defeated">Defeated</span>
-              ) : (
-                <span className={`intent-badge type-${combat.enemy_intent}`}>
-                  Next: {combat.enemy_intent === "attack" ? "Attack" : "Defend"} {combat.enemy_intent_value}
-                </span>
-              )}
+              {/* the next move is shown over the enemy's head in the arena */}
+              {enemySlain && <span className="intent-badge is-defeated">Defeated</span>}
             </div>
           </div>
           <span className="vs-portrait" aria-hidden="true">

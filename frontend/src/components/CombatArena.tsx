@@ -3,6 +3,7 @@ import { sfx } from "../audio";
 import type { HpExchange } from "../hooks/useHpExchange";
 import { CombatMonitor } from "./CombatMonitor";
 import { EnemyMonster } from "./EnemyMonster";
+import { headTopFraction } from "./enemyShape";
 import type { HackerCommand } from "../hackerCommands";
 
 // Full-frame layers rendered from the same Blender camera
@@ -27,6 +28,32 @@ export interface ArenaEnemy {
   maxHp: number;
   attack: number;
   setting: string;
+  // what it does next - shown above its head
+  intent: "attack" | "defend";
+  intentValue: number;
+}
+
+// The enemy's telegraphed next move, floating over its head: a blade for an
+// attack, a shield for a block, and how much.
+function IntentMarker({ enemy }: { enemy: ArenaEnemy }) {
+  const top = headTopFraction(enemy.maxHp, enemy.attack, enemy.setting) * 100;
+  const attacking = enemy.intent === "attack";
+  return (
+    <div
+      className={`arena-intent is-${enemy.intent}`}
+      style={{ top: `${top}%` }}
+      title={attacking ? `Attacks next for ${enemy.intentValue}` : `Blocks ${enemy.intentValue} next`}
+    >
+      <svg viewBox="0 0 20 20" aria-hidden="true">
+        {attacking ? (
+          <path d="M4 16 L13 7 L13 4 L16 4 L16 7 L7 16 Z M3 13 L7 17" />
+        ) : (
+          <path d="M10 2.5 L16 5 V9.5 C16 13.5 13.2 16.3 10 17.5 C6.8 16.3 4 13.5 4 9.5 V5 Z" />
+        )}
+      </svg>
+      <b>{enemy.intentValue}</b>
+    </div>
+  );
 }
 
 const PIXEL_COUNT = 16;
@@ -210,6 +237,7 @@ export function CombatArena({
         />
       </div>
       <ArenaGrade />
+      {!slain && <IntentMarker key={`${enemy.intent}-${enemy.intentValue}`} enemy={enemy} />}
       <CombatMonitor lines={log} commands={commands} />
       {exchange && (
         <div key={exchange.id} className="arena-fx" aria-hidden="true">

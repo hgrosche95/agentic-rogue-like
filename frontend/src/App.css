@@ -52,10 +52,9 @@ body {
 .game {
   position: relative;
   box-sizing: border-box;
-  max-width: 1400px;
   min-height: 100vh;
   margin: 0 auto;
-  padding: 0 28px 28px;
+  padding: 0 clamp(16px, 2.5vw, 48px) 28px;
   font-family: var(--font-body);
   font-weight: 500;
 }
@@ -653,7 +652,7 @@ button.is-primary:hover:not(:disabled),
 /* ---------- map screen ---------- */
 .map-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 22vw, 420px);
   gap: 18px;
   align-items: start;
 }
@@ -675,6 +674,8 @@ button.is-primary:hover:not(:disabled),
   display: block;
   width: 100%;
   height: auto;
+  /* on wide screens the graph grows until it fills the viewport's height */
+  max-height: calc(100vh - 250px);
   overflow: visible;
 }
 
@@ -1752,6 +1753,12 @@ button.is-primary:hover:not(:disabled),
   animation: arena-popup 1.1s ease-out 0.2s both;
 }
 
+/* the enemy's number appears as the pulse comes out of the rift
+   (hooks/useLagged ENEMY_HIT_MS) */
+.arena-popup.is-enemy.is-damage {
+  animation-delay: 0.55s;
+}
+
 .arena-popup.is-player {
   left: 25%;
   top: 20%;
@@ -2044,6 +2051,12 @@ button.is-primary:hover:not(:disabled),
   50% {
     opacity: 0.65;
   }
+}
+
+.combat-row,
+.battlefield {
+  /* the scene plus room for both HUDs beside the stack */
+  max-width: max(calc(var(--arena-w) + 400px), 1100px);
 }
 
 .combat-row {
@@ -2883,7 +2896,8 @@ body > .card-flight {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-width: 960px;
+  /* the scene as wide as the screen allows, with room left for the text */
+  max-width: max(960px, calc((100vh - 380px) * 2.4));
   margin: 0 auto;
   padding-top: 76px;
 }
@@ -3210,5 +3224,142 @@ body > .card-flight {
   }
   .overlay-backdrop {
     animation: none;
+  }
+}
+
+/* ---------- the enemy's next move, over its head ---------- */
+.arena-intent {
+  position: absolute;
+  left: 76.8%;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4cqw;
+  padding: 0.35cqw 0.9cqw 0.35cqw 0.6cqw;
+  border-radius: 99px;
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: max(12px, 1.5cqw);
+  color: #fff;
+  background: rgba(20, 12, 50, 0.72);
+  border: 1px solid currentColor;
+  transform: translate(-50%, -135%);
+  animation:
+    intent-in 0.35s ease-out both,
+    intent-bob 2.2s ease-in-out 0.35s infinite;
+  pointer-events: auto;
+}
+
+.arena-intent svg {
+  width: max(14px, 1.7cqw);
+  height: max(14px, 1.7cqw);
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.arena-intent b {
+  color: #fff;
+}
+
+.arena-intent.is-attack {
+  color: var(--danger);
+  box-shadow: 0 0 18px rgba(255, 79, 139, 0.55);
+}
+
+.arena-intent.is-defend {
+  color: var(--accent);
+  box-shadow: 0 0 18px rgba(0, 229, 255, 0.5);
+}
+
+@keyframes intent-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -80%) scale(0.7);
+  }
+}
+
+@keyframes intent-bob {
+  0%,
+  100% {
+    transform: translate(-50%, -135%);
+  }
+  50% {
+    transform: translate(-50%, -155%);
+  }
+}
+
+/* ---------- jumping into and out of a fight ---------- */
+/* the rift tears open from a slit to the whole screen and fades, while the
+   new screen settles in behind it */
+.rift-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 50% 100% at 50% 50%, rgba(230, 252, 255, 0.95), rgba(0, 229, 255, 0.7) 35%, rgba(255, 79, 216, 0.55) 60%, transparent 80%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.12) 0 2px, transparent 2px 5px);
+  animation: rift-jump 0.9s cubic-bezier(0.3, 0, 0.2, 1) both;
+}
+
+.rift-transition.is-exit {
+  background:
+    radial-gradient(ellipse 50% 100% at 50% 50%, rgba(255, 240, 252, 0.95), rgba(255, 79, 216, 0.7) 35%, rgba(0, 229, 255, 0.5) 60%, transparent 80%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.12) 0 2px, transparent 2px 5px);
+}
+
+@keyframes rift-jump {
+  0% {
+    opacity: 1;
+    transform: scaleX(0.02);
+  }
+  35% {
+    opacity: 1;
+    transform: scaleX(1.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(2.4);
+  }
+}
+
+.combat-panel {
+  animation: combat-enter 0.8s ease-out 0.15s both;
+}
+
+@keyframes combat-enter {
+  from {
+    opacity: 0;
+    transform: scale(1.06);
+    filter: blur(6px) brightness(1.6);
+  }
+}
+
+.map-layout {
+  animation: map-enter 0.6s ease-out 0.2s both;
+}
+
+@keyframes map-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rift-transition,
+  .combat-panel,
+  .map-layout {
+    animation: none;
+  }
+  .rift-transition {
+    display: none;
+  }
+  .arena-intent {
+    animation: none;
+    transform: translate(-50%, -135%);
   }
 }

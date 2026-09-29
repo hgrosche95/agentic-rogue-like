@@ -71,6 +71,14 @@ function App() {
   const [slainCombat, setSlainCombat] = useState<PendingCombatView | null>(null);
   const combat = run?.pending_combat ?? slainCombat;
   const inCombat = Boolean(combat);
+  // Entering or leaving a fight plays a jump through the rift (see
+  // .rift-transition); the id restarts it on every switch.
+  const [wasInCombat, setWasInCombat] = useState(inCombat);
+  const [riftJump, setRiftJump] = useState(0);
+  if (inCombat !== wasInCombat) {
+    setWasInCombat(inCombat);
+    setRiftJump(riftJump + 1);
+  }
   const mood: Mood =
     run?.status === "defeat"
       ? "silence"
@@ -319,6 +327,9 @@ function App() {
       )}
       {isDeckOpen && <DeckView deck={run.player.deck} onClose={() => setIsDeckOpen(false)} />}
 
+      {riftJump > 0 && (
+        <div key={riftJump} className={`rift-transition ${inCombat ? "is-enter" : "is-exit"}`} aria-hidden="true" />
+      )}
       <LoadingIndicator active={isLoading} label={loadingLabel} />
       {error && <p className="error toast">{error}</p>}
     </main>
