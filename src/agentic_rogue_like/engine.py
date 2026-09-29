@@ -19,6 +19,7 @@ from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
+from .enemies import escalate
 from .events import EventOption, GameEvent, random_event
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
@@ -42,8 +43,10 @@ ChooseArtifact = Callable[[list[Artifact]], int]
 # call; the web API passes one that reads background-prefetched text instead.
 Narrator = Callable[[str, str], str | None]
 
-PLAYER_HP = 60
-PLAYER_ATTACK = 3
+# Tuned with `balance-sim` together with enemies.escalate() for a run win
+# rate below 50% - see the README's Balancing section.
+PLAYER_HP = 45
+PLAYER_ATTACK = 2
 REST_HEAL = 15
 
 REST_SITUATION = "a weary adventurer resting and tending their wounds"
@@ -173,15 +176,19 @@ def start_combat_node(
     node.visited = True
     run.floor = node.floor
 
-    enemy = enemy_for_node(
-        enemy_id=f"agent-{rng.getrandbits(32):08x}",
-        floor=node.floor,
-        num_floors=NUM_FLOORS,
-        elite=node.type is NodeType.ELITE,
-        boss=node.type is NodeType.BOSS,
-        rng=rng,
-        setting=run.setting,
-        prefetched=prefetched_enemy,
+    enemy = escalate(
+        enemy_for_node(
+            enemy_id=f"agent-{rng.getrandbits(32):08x}",
+            floor=node.floor,
+            num_floors=NUM_FLOORS,
+            elite=node.type is NodeType.ELITE,
+            boss=node.type is NodeType.BOSS,
+            rng=rng,
+            setting=run.setting,
+            prefetched=prefetched_enemy,
+        ),
+        node.floor,
+        NUM_FLOORS,
     )
     state, log = _start_combat(run.player.deck, enemy, rng, run.player.artifacts)
     run.history.extend(log)
@@ -236,14 +243,18 @@ def resolve_node(
     run.floor = node.floor
 
     if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
-        enemy = enemy_for_node(
-            enemy_id=f"agent-{rng.getrandbits(32):08x}",
-            floor=node.floor,
-            num_floors=NUM_FLOORS,
-            elite=node.type is NodeType.ELITE,
-            boss=node.type is NodeType.BOSS,
-            rng=rng,
-            setting=run.setting,
+        enemy = escalate(
+            enemy_for_node(
+                enemy_id=f"agent-{rng.getrandbits(32):08x}",
+                floor=node.floor,
+                num_floors=NUM_FLOORS,
+                elite=node.type is NodeType.ELITE,
+                boss=node.type is NodeType.BOSS,
+                rng=rng,
+                setting=run.setting,
+            ),
+            node.floor,
+            NUM_FLOORS,
         )
         victory, log = auto_resolve_combat(run.player.deck, enemy, run.player, rng)
         run.history.extend(log)

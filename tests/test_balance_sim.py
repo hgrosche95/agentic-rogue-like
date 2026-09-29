@@ -33,7 +33,7 @@ def test_variant_overrides_budgets_player_and_cards(tmp_path: Path) -> None:
                 "player": {"hp": 80},
                 "cards": {"Exploit": {"value": 9}},
                 "extra_cards": [{"name": "Rootkit", "type": "attack", "value": 12}],
-                "remove_cards": ["Hotfix"],
+                "remove_cards": ["Prefetch"],
             }
         )
     )
@@ -43,7 +43,7 @@ def test_variant_overrides_budgets_player_and_cards(tmp_path: Path) -> None:
     player = cfg.new_player()
     assert player.hp == player.max_hp == 80
     names = [c.name for c in player.deck]
-    assert "Rootkit" in names and "Hotfix" not in names
+    assert "Rootkit" in names and "Prefetch" not in names
     assert all(c.value == 9 for c in player.deck if c.name == "Exploit")
 
 

@@ -11,6 +11,10 @@ from .encounter_schema import EnemyBudget
 
 # Tuned with `balance-sim` against a 60 HP / 3 attack player whose Exploit
 # deals 8 (5 + attack) - see the README's Balancing section for the numbers.
+# The game has since been made harder without touching these envelopes (the
+# encounter agent and its evals are built around them): the player now
+# starts weaker (engine.PLAYER_HP/PLAYER_ATTACK) and second-half enemies get
+# +10% on top (enemies.escalate).
 # Goal is a rising curve instead of the old "trivial fights, then a wall":
 # early fights last ~3 turns and cost a few HP, mid ~4 turns, elites are a
 # real threat, and the boss is the run's climax but winnable. The boss is

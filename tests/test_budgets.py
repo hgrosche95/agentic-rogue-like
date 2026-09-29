@@ -1,7 +1,8 @@
 import pytest
 
 from agentic_rogue_like.agent.budgets import _BUDGETS, budget_for
-from agentic_rogue_like.enemies import ENEMY_POOL
+from agentic_rogue_like.enemies import ENEMY_POOL, escalate
+from agentic_rogue_like.models import Enemy
 
 
 def test_early_floor_gets_early_budget() -> None:
@@ -36,3 +37,11 @@ def test_static_pool_stays_inside_its_own_tier_budget(tier: str) -> None:
         assert budget.min_attack <= enemy.attack <= budget.max_attack, (
             f"{enemy.id} attack out of {tier} budget"
         )
+
+
+def test_escalate_strengthens_only_second_half_enemies() -> None:
+    enemy = Enemy(id="foe", name="Foe", hp=50, attack=10, attack_name="Slam")
+    assert escalate(enemy, floor=3, num_floors=8) == enemy
+    late = escalate(enemy, floor=4, num_floors=8)
+    assert (late.hp, late.attack) == (55, 11)
+    assert (enemy.hp, enemy.attack) == (50, 10)  # the original is left alone

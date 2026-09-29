@@ -18,7 +18,8 @@ import { ArtifactBar } from "./components/ArtifactBar";
 import { ArtifactScreen } from "./components/ArtifactScreen";
 import { AudioControls } from "./components/AudioControls";
 import { CombatPanel } from "./components/CombatPanel";
-import { DungeonMap, NodeBadge } from "./components/DungeonMap";
+import { DeckButton, DeckView } from "./components/DeckView";
+import { DungeonMap } from "./components/DungeonMap";
 import { EndScreen } from "./components/EndScreen";
 import { EventPrompt } from "./components/EventPrompt";
 import { HistoryLog } from "./components/HistoryLog";
@@ -26,10 +27,10 @@ import { IntroScreen } from "./components/IntroScreen";
 import { LoadingIndicator } from "./components/LoadingIndicator";
 import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
+import { CloseButton, Overlay } from "./components/Overlay";
 import { eraLabel, numFloorsOf } from "./eras";
 import { RewardScreen } from "./components/RewardScreen";
 import { SettingPicker } from "./components/SettingPicker";
-import { NODE_STYLE } from "./nodeTypes";
 
 const FALLBACK_SETTINGS = ["dungeon"];
 const INTRO_SEEN_KEY = "agentic-rogue-like:intro-seen";
@@ -60,11 +61,9 @@ function App() {
   const [settings, setSettings] = useState<string[]>(FALLBACK_SETTINGS);
   const [selectedSetting, setSelectedSetting] = useState(FALLBACK_SETTINGS[0]);
   const [isMapOpen, setIsMapOpen] = useState(false);
-  // Hovering a room on the map previews it in the next-jump panel. Clicking
-  // only selects it; moving there needs a confirm (the panel's button or a
-  // second click), so a misclick can't send the player down the wrong path.
+  // Hovering a room on the map previews it in the next-jump panel.
   const [focusedJump, setFocusedJump] = useState<string | null>(null);
-  const [plannedNodeId, setPlannedNodeId] = useState<string | null>(null);
+  const [isDeckOpen, setIsDeckOpen] = useState(false);
   const [isIntroOpen, setIsIntroOpen] = useState(() => !hasSeenIntro());
   // The server closes a won fight in the same response as the killing blow.
   // Keep showing that fight - enemy at 0 HP - so the arena can play the enemy's
@@ -157,7 +156,7 @@ function App() {
         >
           Start run
         </button>
-        {error && <p className="error">{error}</p>}
+        {error && <p className="error toast">{error}</p>}
         <LoadingIndicator active={isLoading} label={loadingLabel} />
         <button type="button" className="link-button replay-intro" disabled={isLoading} onClick={() => setIsIntroOpen(true)}>
           Replay intro
@@ -167,36 +166,43 @@ function App() {
   }
 
   const numFloors = numFloorsOf(run.nodes);
-  // Only a room that is still reachable counts as planned - after moving
-  // on (or any other state change) a stale selection simply drops out.
-  const planned = run.available_choices.find((n) => n.id === plannedNodeId) ?? null;
 
-  function confirmMove(nodeId: string) {
+  function jumpTo(nodeId: string) {
     sfx.play("map_select");
-    setPlannedNodeId(null);
     setFocusedJump(null);
     runAction(() => chooseNextNode(run!.run_id, nodeId), "Jumping through time...");
+  }
+
+  function enterRoom() {
+    sfx.play("click");
+    runAction(
+      () => resolveCurrentNode(run!.run_id),
+      ["combat", "elite", "boss"].includes(run!.current_node.type) ? "Generating the enemy..." : "Entering the room...",
+    );
   }
 
   const mapProps = {
     nodes: run.nodes,
     currentNodeId: run.current_node.id,
     reachableIds: run.available_choices.map((n) => n.id),
-    selectedId: planned?.id ?? null,
     disabled: isLoading,
-    onChoose: (nodeId: string) => {
-      // A second click on the selected room confirms it.
-      if (nodeId === planned?.id) return confirmMove(nodeId);
-      sfx.play("select");
-      setPlannedNodeId(nodeId);
-    },
+    onChoose: jumpTo,
   };
-  const canJump = run.status === "ongoing" && !slainCombat && run.node_resolved && run.available_choices.length > 0;
-  const room = NODE_STYLE[run.current_node.type];
+  const ongoing = run.status === "ongoing";
+  const canJump = ongoing && !slainCombat && run.node_resolved && run.available_choices.length > 0;
+  const needsEnter =
+    ongoing && !run.pending_event && !run.card_reward && !run.artifact_offer && !run.node_resolved;
 
   return (
     <main className={`game${inCombat ? " is-combat" : ""}`}>
       <TopBar player={run.player} floor={run.floor} numFloors={numFloors} setting={run.setting}>
+        <DeckButton
+          count={run.player.deck.length}
+          onClick={() => {
+            sfx.play("click");
+            setIsDeckOpen(true);
+          }}
+        />
         {inCombat && (
           <button
             type="button"
@@ -221,32 +227,7 @@ function App() {
         <AudioControls />
       </TopBar>
 
-      {inCombat && isMapOpen && (
-        <div className="map-overlay">
-          <div className="panel map-overlay-panel">
-            <div className="panel-head">
-              <h2 className="panel-title">Temporal map</h2>
-              <button
-                type="button"
-                className="icon-btn is-small"
-                aria-label="Close map"
-                onClick={() => setIsMapOpen(false)}
-              >
-                <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-                  <line className="close-icon" x1="3" y1="3" x2="13" y2="13" />
-                  <line className="close-icon" x1="13" y1="3" x2="3" y2="13" />
-                </svg>
-              </button>
-            </div>
-            <DungeonMap {...mapProps} />
-          </div>
-        </div>
-      )}
-
-      <LoadingIndicator active={isLoading} label={loadingLabel} />
-      {error && <p className="error">{error}</p>}
-
-      {combat && (run.status === "ongoing" || slainCombat) ? (
+      {combat && (ongoing || slainCombat) ? (
         <CombatPanel
           combat={combat}
           setting={run.setting}
@@ -263,92 +244,83 @@ function App() {
         />
       ) : (
         <div className="map-layout">
-          <div className="map-main">
-            {run.status !== "ongoing" && !slainCombat && <EndScreen run={run} onRestart={() => setRun(null)} />}
-
-            {run.status === "ongoing" && run.pending_event && (
-              <EventPrompt
-                event={run.pending_event}
-                disabled={isLoading}
-                onChoose={(optionIndex) =>
-                  runAction(() => chooseEventOption(run.run_id, optionIndex))
-                }
-              />
-            )}
-
-            {run.status === "ongoing" && run.card_reward && (
-              <RewardScreen
-                offer={run.card_reward}
-                deckSize={run.player.deck.length}
-                disabled={isLoading}
-                onPick={(cardIndex) => runAction(() => chooseCardReward(run.run_id, cardIndex))}
-              />
-            )}
-
-            {run.status === "ongoing" && run.artifact_offer && (
-              <ArtifactScreen
-                offer={run.artifact_offer}
-                owned={run.player.artifacts.length}
-                disabled={isLoading}
-                onPick={(artifactIndex) => runAction(() => chooseArtifact(run.run_id, artifactIndex))}
-              />
-            )}
-
-            {run.status === "ongoing" &&
-              !run.pending_event &&
-              !run.card_reward &&
-              !run.artifact_offer &&
-              !run.node_resolved && (
-                <section className="panel room-panel">
-                  <NodeBadge type={run.current_node.type} size={44} />
-                  <div className="room-text">
-                    <span className="panel-sub">Arrived in {eraLabel(run.floor, numFloors)}</span>
-                    <h2>{room.label}</h2>
-                    <p>{room.blurb}</p>
-                  </div>
-                  <button
-                    className="is-primary"
-                    disabled={isLoading}
-                    onClick={() => {
-                      sfx.play("click");
-                      runAction(
-                        () => resolveCurrentNode(run.run_id),
-                        ["combat", "elite", "boss"].includes(run.current_node.type)
-                          ? "Generating the enemy..."
-                          : "Entering the room...",
-                      );
-                    }}
-                  >
-                    Continue
-                  </button>
-                </section>
-              )}
-
-            <section className="panel map-panel">
-              <div className="panel-head">
-                <h2 className="panel-title">Temporal map</h2>
-                <span className="panel-sub">{canJump ? "Select your next jump" : run.setting}</span>
-              </div>
-              <DungeonMap {...mapProps} onHover={setFocusedJump} />
-            </section>
-          </div>
+          <section className="panel map-panel">
+            <div className="panel-head">
+              <h2 className="panel-title">Temporal map</h2>
+              <span className="panel-sub">{canJump ? "Select your next jump" : run.setting}</span>
+            </div>
+            <DungeonMap {...mapProps} onHover={setFocusedJump} />
+          </section>
 
           <aside className="map-side">
             <JumpPanel
+              current={run.current_node}
+              needsEnter={needsEnter}
               choices={run.available_choices}
-              plannedId={planned?.id ?? null}
               focusedId={focusedJump}
               numFloors={numFloors}
               canJump={canJump}
               disabled={isLoading}
-              onChoose={confirmMove}
-              onCancel={() => setPlannedNodeId(null)}
+              onEnter={enterRoom}
+              onChoose={jumpTo}
             />
             <ArtifactBar artifacts={run.player.artifacts} />
             <HistoryLog history={run.history} />
           </aside>
         </div>
       )}
+
+      {/* choices open as windows over the map, which stays where it is */}
+      {!combat && !ongoing && (
+        <Overlay label="Run over">
+          <EndScreen run={run} onRestart={() => setRun(null)} />
+        </Overlay>
+      )}
+      {!combat && ongoing && run.pending_event && (
+        <Overlay label="Anomaly">
+          <EventPrompt
+            event={run.pending_event}
+            disabled={isLoading}
+            onChoose={(optionIndex) => runAction(() => chooseEventOption(run.run_id, optionIndex))}
+          />
+        </Overlay>
+      )}
+      {!combat && ongoing && run.card_reward && (
+        <Overlay label="Choose a card" className="is-wide">
+          <RewardScreen
+            offer={run.card_reward}
+            deckSize={run.player.deck.length}
+            disabled={isLoading}
+            onPick={(cardIndex) => runAction(() => chooseCardReward(run.run_id, cardIndex))}
+          />
+        </Overlay>
+      )}
+      {!combat && ongoing && run.artifact_offer && (
+        <Overlay label="Choose an artifact" className="is-wide">
+          <ArtifactScreen
+            offer={run.artifact_offer}
+            owned={run.player.artifacts.length}
+            disabled={isLoading}
+            onPick={(artifactIndex) => runAction(() => chooseArtifact(run.run_id, artifactIndex))}
+          />
+        </Overlay>
+      )}
+
+      {inCombat && isMapOpen && (
+        <Overlay label="Temporal map" onClose={() => setIsMapOpen(false)} className="is-wide">
+          <section className="panel">
+            <div className="panel-head">
+              <h2 className="panel-title">Temporal map</h2>
+              <CloseButton onClick={() => setIsMapOpen(false)} label="Close map" />
+            </div>
+            <DungeonMap {...mapProps} />
+          </section>
+        </Overlay>
+      )}
+      {isDeckOpen && <DeckView deck={run.player.deck} onClose={() => setIsDeckOpen(false)} />}
+
+      <LoadingIndicator active={isLoading} label={loadingLabel} />
+      {error && <p className="error toast">{error}</p>}
     </main>
   );
 }

@@ -19,7 +19,7 @@ A variant file only lists what changes, e.g.:
       "player": {"hp": 50, "attack": 5},
       "cards": {"Exploit": {"value": 5}},
       "extra_cards": [{"name": "Rootkit", "type": "attack", "value": 12}],
-      "remove_cards": ["Hotfix"],
+      "remove_cards": ["Prefetch"],
       "rewards": false,
       "artifacts": false
     }
@@ -52,6 +52,7 @@ from .combat import (
     play_card,
     start_combat,
 )
+from .enemies import escalate
 from .events import random_event
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
@@ -75,8 +76,8 @@ REST_HEAL = 15  # mirrors engine.resolve_node's REST branch
 class SimConfig:
     name: str = "aktuell"
     budgets: dict[str, EnemyBudget] = field(default_factory=lambda: dict(_BUDGETS))
-    player_hp: int = 60  # mirrors engine.new_run
-    player_attack: int = 3
+    player_hp: int = 45  # mirrors engine.PLAYER_HP
+    player_attack: int = 2  # mirrors engine.PLAYER_ATTACK
     deck_factory: Callable[[], list[Card]] = starter_deck
     rewards: bool = True
     artifacts: bool = True
@@ -135,6 +136,12 @@ def random_enemy(budget: EnemyBudget, tier: str, rng: random.Random) -> Enemy:
     )
 
 
+# The floor a tier's enemies are scaled for (enemies.escalate) when fought on
+# their own: mid and boss always sit in the timeline's second half, and an
+# elite is measured there too - its harder case.
+_TIER_FLOOR = {"early": 0, "mid": NUM_FLOORS // 2, "elite": NUM_FLOORS // 2, "boss": NUM_FLOORS - 1}
+
+
 def tier_for(floor: int, node_type: NodeType) -> str:
     if node_type is NodeType.BOSS:
         return "boss"
@@ -164,24 +171,20 @@ def _empty_slots(state: CombatState) -> list[int]:
 
 
 def _best_action_slot(state: CombatState) -> int | None:
-    """Free slot with the most Amplifiers to its left, recycling as tie-break."""
-    best, best_score = None, -1.0
+    """Free slot with the most Amplifiers to its left."""
+    best, best_score = None, -1
     for i in _empty_slots(state):
         amps = sum(
             1 for j, c in enumerate(state.field) if c and c.type is CardType.AMPLIFIER and j < i
         )
-        recycles = any(
-            c and c.type is CardType.RECYCLING and j > i for j, c in enumerate(state.field)
-        )
-        score = amps + 0.5 * recycles
-        if score > best_score:
-            best, best_score = i, score
+        if amps > best_score:
+            best, best_score = i, amps
     return best
 
 
 def _permanent_slot(state: CombatState, card: Card) -> int | None:
-    """Amplifiers go far left, Recycling far right, the rest fill from the right
-    but always leave at least one slot free for action cards."""
+    """Amplifiers go far left, the rest fill from the right but always leave
+    at least one slot free for action cards."""
     empty = _empty_slots(state)
     if len(empty) <= 1:
         return None
@@ -236,6 +239,19 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
                     break
         if played:
             continue
+        # System Restore pays with the field, so only when the banished pile
+        # holds more than the field would lose.
+        for idx, card in enumerate(state.hand):
+            if card.type is CardType.REBOOT:
+                back = sum(
+                    1 for c in state.banished_pile if c.type not in (CardType.RESTORE, CardType.REBOOT)
+                )
+                if back >= 2 and back > permanents:
+                    play_card(state, idx, slot, player, rng)
+                    played = True
+                    break
+        if played:
+            continue
         for wanted in order:
             idx = next((i for i, c in enumerate(state.hand) if c.type is wanted), None)
             if idx is not None:
@@ -244,7 +260,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
                 break
         if not played:
             # Unplayed cards stay in hand, but the hand is capped at the
-            # end of the turn, so a Firewall/Hotfix is played rather than
+            # end of the turn, so a Firewall is played rather than
             # hoarded - one-shot cards are kept for when they matter.
             idx = next(
                 (
@@ -305,9 +321,8 @@ def fresh_fights(cfg: SimConfig, bot: Bot, n: int, seed: int) -> dict[str, list[
         rng = random.Random(f"{seed}-{tier}")
         for _ in range(n):
             player = cfg.new_player()
-            results[tier].append(
-                fight(player, random_enemy(cfg.budgets[tier], tier, rng), tier, bot, rng)
-            )
+            enemy = escalate(random_enemy(cfg.budgets[tier], tier, rng), _TIER_FLOOR[tier], NUM_FLOORS)
+            results[tier].append(fight(player, enemy, tier, bot, rng))
     return results
 
 
@@ -338,7 +353,8 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 gain_artifact(player, rng.choice(offer))
         if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
             tier = tier_for(node.floor, node.type)
-            result = fight(player, random_enemy(cfg.budgets[tier], tier, rng), tier, bot, rng)
+            enemy = escalate(random_enemy(cfg.budgets[tier], tier, rng), node.floor, NUM_FLOORS)
+            result = fight(player, enemy, tier, bot, rng)
             fights.append(result)
             if not result.won:
                 return RunResult(False, node.floor, fights)

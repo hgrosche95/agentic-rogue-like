@@ -3,41 +3,59 @@ import { eraLabel } from "../eras";
 import { NODE_STYLE } from "../nodeTypes";
 import { NodeBadge } from "./DungeonMap";
 
-// What the next jump leads to: the room selected on the map, else the one
-// under the pointer, else the first one on offer. The button jumps there -
-// the confirm step after selecting a room on the map.
+// The side column's first panel - always in the same place, so the map never
+// moves: before a room is entered it offers to enter it, afterwards it
+// previews the next jump (the room under the pointer, else the first route).
+// Jumping itself is one click, on the map or on the button here.
 export function JumpPanel({
+  current,
+  needsEnter,
   choices,
-  plannedId,
   focusedId,
   numFloors,
   canJump,
   disabled,
+  onEnter,
   onChoose,
-  onCancel,
 }: {
+  current: MapNode;
+  needsEnter: boolean;
   choices: MapNode[];
-  plannedId: string | null;
   focusedId: string | null;
   numFloors: number;
   canJump: boolean;
   disabled: boolean;
+  onEnter: () => void;
   onChoose: (nodeId: string) => void;
-  onCancel: () => void;
 }) {
-  const target =
-    choices.find((n) => n.id === plannedId) ?? choices.find((n) => n.id === focusedId) ?? choices[0];
-  const isPlanned = target !== undefined && target.id === plannedId;
+  if (needsEnter) {
+    const room = NODE_STYLE[current.type];
+    return (
+      <section className="panel jump-panel is-arrived">
+        <div className="panel-head">
+          <h2 className="panel-title">Arrived</h2>
+          <span className="panel-sub">{eraLabel(current.floor, numFloors)}</span>
+        </div>
+        <div className="jump-target">
+          <NodeBadge type={current.type} size={40} />
+          <div>
+            <b>{room.label}</b>
+            <span>{room.blurb}</span>
+          </div>
+        </div>
+        <button type="button" className="is-primary jump-button" disabled={disabled} onClick={onEnter}>
+          {["combat", "elite", "boss"].includes(current.type) ? "Engage" : "Enter"}
+        </button>
+      </section>
+    );
+  }
+
+  const target = choices.find((n) => n.id === focusedId) ?? choices[0];
   return (
-    <section className={`panel jump-panel${isPlanned ? " is-planned" : ""}`}>
+    <section className="panel jump-panel">
       <div className="panel-head">
         <h2 className="panel-title">Next jump</h2>
-        {target && canJump && (
-          <span className="panel-sub">
-            {isPlanned ? "Selected · " : ""}
-            {eraLabel(target.floor, numFloors)}
-          </span>
-        )}
+        {target && canJump && <span className="panel-sub">{eraLabel(target.floor, numFloors)}</span>}
       </div>
       {target && canJump ? (
         <>
@@ -54,18 +72,16 @@ export function JumpPanel({
                 <NodeBadge type={n.type} size={18} />
               </span>
             ))}
-            <em>{isPlanned ? "click the room again to go" : choices.length === 1 ? "1 route" : `${choices.length} routes`}</em>
+            <em>{choices.length === 1 ? "1 route" : `${choices.length} routes`} · click a room to jump</em>
           </div>
-          <div className="jump-actions">
-            <button type="button" className="is-primary" disabled={disabled} onClick={() => onChoose(target.id)}>
-              Initiate jump
-            </button>
-            {isPlanned && (
-              <button type="button" disabled={disabled} onClick={onCancel}>
-                Cancel
-              </button>
-            )}
-          </div>
+          <button
+            type="button"
+            className="is-primary jump-button"
+            disabled={disabled}
+            onClick={() => onChoose(target.id)}
+          >
+            Initiate jump
+          </button>
         </>
       ) : (
         <p className="muted">{canJump ? "No route leads further." : "Finish this era before you jump."}</p>

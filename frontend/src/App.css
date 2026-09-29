@@ -116,7 +116,10 @@ body {
   text-overflow: ellipsis;
 }
 
+/* stays above the overlay backdrop, so deck, map and audio stay reachable */
 .topbar {
+  position: relative;
+  z-index: 35;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
@@ -655,7 +658,6 @@ button.is-primary:hover:not(:disabled),
   align-items: start;
 }
 
-.map-main,
 .map-side {
   display: flex;
   flex-direction: column;
@@ -981,46 +983,15 @@ button.is-primary:hover:not(:disabled),
   color: var(--text-dim);
 }
 
-.jump-panel button.is-primary {
+.jump-button {
   width: 100%;
   margin-top: 12px;
 }
 
-/* the room you arrived in, before you enter it */
-.room-panel {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  animation: pop-in 0.35s ease both;
-}
-
-.room-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.room-text h2 {
-  margin: 2px 0;
-  font-family: var(--font-head);
-  font-weight: 700;
-  font-size: 18px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.room-text p {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 0.9rem;
-}
-
-@media (max-width: 600px) {
-  .room-panel {
-    flex-wrap: wrap;
-  }
-  .room-panel button {
-    width: 100%;
-  }
+/* before the room is entered, the panel is the screen's call to action */
+.jump-panel.is-arrived {
+  border-color: rgba(0, 229, 255, 0.45);
+  box-shadow: var(--shadow-panel), 0 0 30px rgba(0, 229, 255, 0.18);
 }
 
 /* artifacts */
@@ -1099,27 +1070,115 @@ button.is-primary:hover:not(:disabled),
   margin-right: 8px;
 }
 
-/* the map on demand during a fight */
-.map-overlay {
+/* ---------- overlays: windows over the screen, which stays in place ---------- */
+.overlay-backdrop {
   position: fixed;
   inset: 0;
   z-index: 30;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.2rem;
-  background: rgba(20, 12, 50, 0.6);
+  padding: 96px 1.2rem 1.2rem;
+  background: rgba(20, 12, 50, 0.62);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
+  animation: overlay-fade 0.2s ease both;
 }
 
-.map-overlay-panel {
+@keyframes overlay-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.overlay-window {
   width: 100%;
-  max-width: 1000px;
-  max-height: calc(100vh - 2.4rem);
+  max-width: 720px;
+  max-height: 100%;
   overflow-y: auto;
-  background: rgba(47, 36, 114, 0.92);
   animation: pop-in 0.3s ease both;
+}
+
+.overlay-window.is-wide {
+  max-width: 1000px;
+}
+
+.overlay-window > .panel,
+.overlay-window > .event-prompt,
+.overlay-window > .reward-screen,
+.overlay-window > .end-screen {
+  background: rgba(47, 36, 114, 0.94);
+}
+
+/* errors pop up above the loading toast instead of pushing the screen down */
+.error.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 4.6rem;
+  z-index: 60;
+  transform: translateX(-50%);
+  max-width: min(640px, calc(100vw - 32px));
+  margin: 0;
+  box-shadow: 0 12px 30px rgba(10, 5, 40, 0.5);
+}
+
+/* ---------- deck view ---------- */
+.deck-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  justify-items: center;
+  gap: 16px 12px;
+  padding: 4px 2px 8px;
+}
+
+/* how many copies, in the card's bottom-left corner */
+.deck-count {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  min-width: 26px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 99px;
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--on-accent);
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.6);
+}
+
+.deck-view .panel-head .icon-btn {
+  margin-left: auto;
+}
+
+.deck-button {
+  position: relative;
+}
+
+.deck-button rect:last-of-type {
+  fill: var(--panel-solid);
+}
+
+.deck-button-count {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border-radius: 99px;
+  font-family: var(--font-body);
+  font-weight: 800;
+  font-size: 10px;
+  color: var(--on-accent);
+  background: var(--accent);
 }
 
 /* ---------- event, reward, end screens ---------- */
@@ -2431,8 +2490,7 @@ button.is-primary:hover:not(:disabled),
 .type-final_strike {
   --card: #ff4f8b;
 }
-.type-amplifier,
-.type-recycling {
+.type-amplifier {
   --card: #ffd166;
 }
 .type-armor,
@@ -2442,7 +2500,8 @@ button.is-primary:hover:not(:disabled),
 /* card flow (draw / graveyard / banished pile) */
 .type-draw,
 .type-retrieve,
-.type-restore {
+.type-restore,
+.type-reboot {
   --card: #c38bff;
 }
 .type-damage_boost,
@@ -3092,54 +3151,12 @@ body > .card-flight {
   .combat-seam,
   .field-slot.is-empty.is-targetable,
   .field-slot.is-occupied,
-  .map-overlay-panel,
+  .overlay-window,
   .event-prompt,
   .end-screen,
-  .reward-screen,
-  .room-panel {
+  .reward-screen {
     animation: none;
   }
-}
-
-/* -- a room selected on the map, waiting for the jump to be confirmed -- */
-.map-node.is-selected .map-node-body {
-  transform: scale(1.2);
-}
-
-.map-node.is-selected .map-node-shape {
-  stroke: #fff;
-  stroke-width: 3;
-}
-
-.map-node-target {
-  fill: none;
-  stroke: #fff;
-  stroke-width: 1.5;
-  stroke-dasharray: 5 4;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: map-spin 4s linear infinite reverse;
-}
-
-.jump-panel.is-planned {
-  border-color: rgba(0, 229, 255, 0.5);
-  box-shadow: var(--shadow-panel), 0 0 30px rgba(0, 229, 255, 0.2);
-}
-
-.jump-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.jump-actions button:not(.is-primary) {
-  padding: 0.55rem 0.9rem;
-  font-size: 0.85rem;
-}
-
-.jump-actions .is-primary {
-  flex: 1;
 }
 
 /* -- loading: a small toast pinned to the bottom while a request runs -- */
@@ -3191,7 +3208,7 @@ body > .card-flight {
   .loading-spinner {
     animation-duration: 2.4s;
   }
-  .map-node-target {
+  .overlay-backdrop {
     animation: none;
   }
 }
