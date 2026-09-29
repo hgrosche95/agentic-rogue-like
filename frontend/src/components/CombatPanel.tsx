@@ -49,7 +49,7 @@ function initials(name: string): string {
 // further from the middle and dropped along an arc.
 function fanStyle(index: number, count: number): CSSProperties {
   const k = index - (count - 1) / 2;
-  return { "--rot": `${k * 3}deg`, "--lift": `${k * k * 4}px` } as CSSProperties;
+  return { "--rot": `${k * 2.5}deg`, "--lift": `${k * k * 2.5}px` } as CSSProperties;
 }
 
 export function CombatPanel({

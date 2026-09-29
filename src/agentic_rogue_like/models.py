@@ -62,8 +62,7 @@ class Artifact(BaseModel):
 
 
 class CardType(StrEnum):
-    # Action cards: resolve once, then go to the discard pile (or back to
-    # the deck, if a Recycling permanent applies) - see combat.py.
+    # Action cards: resolve once, then go to the discard pile - see combat.py.
     ATTACK = "attack"
     BLOCK = "block"
     HEAL = "heal"
@@ -71,11 +70,13 @@ class CardType(StrEnum):
     DRAW = "draw"  # draw `value` cards
     RETRIEVE = "retrieve"  # graveyard -> hand, the `value` most recent cards
     RESTORE = "restore"  # banished pile -> hand, the `value` most recent cards
+    # destroy every permanent on the field, then the cards that were already
+    # banished go back to the hand
+    REBOOT = "reboot"
     # Permanent cards: occupy a field slot for the rest of the fight instead
     # of being discarded, passively affecting play based on their position.
     AMPLIFIER = "amplifier"
     ARMOR = "armor"
-    RECYCLING = "recycling"
     DRAW_BONUS = "draw_bonus"
     DAMAGE_BOOST = "damage_boost"  # attacks +value per permanent on the field
     TURRET = "turret"  # deals `value` damage at the end of every turn
@@ -86,7 +87,6 @@ PERMANENT_CARD_TYPES = frozenset(
     {
         CardType.AMPLIFIER,
         CardType.ARMOR,
-        CardType.RECYCLING,
         CardType.DRAW_BONUS,
         CardType.DAMAGE_BOOST,
         CardType.TURRET,

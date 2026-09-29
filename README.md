@@ -42,9 +42,9 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       entstehen, zeichnet `EnemyMonster.tsx` jeden als SVG aus Name (Seed),
       Max-HP (Größe), Angriff (Stacheln, Zähne) und Setting (Farben, Motiv).
 - [x] **Kartenbasierter Kampf** — kein Energie-System; das Feld mit 5 Slots
-      ist die Ressource. Aktionskarten (Exploit, Firewall, Hotfix, Kernel Panic)
+      ist die Ressource. Aktionskarten (Exploit, Firewall, Kernel Panic)
       brauchen einen freien Slot, wirken sofort und wandern in den
-      Friedhof; permanente Karten (Overclock, Encryption, Garbage Collector,
+      Friedhof; permanente Karten (Overclock, Encryption,
       Prefetch) belegen ihren Slot dauerhaft und wirken positionsabhängig — z. B.
       "Aktionskarten rechts von mir sind 25% effektiver". Man startet mit
       5 Handkarten und zieht jede Runde 3 nach (Prefetch: +1); nicht gespielte
@@ -54,7 +54,7 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       das Web-UI interaktiv Karte für Karte über eigene Endpunkte
       (`/combat/play-card`, `/combat/end-turn`).
 - [x] **Deck-Building** — nach jedem Sieg eine von drei Karten wählen
-      (`/runs/{id}/card-reward`); 17 Belohnungskarten mit Abwurfkosten,
+      (`/runs/{id}/card-reward`); 18 Belohnungskarten mit Abwurfkosten,
       Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
 - [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
       drei wählen, danach alle 3 Schritte auf der Map ein weiteres
@@ -99,7 +99,7 @@ src/agentic_rogue_like/
 ├── models.py       Pydantic-Datenmodelle (RunState, PlayerState, MapNode, Enemy, Card, ...)
 ├── map_gen.py      Prozedurale Etagen-/Node-Map
 ├── combat.py       Kartenbasierter Kampf: Deck/Hand/Feld, Zieh-/Ablagelogik
-├── cards.py        Startdeck mit IT-Namen (Exploit, Firewall, Hotfix, ...; Aktions- + permanente Karten)
+├── cards.py        Startdeck mit IT-Namen (Exploit, Firewall, Kernel Panic, ...; Aktions- + permanente Karten)
 ├── artifacts.py    Artefakt-Pool und -Angebote (passive Run-Boni)
 ├── events.py       Event-/Rest-/Shop-Auflösung
 ├── enemies.py      Statischer Gegner-Pool (Fallback für den Encounter-Agent)
@@ -213,24 +213,26 @@ uv run balance-sim --compare balance/gegner-staerker.json
 uv run balance-sim --compare balance/beispiel-neue-karte.json --bot naive
 ```
 
-Aktueller Stand (Smart-Bot, 2000 Runs): Spieler 60 HP / Angriff 3, Exploit
-macht 5 (+3), Starthand 5, danach 3 Karten pro Runde, Handlimit 8; nach
-jedem gewonnenen Kampf kommt eine Karte ins Deck, am Start und alle 3
-Schritte ein Artefakt (die Bots wählen es zufällig). Die Kurve steigt
-gleichmäßig an, der Boss ist der Höhepunkt:
+Aktueller Stand (Smart-Bot, 2000 Runs): Spieler 45 HP / Angriff 2, Exploit
+macht 5 (+2), Starthand 5, danach 3 Karten pro Runde, Handlimit 8; das
+Startdeck hat 11 Karten (keine Heilkarte). Gegner ab der zweiten Hälfte der
+Map bekommen +10 % Leben und Angriff (und damit Block) — aufgeschlagen erst
+*nach* der Erzeugung (`enemies.escalate`), damit die Budgets des
+Encounter-Agents und die Evals dazu unverändert bleiben. Nach jedem
+gewonnenen Kampf kommt eine Karte ins Deck, am Start und alle 3 Schritte ein
+Artefakt (die Bots wählen es zufällig). Ziel ist eine Run-Siegquote unter
+50 %, mit dem Boss als Höhepunkt:
 
 | Stufe | Züge | HP-Verlust im Run | Sieg im Run |
 | --- | --- | --- | --- |
-| early | 2.8 | 6 | 99 % |
-| mid | 3.8 | 10 | 94 % |
-| elite | 4.8 | 17 | 91 % |
-| boss | 5.7 | 22 | 78 % |
+| early | 2.5 | 5 | 100 % |
+| mid | 3.5 | 11 | 91 % |
+| elite | 4.2 | 16 | 85 % |
+| boss | 4.8 | 20 | 56 % |
 
-Run-Siegquote: 67 % (Smart-Bot), 59 % (Naive-Bot). Ohne Artefakte
-(`--no-artifacts`) sind es 26 % — die Artefakte sollen dem Spieler helfen,
-die Gegner-Budgets sind deshalb bewusst nicht mitgewachsen. Jedes einzelne
-Artefakt hebt die Siegquote um 11–25 Prozentpunkte; wer ein neues baut,
-sollte in diesem Band landen.
+Run-Siegquote: 45 % (Smart-Bot), 18 % (Naive-Bot). Ohne Artefakte
+(`--no-artifacts`) sind es 11 % — die Artefakte sollen dem Spieler helfen,
+die Gegner-Budgets sind deshalb bewusst nicht mitgewachsen.
 Die Bots wählen Karten stur nach Seltenheit bzw. zufällig; wer gezielt
 auf eine Strategie baut, sollte deutlich öfter gewinnen.
 

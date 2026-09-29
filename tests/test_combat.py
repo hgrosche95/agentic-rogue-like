@@ -20,7 +20,6 @@ DEFEND = Card(id="defend", name="Defend", type=CardType.BLOCK, value=5, descript
 MEND = Card(id="mend", name="Mend", type=CardType.HEAL, value=4, description="")
 AMPLIFIER = Card(id="amp", name="Amplifier", type=CardType.AMPLIFIER, value=25, description="")
 ARMOR = Card(id="armor", name="Armor", type=CardType.ARMOR, value=1, description="")
-RECYCLING = Card(id="recycling", name="Recycling", type=CardType.RECYCLING, value=0, description="")
 DRAW_BONUS = Card(id="more", name="More", type=CardType.DRAW_BONUS, value=1, description="")
 FINAL_STRIKE = Card(
     id="final-strike", name="Final Strike", type=CardType.FINAL_STRIKE, value=5, description=""
@@ -121,19 +120,6 @@ def test_armor_reduces_incoming_damage_on_top_of_block() -> None:
     # attack=100 is nowhere near blockable to 0 - just confirm armor
     # participated (hp loss is less than the raw 100+ damage would be).
     assert player.hp > 50 - (100 + 6)
-
-
-def test_recycling_sends_action_cards_to_the_deck_instead_of_discard() -> None:
-    player = _player([STRIKE, RECYCLING] + [MEND] * 8)
-    state, _ = start_combat(player.deck, _enemy(), random.Random(1))
-    recycling_index = next(i for i, c in enumerate(state.hand) if c.type is CardType.RECYCLING)
-    play_card(state, recycling_index, 4, player, random.Random(2))
-
-    strike_index = next(i for i, c in enumerate(state.hand) if c.type is CardType.ATTACK)
-    play_card(state, strike_index, 0, player, random.Random(2))  # left of Recycling
-
-    assert not any(c.id == STRIKE.id for c in state.discard_pile)
-    assert any(c.id == STRIKE.id for c in state.draw_pile)
 
 
 def test_draw_bonus_increases_cards_drawn_at_end_of_turn() -> None:

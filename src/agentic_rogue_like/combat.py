@@ -186,13 +186,6 @@ def _amplifier_multiplier(state: CombatState, slot_index: int) -> float:
     return 1 + 0.25 * boosts
 
 
-def _recycles(state: CombatState, slot_index: int) -> bool:
-    return any(
-        c is not None and c.type is CardType.RECYCLING and i > slot_index
-        for i, c in enumerate(state.field)
-    )
-
-
 def play_card(
     state: CombatState, hand_index: int, slot_index: int, player: PlayerState, rng: random.Random
 ) -> str:
@@ -212,22 +205,15 @@ def play_card(
         state.field[slot_index] = card
         return cost_line + f"You play {card.name} in slot {slot_index + 1} - it stays on the field."
 
-    # Action card: multiplier/recycling are read from the field *before* the
-    # effect runs, so e.g. Final Strike destroying the very Amplifier/
-    # Recycling permanent it benefited from still counts that benefit.
+    # Action card: the multiplier is read from the field *before* the effect
+    # runs, so e.g. Final Strike destroying the very Amplifier it benefited
+    # from still counts that benefit.
     multiplier = _amplifier_multiplier(state, slot_index)
-    recycles = _recycles(state, slot_index)
     line = cost_line + _apply_action_effect(state, card, multiplier, player, rng)
 
     if card.exhaust:
-        # One-shot beats Recycling - otherwise a Recycling permanent would
-        # turn every one-shot card into an infinitely reusable one.
         state.banished_pile.append(card)
         line += " It's used up and banished for the rest of the fight."
-    elif recycles:
-        state.draw_pile.append(card)
-        rng.shuffle(state.draw_pile)
-        line += " It's recycled straight back into the deck."
     else:
         state.discard_pile.append(card)
 
@@ -314,6 +300,24 @@ def _apply_action_effect(
             state.banished_pile.remove(c)
         state.hand.extend(returned)
         return f"You play {card.name}, restoring {_names(returned)} from the banished pile."
+
+    if card.type is CardType.REBOOT:
+        # Only what was banished *before* this card counts: the permanents it
+        # destroys are the price and stay banished. Restore-type cards (and
+        # other Reboots) never come back - they could fetch each other forever.
+        returning = [
+            c for c in state.banished_pile if c.type not in (CardType.RESTORE, CardType.REBOOT)
+        ]
+        for c in returning:
+            state.banished_pile.remove(c)
+        destroyed = [c for c in state.field if c is not None]
+        state.banished_pile.extend(destroyed)
+        state.field = [None] * FIELD_SIZE
+        state.hand.extend(returning)
+        return (
+            f"You play {card.name}, wiping {len(destroyed)} permanent card(s) and "
+            f"restoring {_names(returning)} from the banished pile."
+        )
 
     if card.type is CardType.BLOCK:
         amount = round((card.value + total(state.artifacts, "block_bonus")) * multiplier)

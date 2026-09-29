@@ -35,8 +35,6 @@ export function commandFor(card: Card, enemyName: string): string {
       return `overclock --atk +${card.value}%`;
     case "armor":
       return `encrypt --armor ${card.value}`;
-    case "recycling":
-      return `gc --recycle`;
     case "draw_bonus":
       return `prefetch --cards +${card.value}`;
     case "draw":
@@ -45,6 +43,8 @@ export function commandFor(card: Card, enemyName: string): string {
       return `git reset --soft HEAD~${card.value}`;
     case "restore":
       return `undelete --last ${card.value}`;
+    case "reboot":
+      return `sudo systemctl reboot --restore-all`;
     case "damage_boost":
       return `loadbalance --spread`;
     case "turret":

@@ -13,9 +13,9 @@ export type CardType =
   | "draw"
   | "retrieve"
   | "restore"
+  | "reboot"
   | "amplifier"
   | "armor"
-  | "recycling"
   | "draw_bonus"
   | "damage_boost"
   | "turret"
@@ -24,7 +24,6 @@ export type CardType =
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
   "armor",
-  "recycling",
   "draw_bonus",
   "damage_boost",
   "turret",

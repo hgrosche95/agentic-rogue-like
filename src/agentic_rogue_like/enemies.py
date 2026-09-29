@@ -44,3 +44,19 @@ def pick_enemy(floor: int, num_floors: int, elite: bool, boss: bool, rng: random
     else:
         pool = ENEMY_POOL["mid"]
     return rng.choice(pool).model_copy(deep=True)
+
+
+# Enemies in the second half of the timeline hit harder: +10% HP and attack
+# (and with it block - a defending enemy blocks its attack stat, see
+# combat.py). Applied after an enemy is picked or generated, on top of
+# agent/budgets.py, so the encounter agent's envelopes - and the evals that
+# check the agent against them - stay exactly as they are.
+LATE_SCALING = 1.10
+
+
+def escalate(enemy: Enemy, floor: int, num_floors: int) -> Enemy:
+    if floor < num_floors // 2:
+        return enemy
+    return enemy.model_copy(
+        update={"hp": round(enemy.hp * LATE_SCALING), "attack": round(enemy.attack * LATE_SCALING)}
+    )

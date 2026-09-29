@@ -8,12 +8,13 @@ their own payoff card, so a run can lean into one of them:
 - permanents: Botnet, Load Balancer, Mainframe hit harder the fuller the field;
 - graveyard: Memory Dump/Brute Force/Fork Bomb fill it, Stack Overflow and Rollback use it;
 - one-shot cards: Zero-Day/Sandbox/Backup are strong but banished after use,
-  Payload grows with the banished pile, Undelete brings one card back.
+  Payload grows with the banished pile, Undelete brings one card back and
+  System Restore all of them - at the price of the whole field.
 
 Every card that puts cards into the hand mid-turn (draw, retrieve, restore)
 is one-shot on purpose: there is no energy, so a reusable one would allow an
-endless loop (Phishing next to a Garbage Collector drawing itself forever,
-two Undeletes fetching each other back, ...). test_cards.py guards this.
+endless loop (two Undeletes fetching each other back, a System Restore
+restoring itself, ...). test_cards.py guards this.
 """
 
 from __future__ import annotations
@@ -46,9 +47,6 @@ def starter_deck() -> list[Card]:
         for i in range(3)
     ]
     cards.append(
-        Card(id="mend-0", name="Hotfix", type=CardType.HEAL, value=4, description="Heal 4 HP.")
-    )
-    cards.append(
         Card(
             id="amplifier-0",
             name="Overclock",
@@ -64,18 +62,6 @@ def starter_deck() -> list[Card]:
             type=CardType.ARMOR,
             value=1,
             description="Permanent. Reduce incoming damage by 1.",
-        )
-    )
-    cards.append(
-        Card(
-            id="recycling-0",
-            name="Garbage Collector",
-            type=CardType.RECYCLING,
-            value=0,
-            description=(
-                "Permanent. Action cards played to its left go back to the "
-                "deck instead of the discard pile."
-            ),
         )
     )
     cards.append(
@@ -227,6 +213,18 @@ REWARD_POOL: list[Card] = [
         exhaust=True,
         rarity=Rarity.RARE,
         description="One-shot. Return the last banished card (not an Undelete) to your hand.",
+    ),
+    Card(
+        id="system-restore",
+        name="System Restore",
+        type=CardType.REBOOT,
+        value=0,
+        exhaust=True,
+        rarity=Rarity.RARE,
+        description=(
+            "One-shot. Destroy all permanent cards on the field. Return every "
+            "banished card (not a restore card) to your hand."
+        ),
     ),
     # ---- permanents
     Card(

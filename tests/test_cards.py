@@ -46,7 +46,10 @@ def test_pool_has_unique_names_and_ids() -> None:
 def test_cards_that_refill_the_hand_are_one_shot() -> None:
     # Without energy, a reusable one of these would allow an endless loop.
     for card in REWARD_POOL:
-        if card.type in (CardType.DRAW, CardType.RETRIEVE, CardType.RESTORE) or card.draw:
+        if (
+            card.type in (CardType.DRAW, CardType.RETRIEVE, CardType.RESTORE, CardType.REBOOT)
+            or card.draw
+        ):
             assert card.exhaust, card.name
 
 
@@ -66,14 +69,21 @@ def test_reward_card_gets_an_id_unique_in_the_deck() -> None:
     assert len({c.id for c in deck}) == len(deck)
 
 
-def test_one_shot_card_is_banished_even_next_to_recycling() -> None:
-    recycling = next(c for c in starter_deck() if c.type is CardType.RECYCLING)
-    state = _state([_card("Zero-Day")])
-    state.field[4] = recycling
+def test_starter_deck_has_no_heal_card() -> None:
+    assert all(c.type is not CardType.HEAL for c in starter_deck())
+
+
+def test_system_restore_trades_the_field_for_the_banished_pile() -> None:
+    zero_day, undelete = _card("Zero-Day"), _card("Undelete")
+    state = _state([_card("System Restore")], banished_pile=[zero_day, undelete])
+    armor = Card(id="armor", name="Armor", type=CardType.ARMOR, value=1, description="")
+    state.field[3] = armor
     play_card(state, 0, 0, _player(), random.Random(1))
-    assert state.enemy_hp == 200 - (16 + 3)
-    assert [c.name for c in state.banished_pile] == ["Zero-Day"]
-    assert all(c.name != "Zero-Day" for c in state.draw_pile)
+    # the one-shot comes back; the restore card and the destroyed permanent
+    # stay banished, and so does System Restore itself
+    assert [c.name for c in state.hand] == ["Zero-Day"]
+    assert state.field == [None] * 5
+    assert sorted(c.name for c in state.banished_pile) == ["Armor", "System Restore", "Undelete"]
 
 
 def test_discard_cost_throws_away_other_hand_cards() -> None:
