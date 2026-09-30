@@ -41,6 +41,8 @@ export interface Card {
   rarity: Rarity;
   // one-shot: banished for the rest of the fight after it is played
   exhaust: boolean;
+  // attacks only: the damage is dealt this many times
+  hits: number;
 }
 
 // A passive bonus for the rest of the run. Only the text is shown - the
@@ -80,6 +82,9 @@ export interface PendingEventView {
 
 export interface HandCardView extends Card {
   hand_index: number;
+  // what the card comes out with in each field slot (damage per hit, block,
+  // healing) - null for occupied slots and cards without such a number
+  preview: (number | null)[];
 }
 
 export type EnemyIntentType = "attack" | "defend";
@@ -92,6 +97,12 @@ export interface PendingCombatView {
   enemy_block: number;
   enemy_intent: EnemyIntentType;
   enemy_intent_value: number;
+  // the attack's d6 range, and what of it gets through block and armor if
+  // the turn ended now (both 0 while the enemy defends)
+  enemy_intent_min: number;
+  enemy_intent_max: number;
+  incoming_min: number;
+  incoming_max: number;
   hand: HandCardView[];
   field: (Card | null)[];
   player_block: number;

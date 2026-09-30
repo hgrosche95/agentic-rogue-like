@@ -100,6 +100,36 @@ def enemy_attack(state: CombatState) -> int:
     return max(0, state.enemy.attack + total(state.artifacts, "enemy_attack"))
 
 
+def player_armor(state: CombatState) -> int:
+    """Flat reduction of the enemy's hit: armor cards on the field plus artifacts."""
+    armor = sum(1 for c in state.field if c is not None and c.type is CardType.ARMOR)
+    return armor + total(state.artifacts, "armor")
+
+
+def fortify_block(state: CombatState) -> int:
+    """Block the Mainframes raise at the end of the turn, before the enemy acts."""
+    fortify = sum(c.value for c in state.field if c and c.type is CardType.FORTIFY)
+    return fortify * permanent_count(state)
+
+
+def turn_block(state: CombatState) -> int:
+    """Block the artifacts raise at the end of this turn, before the enemy acts."""
+    return every_nth_turn(state.artifacts, "turn_block", "turn_block_every", state.turn)
+
+
+def incoming_damage(state: CombatState) -> tuple[int, int]:
+    """(lowest, highest) damage the telegraphed attack would do if the turn
+    ended now - the d6 roll on top of the attack stat, after the block the
+    player has and is about to raise, and after armor. (0, 0) while the enemy
+    is defending.
+    """
+    if state.enemy_intent is not EnemyIntentType.ATTACK:
+        return 0, 0
+    reduction = state.player_block + fortify_block(state) + turn_block(state) + player_armor(state)
+    base = enemy_attack(state)
+    return max(0, base + 1 - reduction), max(0, base + 6 - reduction)
+
+
 def excess_hand_cards(state: CombatState) -> int:
     """How many cards have to be discarded before the turn can end."""
     return max(0, len(state.hand) - max_hand_size(state))
@@ -256,6 +286,31 @@ def attack_damage(
     return round(base * multiplier)
 
 
+def action_preview(
+    state: CombatState, card: Card, player: PlayerState, slot_index: int
+) -> int | None:
+    """The number an action card would come out with in `slot_index`: damage
+    per hit, block gained or HP healed, after ATK, artifacts and any
+    amplifier to its left. None for cards without such a number (permanents,
+    card flow) and for occupied slots.
+
+    Reads the same helpers _apply_action_effect uses, so the preview is what
+    the play will actually do.
+    """
+    if state.field[slot_index] is not None:
+        return None
+    multiplier = _amplifier_multiplier(state, slot_index)
+    if card.type is CardType.ATTACK:
+        return attack_damage(state, card, player, multiplier)
+    if card.type is CardType.BLOCK:
+        return round((card.value + total(state.artifacts, "block_bonus")) * multiplier)
+    if card.type is CardType.HEAL:
+        return round((card.value + total(state.artifacts, "heal_bonus")) * multiplier)
+    if card.type is CardType.FINAL_STRIKE:
+        return round(card.value * permanent_count(state) * multiplier)
+    return None
+
+
 def _apply_action_effect(
     state: CombatState, card: Card, multiplier: float, player: PlayerState, rng: random.Random
 ) -> str:
@@ -376,22 +431,18 @@ def end_turn(
         )
         if state.enemy_hp <= 0:
             return log
-    fortify = sum(c.value for c in state.field if c and c.type is CardType.FORTIFY)
-    if fortify:
-        gained = fortify * permanent_count(state)
+    if gained := fortify_block(state):
         state.player_block += gained
         log.append(f"Your mainframe raises {gained} block.")
-    turn_block = every_nth_turn(state.artifacts, "turn_block", "turn_block_every", state.turn)
-    if turn_block:
-        state.player_block += turn_block
-        log.append(f"Your artifacts raise {turn_block} block.")
+    if gained := turn_block(state):
+        state.player_block += gained
+        log.append(f"Your artifacts raise {gained} block.")
 
     if state.enemy_intent is EnemyIntentType.DEFEND:
         state.enemy_block += state.enemy.attack
         log.append(f"{state.enemy.name} braces itself, gaining {state.enemy.attack} block.")
     else:
-        armor = sum(1 for c in state.field if c is not None and c.type is CardType.ARMOR)
-        armor += total(state.artifacts, "armor")
+        armor = player_armor(state)
         reduction = state.player_block + armor
         raw_damage = enemy_attack(state) + rng.randint(1, 6)
         blocked = min(raw_damage, reduction)

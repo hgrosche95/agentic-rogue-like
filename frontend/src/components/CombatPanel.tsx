@@ -12,8 +12,9 @@ import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useCardDrag } from "../hooks/useCardDrag";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
-import { CardFace } from "./CardFace";
-import { CombatArena } from "./CombatArena";
+import { rangeText, unitOf } from "../readouts";
+import { CardFace, type Readout } from "./CardFace";
+import { CombatArena, IntentIcon } from "./CombatArena";
 
 function Pile({ label, count, kind }: { label: string; count: number; kind: string }) {
   return (
@@ -38,6 +39,22 @@ function HpBar({ hp, max, side }: { hp: number; max: number; side: "player" | "e
   );
 }
 
+// An empty slot shows its number - and, while a card is aimed at the stack,
+// what that card would do from here, lit up where an amplifier boosts it.
+function SlotPreview({ index, card, low }: { index: number; card?: HandCardView; low?: number }) {
+  const label = String(index + 1).padStart(2, "0");
+  const value = card?.preview[index];
+  const unit = card && unitOf(card.type);
+  if (value === null || value === undefined || !unit) return <>{label}</>;
+  return (
+    <span className={`slot-preview${low !== undefined && value > low ? " is-boosted" : ""}`}>
+      <span className="slot-no">{label}</span>
+      <b>{value}</b>
+      <span className="slot-unit">{unit}</span>
+    </span>
+  );
+}
+
 function initials(name: string): string {
   return name
     .split(/\s+/)
@@ -45,6 +62,19 @@ function initials(name: string): string {
     .slice(0, 2)
     .map((word) => word[0].toUpperCase())
     .join("");
+}
+
+// What a hand card will come out with: in `slot` when the player is pointing
+// at one, otherwise in the weakest free slot - with the best free slot as a
+// hint that position matters. Undefined for cards without such a number.
+function readoutOf(card: HandCardView, slot: number | null): Readout | undefined {
+  const values = card.preview.filter((v): v is number => v !== null);
+  if (values.length === 0) return undefined;
+  const low = Math.min(...values);
+  const best = Math.max(...values);
+  const at = slot === null ? null : card.preview[slot];
+  const value = at ?? low;
+  return { value, best, boosted: value > low };
 }
 
 // The hand fans out like cards held in a hand: each one turned a little
@@ -78,6 +108,8 @@ export function CombatPanel({
   onContinue?: () => void;
 }) {
   const [selectedHandIndex, setSelectedHandIndex] = useState<number | null>(null);
+  // the free slot the pointer rests on while a card is selected
+  const [pointedSlot, setPointedSlot] = useState<number | null>(null);
   // Over the hand limit, ending the turn first asks which cards to discard.
   // The picks belong to the table they were made on, so any new state from
   // the server (a card played, a turn ended) drops them; null while not choosing.
@@ -176,6 +208,13 @@ export function CombatPanel({
     onDrop: (handIndex, slotIndex, slot, from) => playIntoSlot(slotIndex, slot, handIndex, from),
   });
 
+  // the card being aimed (selected or dragged) and the slot it is aimed at
+  const aimedIndex = discarding === null ? (drag.dragging ?? selectedHandIndex) : null;
+  const aimedCard = aimedIndex === null ? undefined : combat.hand.find((c) => c.hand_index === aimedIndex);
+  const aimedSlot = drag.dragging !== null ? drag.hoverSlot : pointedSlot;
+  const aimedLow = aimedCard && readoutOf(aimedCard, null);
+  const attacking = combat.enemy_intent === "attack";
+
   return (
     <div className="combat-panel">
       <CombatArena
@@ -186,7 +225,8 @@ export function CombatPanel({
           attack: combat.enemy_intent_value,
           setting,
           intent: combat.enemy_intent,
-          intentValue: combat.enemy_intent_value,
+          intentMin: combat.enemy_intent_min,
+          intentMax: combat.enemy_intent_max,
         }}
         exchange={exchange}
         log={log}
@@ -210,6 +250,16 @@ export function CombatPanel({
             </span>
             <HpBar hp={shownPlayerHp} max={player.max_hp} side="player" />
             <div className="hud-meta">
+              {attacking && !enemySlain && (
+                <span
+                  className={`incoming-badge${combat.incoming_max === 0 ? " is-safe" : ""}`}
+                  title="What the enemy's attack does to you if you end the turn now - after block and armor"
+                >
+                  {combat.incoming_max === 0
+                    ? "Fully blocked"
+                    : `Incoming ${rangeText(combat.incoming_min, combat.incoming_max)}`}
+                </span>
+              )}
               {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
               {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
               <ArtifactBar artifacts={player.artifacts} compact />
@@ -235,11 +285,13 @@ export function CombatPanel({
                 <button
                   key={slotIndex}
                   data-slot-index={slotIndex}
-                  className={`field-slot is-empty${(selectedHandIndex !== null || drag.dragging !== null) && discarding === null ? " is-targetable" : ""}${drag.hoverSlot === slotIndex ? " is-drop-target" : ""}`}
+                  className={`field-slot is-empty${aimedCard ? " is-targetable" : ""}${drag.hoverSlot === slotIndex ? " is-drop-target" : ""}`}
                   disabled={busy || selectedHandIndex === null || discarding !== null}
                   onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
+                  onPointerEnter={() => setPointedSlot(slotIndex)}
+                  onPointerLeave={() => setPointedSlot((s) => (s === slotIndex ? null : s))}
                 >
-                  {String(slotIndex + 1).padStart(2, "0")}
+                  <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} />
                 </button>
               ) : (
                 <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
@@ -257,10 +309,15 @@ export function CombatPanel({
             </span>
             <HpBar hp={shownEnemyHp} max={combat.enemy_max_hp} side="enemy" />
             <div className="hud-meta">
+              {!enemySlain && (
+                <span className={`intent-badge type-${combat.enemy_intent}`}>
+                  <IntentIcon intent={combat.enemy_intent} />
+                  {attacking ? "Attack" : "Brace"} {rangeText(combat.enemy_intent_min, combat.enemy_intent_max)}
+                </span>
+              )}
               {combat.enemy_block > 0 && (
                 <span className="block-badge enemy-block-badge">Block {combat.enemy_block}</span>
               )}
-              {/* the next move is shown over the enemy's head in the arena */}
               {enemySlain && <span className="intent-badge is-defeated">Defeated</span>}
             </div>
           </div>
@@ -288,7 +345,7 @@ export function CombatPanel({
                   if (!drag.consumeClick()) selectCard(card.hand_index);
                 }}
               >
-                <CardFace card={card} />
+                <CardFace card={card} readout={readoutOf(card, aimedIndex === card.hand_index ? aimedSlot : null)} />
               </button>
             ))}
           </div>

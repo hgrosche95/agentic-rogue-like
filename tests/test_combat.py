@@ -8,8 +8,10 @@ from agentic_rogue_like.combat import (
     HAND_SIZE,
     MAX_HAND_SIZE,
     EnemyIntentType,
+    action_preview,
     auto_resolve_combat,
     end_turn,
+    incoming_damage,
     play_card,
     start_combat,
 )
@@ -279,3 +281,47 @@ def test_auto_resolve_combat_is_deterministic_for_a_given_seed() -> None:
     assert victory_a == victory_b
     assert log_a == log_b
     assert player_a.hp == player_b.hp
+
+
+def test_action_preview_matches_the_damage_actually_dealt_per_slot() -> None:
+    player = _player([AMPLIFIER, STRIKE, STRIKE] + [MEND] * 7)
+    state, _ = start_combat(player.deck, _enemy(hp=999), random.Random(1))
+    amp_index = next(i for i, c in enumerate(state.hand) if c.type is CardType.AMPLIFIER)
+    play_card(state, amp_index, 1, player, random.Random(2))
+    strike = next(c for c in state.hand if c.type is CardType.ATTACK)
+
+    previews = [action_preview(state, strike, player, slot) for slot in range(FIELD_SIZE)]
+
+    plain = STRIKE.value + player.attack
+    assert previews == [plain, None, round(plain * 1.25), round(plain * 1.25), round(plain * 1.25)]
+    play_card(state, state.hand.index(strike), 3, player, random.Random(2))
+    assert 999 - state.enemy_hp == previews[3]
+
+
+def test_action_preview_is_none_for_permanents() -> None:
+    player = _player(_basic_deck())
+    state, _ = start_combat(player.deck, _enemy(), random.Random(1))
+
+    assert action_preview(state, ARMOR, player, 0) is None
+
+
+def test_incoming_damage_spans_the_roll_after_block_and_armor() -> None:
+    player = _player([ARMOR] + [DEFEND] * 9)
+    state, _ = start_combat(player.deck, _enemy(attack=10), random.Random(1))
+    state.enemy_intent = EnemyIntentType.ATTACK
+    play_card(state, state.hand.index(ARMOR), 0, player, random.Random(2))
+    play_card(state, state.hand.index(DEFEND), 1, player, random.Random(2))
+
+    low, high = incoming_damage(state)
+    assert (low, high) == (10 + 1 - 5 - 1, 10 + 6 - 5 - 1)
+
+    end_turn(state, player, random.Random(3))
+    assert low <= 50 - player.hp <= high
+
+
+def test_incoming_damage_is_zero_while_the_enemy_defends() -> None:
+    player = _player(_basic_deck())
+    state, _ = start_combat(player.deck, _enemy(attack=10), random.Random(1))
+    state.enemy_intent = EnemyIntentType.DEFEND
+
+    assert incoming_damage(state) == (0, 0)
