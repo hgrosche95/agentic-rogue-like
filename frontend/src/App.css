@@ -1276,10 +1276,85 @@ button.is-primary:hover:not(:disabled),
   margin-bottom: 1.3rem;
 }
 
+/* -- the black market (ShopScreen): cards and artifacts with price tags -- */
+.shop-credits {
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
 
-/* -- arena: three stacked full-frame renders from one Blender camera.
-   The percentages below (fighter origins, popup spots, monitor glass) are
-   measured from that camera, so they stay right at any size. -- */
+.shop-section {
+  margin: 0 0 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.shop-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.shop-artifacts {
+  margin-bottom: 1.3rem;
+}
+
+.price-tag {
+  min-width: 4.6rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 99px;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-accent);
+  background: var(--gold);
+  box-shadow: 0 0 14px rgba(255, 209, 102, 0.35);
+}
+
+/* can't afford it: the price turns red, the item dims */
+.price-tag.is-short {
+  color: #ffd6e4;
+  background: rgba(255, 79, 139, 0.2);
+  border: 1px solid var(--danger);
+  box-shadow: none;
+}
+
+.price-tag.is-sold {
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--line);
+  box-shadow: none;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+/* filter, not opacity: the deal-in animation holds opacity at 1 */
+.shop-item > button:disabled {
+  cursor: not-allowed;
+  filter: saturate(0.35) brightness(0.6);
+}
+
+.shop-item > button.is-sold {
+  filter: grayscale(1) brightness(0.35);
+}
+
+/* artifacts of different text lengths: equal heights, tags on one line */
+.shop-artifacts {
+  align-items: stretch;
+}
+
+.shop-artifacts > .shop-item > .artifact-card {
+  flex: 1;
+}
+
+
+/* -- arena: the pixel scene (CombatArena / PixelStage) with HTML overlays
+   placed from pixel/layout.ts, so they stay right at any size. -- */
 .arena-stage {
   position: relative;
   aspect-ratio: 1920 / 800;

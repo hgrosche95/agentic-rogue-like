@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from .engine import available_choices, move_to, new_run, resolve_node
 from .events import EventOption, GameEvent
 from .models import Artifact, Card, RunState, RunStatus
+from .shop import buy_artifact, buy_card
 
 
 def _prompt_index(count: int) -> int:
@@ -42,6 +43,33 @@ def _choose_artifact(offer: list[Artifact]) -> int:
     return _prompt_index(len(offer))
 
 
+def _browse_shop(run: RunState) -> None:
+    shop = run.shop
+    while shop is not None:
+        print(f"\nBlack market - you have {run.player.gold} gold:")
+        items = [
+            ("card", i, item.card.name, item.card.description, item)
+            for i, item in enumerate(shop.cards)
+        ]
+        items += [
+            ("artifact", i, item.artifact.name, item.artifact.description, item)
+            for i, item in enumerate(shop.artifacts)
+        ]
+        for n, (_, _, name, description, item) in enumerate(items, start=1):
+            price = "sold" if item.sold else f"{item.price} gold"
+            print(f"  {n}. {name} ({price}) - {description}")
+        print(f"  {len(items) + 1}. Leave")
+        choice = _prompt_index(len(items) + 1)
+        if choice == len(items):
+            return
+        kind, index = items[choice][0], items[choice][1]
+        try:
+            (buy_card if kind == "card" else buy_artifact)(run, index)
+            print(run.history[-1])
+        except ValueError as exc:
+            print(exc)
+
+
 def _choose_next_node(run: RunState, choices: list[str]) -> str:
     print("\nPaths ahead:")
     for i, node_id in enumerate(choices, start=1):
@@ -68,6 +96,7 @@ def main() -> None:
                 choose_event_option=_choose_event_option,
                 choose_card=_choose_card,
                 choose_artifact_option=_choose_artifact,
+                browse_shop=_browse_shop,
             )
             for line in run.history[last_printed:]:
                 print(line)

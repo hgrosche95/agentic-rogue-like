@@ -140,6 +140,25 @@ class PlayerState(BaseModel):
         return self.hp > 0
 
 
+class ShopCard(BaseModel):
+    card: Card
+    price: int
+    sold: bool = False
+
+
+class ShopArtifact(BaseModel):
+    artifact: Artifact
+    price: int
+    sold: bool = False
+
+
+class Shop(BaseModel):
+    """What a SHOP room has for sale - see shop.py."""
+
+    cards: list[ShopCard] = Field(default_factory=list)
+    artifacts: list[ShopArtifact] = Field(default_factory=list)
+
+
 class Enemy(BaseModel):
     id: str
     name: str
@@ -189,3 +208,6 @@ class RunState(BaseModel):
     # before the room they arrived in can be entered.
     steps: int = 0
     artifact_offer: list[Artifact] | None = None
+    # The shop the player is browsing - open from entering a SHOP room until
+    # they leave it; the run can't move on while it is open.
+    shop: Shop | None = None

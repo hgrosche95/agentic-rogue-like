@@ -67,6 +67,15 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 - [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
       drei wählen, danach alle 3 Schritte auf der Map ein weiteres
       (`/runs/{id}/artifact`). 20 Stück in `artifacts.py`, siehe *Artefakte* unten.
+- [x] **Schwarzmarkt** — jeder Shop-Raum bietet eine zufällige Auswahl
+      aus 4 Karten (nach Seltenheit gewichtet, wie eine Kartenbelohnung) und
+      2 Artefakten, die man noch nicht hat, gegen Credits (Gold): Karten
+      je nach Seltenheit ~25/45/70, Artefakte ~75, jeweils ±15 %. Man kann
+      beliebig viel kaufen, solange das Gold reicht, und verlässt den Shop
+      selbst (`/runs/{id}/shop/buy-card`, `/shop/buy-artifact`,
+      `/shop/leave`). Das Angebot kommt aus einem eigenen, pro Run und Raum
+      geseedeten Zufallsgenerator (`shop.py`), verschiebt also keine anderen
+      Zufallsergebnisse des Runs. `balance-sim` modelliert Shops noch nicht.
 - [x] **Oberfläche ("Rift")** — Zeitreise-Sci-Fi-Look: Glas-Panels auf
       violettem Grund, Cyan für die Maschinenwelt, Magenta/Orange für das
       Labor. Die Karte ist eine Zeitachse (Etagen als Jahre 1969 → Ω), ein
@@ -123,6 +132,7 @@ src/agentic_rogue_like/
 ├── combat.py       Kartenbasierter Kampf: Deck/Hand/Feld, Zieh-/Ablagelogik
 ├── cards.py        Startdeck mit IT-Namen (Exploit, Firewall, Kernel Panic, ...; Aktions- + permanente Karten)
 ├── artifacts.py    Artefakt-Pool und -Angebote (passive Run-Boni)
+├── shop.py         Schwarzmarkt: zufälliges Angebot aus Karten und Artefakten, Preise, Kaufen
 ├── events.py       Event-/Rest-/Shop-Auflösung
 ├── enemies.py      Statischer Gegner-Pool (Fallback für den Encounter-Agent)
 ├── engine.py       Der deterministische Kern-Loop, den CLI und API beide treiben

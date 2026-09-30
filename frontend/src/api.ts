@@ -113,6 +113,24 @@ export interface PendingCombatView {
   banished_count: number;
 }
 
+export interface ShopCard {
+  card: Card;
+  price: number;
+  sold: boolean;
+}
+
+export interface ShopArtifact {
+  artifact: Artifact;
+  price: number;
+  sold: boolean;
+}
+
+// What a black market room sells, until the player leaves it.
+export interface ShopView {
+  cards: ShopCard[];
+  artifacts: ShopArtifact[];
+}
+
 export interface RunView {
   run_id: string;
   status: RunStatus;
@@ -127,6 +145,7 @@ export interface RunView {
   pending_combat: PendingCombatView | null;
   card_reward: Card[] | null;
   artifact_offer: Artifact[] | null;
+  shop: ShopView | null;
   nodes: Record<string, MapNode>;
 }
 
@@ -183,6 +202,24 @@ export function chooseArtifact(runId: string, artifactIndex: number): Promise<Ru
     method: "POST",
     body: JSON.stringify({ artifact_index: artifactIndex }),
   });
+}
+
+export function buyShopCard(runId: string, index: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/shop/buy-card`, {
+    method: "POST",
+    body: JSON.stringify({ index }),
+  });
+}
+
+export function buyShopArtifact(runId: string, index: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/shop/buy-artifact`, {
+    method: "POST",
+    body: JSON.stringify({ index }),
+  });
+}
+
+export function leaveShop(runId: string): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/shop/leave`, { method: "POST" });
 }
 
 export function playCard(runId: string, handIndex: number, slotIndex: number): Promise<RunView> {

@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import {
+  buyShopArtifact,
+  buyShopCard,
   chooseArtifact,
   chooseCardReward,
   chooseEventOption,
   chooseNextNode,
   createRun,
   endCombatTurn,
+  leaveShop,
   listSettings,
   playCard,
   resolveCurrentNode,
@@ -31,6 +34,7 @@ import { CloseButton, Overlay } from "./components/Overlay";
 import { eraLabel, numFloorsOf } from "./eras";
 import { RewardScreen } from "./components/RewardScreen";
 import { SettingPicker } from "./components/SettingPicker";
+import { ShopScreen } from "./components/ShopScreen";
 
 const FALLBACK_SETTINGS = ["dungeon"];
 const INTRO_SEEN_KEY = "agentic-rogue-like:intro-seen";
@@ -199,7 +203,12 @@ function App() {
   const ongoing = run.status === "ongoing";
   const canJump = ongoing && !slainCombat && run.node_resolved && run.available_choices.length > 0;
   const needsEnter =
-    ongoing && !run.pending_event && !run.card_reward && !run.artifact_offer && !run.node_resolved;
+    ongoing &&
+    !run.pending_event &&
+    !run.card_reward &&
+    !run.artifact_offer &&
+    !run.shop &&
+    !run.node_resolved;
 
   return (
     <main className={`game${inCombat ? " is-combat" : ""}`}>
@@ -300,6 +309,18 @@ function App() {
             deckSize={run.player.deck.length}
             disabled={isLoading}
             onPick={(cardIndex) => runAction(() => chooseCardReward(run.run_id, cardIndex))}
+          />
+        </Overlay>
+      )}
+      {!combat && ongoing && run.shop && (
+        <Overlay label="Black market" className="is-wide">
+          <ShopScreen
+            shop={run.shop}
+            gold={run.player.gold}
+            disabled={isLoading}
+            onBuyCard={(index) => runAction(() => buyShopCard(run.run_id, index))}
+            onBuyArtifact={(index) => runAction(() => buyShopArtifact(run.run_id, index))}
+            onLeave={() => runAction(() => leaveShop(run.run_id))}
           />
         </Overlay>
       )}

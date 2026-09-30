@@ -48,6 +48,7 @@ from .engine import (
     finalize_combat,
     move_to,
     new_run,
+    open_shop,
     play_combat_card,
     resolve_node,
     start_combat_node,
@@ -62,8 +63,10 @@ from .models import (
     NodeType,
     PlayerState,
     RunStatus,
+    Shop,
 )
 from .sessions import RunSession, create_session, get_session
+from .shop import buy_artifact, buy_card, leave_shop
 
 app = FastAPI(title="agentic-rogue-like")
 
@@ -151,6 +154,36 @@ class PendingCombatView(BaseModel):
     banished_count: int
 
 
+class ShopCardView(BaseModel):
+    card: CardView
+    price: int
+    sold: bool
+
+
+class ShopArtifactView(BaseModel):
+    artifact: Artifact
+    price: int
+    sold: bool
+
+
+class ShopView(BaseModel):
+    cards: list[ShopCardView]
+    artifacts: list[ShopArtifactView]
+
+    @classmethod
+    def of(cls, shop: Shop) -> ShopView:
+        return cls(
+            cards=[
+                ShopCardView(card=CardView.of(item.card), price=item.price, sold=item.sold)
+                for item in shop.cards
+            ],
+            artifacts=[
+                ShopArtifactView(artifact=item.artifact, price=item.price, sold=item.sold)
+                for item in shop.artifacts
+            ],
+        )
+
+
 class RunView(BaseModel):
     run_id: str
     status: RunStatus
@@ -166,6 +199,8 @@ class RunView(BaseModel):
     card_reward: list[CardView] | None
     # Artifacts to pick one from before the current room can be entered.
     artifact_offer: list[Artifact] | None
+    # The shop being browsed, until the player leaves it.
+    shop: ShopView | None
     # Every node in the run, not just the current/reachable ones - the
     # frontend draws the whole dungeon graph, not just the next step.
     nodes: dict[str, MapNode]
@@ -218,6 +253,10 @@ class CardRewardRequest(BaseModel):
     card_index: int | None
 
 
+class ShopBuyRequest(BaseModel):
+    index: int
+
+
 class ChooseNodeRequest(BaseModel):
     node_id: str
 
@@ -230,6 +269,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         and session.pending_event is None
         and session.combat is None
         and run.card_reward is None
+        and run.shop is None
     )
 
     pending_event = None
@@ -299,6 +339,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             None if run.card_reward is None else [CardView.of(c) for c in run.card_reward]
         ),
         artifact_offer=run.artifact_offer,
+        shop=None if run.shop is None else ShopView.of(run.shop),
         nodes=run.nodes,
     )
 
@@ -353,6 +394,8 @@ def resolve_current_node(run_id: str) -> RunView:
         session.combat = start_combat_node(
             run, session.rng, prefetched_enemy=prefetch.take_enemy(node.id)
         )
+    elif node.type is NodeType.SHOP:
+        open_shop(run, narrator=prefetch.narrator)
     else:
         resolve_node(run, session.rng, narrator=prefetch.narrator)
 
@@ -438,6 +481,32 @@ def choose_artifact_endpoint(run_id: str, request: ArtifactChoiceRequest) -> Run
     return _run_view(run_id, session)
 
 
+def _shop_action(run_id: str, action) -> RunView:
+    session = _get_session_or_404(run_id)
+    if session.run.shop is None:
+        raise HTTPException(status_code=409, detail="no shop open")
+    try:
+        action(session.run)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _run_view(run_id, session)
+
+
+@app.post("/runs/{run_id}/shop/buy-card")
+def buy_card_endpoint(run_id: str, request: ShopBuyRequest) -> RunView:
+    return _shop_action(run_id, lambda run: buy_card(run, request.index))
+
+
+@app.post("/runs/{run_id}/shop/buy-artifact")
+def buy_artifact_endpoint(run_id: str, request: ShopBuyRequest) -> RunView:
+    return _shop_action(run_id, lambda run: buy_artifact(run, request.index))
+
+
+@app.post("/runs/{run_id}/shop/leave")
+def leave_shop_endpoint(run_id: str) -> RunView:
+    return _shop_action(run_id, leave_shop)
+
+
 @app.post("/runs/{run_id}/choose-node")
 def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
     session = _get_session_or_404(run_id)
@@ -449,6 +518,7 @@ def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
         or session.pending_event is not None
         or session.combat is not None
         or run.card_reward is not None
+        or run.shop is not None
     ):
         raise HTTPException(status_code=409, detail="current node is not resolved yet")
     if request.node_id not in available_choices(run):
