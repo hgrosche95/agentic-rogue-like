@@ -14,7 +14,7 @@ import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { rangeText, unitOf } from "../readouts";
 import { CardFace, type Readout } from "./CardFace";
-import { CombatArena, IntentIcon } from "./CombatArena";
+import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
 
 function Pile({ label, count, kind }: { label: string; count: number; kind: string }) {
   return (
@@ -136,6 +136,7 @@ export function CombatPanel({
   const pending = busy ? played : null;
   const pendingCard = pending && combat.hand.find((c) => c.hand_index === pending.handIndex);
   const handRef = useRef<HTMLDivElement>(null);
+  const arenaRef = useRef<ArenaHandle>(null);
   // What the table looked like when the turn was ended, to tell once the
   // server answers whether the daemon fired and the enemy's blow got through.
   const endTurnFrom = useRef<{ combat: PendingCombatView; hp: number } | null>(null);
@@ -144,8 +145,16 @@ export function CombatPanel({
     const before = endTurnFrom.current;
     if (!before || before.combat === combat) return;
     endTurnFrom.current = null;
-    if (before.combat.field.some((card) => card?.type === "turret")) sfx.play("daemon_tick");
-    if (before.combat.enemy_intent !== "attack" || enemySlain) return;
+    const daemon = before.combat.field.some((card) => card?.type === "turret");
+    const attacked = before.combat.enemy_intent === "attack" && !enemySlain;
+    arenaRef.current?.enemyTurn({
+      attacked,
+      blocked: player.hp >= before.hp,
+      braced: before.combat.enemy_intent === "defend" && !enemySlain,
+      daemon,
+    });
+    if (daemon) sfx.play("daemon_tick");
+    if (!attacked) return;
     sfx.play("enemy_attack", { delayMs: 150 });
     // a hit through the block is voiced by the HP exchange (useHpExchange)
     if (player.hp >= before.hp && before.combat.player_block > 0) sfx.play("block_absorb", { delayMs: 300 });
@@ -199,6 +208,7 @@ export function CombatPanel({
       // Enter, and the command runs
       sfx.play("enter");
       sfx.play(cardSound(played.type), { hits: hitsOf(played.description), delayMs: 40 });
+      arenaRef.current?.cardPlayed(played.type, played.value);
       onPlayCard(handIndex, slotIndex);
     }, TYPING_MS + 150);
   }
@@ -218,6 +228,15 @@ export function CombatPanel({
   return (
     <div className="combat-panel">
       <CombatArena
+        ref={arenaRef}
+        status={{
+          block: combat.player_block,
+          armor: combat.armor,
+          enemyBlock: combat.enemy_block,
+          turrets: combat.field.filter((card) => card?.type === "turret").length,
+          amplifiers: combat.field.filter((card) => card?.type === "amplifier").length,
+          fortify: combat.field.filter((card) => card?.type === "fortify").length,
+        }}
         enemy={{
           name: combat.enemy_name,
           maxHp: combat.enemy_max_hp,
