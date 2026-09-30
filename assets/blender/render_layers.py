@@ -2,6 +2,9 @@
 
     python assets/blender/render_layers.py [--preview] [--out DIR] [LAYER ...]
 
+(needs `pip install bpy pillow`: Blender renders a lossless PNG, Pillow
+encodes the WebP with its slowest, smallest settings)
+
 Every layer is a full 1920x800 frame from the same camera, so the frontend
 can stack them 1:1 (see frontend/src/components/CombatArena.tsx):
 
@@ -23,9 +26,11 @@ the rift and the racks sits in the frame the same way the UI's glows do.
 
 import argparse
 import sys
+import tempfile
 from pathlib import Path
 
 import bpy
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
 BLEND = Path(__file__).with_name("arena.blend")
@@ -142,11 +147,17 @@ def render(layer: str, out_dir: Path, preview: bool):
     s.render.resolution_x, s.render.resolution_y = 1920, 800
     s.render.resolution_percentage = 50 if preview else 100
     s.cycles.samples = 48 if preview else 256
-    s.render.image_settings.file_format = "WEBP"
+    s.render.image_settings.file_format = "PNG"
     s.render.image_settings.color_mode = "RGB" if layer == "background" else "RGBA"
-    s.render.image_settings.quality = 88
-    s.render.filepath = str(out_dir / f"lab-{layer}.webp")
-    bpy.ops.render.render(write_still=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        png = Path(tmp) / f"{layer}.png"
+        s.render.filepath = str(png)
+        bpy.ops.render.render(write_still=True)
+        # q82 is where the renders stop showing artifacts at 1920 wide; the
+        # empty areas of the transparent layers cost next to nothing
+        Image.open(png).save(
+            out_dir / f"lab-{layer}.webp", "WEBP", quality=82, method=6, alpha_quality=80
+        )
 
 
 def main():
