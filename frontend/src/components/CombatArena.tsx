@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode 
 import { sfx } from "../audio";
 import type { HpExchange } from "../hooks/useHpExchange";
 import { CombatMonitor } from "./CombatMonitor";
+import { rangeText } from "../readouts";
 import { EnemyMonster } from "./EnemyMonster";
 import { headTopFraction } from "./enemyShape";
 import type { HackerCommand } from "../hackerCommands";
@@ -30,28 +31,40 @@ export interface ArenaEnemy {
   setting: string;
   // what it does next - shown above its head
   intent: "attack" | "defend";
-  intentValue: number;
+  intentMin: number;
+  intentMax: number;
 }
 
-// The enemy's telegraphed next move, floating over its head: a blade for an
-// attack, a shield for a block, and how much.
+// a blade for an attack, a shield for bracing
+export function IntentIcon({ intent }: { intent: "attack" | "defend" }) {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="intent-icon">
+      {intent === "attack" ? (
+        <>
+          <path className="fill" d="M16.8 2.2 17.8 3.2 9.2 11.8 8.2 10.8Z" />
+          <path d="M5.6 10.4 9.6 14.4M7.6 12.4 3.4 16.6" />
+        </>
+      ) : (
+        <path className="fill" d="M10 2.5 L16 5 V9.5 C16 13.5 13.2 16.3 10 17.5 C6.8 16.3 4 13.5 4 9.5 V5 Z" />
+      )}
+    </svg>
+  );
+}
+
+// The enemy's telegraphed next move, floating over its head - the first
+// thing a turn is planned around, so it is the loudest mark in the scene.
 function IntentMarker({ enemy }: { enemy: ArenaEnemy }) {
   const top = headTopFraction(enemy.maxHp, enemy.attack, enemy.setting) * 100;
   const attacking = enemy.intent === "attack";
+  const amount = rangeText(enemy.intentMin, enemy.intentMax);
   return (
     <div
       className={`arena-intent is-${enemy.intent}`}
       style={{ top: `${top}%` }}
-      title={attacking ? `Attacks next for ${enemy.intentValue}` : `Blocks ${enemy.intentValue} next`}
+      title={attacking ? `Attacks next for ${amount}` : `Braces for ${amount} block next`}
     >
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        {attacking ? (
-          <path d="M4 16 L13 7 L13 4 L16 4 L16 7 L7 16 Z M3 13 L7 17" />
-        ) : (
-          <path d="M10 2.5 L16 5 V9.5 C16 13.5 13.2 16.3 10 17.5 C6.8 16.3 4 13.5 4 9.5 V5 Z" />
-        )}
-      </svg>
-      <b>{enemy.intentValue}</b>
+      <IntentIcon intent={enemy.intent} />
+      <b>{amount}</b>
     </div>
   );
 }
@@ -237,7 +250,7 @@ export function CombatArena({
         />
       </div>
       <ArenaGrade />
-      {!slain && <IntentMarker key={`${enemy.intent}-${enemy.intentValue}`} enemy={enemy} />}
+      {!slain && <IntentMarker key={`${enemy.intent}-${enemy.intentMin}-${enemy.intentMax}`} enemy={enemy} />}
       <CombatMonitor lines={log} commands={commands} />
       {exchange && (
         <div key={exchange.id} className="arena-fx" aria-hidden="true">

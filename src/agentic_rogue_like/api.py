@@ -30,7 +30,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-from .combat import EnemyIntentType, enemy_attack, max_hand_size
+from .combat import (
+    FIELD_SIZE,
+    EnemyIntentType,
+    action_preview,
+    enemy_attack,
+    incoming_damage,
+    max_hand_size,
+    player_armor,
+)
 from .engine import (
     apply_event_choice,
     available_choices,
@@ -50,7 +58,6 @@ from .models import (
     SETTING_PRESETS,
     Artifact,
     Card,
-    CardType,
     MapNode,
     NodeType,
     PlayerState,
@@ -96,6 +103,7 @@ class CardView(BaseModel):
     description: str
     rarity: str
     exhaust: bool
+    hits: int
 
     @classmethod
     def of(cls, card: Card) -> CardView:
@@ -107,11 +115,16 @@ class CardView(BaseModel):
             description=card.description,
             rarity=card.rarity.value,
             exhaust=card.exhaust,
+            hits=max(card.hits, 1),
         )
 
 
 class HandCardView(CardView):
     hand_index: int
+    # What the card comes out with in each field slot (see
+    # combat.action_preview) - null for occupied slots and for cards
+    # without such a number.
+    preview: list[int | None]
 
 
 class PendingCombatView(BaseModel):
@@ -122,6 +135,12 @@ class PendingCombatView(BaseModel):
     enemy_block: int
     enemy_intent: str
     enemy_intent_value: int
+    # The attack's full range - the d6 roll on top of the attack stat - and
+    # what of it would get through block and armor if the turn ended now.
+    enemy_intent_min: int
+    enemy_intent_max: int
+    incoming_min: int
+    incoming_max: int
     hand: list[HandCardView]
     field: list[CardView | None]
     player_block: int
@@ -226,6 +245,9 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
     pending_combat = None
     if session.combat is not None:
         combat = session.combat
+        attacking = combat.enemy_intent is EnemyIntentType.ATTACK
+        intent_value = enemy_attack(combat) if attacking else combat.enemy.attack
+        incoming_min, incoming_max = incoming_damage(combat)
         pending_combat = PendingCombatView(
             enemy_name=combat.enemy.name,
             enemy_attack_name=combat.enemy.attack_name,
@@ -233,18 +255,24 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_max_hp=combat.enemy.hp,
             enemy_block=combat.enemy_block,
             enemy_intent=combat.enemy_intent.value,
-            enemy_intent_value=(
-                enemy_attack(combat)
-                if combat.enemy_intent is EnemyIntentType.ATTACK
-                else combat.enemy.attack
-            ),
+            enemy_intent_value=intent_value,
+            enemy_intent_min=intent_value + 1 if attacking else intent_value,
+            enemy_intent_max=intent_value + 6 if attacking else intent_value,
+            incoming_min=incoming_min,
+            incoming_max=incoming_max,
             hand=[
-                HandCardView(hand_index=i, **CardView.of(card).model_dump())
+                HandCardView(
+                    hand_index=i,
+                    preview=[
+                        action_preview(combat, card, run.player, slot) for slot in range(FIELD_SIZE)
+                    ],
+                    **CardView.of(card).model_dump(),
+                )
                 for i, card in enumerate(combat.hand)
             ],
             field=[None if card is None else CardView.of(card) for card in combat.field],
             player_block=combat.player_block,
-            armor=sum(1 for c in combat.field if c is not None and c.type is CardType.ARMOR),
+            armor=player_armor(combat),
             max_hand_size=max_hand_size(combat),
             draw_count=len(combat.draw_pile),
             discard_count=len(combat.discard_pile),

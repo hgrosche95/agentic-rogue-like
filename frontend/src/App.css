@@ -27,6 +27,11 @@
   --glow-cyan: 0 0 12px rgba(0, 229, 255, 0.6);
   --warm: #ffb86b;
   --ai-red: #ff4f8b;
+  /* the enemy bracing - steel, so it never melts into the cyan AI side */
+  --brace: #c9d6ff;
+  --safe: #5dffb1;
+  /* a slot or card an amplifier boosts */
+  --boost: #ffd166;
   --line-ink: #1a1240;
 
   --font-head: "Orbitron", "Exo 2", system-ui, sans-serif;
@@ -2216,11 +2221,12 @@ button.is-primary:hover:not(:disabled),
 .block-badge,
 .armor-badge,
 .intent-badge,
+.incoming-badge,
 .artifact-chip {
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   padding: 2px 9px;
   border: 1px solid currentColor;
@@ -2236,13 +2242,40 @@ button.is-primary:hover:not(:disabled),
   color: #8fb8ff;
 }
 
+.intent-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 700;
+}
+
+.intent-badge .intent-icon {
+  width: 13px;
+  height: 13px;
+}
+
 .intent-badge.type-attack {
   color: var(--danger);
   background: rgba(255, 79, 139, 0.14);
 }
 
 .intent-badge.type-defend {
-  color: var(--accent);
+  color: var(--brace);
+  background: rgba(201, 214, 255, 0.1);
+}
+
+/* what the telegraphed attack does to you if the turn ended now */
+.incoming-badge {
+  font-weight: 700;
+  color: #fff;
+  background: rgba(217, 46, 102, 0.55);
+  border-color: var(--danger);
+}
+
+.incoming-badge.is-safe {
+  color: var(--safe);
+  background: rgba(93, 255, 177, 0.1);
+  border-color: currentColor;
 }
 
 .intent-badge.is-defeated {
@@ -2420,7 +2453,8 @@ button.is-primary:hover:not(:disabled),
   line-height: 1.1;
 }
 
-.card-rank {
+/* the module's socket: what kind of card it is, drawn */
+.card-socket {
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
@@ -2428,13 +2462,79 @@ button.is-primary:hover:not(:disabled),
   height: 24px;
   display: grid;
   place-items: center;
-  border-radius: 50%;
-  background: var(--card);
-  box-shadow: 0 0 12px var(--card);
-  font-family: var(--font-body);
-  font-weight: 700;
-  font-size: 0.72rem;
-  color: var(--on-accent);
+  border-radius: 6px;
+  color: var(--card);
+  background: color-mix(in srgb, var(--card) 18%, rgba(12, 8, 36, 0.85));
+  border: 1px solid color-mix(in srgb, var(--card) 70%, transparent);
+}
+
+.card-icon {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card-icon .fill,
+.card-icon.is-shield path,
+.card-icon.is-repair path,
+.card-icon.is-purge path,
+.card-icon.is-module rect {
+  fill: currentColor;
+  fill-opacity: 0.28;
+}
+
+.card-icon .fill {
+  fill-opacity: 1;
+}
+
+/* the number the card really comes out with, ATK and slot included */
+.card-readout {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin: 0.1rem 0.5rem 0;
+  padding: 3px 7px 4px;
+  border-radius: 6px;
+  background: rgba(10, 6, 32, 0.62);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card) 35%, transparent);
+  font-family: var(--font-mono);
+}
+
+.card-readout b {
+  font-family: var(--font-head);
+  font-size: 1.35rem;
+  line-height: 1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-readout b small {
+  margin-right: 2px;
+  font-size: 0.65em;
+  color: var(--card);
+}
+
+.card-unit {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--card);
+}
+
+.card-best {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--boost);
+}
+
+.card-readout.is-boosted b {
+  color: var(--boost);
+  text-shadow: 0 0 10px rgba(255, 209, 102, 0.6);
 }
 
 .card-body {
@@ -2662,7 +2762,7 @@ button.is-primary:hover:not(:disabled),
   padding: 0.5rem 0.35rem 0.3rem calc(22px + 0.6rem);
 }
 
-.field-slot.is-occupied .card-rank {
+.field-slot.is-occupied .card-socket {
   width: 22px;
   height: 22px;
   top: 0.45rem;
@@ -2862,10 +2962,16 @@ button.is-primary:hover:not(:disabled),
     font-size: 0.76rem;
     padding-left: 2.1rem;
   }
-  .hand .hand-card .card-rank {
+  .hand .hand-card .card-socket {
     width: 20px;
     height: 20px;
-    font-size: 0.64rem;
+  }
+  .hand .hand-card .card-icon {
+    width: 13px;
+    height: 13px;
+  }
+  .hand .hand-card .card-readout b {
+    font-size: 1.1rem;
   }
   .hand .hand-card .card-body {
     font-size: 0.62rem;
@@ -2906,6 +3012,49 @@ body > .card-drag {
 .hand .hand-card {
   touch-action: none;
   cursor: grab;
+}
+
+/* what the aimed card would do from this slot */
+.slot-preview {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+}
+
+.slot-no {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.slot-preview b {
+  font-family: var(--font-head);
+  font-size: 1.6rem;
+  line-height: 1;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.slot-unit {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.slot-preview.is-boosted b,
+.slot-preview.is-boosted .slot-unit {
+  color: var(--boost);
+  text-shadow: 0 0 12px rgba(255, 209, 102, 0.7);
+}
+
+.field-slot.is-empty.is-targetable:has(.slot-preview.is-boosted) {
+  border-color: var(--boost);
+  background: rgba(255, 209, 102, 0.1);
+}
+
+/* the slot under the pointer - after the boost, so it still stands out */
+.field-slot.is-empty.is-targetable:hover {
+  border-color: #fff;
+  background: rgba(0, 229, 255, 0.2);
 }
 
 .field-slot.is-empty.is-drop-target {
@@ -3267,15 +3416,16 @@ body > .card-flight {
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 0.4cqw;
-  padding: 0.35cqw 0.9cqw 0.35cqw 0.6cqw;
+  gap: 0.5cqw;
+  padding: 0.45cqw 1.1cqw 0.45cqw 0.75cqw;
   border-radius: 99px;
-  font-family: var(--font-body);
+  font-family: var(--font-head);
   font-weight: 800;
-  font-size: max(12px, 1.5cqw);
-  color: #fff;
-  background: rgba(20, 12, 50, 0.72);
-  border: 1px solid currentColor;
+  font-size: max(16px, 2.2cqw);
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  border: 2px solid;
   transform: translate(-50%, -135%);
   animation:
     intent-in 0.35s ease-out both,
@@ -3283,27 +3433,38 @@ body > .card-flight {
   pointer-events: auto;
 }
 
-.arena-intent svg {
-  width: max(14px, 1.7cqw);
-  height: max(14px, 1.7cqw);
-  fill: currentColor;
+.intent-icon {
+  flex-shrink: 0;
+  fill: none;
   stroke: currentColor;
-  stroke-width: 1.2;
+  stroke-width: 2;
+  stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.arena-intent b {
-  color: #fff;
+.intent-icon .fill {
+  fill: currentColor;
+  stroke-width: 1;
 }
 
+.arena-intent .intent-icon {
+  width: max(18px, 2.3cqw);
+  height: max(18px, 2.3cqw);
+}
+
+/* solid plates, not outlines: this is what the whole turn is planned around */
 .arena-intent.is-attack {
-  color: var(--danger);
-  box-shadow: 0 0 18px rgba(255, 79, 139, 0.55);
+  color: #fff;
+  background: #d92e66;
+  border-color: #ffc2d6;
+  box-shadow: 0 0 0 3px rgba(217, 46, 102, 0.35), 0 0 28px rgba(255, 79, 139, 0.7), 0 6px 14px rgba(10, 5, 40, 0.5);
 }
 
 .arena-intent.is-defend {
-  color: var(--accent);
-  box-shadow: 0 0 18px rgba(0, 229, 255, 0.5);
+  color: var(--line-ink);
+  background: var(--brace);
+  border-color: #fff;
+  box-shadow: 0 0 0 3px rgba(201, 214, 255, 0.3), 0 0 24px rgba(201, 214, 255, 0.55), 0 6px 14px rgba(10, 5, 40, 0.5);
 }
 
 @keyframes intent-in {
