@@ -59,6 +59,16 @@ while (n < MAX_FRAMES) {
   await tick(200);
   const cont = p.getByRole('button', { name: /^continue$/i }).first();
   if (await cont.count() && await cont.isVisible()) { ev('victory'); await tick(1600); await cont.click(); await tick(1200); continue; }
+  if (await has('.shop-screen')) {
+    ev('shop'); await tick(1500);
+    const items = await p.$$('.shop-screen button.reward-card, .shop-screen button.artifact-card');
+    for (const it of items) { await it.hover(); await tick(350); }
+    const buyable = await p.$$('.shop-screen .shop-item:not(:has(.is-short)):not(:has(.is-sold)) button:not([disabled])');
+    if (buyable.length) { await buyable[0].click(); ev('buy'); await tick(1500); }
+    const more = await p.$$('.shop-screen .shop-item:not(:has(.is-short)):not(:has(.is-sold)) button:not([disabled])');
+    if (more.length) { await more[0].click(); ev('buy'); await tick(1500); }
+    await p.click('.shop-screen .reward-skip'); await tick(1500); continue;
+  }
   if (await has('.artifact-card')) {
     ev('artifact'); await tick(1400);
     const c = await p.$$('.artifact-card');
@@ -98,7 +108,14 @@ while (n < MAX_FRAMES) {
           await p.mouse.down(); await tick(100);
           await glide(x0, y0, sb.x + sb.width / 2, sb.y + sb.height / 2, 14);
           await tick(120); await p.mouse.up();
-          await tick(1500);
+          await tick(500);
+          const after = (await p.$$('.hand-card:not(.is-played):not(.is-discarding)')).length;
+          if (after === cards.length && !(await has('.end-turn-button[disabled]'))) {
+            ev('click-play');
+            const again = await p.$$('.hand-card:not(.is-played):not(.is-discarding)');
+            if (again[idx]) { await again[idx].click(); await tick(200); const sl = await p.$('.field-slot.is-empty'); if (sl) await sl.click(); }
+          }
+          await tick(1000);
           continue;
         }
       }
@@ -106,6 +123,19 @@ while (n < MAX_FRAMES) {
   }
   const et = await p.$('.end-turn-button:not(.is-cancel):not([disabled])');
   if (et) { ev('end-turn'); await et.click(); await tick(2600); continue; }
+  const reach = await p.$$('.map-node.is-reachable');
+  if (reach.length && !(await has('.jump-panel.is-arrived'))) {
+    ev('map'); await tick(1500);
+    const types = await Promise.all(reach.map((r) => r.getAttribute('class')));
+    const rank = (c) => (/type-shop/.test(c) && !globalThis.__shopSeen ? 0 : /type-boss/.test(c) ? 1 : /type-elite/.test(c) ? 2 : /type-combat/.test(c) ? 3 : 5);
+    const order = types.map((c, i) => [i, rank(c)]).sort((a, b) => a[1] - b[1]);
+    for (const [i] of order.slice(1)) { await reach[i].hover(); await tick(400); }
+    const pick = order[0][0];
+    if (/type-shop/.test(types[pick])) globalThis.__shopSeen = true;
+    await reach[pick].hover(); await tick(600);
+    await reach[pick].click({ force: true }); ev('jump:' + types[pick]); await tick(2400);
+    continue;
+  }
   const jb = await p.$('.jump-button:not([disabled])');
   if (jb) {
     ev('map'); await tick(1500);
