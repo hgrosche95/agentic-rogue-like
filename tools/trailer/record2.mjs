@@ -11,6 +11,20 @@ const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 1920, height: 1080 } });
 await ctx.addInitScript({ path: new URL('./timectl.js', import.meta.url).pathname });
 const p = await ctx.newPage();
+let run = null;
+p.on('response', async (r) => { if (/\/runs(\/|$)/.test(r.url()) && r.request().method() !== 'OPTIONS') { try { const j = await r.json(); if (j && j.nodes) run = j; } catch {} } });
+// steps from a node to the nearest unvisited black market
+function shopDistance(id) {
+  if (!run) return 99;
+  const seen = new Set([id]); let frontier = [id];
+  for (let d = 0; d < 12; d++) {
+    for (const n of frontier) if (run.nodes[n]?.type === 'shop') return d;
+    const next = [];
+    for (const n of frontier) for (const c of run.nodes[n]?.connections || []) if (!seen.has(c)) { seen.add(c); next.push(c); }
+    frontier = next;
+  }
+  return 99;
+}
 const cdp = await ctx.newCDPSession(p);
 const frames = []; const events = [];
 const FRAME = 1000 / 30;
@@ -25,7 +39,11 @@ async function shot() {
 async function tick(ms) {
   const k = Math.max(1, Math.round(ms / FRAME));
   for (let i = 0; i < k; i++) {
-    await p.evaluate((d) => window.__advance(d), FRAME);
+    await p.evaluate((d) => {
+      window.__advance(d);
+      // a drag or flight cut short when a fight ends would otherwise stay on screen
+      if (!document.querySelector('.hand-card:not(.reward-card)')) document.querySelectorAll('.card-drag, .card-flight').forEach((el) => el.remove());
+    }, FRAME);
     await shot();
   }
 }
@@ -94,7 +112,8 @@ while (n < MAX_FRAMES) {
       if (await conf.count()) await conf.click(); else await p.click('.end-turn-button.is-cancel');
       await tick(1200); continue;
     }
-    if (!busy && slot && cards.length) {
+    const over = await has('.intent-badge.is-defeated');
+    if (!busy && !over && slot && cards.length) {
       const names = await Promise.all(cards.map((c) => c.innerText()));
       const occupied = (await p.$$('.field-slot.is-occupied')).length;
       const order = names.map((t, i) => [i, /kernel panic/i.test(t) ? (occupied >= 2 ? 0 : 9) : /exploit|zero|payload|overflow|brute/i.test(t) ? 1 : 2]).sort((a, b) => a[1] - b[1]);
@@ -113,7 +132,9 @@ while (n < MAX_FRAMES) {
           if (after === cards.length && !(await has('.end-turn-button[disabled]'))) {
             ev('click-play');
             const again = await p.$$('.hand-card:not(.is-played):not(.is-discarding)');
-            if (again[idx]) { await again[idx].click(); await tick(200); const sl = await p.$('.field-slot.is-empty'); if (sl) await sl.click(); }
+            try {
+              if (again[idx]) { await again[idx].click({ timeout: 2000, force: true }); await tick(200); const sl = await p.$('.field-slot.is-empty'); if (sl) await sl.click({ timeout: 2000, force: true }); }
+            } catch (e) { ev('click-play failed'); }
           }
           await tick(1000);
           continue;
@@ -127,7 +148,13 @@ while (n < MAX_FRAMES) {
   if (reach.length && !(await has('.jump-panel.is-arrived'))) {
     ev('map'); await tick(1500);
     const types = await Promise.all(reach.map((r) => r.getAttribute('class')));
-    const rank = (c) => (/type-shop/.test(c) && !globalThis.__shopSeen ? 0 : /type-boss/.test(c) ? 1 : /type-elite/.test(c) ? 2 : /type-combat/.test(c) ? 3 : 5);
+    const choices = (run?.available_choices || []).map((c) => (typeof c === 'string' ? c : c.id));
+    let wantType = null;
+    if (!globalThis.__shopSeen && choices.length) {
+      const best = choices.map((id) => [id, shopDistance(id)]).sort((a, b) => a[1] - b[1])[0];
+      if (best && best[1] < 99) wantType = run.nodes[best[0]].type;
+    }
+    const rank = (c) => (wantType && c.includes('type-' + wantType + ' ') ? -1 : /type-shop/.test(c) && !globalThis.__shopSeen ? 0 : /type-boss/.test(c) ? 1 : /type-elite/.test(c) ? 2 : /type-combat/.test(c) ? 3 : 5);
     const order = types.map((c, i) => [i, rank(c)]).sort((a, b) => a[1] - b[1]);
     for (const [i] of order.slice(1)) { await reach[i].hover(); await tick(400); }
     const pick = order[0][0];
