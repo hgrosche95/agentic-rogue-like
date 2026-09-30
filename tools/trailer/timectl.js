@@ -53,6 +53,9 @@
         if (local >= end) {
           a.__done = true;
           a.finish();
+          // finish events are only dispatched in a rendering step we never
+          // reach reliably, so call the handler ourselves
+          if (typeof a.onfinish === "function") a.onfinish(new Event("finish"));
         } else {
           a.currentTime = local;
         }

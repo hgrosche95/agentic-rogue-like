@@ -42,7 +42,7 @@ async function tick(ms) {
     await p.evaluate((d) => {
       window.__advance(d);
       // a drag or flight cut short when a fight ends would otherwise stay on screen
-      if (!document.querySelector('.hand-card:not(.reward-card)')) document.querySelectorAll('.card-drag, .card-flight').forEach((el) => el.remove());
+      if (!document.querySelector('.hand-zone .hand-card')) document.querySelectorAll('.card-drag, .card-flight').forEach((el) => el.remove());
     }, FRAME);
     await shot();
   }
@@ -99,13 +99,13 @@ while (n < MAX_FRAMES) {
     for (const k of [0, 1, 2]) { if (c[k]) { await c[k].hover(); await tick(450); } }
     await c[1].click(); await tick(1200); continue;
   }
-  if (await has('.hand-card')) {
+  if (await has('.hand-zone .hand-card') || await has('.end-turn-button')) {
     const slot = await p.$('.field-slot.is-empty');
-    const cards = await p.$$('.hand-card:not(.is-played):not(.is-discarding)');
+    const cards = await p.$$('.hand-zone .hand-card:not(.is-played):not(.is-discarding)');
     const busy = await has('.end-turn-button[disabled]');
     if (await has('.end-turn-button.is-cancel')) {
       ev('discard');
-      const d = await p.$$('.hand-card:not(.is-played)');
+      const d = await p.$$('.hand-zone .hand-card:not(.is-played)');
       if (d[d.length - 1]) await d[d.length - 1].click();
       await tick(500);
       const conf = p.getByRole('button', { name: /confirm|discard/i }).first();
@@ -128,10 +128,10 @@ while (n < MAX_FRAMES) {
           await glide(x0, y0, sb.x + sb.width / 2, sb.y + sb.height / 2, 14);
           await tick(120); await p.mouse.up();
           await tick(500);
-          const after = (await p.$$('.hand-card:not(.is-played):not(.is-discarding)')).length;
+          const after = (await p.$$('.hand-zone .hand-card:not(.is-played):not(.is-discarding)')).length;
           if (after === cards.length && !(await has('.end-turn-button[disabled]'))) {
             ev('click-play');
-            const again = await p.$$('.hand-card:not(.is-played):not(.is-discarding)');
+            const again = await p.$$('.hand-zone .hand-card:not(.is-played):not(.is-discarding)');
             try {
               if (again[idx]) { await again[idx].click({ timeout: 2000, force: true }); await tick(200); const sl = await p.$('.field-slot.is-empty'); if (sl) await sl.click({ timeout: 2000, force: true }); }
             } catch (e) { ev('click-play failed'); }
