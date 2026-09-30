@@ -156,9 +156,10 @@ export function PortalRift() {
   );
 }
 
-// A color grade over the rendered scene so it sits in the UI's rift palette:
-// shadows lifted to violet, the lab pushed toward magenta, the machine world
-// toward cyan. Blend layers, so the renders themselves stay untouched.
+// A light color grade over the rendered scene, which is lit in the rift
+// palette already: the deepest shadows lifted to the page's violet, and the
+// lab's magenta and the machine world's cyan at the outer edges, where the
+// stage fades into the page. Blend layers, so the renders stay untouched.
 export function ArenaGrade() {
   return (
     <div className="arena-grade" aria-hidden="true">

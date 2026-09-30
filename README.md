@@ -38,7 +38,11 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 - [x] **Arena und Story** — ein kurzes Story-Intro beim ersten Besuch
       (überspringbar, auf dem Startbildschirm wiederholbar); gekämpft wird
       in einer Arena aus einer Blender-Szene, in der Dr. Chronos seine
-      Angriffe an einer Tastatur einhackt. Weil die Gegner erst zur Laufzeit
+      Angriffe an einer Tastatur einhackt. Die Szene ist physikalisch
+      beleuchtet (Cycles): echte Haarsträhnen, Holz, Messing und Stoff,
+      Bloom und violetter Tiefendunst; `assets/blender/render_layers.py`
+      rendert die Ebenen neu, `restyle_realistic.py` dokumentiert den Umbau
+      vom früheren Cel-Shading-Look. Weil die Gegner erst zur Laufzeit
       entstehen, zeichnet `EnemyMonster.tsx` jeden als SVG aus Name (Seed),
       Max-HP (Größe), Angriff (Stacheln, Zähne) und Setting (Farben, Motiv).
 - [x] **Kartenbasierter Kampf** — kein Energie-System; das Feld mit 5 Slots
@@ -64,7 +68,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       Labor. Die Karte ist eine Zeitachse (Etagen als Jahre 1969 → Ω), ein
       Klick springt in den nächsten Raum, daneben Vorschau, Artefakte und
       System-Log. Im Kampf ist die Arena die Bühne: sie blendet ohne Rahmen
-      in die Seite aus, ein Farbfilter zieht die Renders in die Palette, und
+      in die Seite aus, die Renders sind schon in der Palette der UI
+      ausgeleuchtet (ein leichter Farbfilter gleicht nur noch die Ränder an), und
       der Riss läuft als Lichtnaht zwischen Menschen- und KI-Seite nach unten
       weiter. Karten lassen sich anklicken oder per Drag & Drop (auch per
       Touch) auf das Feld ziehen; Lebenspunkte ändern sich erst, wenn der
