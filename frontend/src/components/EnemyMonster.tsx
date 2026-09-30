@@ -17,12 +17,16 @@ import {
 //   max HP  -> overall size
 //   attack  -> number and length of spikes and teeth, angry brows when strong
 //   setting -> palette and a themed feature (horns, circuits, tentacles, ...)
-// It is drawn in the arena's 1920x800 frame so it stacks like the other layers.
+// It is drawn in the arena's 1920x800 frame so it stacks like the other layers,
+// and lit like the rendered scene around it: a soft key from above, the
+// rift's cyan as a rim light on the side facing the player, occlusion
+// underneath and a blurred contact shadow - no cartoon ink outline.
 
 const f = (n: number) => n.toFixed(1);
 
-const INK = "#1a120a";
+const INK = "#140c24";
 const BONE = "#f4ecd6";
+const RIM = "#8ff2ef";
 
 export function EnemyMonster({
   name,
@@ -52,6 +56,8 @@ export function EnemyMonster({
   const body = `hsl(${hue}, ${theme.sat}%, ${theme.light}%)`;
   const dark = `hsl(${hue}, ${theme.sat}%, ${theme.light - 22}%)`;
   const light = `hsl(${hue}, ${theme.sat}%, ${theme.light + 18}%)`;
+  const deep = `hsl(${hue}, ${theme.sat}%, ${Math.max(theme.light - 36, 6)}%)`;
+  const edge = `hsl(${hue}, ${theme.sat}%, ${Math.max(theme.light - 30, 8)}%)`;
   // Body centre, so every size stands on the floor; tentacled ones stand on them.
   const cy = 185 - R * 0.95 - (theme.feature === "tentacles" ? 32 : 0);
 
@@ -136,6 +142,35 @@ export function EnemyMonster({
   return (
     <svg ref={ref} className={className} viewBox="0 0 1920 800" preserveAspectRatio="xMidYMid meet" role="img" aria-label={name}>
       <defs>
+        {/* key light from the upper left, falling off into the body's shadow side */}
+        <radialGradient id={`${uid}-shade`} cx="0.38" cy="0.3" r="0.8">
+          <stop offset="0" stopColor={light} />
+          <stop offset="0.45" stopColor={body} />
+          <stop offset="1" stopColor={deep} />
+        </radialGradient>
+        {/* the rift's cyan glancing off the side that faces the player */}
+        <linearGradient id={`${uid}-rim`} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0" stopColor={RIM} stopOpacity="0.75" />
+          <stop offset="0.14" stopColor={RIM} stopOpacity="0.18" />
+          <stop offset="0.3" stopColor={RIM} stopOpacity="0" />
+        </linearGradient>
+        {/* ambient occlusion: the underside sinks into the floor's shadow */}
+        <linearGradient id={`${uid}-occlusion`} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0.45" stopColor={INK} stopOpacity="0" />
+          <stop offset="1" stopColor={INK} stopOpacity="0.6" />
+        </linearGradient>
+        <linearGradient id={`${uid}-spike`} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" stopColor={light} />
+          <stop offset="1" stopColor={deep} />
+        </linearGradient>
+        <radialGradient id={`${uid}-eye`} cx="0.4" cy="0.35" r="0.7">
+          <stop offset="0" stopColor="#fffdf6" />
+          <stop offset="0.7" stopColor={BONE} />
+          <stop offset="1" stopColor="#b9ae96" />
+        </radialGradient>
+        <filter id={`${uid}-soft`} x="-50%" y="-200%" width="200%" height="500%">
+          <feGaussianBlur stdDeviation="4" />
+        </filter>
         {theme.glow && (
           <filter id={`${uid}-glow`} x="-30%" y="-30%" width="160%" height="160%">
             <feDropShadow dx="0" dy="0" stdDeviation="4" floodColor={theme.glow} floodOpacity="0.7" />
@@ -146,10 +181,10 @@ export function EnemyMonster({
         </clipPath>
       </defs>
       <g transform={transform}>
-        <ellipse cx={C} cy={188} rx={R * 0.8} ry={6} fill="#000" opacity={0.35} />
-        <g filter={theme.glow ? `url(#${uid}-glow)` : undefined} stroke={INK} strokeLinejoin="round">
+        <ellipse cx={C} cy={188} rx={R * 0.9} ry={7} fill={INK} opacity={0.7} filter={`url(#${uid}-soft)`} />
+        <g filter={theme.glow ? `url(#${uid}-glow)` : undefined} stroke={edge} strokeLinejoin="round">
           {spikes.map((d) => (
-            <path key={d} d={d} fill={dark} strokeWidth={2.5} />
+            <path key={d} d={d} fill={`url(#${uid}-spike)`} strokeWidth={1.2} />
           ))}
           {theme.feature === "horns" &&
             [-1, 1].map((s) => (
@@ -157,20 +192,21 @@ export function EnemyMonster({
                 key={s}
                 d={`M${f(C + s * R * 0.45)},${f(cy - R * 0.55)} q${s * 30},-10 ${s * 30},-42 q${-s * 8},20 ${-s * 22},30 Z`}
                 fill="#d9ccb0"
-                strokeWidth={2.5}
+                stroke="#6a5a40"
+                strokeWidth={1.2}
               />
             ))}
           {tentacles.map((d) => (
             <g key={d} fill="none" strokeLinecap="round">
-              <path d={d} strokeWidth={12} />
-              <path d={d} stroke={dark} strokeWidth={7} />
+              <path d={d} strokeWidth={11} />
+              <path d={d} stroke={dark} strokeWidth={8} />
             </g>
           ))}
           {theme.feature === "fins" &&
             [-1, 1].map((s) => (
-              <path key={s} d={`M${f(C + s * R * 0.8)},${f(cy + 5)} l${s * 30},-10 l${-s * 8},30 Z`} fill={light} strokeWidth={2.5} />
+              <path key={s} d={`M${f(C + s * R * 0.8)},${f(cy + 5)} l${s * 30},-10 l${-s * 8},30 Z`} fill={light} strokeWidth={1.2} />
             ))}
-          <path d={bodyPath} fill={body} strokeWidth={3} />
+          <path d={bodyPath} fill={`url(#${uid}-shade)`} strokeWidth={1.5} />
         </g>
         <g clipPath={`url(#${uid}-body)`}>
           {circuits.map(({ x, y, d }) => (
@@ -184,29 +220,36 @@ export function EnemyMonster({
               <path key={i} d={`M${f(C + i * 18 - 10)},${f(cy - R)} l30,${f(R * 2.2)}`} stroke={light} strokeWidth={7} opacity={0.45} />
             ))}
           {barnacles.map(({ x, y, r }) => (
-            <circle key={`${x}-${y}`} cx={x} cy={y} r={r} fill="#e8e0c8" stroke={INK} strokeWidth={1.5} />
+            <circle key={`${x}-${y}`} cx={x} cy={y} r={r} fill="#e8e0c8" stroke={edge} strokeWidth={1} />
           ))}
-          <ellipse cx={C - R * 0.3} cy={cy - R * 0.3} rx={R * 0.35} ry={R * 0.2} fill="#fff" opacity={0.12} />
+          <path d={bodyPath} fill={`url(#${uid}-occlusion)`} />
+          <path d={bodyPath} fill={`url(#${uid}-rim)`} style={{ mixBlendMode: "screen" }} />
+          {/* a soft specular sheen where the key light hits */}
+          <ellipse cx={C - R * 0.3} cy={cy - R * 0.38} rx={R * 0.3} ry={R * 0.14} fill="#fff" opacity={0.22} filter={`url(#${uid}-soft)`} />
         </g>
         {eyes.map(({ x, y, r, look }) => (
           <g key={x}>
-            <circle cx={x} cy={y} r={r} fill={BONE} stroke={INK} strokeWidth={2.5} />
+            {/* the socket's shadow, then a wet eyeball with a pupil and a glint */}
+            <circle cx={x} cy={y + 1.5} r={r + 2} fill={INK} opacity={0.45} />
+            <circle cx={x} cy={y} r={r} fill={`url(#${uid}-eye)`} stroke={edge} strokeWidth={1} />
             <circle cx={x + look} cy={y + 2} r={r * 0.45} fill={theme.glow ?? INK} />
+            <circle cx={x + look} cy={y + 2} r={r * 0.22} fill={INK} opacity={0.8} />
+            <circle cx={x - r * 0.35} cy={y - r * 0.4} r={Math.max(1.5, r * 0.18)} fill="#fff" opacity={0.9} />
           </g>
         ))}
         {atkT >= 0.4 && (
           <path
             d={`M${f(C - spread / 2 - 10)},${f(eyeY - 20)} L${f(C - 6)},${f(eyeY - 10)} M${f(C + spread / 2 + 10)},${f(eyeY - 20)} L${f(C + 6)},${f(eyeY - 10)}`}
-            stroke={INK}
+            stroke={deep}
             strokeWidth={4}
             strokeLinecap="round"
           />
         )}
         <path
           d={`M${f(C - mouthWidth / 2)},${f(mouthY)} Q${C},${f(mouthY + 22 + atkT * 12)} ${f(C + mouthWidth / 2)},${f(mouthY)} Z`}
-          fill="#2a0e0e"
-          stroke={INK}
-          strokeWidth={2.5}
+          fill="#1e0a14"
+          stroke={edge}
+          strokeWidth={1.5}
           strokeLinejoin="round"
         />
         {teeth.map((d) => (

@@ -1288,15 +1288,16 @@ button.is-primary:hover:not(:disabled),
   margin-inline: auto;
   overflow: hidden;
   container-type: inline-size;
-  /* no frame: the scene fades out into the page below and at the sides,
-     and the HUD row slides up into that fade */
+  /* no frame: the scene fades out into the page on every side - softly at
+     the top, wide at the sides and below, where the HUD row slides up into
+     that fade */
   -webkit-mask-image:
-    linear-gradient(180deg, #000 70%, transparent 99%),
-    linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%);
+    linear-gradient(180deg, transparent 0, #000 6%, #000 70%, transparent 99%),
+    linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
   -webkit-mask-composite: source-in;
   mask-image:
-    linear-gradient(180deg, #000 70%, transparent 99%),
-    linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%);
+    linear-gradient(180deg, transparent 0, #000 6%, #000 70%, transparent 99%),
+    linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
   mask-composite: intersect;
   margin-bottom: calc(var(--arena-w, 100%) / 2.4 * -0.12);
 }
@@ -1309,22 +1310,26 @@ button.is-primary:hover:not(:disabled),
   pointer-events: none;
 }
 
+/* The renders are lit in the rift palette already, so the grade only
+   nudges: deepest shadows lifted toward the page violet, so the scene's
+   blacks and the page never meet as a seam, and a touch of each side's
+   color at the outer edges where the stage fades into the page. */
 .arena-grade-lift {
-  background: #2e1f6a;
+  background: #231a52;
   mix-blend-mode: lighten;
-  opacity: 0.85;
+  opacity: 0.55;
 }
 
 .arena-grade > .arena-grade-human {
   right: 50%;
-  background: linear-gradient(90deg, rgba(255, 79, 216, 0.55), rgba(255, 150, 90, 0.35) 70%, transparent);
-  mix-blend-mode: overlay;
+  background: linear-gradient(90deg, rgba(255, 79, 216, 0.3), rgba(255, 150, 90, 0.12) 45%, transparent 75%);
+  mix-blend-mode: soft-light;
 }
 
 .arena-grade > .arena-grade-ai {
   left: 49%;
-  background: linear-gradient(270deg, rgba(0, 229, 255, 0.5), rgba(120, 90, 255, 0.35) 70%, transparent);
-  mix-blend-mode: overlay;
+  background: linear-gradient(270deg, rgba(0, 229, 255, 0.28), rgba(120, 90, 255, 0.12) 45%, transparent 75%);
+  mix-blend-mode: soft-light;
 }
 
 .arena-layer {
