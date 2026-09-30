@@ -33,12 +33,16 @@ from .models import (
     RunState,
     RunStatus,
 )
+from .shop import leave_shop, roll_shop
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
 # Index into the offered cards, or None to skip the reward.
 ChooseCardReward = Callable[[list[Card]], int | None]
 # Index into the offered artifacts - picking one is not optional.
 ChooseArtifact = Callable[[list[Artifact]], int]
+# Called while a shop is open, to buy from it (shop.buy_card/buy_artifact);
+# the shop closes when it returns.
+BrowseShop = Callable[[RunState], None]
 # (setting, situation) -> flavor text or None. Defaults to a live narrate()
 # call; the web API passes one that reads background-prefetched text instead.
 Narrator = Callable[[str, str], str | None]
@@ -58,9 +62,7 @@ def new_run(seed: int, setting: str = DEFAULT_SETTING) -> RunState:
         hp=PLAYER_HP, max_hp=PLAYER_HP, attack=PLAYER_ATTACK, gold=0, deck=starter_deck()
     )
     nodes = generate_map(seed)
-    run = RunState(
-        seed=seed, player=player, nodes=nodes, current_node_id="0-0", setting=setting
-    )
+    run = RunState(seed=seed, player=player, nodes=nodes, current_node_id="0-0", setting=setting)
     # Its own rng, so offering artifacts doesn't shift the run rng's sequence
     # (enemies, events, rewards) compared to a run without them.
     run.artifact_offer = roll_artifact_offer(random.Random(f"{seed}-artifacts-0"), [])
@@ -114,6 +116,25 @@ def start_event(run: RunState, rng: random.Random, narrator: Narrator | None = N
         event = replace(event, description=flavor)
     run.history.append(event.description)
     return event
+
+
+def open_shop(run: RunState, narrator: Narrator | None = None) -> None:
+    """Enter a SHOP room: roll its stock and leave it open (run.shop).
+
+    Like start_event, split out from resolve_node so the web API can keep the
+    shop open across requests while the player browses.
+    """
+    node = run.nodes[run.current_node_id]
+    node.visited = True
+    run.floor = node.floor
+    flavor = (narrator or narrate)(run.setting, SHOP_SITUATION)
+    if flavor:
+        run.history.append(flavor)
+    run.shop = roll_shop(run)
+    run.history.append(
+        f"A merchant lays out {len(run.shop.cards)} cards and "
+        f"{len(run.shop.artifacts)} artifacts. You have {run.player.gold} gold."
+    )
 
 
 def apply_event_choice(run: RunState, option: EventOption, rng: random.Random) -> None:
@@ -223,6 +244,7 @@ def resolve_node(
     narrator: Narrator | None = None,
     choose_card: ChooseCardReward | None = None,
     choose_artifact_option: ChooseArtifact | None = None,
+    browse_shop: BrowseShop | None = None,
 ) -> None:
     if run.artifact_offer is not None:
         offer = run.artifact_offer
@@ -273,9 +295,8 @@ def resolve_node(
         run.history.append(f"You rest and recover {healed} HP.")
 
     elif node.type is NodeType.SHOP:
-        flavor = (narrator or narrate)(run.setting, SHOP_SITUATION)
-        if flavor:
-            run.history.append(flavor)
-        # TODO(Phase 3): the shop is announced but sells nothing until there
-        # are relics and cards to spend gold on.
-        run.history.append(f"A merchant offers wares. You have {run.player.gold} gold.")
+        # without a browse_shop callback (bots, tests) nothing is bought
+        open_shop(run, narrator)
+        if browse_shop is not None:
+            browse_shop(run)
+        leave_shop(run)

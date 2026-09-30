@@ -45,14 +45,15 @@ def _play_full_run(seed: int) -> dict:
         run = _resolve(run_id).json()
 
         if run["pending_event"] is not None:
-            run = client.post(
-                f"/runs/{run_id}/event-choice", json={"option_index": 0}
-            ).json()
+            run = client.post(f"/runs/{run_id}/event-choice", json={"option_index": 0}).json()
 
         run = _play_combat(run_id, run)
 
         if run["card_reward"] is not None:
             run = client.post(f"/runs/{run_id}/card-reward", json={"card_index": 0}).json()
+
+        if run["shop"] is not None:
+            run = client.post(f"/runs/{run_id}/shop/leave").json()
 
         if run["status"] != "ongoing":
             break
