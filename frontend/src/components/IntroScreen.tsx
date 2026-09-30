@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
-import { ArenaGrade, PortalRift } from "./CombatArena";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { PixelScene } from "../pixel/scene";
+import { PixelStage } from "./PixelStage";
 
 // Where the camera looks while a beat is on screen. The lab is the combat
-// arena's own render (see CombatArena), so the intro stages the story in the
+// arena's own pixel scene (see CombatArena), so the intro stages the story in the
 // room the fights later happen in: the dark lab at night, then the rift, then
 // the monitor the AGI writes on.
 type Shot = "night" | "rift" | "monitor";
@@ -60,6 +61,14 @@ export function IntroScreen({ onDone }: { onDone: () => void }) {
   const onMessage = step === NARRATION.length;
   const isTyping = onMessage && typed < MESSAGE_LENGTH;
   const shot: Shot = onMessage ? "monitor" : NARRATION[step].shot;
+  const sceneRef = useRef<PixelScene | null>(null);
+  const onScene = useCallback((scene: PixelScene) => {
+    sceneRef.current = scene;
+  }, []);
+  useEffect(() => {
+    sceneRef.current?.setNight(shot === "night");
+    sceneRef.current?.setPlayerVisible(shot !== "night");
+  }, [shot]);
 
   useEffect(() => {
     if (!isTyping) return;
@@ -93,14 +102,8 @@ export function IntroScreen({ onDone }: { onDone: () => void }) {
     <section className="intro" aria-label="Intro">
       <div className="intro-scene" onClick={advance}>
         <div className={`intro-camera is-${shot}`}>
-          <img className="arena-layer" src="/assets/lab-background.webp" alt="" />
-          {shot !== "night" && <PortalRift />}
-          {/* nobody is in the lab overnight */}
-          <div className="arena-layer intro-player">
-            <img className="arena-layer" src="/assets/lab-rig.webp" alt="" />
-            <img className="arena-layer" src="/assets/lab-player.webp" alt="" />
-          </div>
-          <ArenaGrade />
+          {/* nobody is in the lab overnight, and the rift only opens by morning */}
+          <PixelStage fit="fill" onScene={onScene} />
           {shot !== "night" && (
             <div className="intro-glass">
               <span className="intro-glass-alert">1 new message</span>

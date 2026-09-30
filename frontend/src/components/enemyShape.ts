@@ -1,5 +1,4 @@
-// The enemy drawing's themes and size rules, shared by EnemyMonster (which
-// draws it) and the arena (which places things relative to it).
+// The enemy sprites' themes and stat ranges (see pixel/enemySprite.ts).
 
 export type Feature = "horns" | "circuits" | "tentacles" | "fins" | "stripes";
 
@@ -63,24 +62,3 @@ export function clamp01(value: number): number {
 // Stat ranges of the encounter budgets (agent/budgets.py), early to boss.
 export const HP_RANGE = [38, 130];
 export const ATTACK_RANGE = [9, 18];
-
-// Where the monster stands in the 1920x800 arena frame - the spot the old
-// robot render occupied (feet at y~708, centred on x~1475).
-export const ANCHOR_X = 1475;
-export const ANCHOR_Y = 708;
-export const SCALE = 3.4;
-
-// The top of the monster's head (spikes and horns included) as a share of
-// the arena frame's height - where things are shown "above its head". Uses
-// the same size formulas as the drawing below.
-export function headTopFraction(maxHp: number, attack: number, setting: string): number {
-  const theme = themeFor(setting);
-  const hpT = clamp01((maxHp - HP_RANGE[0]) / (HP_RANGE[1] - HP_RANGE[0]));
-  const atkT = clamp01((attack - ATTACK_RANGE[0]) / (ATTACK_RANGE[1] - ATTACK_RANGE[0]));
-  const R = 62 * (0.72 + hpT * 0.28);
-  const cy = 185 - R * 0.95 - (theme.feature === "tentacles" ? 32 : 0);
-  const spikeTop = cy - R * 0.8 - (10 + atkT * 22);
-  const hornTop = theme.feature === "horns" ? cy - R * 0.55 - 42 : spikeTop;
-  const top = Math.min(spikeTop, hornTop);
-  return (ANCHOR_Y - 185 * SCALE + top * SCALE) / 800;
-}
