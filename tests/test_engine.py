@@ -1,7 +1,12 @@
 import random
 
-from agentic_rogue_like.engine import available_choices, new_run, resolve_node
-from agentic_rogue_like.models import RunStatus
+from agentic_rogue_like.engine import (
+    available_choices,
+    choose_card_reward,
+    new_run,
+    resolve_node,
+)
+from agentic_rogue_like.models import Rarity, RunStatus
 
 
 def _play_full_run(seed: int) -> None:
@@ -48,6 +53,7 @@ def _win_boss(run, rng) -> None:
 def test_beating_the_first_boss_opens_act_two() -> None:
     run = new_run(seed=5)
     rng = random.Random(5)
+    choose_card_reward(run, None)  # skip the starting pick
     deck_size = len(run.player.deck)
 
     _win_boss(run, rng)
@@ -68,3 +74,17 @@ def test_beating_the_last_boss_wins_the_run() -> None:
     _win_boss(run, rng)
 
     assert run.status is RunStatus.VICTORY
+
+
+def test_a_run_starts_with_a_pick_of_three_uncommon_or_rare_cards() -> None:
+    run = new_run(seed=9)
+    deck_size = len(run.player.deck)
+
+    assert run.card_reward is not None and len(run.card_reward) == 3
+    assert {c.rarity for c in run.card_reward} <= {Rarity.UNCOMMON, Rarity.RARE}
+    assert new_run(seed=9).card_reward == run.card_reward  # seeded
+
+    choose_card_reward(run, 1)
+
+    assert len(run.player.deck) == deck_size + 1
+    assert run.card_reward is None

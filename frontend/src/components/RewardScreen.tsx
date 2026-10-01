@@ -8,11 +8,14 @@ export function RewardScreen({
   deckSize,
   disabled,
   onPick,
+  isStart = false,
 }: {
   offer: Card[];
   deckSize: number;
   disabled: boolean;
   onPick: (cardIndex: number | null) => void;
+  // the pick of uncommon/rare cards before the first room
+  isStart?: boolean;
 }) {
   useEffect(() => {
     sfx.play("reward_open");
@@ -20,9 +23,11 @@ export function RewardScreen({
 
   return (
     <div className="reward-screen">
-      <h2>Choose a card</h2>
+      <h2>{isStart ? "Choose a starting card" : "Choose a card"}</h2>
       <p className="reward-hint">
-        Add one to your deck ({deckSize} cards) - or skip to keep it lean.
+        {isStart
+          ? `Pack one uncommon or rare card into your starter deck (${deckSize} cards) before you jump - or skip.`
+          : `Add one to your deck (${deckSize} cards) - or skip to keep it lean.`}
       </p>
       <div className="reward-cards">
         {offer.map((card, index) => (

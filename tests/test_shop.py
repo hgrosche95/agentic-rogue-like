@@ -7,11 +7,15 @@ from agentic_rogue_like.api import app
 from agentic_rogue_like.engine import new_run, open_shop, resolve_node
 from agentic_rogue_like.models import MapNode, NodeType
 from agentic_rogue_like.shop import (
+    MIN_DECK_SIZE,
+    REMOVAL_PRICE,
+    REMOVAL_PRICE_STEP,
     SHOP_ARTIFACTS,
     SHOP_CARDS,
     buy_artifact,
     buy_card,
     leave_shop,
+    remove_card,
     roll_shop,
 )
 
@@ -20,6 +24,7 @@ def _at_shop(seed: int = 7, gold: int = 500):
     """A run standing in a shop room (the start node, retyped - no narrator call)."""
     run = new_run(seed)
     run.artifact_offer = None
+    run.card_reward = None
     run.nodes[run.current_node_id] = MapNode(id=run.current_node_id, floor=0, type=NodeType.SHOP)
     run.player.gold = gold
     open_shop(run, narrator=lambda setting, situation: None)
@@ -116,6 +121,7 @@ def _api_run_at_shop() -> tuple[str, dict]:
     run_id = run["run_id"]
     if run["artifact_offer"] is not None:
         client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0})
+    client.post(f"/runs/{run_id}/card-reward", json={"card_index": None})
     return run_id, client.post(f"/runs/{run_id}/resolve").json()
 
 
@@ -139,6 +145,16 @@ def test_api_shop_flow(monkeypatch) -> None:
     again = client.post(f"/runs/{run_id}/shop/buy-card", json={"index": 0})
     assert again.status_code == 400
 
+    deck = run["player"]["deck"]
+    removal = run["shop"]["removal_price"]
+    gold = run["player"]["gold"]
+    run = client.post(f"/runs/{run_id}/shop/remove-card", json={"index": 0}).json()
+    assert len(run["player"]["deck"]) == len(deck) - 1
+    assert run["player"]["gold"] == gold - removal
+    assert run["shop"]["removal_used"]
+    again = client.post(f"/runs/{run_id}/shop/remove-card", json={"index": 0})
+    assert again.status_code == 400
+
     run = client.post(f"/runs/{run_id}/shop/leave").json()
     assert run["shop"] is None and run["node_resolved"]
     assert client.post(f"/runs/{run_id}/shop/leave").status_code == 409
@@ -155,3 +171,39 @@ def _patched_new_run(original):
         return run
 
     return new_run
+
+
+def test_removing_a_card_costs_gold_and_works_once_per_shop() -> None:
+    run = _at_shop(gold=500)
+    assert run.shop.removal_price == REMOVAL_PRICE
+    deck = list(run.player.deck)
+
+    remove_card(run, 2)
+
+    assert run.player.deck == deck[:2] + deck[3:]
+    assert run.player.gold == 500 - REMOVAL_PRICE
+    assert run.cards_removed == 1
+    with pytest.raises(ValueError, match="already removed"):
+        remove_card(run, 0)
+
+
+def test_every_removal_makes_the_next_shop_pricier() -> None:
+    run = _at_shop(gold=500)
+    remove_card(run, 0)
+    leave_shop(run)
+
+    open_shop(run, narrator=lambda setting, situation: None)
+
+    assert run.shop.removal_price == REMOVAL_PRICE + REMOVAL_PRICE_STEP
+
+
+def test_removal_needs_gold_and_a_big_enough_deck() -> None:
+    run = _at_shop(gold=REMOVAL_PRICE - 1)
+    with pytest.raises(ValueError, match="not enough gold"):
+        remove_card(run, 0)
+    run.player.gold = 500
+    del run.player.deck[MIN_DECK_SIZE:]
+    with pytest.raises(ValueError, match="smaller than"):
+        remove_card(run, 0)
+    with pytest.raises(ValueError, match="out of range"):
+        remove_card(run, 99)

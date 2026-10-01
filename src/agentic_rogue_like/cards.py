@@ -267,6 +267,8 @@ _RARITY_WEIGHTS: dict[bool, dict[Rarity, int]] = {
     False: {Rarity.COMMON: 60, Rarity.UNCOMMON: 32, Rarity.RARE: 8},
     True: {Rarity.COMMON: 30, Rarity.UNCOMMON: 45, Rarity.RARE: 25},  # elite
 }
+# The pick offered at the start of a run (engine.new_run): no commons.
+START_CARD_WEIGHTS: dict[Rarity, int] = {Rarity.UNCOMMON: 65, Rarity.RARE: 35}
 
 
 def reward_card(template: Card, deck: list[Card]) -> Card:
@@ -278,9 +280,15 @@ def reward_card(template: Card, deck: list[Card]) -> Card:
     return template.model_copy(update={"id": f"{template.id}-{n}"}, deep=True)
 
 
-def roll_card_reward(rng: random.Random, elite: bool = False, count: int = 3) -> list[Card]:
-    """`count` distinct reward templates, weighted by rarity."""
-    weights = _RARITY_WEIGHTS[elite]
+def roll_card_reward(
+    rng: random.Random,
+    elite: bool = False,
+    count: int = 3,
+    weights: dict[Rarity, int] | None = None,
+) -> list[Card]:
+    """`count` distinct reward templates, weighted by rarity - by `weights`
+    if given, else the normal or elite reward weights."""
+    weights = weights or _RARITY_WEIGHTS[elite]
     offer: list[Card] = []
     while len(offer) < count:
         rarity = rng.choices(list(weights), weights=list(weights.values()))[0]
