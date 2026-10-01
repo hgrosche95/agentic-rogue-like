@@ -25,37 +25,56 @@ _FLOOR_WEIGHTS: dict[NodeType, int] = {
 
 ELITE_MIN_FLOOR = 3
 
+# Later acts: elites from the start, more of them, fewer camps - on top of
+# the stronger enemies, so the run keeps getting harder after act 1.
+_LATE_ACT_WEIGHTS: dict[NodeType, int] = {
+    NodeType.COMBAT: 5,
+    NodeType.ELITE: 3,
+    NodeType.EVENT: 3,
+    NodeType.SHOP: 1,
+    NodeType.REST: 1,
+}
 
-def _node_type_for_floor(floor: int, rng: random.Random) -> NodeType:
+
+def _node_type_for_floor(floor: int, rng: random.Random, act: int = 1) -> NodeType:
     if floor == 0:
-        return NodeType.COMBAT
+        # A later act opens on a single camp the player lands in, already
+        # resolved (see engine.advance_act) - the boss fight was enough.
+        return NodeType.COMBAT if act <= 1 else NodeType.REST
     if floor == NUM_FLOORS - 1:
         return NodeType.BOSS
 
-    weights = _FLOOR_WEIGHTS
-    if floor < ELITE_MIN_FLOOR:
+    if act > 1:
+        weights = _LATE_ACT_WEIGHTS
+    elif floor < ELITE_MIN_FLOOR:
         weights = {t: w for t, w in _FLOOR_WEIGHTS.items() if t is not NodeType.ELITE}
+    else:
+        weights = _FLOOR_WEIGHTS
     return rng.choices(list(weights), weights=list(weights.values()))[0]
 
 
-def generate_map(seed: int) -> dict[str, MapNode]:
+def generate_map(seed: int, act: int = 1) -> dict[str, MapNode]:
     """Build a layered graph: each floor's nodes connect to 1-2 nodes on the next floor.
 
     Every node past floor 0 is guaranteed at least one incoming connection
     and every non-boss node at least one outgoing one, so there are no dead
-    ends and no unreachable nodes.
+    ends and no unreachable nodes. Act 1's map comes from `seed` alone, so
+    it is the same map runs always had; later acts start from a single node.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed if act <= 1 else f"{seed}-act-{act}")
     nodes: dict[str, MapNode] = {}
     floors: list[list[str]] = []
 
     for floor in range(NUM_FLOORS):
         is_boss_floor = floor == NUM_FLOORS - 1
-        count = 1 if is_boss_floor else rng.randint(MIN_NODES_PER_FLOOR, MAX_NODES_PER_FLOOR)
+        single = is_boss_floor or (floor == 0 and act > 1)
+        count = 1 if single else rng.randint(MIN_NODES_PER_FLOOR, MAX_NODES_PER_FLOOR)
         floor_ids = []
         for i in range(count):
             node_id = f"{floor}-{i}"
-            nodes[node_id] = MapNode(id=node_id, floor=floor, type=_node_type_for_floor(floor, rng))
+            nodes[node_id] = MapNode(
+                id=node_id, floor=floor, type=_node_type_for_floor(floor, rng, act)
+            )
             floor_ids.append(node_id)
         floors.append(floor_ids)
 

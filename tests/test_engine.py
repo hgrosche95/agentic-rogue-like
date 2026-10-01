@@ -34,3 +34,37 @@ def test_history_is_recorded_as_the_run_progresses() -> None:
     resolve_node(run, rng)
 
     assert run.history
+
+
+def _win_boss(run, rng) -> None:
+    from agentic_rogue_like.engine import NUM_FLOORS
+
+    run.current_node_id = f"{NUM_FLOORS - 1}-0"
+    run.player.hp = run.player.max_hp = 10_000
+    run.player.attack = 200
+    resolve_node(run, rng)
+
+
+def test_beating_the_first_boss_opens_act_two() -> None:
+    run = new_run(seed=5)
+    rng = random.Random(5)
+    deck_size = len(run.player.deck)
+
+    _win_boss(run, rng)
+
+    assert run.status is RunStatus.ONGOING
+    assert run.act == 2
+    assert run.current_node_id == "0-0"
+    assert run.nodes["0-0"].visited
+    assert available_choices(run)
+    assert len(run.player.deck) == deck_size + 1  # the boss's card reward
+
+
+def test_beating_the_last_boss_wins_the_run() -> None:
+    run = new_run(seed=5)
+    rng = random.Random(5)
+    _win_boss(run, rng)
+
+    _win_boss(run, rng)
+
+    assert run.status is RunStatus.VICTORY

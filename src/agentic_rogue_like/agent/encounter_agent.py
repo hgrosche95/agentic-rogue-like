@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
 
-from ..enemies import pick_enemy
+from ..enemies import pick_enemy, tier_floor
 from ..models import DEFAULT_SETTING, Enemy
 from .budgets import budget_for
 from .encounter_schema import BudgetViolation, EnemyBudget, EnemyProposal, validate_proposal
@@ -172,6 +172,7 @@ def enemy_for_node(
     rng: random.Random,
     setting: str = DEFAULT_SETTING,
     prefetched: Callable[[], Enemy] | None = None,
+    act: int = 1,
 ) -> Enemy:
     """Agent-generated enemy, degrading to the static pool if the agent can't deliver.
 
@@ -190,16 +191,21 @@ def enemy_for_node(
     (see prefetch.py) and hands the result in here, so its errors land in the
     same fallback as a live call's. Its placeholder id is swapped for
     `enemy_id` so ids still come from `rng` exactly as before.
+
+    `act` > 1 only shifts which tier is picked (see enemies.tier_floor) -
+    the extra strength of later acts is enemies.escalate()'s job.
     """
     if os.environ.get("ENCOUNTER_AGENT_ENABLED") != "1":
-        return pick_enemy(floor=floor, num_floors=num_floors, elite=elite, boss=boss, rng=rng)
+        return pick_enemy(
+            floor=floor, num_floors=num_floors, elite=elite, boss=boss, rng=rng, act=act
+        )
 
     try:
         if prefetched is not None:
             return prefetched().model_copy(update={"id": enemy_id})
         return generate_balanced_enemy(
             enemy_id=enemy_id,
-            floor=floor,
+            floor=tier_floor(floor, num_floors, act),
             num_floors=num_floors,
             elite=elite,
             boss=boss,
@@ -207,4 +213,6 @@ def enemy_for_node(
         )
     except Exception:
         logger.warning("encounter agent failed, using static pool", exc_info=True)
-        return pick_enemy(floor=floor, num_floors=num_floors, elite=elite, boss=boss, rng=rng)
+        return pick_enemy(
+            floor=floor, num_floors=num_floors, elite=elite, boss=boss, rng=rng, act=act
+        )

@@ -193,6 +193,9 @@ MAX_CUSTOM_SETTING_LENGTH = 40
 
 class RunState(BaseModel):
     seed: int
+    # Which map of the run the player is on - beating an act's boss opens
+    # the next one (see engine.advance_act), beating the last one wins.
+    act: int = 1
     floor: int = 0
     status: RunStatus = RunStatus.ONGOING
     player: PlayerState

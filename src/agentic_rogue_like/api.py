@@ -35,11 +35,14 @@ from .combat import (
     EnemyIntentType,
     action_preview,
     enemy_attack,
+    enemy_block_gain,
     incoming_damage,
+    intent_hits,
     max_hand_size,
     player_armor,
 )
 from .engine import (
+    NUM_ACTS,
     apply_event_choice,
     available_choices,
     choose_artifact,
@@ -133,17 +136,28 @@ class HandCardView(CardView):
 class PendingCombatView(BaseModel):
     enemy_name: str
     enemy_attack_name: str
+    # The enemy's base attack stat - what its look is built from.
+    enemy_attack: int
     enemy_hp: int
     enemy_max_hp: int
     enemy_block: int
     enemy_intent: str
     enemy_intent_value: int
-    # The attack's full range - the d6 roll on top of the attack stat - and
-    # what of it would get through block and armor if the turn ended now.
+    # The range of one hit of the telegraphed attack (the roll on top of
+    # the attack stat), how many hits it has, and what of all of them would
+    # get through block and armor if the turn ended now. For intents that
+    # raise block instead, min = max = the block raised and hits = 0.
     enemy_intent_min: int
     enemy_intent_max: int
+    enemy_intent_hits: int
     incoming_min: int
     incoming_max: int
+    # Boss fights: the phase the boss is in (of enemy_phases), and the
+    # attack it has gained.
+    boss: bool
+    enemy_phase: int
+    enemy_phases: int
+    enemy_strength: int
     hand: list[HandCardView]
     field: list[CardView | None]
     player_block: int
@@ -187,6 +201,8 @@ class ShopView(BaseModel):
 class RunView(BaseModel):
     run_id: str
     status: RunStatus
+    act: int
+    num_acts: int
     floor: int
     setting: str
     player: PlayerState
@@ -285,21 +301,35 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
     pending_combat = None
     if session.combat is not None:
         combat = session.combat
-        attacking = combat.enemy_intent is EnemyIntentType.ATTACK
-        intent_value = enemy_attack(combat) if attacking else combat.enemy.attack
+        hits = intent_hits(combat)
+        if hits:
+            hit_min, hit_max = hits[0]
+            intent_value = (
+                enemy_attack(combat)
+                if combat.enemy_intent is EnemyIntentType.ATTACK
+                else hit_min - 1
+            )
+        else:
+            hit_min = hit_max = intent_value = enemy_block_gain(combat)
         incoming_min, incoming_max = incoming_damage(combat)
         pending_combat = PendingCombatView(
             enemy_name=combat.enemy.name,
             enemy_attack_name=combat.enemy.attack_name,
+            enemy_attack=combat.enemy.attack,
             enemy_hp=combat.enemy_hp,
             enemy_max_hp=combat.enemy.hp,
             enemy_block=combat.enemy_block,
             enemy_intent=combat.enemy_intent.value,
             enemy_intent_value=intent_value,
-            enemy_intent_min=intent_value + 1 if attacking else intent_value,
-            enemy_intent_max=intent_value + 6 if attacking else intent_value,
+            enemy_intent_min=hit_min,
+            enemy_intent_max=hit_max,
+            enemy_intent_hits=len(hits),
             incoming_min=incoming_min,
             incoming_max=incoming_max,
+            boss=combat.boss,
+            enemy_phase=combat.phase,
+            enemy_phases=combat.boss_phases,
+            enemy_strength=combat.enemy_strength,
             hand=[
                 HandCardView(
                     hand_index=i,
@@ -326,6 +356,8 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
     return RunView(
         run_id=run_id,
         status=run.status,
+        act=run.act,
+        num_acts=NUM_ACTS,
         floor=run.floor,
         setting=run.setting,
         player=run.player,
@@ -349,6 +381,16 @@ def _get_session_or_404(run_id: str) -> RunSession:
     if session is None:
         raise HTTPException(status_code=404, detail="run not found")
     return session
+
+
+def _finish_fight(session: RunSession) -> None:
+    act = session.run.act
+    finalize_combat(session.run, session.combat, session.rng)
+    session.combat = None
+    if session.run.act != act:
+        # A beaten boss opened the next act's map - its first rooms are
+        # reachable now, not only after the next jump.
+        session.prefetch.warm(session.run)
 
 
 @app.get("/settings")
@@ -416,8 +458,7 @@ def play_card_endpoint(run_id: str, request: PlayCardRequest) -> RunView:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if session.combat.enemy_hp <= 0:
-        finalize_combat(session.run, session.combat, session.rng)
-        session.combat = None
+        _finish_fight(session)
 
     return _run_view(run_id, session)
 
@@ -436,8 +477,7 @@ def end_turn_endpoint(run_id: str, request: EndTurnRequest | None = None) -> Run
 
     # A Daemon permanent can finish the enemy off during the end of the turn.
     if session.run.player.hp <= 0 or session.combat.enemy_hp <= 0:
-        finalize_combat(session.run, session.combat, session.rng)
-        session.combat = None
+        _finish_fight(session)
 
     return _run_view(run_id, session)
 

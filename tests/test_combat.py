@@ -325,3 +325,138 @@ def test_incoming_damage_is_zero_while_the_enemy_defends() -> None:
     state.enemy_intent = EnemyIntentType.DEFEND
 
     assert incoming_damage(state) == (0, 0)
+
+
+# --------------------------------------------------------------------------- bosses
+
+
+def _boss_state(hp: int = 100, attack: int = 10, deck: list[Card] | None = None):
+    player = _player(deck or _basic_deck())
+    state, log = start_combat(
+        player.deck, _enemy(hp=hp, attack=attack), random.Random(1), boss=True
+    )
+    return state, player, log
+
+
+def test_regular_enemies_only_attack_or_defend() -> None:
+    player = _player(_basic_deck())
+    state, _ = start_combat(player.deck, _enemy(hp=10_000), random.Random(3))
+    seen = set()
+    for _ in range(60):
+        seen.add(state.enemy_intent)
+        player.hp = player.max_hp
+        end_turn(state, player, random.Random(len(seen)))
+    assert seen <= {EnemyIntentType.ATTACK, EnemyIntentType.DEFEND}
+
+
+def test_boss_uses_its_whole_move_set_and_charge_is_always_followed_by_overload() -> None:
+    state, player, log = _boss_state(hp=10_000)
+    assert "boss" in log[1]
+    rng = random.Random(4)
+    intents = []
+    for _ in range(200):
+        intents.append(state.enemy_intent)
+        player.hp = player.max_hp
+        end_turn(state, player, rng)
+    assert {
+        EnemyIntentType.ATTACK,
+        EnemyIntentType.DEFEND,
+        EnemyIntentType.BARRAGE,
+        EnemyIntentType.CHARGE,
+        EnemyIntentType.OVERLOAD,
+    } <= set(intents)
+    for before, after in zip(intents, intents[1:], strict=False):
+        if before is EnemyIntentType.CHARGE:
+            assert after is EnemyIntentType.OVERLOAD
+        if before is EnemyIntentType.OVERLOAD:
+            assert after is not EnemyIntentType.CHARGE
+    # no permanents ever hit the field, so there was nothing to purge
+    assert EnemyIntentType.PURGE not in intents
+
+
+def test_barrage_preview_applies_armor_to_every_hit() -> None:
+    state, _, _ = _boss_state(attack=12)
+    state.enemy_intent = EnemyIntentType.BARRAGE
+    state.player_block = 0
+    # 3 hits of 3 + d3 (round(12 * 0.25) = 3)
+    assert incoming_damage(state) == (12, 18)
+    state.field[0] = ARMOR
+    assert incoming_damage(state) == (9, 15)
+    state.player_block = 10
+    assert incoming_damage(state) == (0, 5)
+
+
+def test_charge_raises_block_and_deals_no_damage() -> None:
+    state, player, _ = _boss_state(attack=12)
+    state.enemy_intent = EnemyIntentType.CHARGE
+    assert incoming_damage(state) == (0, 0)
+
+    end_turn(state, player, random.Random(1))
+
+    assert player.hp == player.max_hp
+    assert state.enemy_block == 3
+    assert state.enemy_intent is EnemyIntentType.OVERLOAD
+
+
+def test_boss_enters_phase_two_at_half_hp() -> None:
+    big_strike = Card(id="big", name="Big", type=CardType.ATTACK, value=45, description="")
+    state, player, _ = _boss_state(hp=100, attack=10, deck=[big_strike] * 10)
+    assert (state.phase, state.enemy_strength) == (1, 0)
+
+    line = play_card(state, 0, 0, player, random.Random(1))
+
+    assert state.enemy_hp == 50
+    assert "phase 2" in line
+    assert state.phase == 2
+    assert state.enemy_strength == 2  # round(10 * 0.15), at least 1
+    assert state.enemy_block == 2  # round(10 * 0.25)
+    play_card(state, 0, 1, player, random.Random(1))
+    assert state.enemy_strength == 2  # only once
+
+
+def test_purge_destroys_the_rightmost_permanent() -> None:
+    state, player, _ = _boss_state(attack=10)
+    state.phase = 2
+    state.field[0] = ARMOR
+    state.field[3] = AMPLIFIER
+    state.enemy_intent = EnemyIntentType.PURGE
+
+    log = end_turn(state, player, random.Random(1))
+
+    assert state.field[3] is None
+    assert state.field[0] == ARMOR
+    assert AMPLIFIER in state.banished_pile
+    assert any("purges" in line for line in log)
+    assert player.hp < player.max_hp
+
+
+def test_three_phase_boss_enters_phase_three_at_a_quarter_hp() -> None:
+    jab = Card(id="j", name="Jab", type=CardType.ATTACK, value=0, description="")
+    player = _player([jab] * 10)
+    state, log = start_combat(
+        player.deck, _enemy(hp=100, attack=10), random.Random(1), boss=True, boss_phases=3
+    )
+    assert "quarter" in log[1]
+    state.enemy_hp = 30
+
+    line = play_card(state, 0, 0, player, random.Random(1))  # 5 damage -> 25 HP
+
+    # dropping past both thresholds at once enters both phases
+    assert state.phase == 3
+    assert state.enemy_strength == 4  # +2 per phase entered
+    assert "phase 2" in line and "phase 3" in line
+    state.enemy_intent = EnemyIntentType.BARRAGE
+    state.player_block = 0
+    assert len(incoming_damage(state)) == 2  # still a (min, max) pair
+    from agentic_rogue_like.combat import intent_hits
+
+    assert len(intent_hits(state)) == 4
+
+
+def test_two_phase_boss_never_enters_phase_three() -> None:
+    big = Card(id="b", name="B", type=CardType.ATTACK, value=85, description="")
+    state, player, _ = _boss_state(hp=100, attack=10, deck=[big] * 10)
+
+    play_card(state, 0, 0, player, random.Random(1))
+
+    assert state.phase == 2

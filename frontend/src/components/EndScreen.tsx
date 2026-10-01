@@ -11,7 +11,7 @@ export function EndScreen({ run, onRestart }: { run: RunView; onRestart: () => v
     <div className={`end-screen ${won ? "is-won" : "is-lost"}`}>
       <h2>{won ? "Victory!" : "You have fallen."}</h2>
       <p>
-        Reached floor {run.floor} with {run.player.gold} gold.
+        Reached act {run.act}/{run.num_acts}, floor {run.floor + 1} with {run.player.gold} gold.
       </p>
       <button
         className="is-primary"

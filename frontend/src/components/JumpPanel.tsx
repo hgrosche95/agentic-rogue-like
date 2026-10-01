@@ -13,6 +13,7 @@ export function JumpPanel({
   choices,
   focusedId,
   numFloors,
+  act,
   canJump,
   disabled,
   onEnter,
@@ -23,6 +24,7 @@ export function JumpPanel({
   choices: MapNode[];
   focusedId: string | null;
   numFloors: number;
+  act: number;
   canJump: boolean;
   disabled: boolean;
   onEnter: () => void;
@@ -34,7 +36,7 @@ export function JumpPanel({
       <section className="panel jump-panel is-arrived">
         <div className="panel-head">
           <h2 className="panel-title">Arrived</h2>
-          <span className="panel-sub">{eraLabel(current.floor, numFloors)}</span>
+          <span className="panel-sub">{eraLabel(current.floor, numFloors, act)}</span>
         </div>
         <div className="jump-target">
           <NodeBadge type={current.type} size={40} />
@@ -55,7 +57,7 @@ export function JumpPanel({
     <section className="panel jump-panel">
       <div className="panel-head">
         <h2 className="panel-title">Next jump</h2>
-        {target && canJump && <span className="panel-sub">{eraLabel(target.floor, numFloors)}</span>}
+        {target && canJump && <span className="panel-sub">{eraLabel(target.floor, numFloors, act)}</span>}
       </div>
       {target && canJump ? (
         <>

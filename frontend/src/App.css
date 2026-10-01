@@ -1836,14 +1836,51 @@ button.is-primary:hover:not(:disabled),
   height: 13px;
 }
 
-.intent-badge.type-attack {
+.intent-badge.is-hit {
   color: var(--danger);
   background: rgba(255, 79, 139, 0.14);
 }
 
-.intent-badge.type-defend {
+.intent-badge.is-guard {
   color: var(--brace);
   background: rgba(201, 214, 255, 0.1);
+}
+
+/* boss moves: a charge warns of the overload behind it, a purge goes for the field */
+.intent-badge.type-charge {
+  color: var(--boost);
+  background: rgba(255, 209, 102, 0.12);
+}
+
+.intent-badge.type-purge {
+  color: #c38bff;
+  background: rgba(195, 139, 255, 0.14);
+}
+
+.phase-badge {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 9px;
+  border: 1px solid currentColor;
+  border-radius: 99px;
+  color: var(--text-dim);
+  background: rgba(20, 12, 50, 0.6);
+}
+
+.phase-badge.is-enraged {
+  color: #fff;
+  background: rgba(217, 46, 102, 0.55);
+  border-color: var(--danger);
+  animation: phase-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes phase-pulse {
+  50% {
+    box-shadow: 0 0 14px rgba(255, 79, 139, 0.75);
+  }
 }
 
 /* what the telegraphed attack does to you if the turn ended now */
@@ -3024,18 +3061,35 @@ body > .card-flight {
 }
 
 /* solid plates, not outlines: this is what the whole turn is planned around */
-.arena-intent.is-attack {
+.arena-intent.is-hit {
   color: #fff;
   background: #d92e66;
   border-color: #ffc2d6;
   box-shadow: 0 0 0 3px rgba(217, 46, 102, 0.35), 0 0 28px rgba(255, 79, 139, 0.7), 0 6px 14px rgba(10, 5, 40, 0.5);
 }
 
-.arena-intent.is-defend {
+.arena-intent.is-guard {
   color: var(--line-ink);
   background: var(--brace);
   border-color: #fff;
   box-shadow: 0 0 0 3px rgba(201, 214, 255, 0.3), 0 0 24px rgba(201, 214, 255, 0.55), 0 6px 14px rgba(10, 5, 40, 0.5);
+}
+
+.arena-intent.is-charge {
+  background: var(--boost);
+  border-color: #fff4d6;
+  box-shadow: 0 0 0 3px rgba(255, 209, 102, 0.3), 0 0 26px rgba(255, 209, 102, 0.7), 0 6px 14px rgba(10, 5, 40, 0.5);
+}
+
+.arena-intent.is-overload {
+  background: #a3123f;
+  box-shadow: 0 0 0 4px rgba(255, 79, 139, 0.45), 0 0 40px rgba(255, 79, 139, 0.95), 0 6px 14px rgba(10, 5, 40, 0.5);
+}
+
+.arena-intent.is-purge {
+  background: #8a3fd6;
+  border-color: #e4ccff;
+  box-shadow: 0 0 0 3px rgba(195, 139, 255, 0.35), 0 0 28px rgba(195, 139, 255, 0.7), 0 6px 14px rgba(10, 5, 40, 0.5);
 }
 
 @keyframes intent-in {

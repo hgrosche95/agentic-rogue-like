@@ -105,6 +105,7 @@ export function DungeonMap({
   onChoose,
   onHover,
   disabled,
+  act = 1,
 }: {
   nodes: Record<string, MapNode>;
   currentNodeId: string;
@@ -112,6 +113,7 @@ export function DungeonMap({
   onChoose: (nodeId: string) => void;
   onHover?: (nodeId: string | null) => void;
   disabled: boolean;
+  act?: number;
 }) {
   const isHorizontal = useIsHorizontal();
 
@@ -168,14 +170,14 @@ export function DungeonMap({
             <g key={floor} className={classes}>
               <line className="map-era-line" x1={at} y1={44} x2={at} y2={height - 8} />
               <text className="map-era-label" x={at} y={28}>
-                {eraLabel(floor, numFloors)}
+                {eraLabel(floor, numFloors, act)}
               </text>
             </g>
           ) : (
             <g key={floor} className={classes}>
               <line className="map-era-line" x1={VERTICAL.LABEL + 4} y1={at} x2={width - 6} y2={at} />
               <text className="map-era-label is-side" x={4} y={at}>
-                {eraLabel(floor, numFloors)}
+                {eraLabel(floor, numFloors, act)}
               </text>
             </g>
           );
@@ -220,7 +222,7 @@ export function DungeonMap({
               transform={`translate(${x} ${y})`}
               role={isReachable ? "button" : undefined}
               tabIndex={interactive ? 0 : undefined}
-              aria-label={`${style.label}, ${eraLabel(node.floor, numFloors)}`}
+              aria-label={`${style.label}, ${eraLabel(node.floor, numFloors, act)}`}
               onMouseEnter={() => {
                 if (!interactive) return;
                 sfx.play("hover");

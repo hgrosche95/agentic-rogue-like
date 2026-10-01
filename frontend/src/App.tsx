@@ -198,6 +198,7 @@ function App() {
     currentNodeId: run.current_node.id,
     reachableIds: run.available_choices.map((n) => n.id),
     disabled: isLoading,
+    act: run.act,
     onChoose: jumpTo,
   };
   const ongoing = run.status === "ongoing";
@@ -212,7 +213,14 @@ function App() {
 
   return (
     <main className={`game${inCombat ? " is-combat" : ""}`}>
-      <TopBar player={run.player} floor={run.floor} numFloors={numFloors} setting={run.setting}>
+      <TopBar
+        player={run.player}
+        floor={run.floor}
+        numFloors={numFloors}
+        act={run.act}
+        numActs={run.num_acts}
+        setting={run.setting}
+      >
         <DeckButton
           count={run.player.deck.length}
           onClick={() => {
@@ -249,7 +257,7 @@ function App() {
           combat={combat}
           setting={run.setting}
           player={run.player}
-          era={eraLabel(run.floor, numFloors)}
+          era={eraLabel(run.floor, numFloors, run.act)}
           log={run.history}
           disabled={isLoading || slainCombat !== null}
           enemySlain={slainCombat !== null}
@@ -276,6 +284,7 @@ function App() {
               choices={run.available_choices}
               focusedId={focusedJump}
               numFloors={numFloors}
+              act={run.act}
               canJump={canJump}
               disabled={isLoading}
               onEnter={enterRoom}
