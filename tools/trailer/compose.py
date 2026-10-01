@@ -209,8 +209,9 @@ def render_frame(t):
     bars = int(getattr(tl, 'LETTERBOX', 0) * SCALE)
     if bars:
         arr[:bars] = 0; arr[-bars:] = 0
-    # film grain
-    arr += np.random.default_rng(int(t * 30)).normal(0, 3.5, (OH, OW, 1)).astype(np.float32)
+    # film grain (off for the small web encode, where it eats the bitrate)
+    if not os.environ.get('NO_GRAIN'):
+        arr += np.random.default_rng(int(t * 30)).normal(0, 3.5, (OH, OW, 1)).astype(np.float32)
     return np.clip(arr, 0, 255).astype(np.uint8)
 
 
