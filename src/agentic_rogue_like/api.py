@@ -69,7 +69,7 @@ from .models import (
     Shop,
 )
 from .sessions import RunSession, create_session, get_session
-from .shop import buy_artifact, buy_card, leave_shop
+from .shop import MIN_DECK_SIZE, buy_artifact, buy_card, leave_shop, remove_card
 
 app = FastAPI(title="agentic-rogue-like")
 
@@ -183,6 +183,11 @@ class ShopArtifactView(BaseModel):
 class ShopView(BaseModel):
     cards: list[ShopCardView]
     artifacts: list[ShopArtifactView]
+    # Removing a card from the deck: its price, whether this shop's one
+    # removal is used up, and the deck size it can't go below.
+    removal_price: int
+    removal_used: bool
+    min_deck_size: int
 
     @classmethod
     def of(cls, shop: Shop) -> ShopView:
@@ -195,6 +200,9 @@ class ShopView(BaseModel):
                 ShopArtifactView(artifact=item.artifact, price=item.price, sold=item.sold)
                 for item in shop.artifacts
             ],
+            removal_price=shop.removal_price,
+            removal_used=shop.removal_used,
+            min_deck_size=MIN_DECK_SIZE,
         )
 
 
@@ -428,6 +436,8 @@ def resolve_current_node(run_id: str) -> RunView:
         raise HTTPException(status_code=409, detail="node already resolved")
     if run.artifact_offer is not None:
         raise HTTPException(status_code=409, detail="choose an artifact first")
+    if run.card_reward is not None:
+        raise HTTPException(status_code=409, detail="choose a card first")
 
     prefetch = session.prefetch
     if node.type is NodeType.EVENT:
@@ -540,6 +550,12 @@ def buy_card_endpoint(run_id: str, request: ShopBuyRequest) -> RunView:
 @app.post("/runs/{run_id}/shop/buy-artifact")
 def buy_artifact_endpoint(run_id: str, request: ShopBuyRequest) -> RunView:
     return _shop_action(run_id, lambda run: buy_artifact(run, request.index))
+
+
+@app.post("/runs/{run_id}/shop/remove-card")
+def remove_card_endpoint(run_id: str, request: ShopBuyRequest) -> RunView:
+    """`index` is the card's position in the deck (RunView.player.deck)."""
+    return _shop_action(run_id, lambda run: remove_card(run, request.index))
 
 
 @app.post("/runs/{run_id}/shop/leave")

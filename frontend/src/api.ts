@@ -144,6 +144,10 @@ export interface ShopArtifact {
 export interface ShopView {
   cards: ShopCard[];
   artifacts: ShopArtifact[];
+  // removing one card from the deck: once per shop, pricier every time
+  removal_price: number;
+  removal_used: boolean;
+  min_deck_size: number;
 }
 
 export interface RunView {
@@ -230,6 +234,14 @@ export function buyShopCard(runId: string, index: number): Promise<RunView> {
 
 export function buyShopArtifact(runId: string, index: number): Promise<RunView> {
   return request<RunView>(`/runs/${runId}/shop/buy-artifact`, {
+    method: "POST",
+    body: JSON.stringify({ index }),
+  });
+}
+
+// `index` is the card's position in the deck (player.deck)
+export function removeShopCard(runId: string, index: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/shop/remove-card`, {
     method: "POST",
     body: JSON.stringify({ index }),
   });

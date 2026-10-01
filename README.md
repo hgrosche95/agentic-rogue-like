@@ -61,7 +61,9 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       erste bezahlbare Karte in den ersten freien Slot, dann Rundenende),
       das Web-UI interaktiv Karte für Karte über eigene Endpunkte
       (`/combat/play-card`, `/combat/end-turn`).
-- [x] **Deck-Building** — nach jedem Sieg eine von drei Karten wählen
+- [x] **Deck-Building** — zu Beginn des Runs (nach dem ersten Artefakt)
+      eine von drei Karten der Seltenheit Uncommon/Rare ins Startdeck
+      nehmen (oder überspringen), danach nach jedem Sieg eine von drei Karten wählen
       (`/runs/{id}/card-reward`); 18 Belohnungskarten mit Abwurfkosten,
       Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
 - [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
@@ -71,9 +73,11 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       aus 4 Karten (nach Seltenheit gewichtet, wie eine Kartenbelohnung) und
       2 Artefakten, die man noch nicht hat, gegen Credits (Gold): Karten
       je nach Seltenheit ~25/45/70, Artefakte ~75, jeweils ±15 %. Man kann
-      beliebig viel kaufen, solange das Gold reicht, und verlässt den Shop
-      selbst (`/runs/{id}/shop/buy-card`, `/shop/buy-artifact`,
-      `/shop/leave`). Das Angebot kommt aus einem eigenen, pro Run und Raum
+      beliebig viel kaufen, solange das Gold reicht. Einmal pro Shop lässt
+      sich außerdem eine Karte gegen Credits aus dem Deck entfernen: 50 für
+      die erste, jede weitere im Run 25 mehr, das Deck bleibt bei mindestens
+      5 Karten. Den Shop verlässt man selbst (`/runs/{id}/shop/buy-card`,
+      `/shop/buy-artifact`, `/shop/remove-card`, `/shop/leave`). Das Angebot kommt aus einem eigenen, pro Run und Raum
       geseedeten Zufallsgenerator (`shop.py`), verschiebt also keine anderen
       Zufallsergebnisse des Runs. `balance-sim` modelliert Shops noch nicht.
 - [x] **Zwei Akte und ein mehrphasiger Boss** — wer den ersten Boss

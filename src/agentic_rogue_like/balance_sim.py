@@ -42,7 +42,7 @@ from pathlib import Path
 from .agent.budgets import _BUDGETS
 from .agent.encounter_schema import EnemyBudget
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
-from .cards import reward_card, roll_card_reward, starter_deck
+from .cards import START_CARD_WEIGHTS, reward_card, roll_card_reward, starter_deck
 from .combat import (
     ATTACKING_INTENTS,
     MAX_AUTO_PLAYS_PER_TURN,
@@ -359,6 +359,9 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
     node = nodes["0-0"]
     fights: list[FightResult] = []
     steps = 0
+    if cfg.rewards:  # mirrors engine.new_run's starting card pick
+        offer = roll_card_reward(random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS)
+        player.deck.append(reward_card(offer[pick_reward(offer, bot_name, rng)], player.deck))
 
     while True:
         if cfg.artifacts and steps % ARTIFACT_EVERY_STEPS == 0:

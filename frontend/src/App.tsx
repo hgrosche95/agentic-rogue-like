@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import "./App.css";
 import {
   buyShopArtifact,
+  removeShopCard,
   buyShopCard,
   chooseArtifact,
   chooseCardReward,
@@ -311,10 +312,12 @@ function App() {
           />
         </Overlay>
       )}
-      {!combat && ongoing && run.card_reward && (
+      {/* at the start the artifact comes first, then the starting card */}
+      {!combat && ongoing && run.card_reward && !run.artifact_offer && (
         <Overlay label="Choose a card" className="is-wide">
           <RewardScreen
             offer={run.card_reward}
+            isStart={!run.current_node.visited}
             deckSize={run.player.deck.length}
             disabled={isLoading}
             onPick={(cardIndex) => runAction(() => chooseCardReward(run.run_id, cardIndex))}
@@ -326,7 +329,9 @@ function App() {
           <ShopScreen
             shop={run.shop}
             gold={run.player.gold}
+            deck={run.player.deck}
             disabled={isLoading}
+            onRemoveCard={(index) => runAction(() => removeShopCard(run.run_id, index))}
             onBuyCard={(index) => runAction(() => buyShopCard(run.run_id, index))}
             onBuyArtifact={(index) => runAction(() => buyShopArtifact(run.run_id, index))}
             onLeave={() => runAction(() => leaveShop(run.run_id))}

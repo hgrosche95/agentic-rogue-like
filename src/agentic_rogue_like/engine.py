@@ -14,7 +14,7 @@ from dataclasses import replace
 from .agent.encounter_agent import enemy_for_node
 from .agent.narrator import narrate
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
-from .cards import reward_card, roll_card_reward, starter_deck
+from .cards import START_CARD_WEIGHTS, reward_card, roll_card_reward, starter_deck
 from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
@@ -78,6 +78,11 @@ def new_run(seed: int, setting: str = DEFAULT_SETTING) -> RunState:
     # Its own rng, so offering artifacts doesn't shift the run rng's sequence
     # (enemies, events, rewards) compared to a run without them.
     run.artifact_offer = roll_artifact_offer(random.Random(f"{seed}-artifacts-0"), [])
+    # ... and so does the starting card pick: three uncommon/rare cards, one of
+    # which (or none) joins the starter deck before the first room.
+    run.card_reward = roll_card_reward(
+        random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS
+    )
     return run
 
 
@@ -296,6 +301,10 @@ def resolve_node(
             run,
             choose_artifact_option(offer) if choose_artifact_option else rng.randrange(len(offer)),
         )
+
+    if run.card_reward is not None:  # the starting card pick
+        offer = run.card_reward
+        choose_card_reward(run, choose_card(offer) if choose_card else rng.randrange(len(offer)))
 
     node = run.nodes[run.current_node_id]
 

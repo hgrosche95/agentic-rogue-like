@@ -157,6 +157,9 @@ class Shop(BaseModel):
 
     cards: list[ShopCard] = Field(default_factory=list)
     artifacts: list[ShopArtifact] = Field(default_factory=list)
+    # Removing one card from the deck, once per shop.
+    removal_price: int = 0
+    removal_used: bool = False
 
 
 class Enemy(BaseModel):
@@ -214,3 +217,5 @@ class RunState(BaseModel):
     # The shop the player is browsing - open from entering a SHOP room until
     # they leave it; the run can't move on while it is open.
     shop: Shop | None = None
+    # Cards removed at black markets so far - each removal costs more.
+    cards_removed: int = 0
