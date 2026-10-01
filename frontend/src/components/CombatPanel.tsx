@@ -347,13 +347,16 @@ export function CombatPanel({
               {combat.boss && !enemySlain && (
                 <span
                   className={`phase-badge${combat.enemy_phase > 1 ? " is-enraged" : ""}`}
-                  title={
+                  title={[
                     combat.enemy_phase > 1
-                      ? `Overclocked: +${combat.enemy_strength} attack, and it purges permanents`
-                      : "Overclocks into phase 2 at half HP"
-                  }
+                      ? `Overclocked: +${combat.enemy_strength} attack, and it purges permanents.`
+                      : "Overclocks into phase 2 at half HP.",
+                    combat.enemy_phases > 2 && combat.enemy_phase < 3
+                      ? "Phase 3 at a quarter HP: stronger again, no more bracing, 4-hit barrages."
+                      : "",
+                  ].join(" ")}
                 >
-                  Phase {combat.enemy_phase}
+                  Phase {combat.enemy_phase}/{combat.enemy_phases}
                   {combat.enemy_strength > 0 && ` · +${combat.enemy_strength} ATK`}
                 </span>
               )}

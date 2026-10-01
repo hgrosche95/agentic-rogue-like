@@ -152,9 +152,11 @@ class PendingCombatView(BaseModel):
     enemy_intent_hits: int
     incoming_min: int
     incoming_max: int
-    # Boss fights: the phase the boss is in, and the attack it has gained.
+    # Boss fights: the phase the boss is in (of enemy_phases), and the
+    # attack it has gained.
     boss: bool
     enemy_phase: int
+    enemy_phases: int
     enemy_strength: int
     hand: list[HandCardView]
     field: list[CardView | None]
@@ -326,6 +328,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             incoming_max=incoming_max,
             boss=combat.boss,
             enemy_phase=combat.phase,
+            enemy_phases=combat.boss_phases,
             enemy_strength=combat.enemy_strength,
             hand=[
                 HandCardView(

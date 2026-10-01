@@ -57,7 +57,13 @@ REST_HEAL = 15
 # last act's boss wins the run. Between acts the player recovers this share
 # of their max HP, on top of the boss's gold and card reward.
 NUM_ACTS = 2
-ACT_HEAL_PERCENT = 50
+ACT_HEAL_PERCENT = 40
+
+
+def boss_phases(act: int) -> int:
+    """Act 1's boss has two phases, every later act's boss a third one."""
+    return 2 if act <= 1 else 3
+
 
 REST_SITUATION = "a weary adventurer resting and tending their wounds"
 SHOP_SITUATION = "a traveling merchant offering strange wares for sale"
@@ -243,7 +249,12 @@ def start_combat_node(
         run.act,
     )
     state, log = _start_combat(
-        run.player.deck, enemy, rng, run.player.artifacts, boss=node.type is NodeType.BOSS
+        run.player.deck,
+        enemy,
+        rng,
+        run.player.artifacts,
+        boss=node.type is NodeType.BOSS,
+        boss_phases=boss_phases(run.act),
     )
     run.history.extend(log)
     return state
@@ -314,7 +325,12 @@ def resolve_node(
             run.act,
         )
         victory, log = auto_resolve_combat(
-            run.player.deck, enemy, run.player, rng, boss=node.type is NodeType.BOSS
+            run.player.deck,
+            enemy,
+            run.player,
+            rng,
+            boss=node.type is NodeType.BOSS,
+            boss_phases=boss_phases(run.act),
         )
         run.history.extend(log)
         _finish_combat(run, node, enemy.name, victory, rng)

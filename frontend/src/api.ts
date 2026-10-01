@@ -112,9 +112,11 @@ export interface PendingCombatView {
   enemy_intent_hits: number;
   incoming_min: number;
   incoming_max: number;
-  // boss fights: phase 2 starts at half HP and adds strength
+  // boss fights: phase 2 starts at half HP, phase 3 (later acts) at a
+  // quarter - each adds strength
   boss: boolean;
   enemy_phase: number;
+  enemy_phases: number;
   enemy_strength: number;
   hand: HandCardView[];
   field: (Card | null)[];

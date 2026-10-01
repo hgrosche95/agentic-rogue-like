@@ -24,7 +24,8 @@ Bosses fight with a bigger move set (see _roll_boss_intent): a three-hit
 barrage, a charge-up that telegraphs a crushing overload blow on the
 following turn, and - once they drop to half HP and enter phase 2, gaining
 strength and block - a purge that destroys the rightmost permanent on the
-field.
+field. Later acts' bosses have a third phase at a quarter HP: stronger
+again, no more bracing, and a four-hit barrage.
 
 Two ways to drive this engine:
 - step by step (start_combat / play_card / end_turn) - what the web API
@@ -60,9 +61,10 @@ BARRAGE_FACTOR = 0.25  # damage per barrage hit, before its d3
 OVERLOAD_FACTOR = 1.4  # the charged blow, before its d6
 CHARGE_BLOCK_FACTOR = 0.25  # block raised while charging
 PURGE_FACTOR = 0.5  # the purge's hit, before its d6
-PHASE_TWO_HP_PERCENT = 50
-PHASE_TWO_STRENGTH_FACTOR = 0.15
-PHASE_TWO_BLOCK_FACTOR = 0.25
+# HP percentage at or below which a boss enters each phase past the first.
+PHASE_HP_PERCENT = {2: 50, 3: 25}
+PHASE_STRENGTH_FACTOR = 0.15  # attack gained on entering a phase
+PHASE_BLOCK_FACTOR = 0.25  # block gained on entering a phase
 
 
 class EnemyIntentType(StrEnum):
@@ -101,8 +103,10 @@ class CombatState(BaseModel):
     # read them without being handed the PlayerState.
     artifacts: list[Artifact] = Field(default_factory=list)
     turn: int = 1
-    # Boss fights only: the phase it is in, and the attack it has gained.
+    # Boss fights only: the phase it is in (out of boss_phases), and the
+    # attack it has gained.
     boss: bool = False
+    boss_phases: int = 2
     phase: int = 1
     enemy_strength: int = 0
 
@@ -157,7 +161,7 @@ def intent_hits(state: CombatState) -> list[tuple[int, int]]:
         return [(base + 1, base + 6)]
     if intent is EnemyIntentType.BARRAGE:
         hit = round(base * BARRAGE_FACTOR)
-        return [(hit + 1, hit + 3)] * BARRAGE_HITS
+        return [(hit + 1, hit + 3)] * barrage_hits(state)
     if intent is EnemyIntentType.OVERLOAD:
         hit = round(base * OVERLOAD_FACTOR)
         return [(hit + 1, hit + 6)]
@@ -165,6 +169,10 @@ def intent_hits(state: CombatState) -> list[tuple[int, int]]:
         hit = round(base * PURGE_FACTOR)
         return [(hit + 1, hit + 6)]
     return []
+
+
+def barrage_hits(state: CombatState) -> int:
+    return BARRAGE_HITS + (1 if state.phase >= 3 else 0)
 
 
 def _damage_taken(hits: list[int], block: int, armor: int) -> int:
@@ -246,8 +254,9 @@ def _roll_enemy_intent(rng: random.Random) -> EnemyIntentType:
 
 def _roll_boss_intent(state: CombatState, rng: random.Random) -> EnemyIntentType:
     """A boss's next move: a charge is always followed by its overload, an
-    overload never straight by another charge, and purges only come in
-    phase 2 while there is a permanent on the field to destroy."""
+    overload never straight by another charge, purges only come from phase 2
+    on while there is a permanent on the field to destroy, and in phase 3 it
+    stops bracing."""
     previous = state.enemy_intent
     if previous is EnemyIntentType.CHARGE:
         return EnemyIntentType.OVERLOAD
@@ -261,6 +270,8 @@ def _roll_boss_intent(state: CombatState, rng: random.Random) -> EnemyIntentType
         weights[EnemyIntentType.DEFEND] = 2
         if permanent_count(state):
             weights[EnemyIntentType.PURGE] = 2
+    if state.phase >= 3:
+        del weights[EnemyIntentType.DEFEND]
     if previous is EnemyIntentType.OVERLOAD:
         del weights[EnemyIntentType.CHARGE]
     return rng.choices(list(weights), weights=list(weights.values()))[0]
@@ -271,20 +282,25 @@ def _next_intent(state: CombatState, rng: random.Random) -> EnemyIntentType:
 
 
 def _check_boss_phase(state: CombatState) -> str:
-    """Move a boss into phase 2 the first time it drops to half HP or below."""
-    if (
-        not state.boss
-        or state.phase >= 2
-        or state.enemy_hp <= 0
-        or state.enemy_hp * 100 > state.enemy.hp * PHASE_TWO_HP_PERCENT
+    """Move a boss into its next phase(s) once its HP drops to the threshold
+    (PHASE_HP_PERCENT) - each phase entered once, and only up to boss_phases."""
+    line = ""
+    while (
+        state.boss
+        and state.phase < state.boss_phases
+        and state.enemy_hp > 0
+        and state.enemy_hp * 100 <= state.enemy.hp * PHASE_HP_PERCENT[state.phase + 1]
     ):
-        return ""
-    state.phase = 2
-    strength = max(1, round(state.enemy.attack * PHASE_TWO_STRENGTH_FACTOR))
-    state.enemy_strength += strength
-    block = round(state.enemy.attack * PHASE_TWO_BLOCK_FACTOR)
-    state.enemy_block += block
-    return f" {state.enemy.name} overclocks into phase 2: +{strength} attack and {block} block!"
+        state.phase += 1
+        strength = max(1, round(state.enemy.attack * PHASE_STRENGTH_FACTOR))
+        state.enemy_strength += strength
+        block = round(state.enemy.attack * PHASE_BLOCK_FACTOR)
+        state.enemy_block += block
+        line += (
+            f" {state.enemy.name} overclocks into phase {state.phase}: +{strength} attack "
+            f"and {block} block!"
+        )
+    return line
 
 
 def _damage_enemy(state: CombatState, damage: int) -> tuple[int, int]:
@@ -302,12 +318,14 @@ def start_combat(
     rng: random.Random,
     artifacts: list[Artifact] | None = None,
     boss: bool = False,
+    boss_phases: int = 2,
 ) -> tuple[CombatState, list[str]]:
     """Shuffle a *copy* of `deck` into the draw pile and draw an opening hand.
 
     `deck` (the player's owned cards) is read, never mutated - the piles
     below are the combat-scoped working copy that gets folded back once the
-    fight ends. `boss` switches on the boss move set and phases.
+    fight ends. `boss` switches on the boss move set, with `boss_phases`
+    phases (2 or 3).
     """
     artifacts = list(artifacts or [])
     hp_percent = total(artifacts, "enemy_hp_percent")
@@ -325,14 +343,16 @@ def start_combat(
         player_block=total(artifacts, "start_block"),
         artifacts=artifacts,
         boss=boss,
+        boss_phases=boss_phases,
     )
     state.enemy_intent = _next_intent(state, rng)
     _draw(state, HAND_SIZE + total(artifacts, "opening_hand"), rng)
     log = [f"A {enemy.name} appears! ({enemy.hp} HP)"]
     if boss:
+        later = " and again at a quarter" if boss_phases >= 3 else ""
         log.append(
             f"{enemy.name} is a boss: it barrages, charges up crushing blows, "
-            f"and grows stronger at half HP."
+            f"and grows stronger at half HP{later}."
         )
     if opening := total(artifacts, "opening_damage"):
         _, dealt = _damage_enemy(state, opening)
@@ -662,11 +682,14 @@ def auto_resolve_combat(
     player: PlayerState,
     rng: random.Random,
     boss: bool = False,
+    boss_phases: int = 2,
 ) -> tuple[bool, list[str]]:
     """Play out a full fight non-interactively: dump the hand into the first
     empty field slot each turn, then end the turn, until someone runs out of HP.
     """
-    state, log = start_combat(deck, enemy, rng, player.artifacts, boss=boss)
+    state, log = start_combat(
+        deck, enemy, rng, player.artifacts, boss=boss, boss_phases=boss_phases
+    )
 
     for _ in range(MAX_AUTO_TURNS):
         if state.enemy_hp <= 0 or player.hp <= 0:

@@ -78,7 +78,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       Zufallsergebnisse des Runs. `balance-sim` modelliert Shops noch nicht.
 - [x] **Zwei Akte und ein mehrphasiger Boss** — wer den ersten Boss
       besiegt, landet auf einer zweiten Karte (Akt 2, ab einem Rastplatz,
-      mit 50 % der max. HP geheilt, doppeltem Gold und einer Elite-Kartenbelohnung).
+      mit 40 % der max. HP geheilt, doppeltem Gold und einer Elite-Kartenbelohnung).
+      Akt 2 hat ab der ersten Etage mehr Elite-Räume und weniger Rastplätze.
       Gegner werden pro Hälfte der Zeitachse um 10 % stärker: Akt 1 ×1,0 /
       ×1,1, Akt 2 ×1,21 / ×1,331 (`enemies.escalate`); Akt 2 kennt keine
       frühen Gegner mehr (`enemies.tier_floor`). Bosse kämpfen mit eigenem
@@ -86,6 +87,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       pro Treffer), Aufladen (Block, danach garantiert eine Überladung mit
       1,4-fachem Schaden) und ab 50 % HP Phase 2 mit mehr Angriff, etwas
       Block und der Säuberung, die die rechteste permanente Karte zerstört.
+      Der Boss von Akt 2 hat ab 25 % HP eine dritte Phase: noch mehr Angriff,
+      kein Blocken mehr, Salven mit 4 Treffern.
       Alle Absichten werden wie gewohnt einen Zug vorher angezeigt.
 - [x] **Oberfläche ("Rift")** — Zeitreise-Sci-Fi-Look: Glas-Panels auf
       violettem Grund, Cyan für die Maschinenwelt, Magenta/Orange für das
@@ -264,18 +267,26 @@ Block) — Akt 1 ×1,0 / ×1,1, Akt 2 ×1,21 / ×1,331 — aufgeschlagen erst
 *nach* der Erzeugung (`enemies.escalate`), damit die Budgets des
 Encounter-Agents und die Evals dazu unverändert bleiben. Nach jedem
 gewonnenen Kampf kommt eine Karte ins Deck, am Start und alle 3 Schritte ein
-Artefakt (die Bots wählen es zufällig). Der Boss-Moveset ist so eingestellt,
-dass der erste Boss etwa so oft einen Run beendet wie früher der einfache
-Boss (~39 % der Runs); Akt 2 kommt obendrauf:
+Artefakt (die Bots wählen es zufällig). Ziel: schwer machbar und über den
+ganzen Run immer schwerer — der Spieler wird mit Deck und Artefakten stärker,
+deshalb hat Akt 2 außer den +10 %-Stufen auch mehr Elites, weniger
+Rastplätze, nur 40 % Heilung beim Aktwechsel und einen Boss mit drei Phasen.
+Siegquote pro Kampf im Run, nach Abschnitt (Smart-Bot, 3000 Runs):
+
+| Akt 1, 1. Hälfte | Akt 1, 2. Hälfte | Boss 1 | Akt 2, 1. Hälfte | Akt 2, 2. Hälfte | Boss 2 |
+| --- | --- | --- | --- | --- | --- |
+| 100 % | 88 % | 54 % | 86 % | 79 % | 47 % |
+
+Nach Gegnerstufe über beide Akte:
 
 | Stufe | Züge | HP-Verlust im Run | Sieg im Run |
 | --- | --- | --- | --- |
 | early | 2.5 | 5 | 100 % |
-| mid | 3.5 | 10 | 92 % |
-| elite | 4.2 | 17 | 83 % |
-| boss | 4.8 | 20 | 53 % |
+| mid | 3.5 | 10 | 90 % |
+| elite | 4.1 | 16 | 80 % |
+| boss | 4.8 | 21 | 50 % |
 
-Run-Siegquote (beide Akte): 16 % (Smart-Bot), 4 % (Naive-Bot). Ohne
+Run-Siegquote (beide Akte): 9 % (Smart-Bot), 2 % (Naive-Bot). Ohne
 Artefakte (`--no-artifacts`) schafft es praktisch kein Bot-Run — die
 Artefakte sollen dem Spieler helfen, die Gegner-Budgets sind deshalb bewusst
 nicht mitgewachsen.

@@ -49,3 +49,16 @@ def test_later_acts_start_on_a_single_camp_and_end_on_a_boss() -> None:
     assert nodes[f"{NUM_FLOORS - 1}-0"].type is NodeType.BOSS
     assert generate_map(seed=42, act=2) == nodes
     assert generate_map(seed=42) == generate_map(seed=42, act=1)
+
+
+def test_later_acts_have_more_elites_and_fewer_camps() -> None:
+    def count(act: int, node_type: NodeType) -> int:
+        return sum(
+            n.type is node_type
+            for seed in range(200)
+            for n in generate_map(seed, act).values()
+            if 0 < n.floor < NUM_FLOORS - 1
+        )
+
+    assert count(2, NodeType.ELITE) > count(1, NodeType.ELITE)
+    assert count(2, NodeType.REST) < count(1, NodeType.REST)

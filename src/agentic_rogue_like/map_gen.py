@@ -25,6 +25,16 @@ _FLOOR_WEIGHTS: dict[NodeType, int] = {
 
 ELITE_MIN_FLOOR = 3
 
+# Later acts: elites from the start, more of them, fewer camps - on top of
+# the stronger enemies, so the run keeps getting harder after act 1.
+_LATE_ACT_WEIGHTS: dict[NodeType, int] = {
+    NodeType.COMBAT: 5,
+    NodeType.ELITE: 3,
+    NodeType.EVENT: 3,
+    NodeType.SHOP: 1,
+    NodeType.REST: 1,
+}
+
 
 def _node_type_for_floor(floor: int, rng: random.Random, act: int = 1) -> NodeType:
     if floor == 0:
@@ -34,9 +44,12 @@ def _node_type_for_floor(floor: int, rng: random.Random, act: int = 1) -> NodeTy
     if floor == NUM_FLOORS - 1:
         return NodeType.BOSS
 
-    weights = _FLOOR_WEIGHTS
-    if floor < ELITE_MIN_FLOOR:
+    if act > 1:
+        weights = _LATE_ACT_WEIGHTS
+    elif floor < ELITE_MIN_FLOOR:
         weights = {t: w for t, w in _FLOOR_WEIGHTS.items() if t is not NodeType.ELITE}
+    else:
+        weights = _FLOOR_WEIGHTS
     return rng.choices(list(weights), weights=list(weights.values()))[0]
 
 

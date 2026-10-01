@@ -53,7 +53,7 @@ from .combat import (
     start_combat,
 )
 from .enemies import escalate, tier_floor
-from .engine import ACT_HEAL_PERCENT, NUM_ACTS
+from .engine import ACT_HEAL_PERCENT, NUM_ACTS, boss_phases
 from .events import random_event
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
@@ -303,10 +303,17 @@ class FightResult:
 
 
 def fight(
-    player: PlayerState, enemy: Enemy, tier: str, bot: Bot, rng: random.Random
+    player: PlayerState, enemy: Enemy, tier: str, bot: Bot, rng: random.Random, act: int = 1
 ) -> FightResult:
     hp_before = player.hp
-    state, _ = start_combat(player.deck, enemy, rng, player.artifacts, boss=tier == "boss")
+    state, _ = start_combat(
+        player.deck,
+        enemy,
+        rng,
+        player.artifacts,
+        boss=tier == "boss",
+        boss_phases=boss_phases(act),
+    )
     turns = 0
     while turns < MAX_AUTO_TURNS and state.enemy_hp > 0 and player.hp > 0:
         turns += 1
@@ -363,7 +370,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
             enemy = escalate(
                 random_enemy(cfg.budgets[tier], tier, rng), node.floor, NUM_FLOORS, act
             )
-            result = fight(player, enemy, tier, bot, rng)
+            result = fight(player, enemy, tier, bot, rng, act)
             fights.append(result)
             if not result.won:
                 return RunResult(False, node.floor, fights, act)

@@ -428,3 +428,35 @@ def test_purge_destroys_the_rightmost_permanent() -> None:
     assert AMPLIFIER in state.banished_pile
     assert any("purges" in line for line in log)
     assert player.hp < player.max_hp
+
+
+def test_three_phase_boss_enters_phase_three_at_a_quarter_hp() -> None:
+    jab = Card(id="j", name="Jab", type=CardType.ATTACK, value=0, description="")
+    player = _player([jab] * 10)
+    state, log = start_combat(
+        player.deck, _enemy(hp=100, attack=10), random.Random(1), boss=True, boss_phases=3
+    )
+    assert "quarter" in log[1]
+    state.enemy_hp = 30
+
+    line = play_card(state, 0, 0, player, random.Random(1))  # 5 damage -> 25 HP
+
+    # dropping past both thresholds at once enters both phases
+    assert state.phase == 3
+    assert state.enemy_strength == 4  # +2 per phase entered
+    assert "phase 2" in line and "phase 3" in line
+    state.enemy_intent = EnemyIntentType.BARRAGE
+    state.player_block = 0
+    assert len(incoming_damage(state)) == 2  # still a (min, max) pair
+    from agentic_rogue_like.combat import intent_hits
+
+    assert len(intent_hits(state)) == 4
+
+
+def test_two_phase_boss_never_enters_phase_three() -> None:
+    big = Card(id="b", name="B", type=CardType.ATTACK, value=85, description="")
+    state, player, _ = _boss_state(hp=100, attack=10, deck=[big] * 10)
+
+    play_card(state, 0, 0, player, random.Random(1))
+
+    assert state.phase == 2
