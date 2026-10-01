@@ -76,6 +76,17 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       `/shop/leave`). Das Angebot kommt aus einem eigenen, pro Run und Raum
       geseedeten Zufallsgenerator (`shop.py`), verschiebt also keine anderen
       Zufallsergebnisse des Runs. `balance-sim` modelliert Shops noch nicht.
+- [x] **Zwei Akte und ein mehrphasiger Boss** — wer den ersten Boss
+      besiegt, landet auf einer zweiten Karte (Akt 2, ab einem Rastplatz,
+      mit 50 % der max. HP geheilt, doppeltem Gold und einer Elite-Kartenbelohnung).
+      Gegner werden pro Hälfte der Zeitachse um 10 % stärker: Akt 1 ×1,0 /
+      ×1,1, Akt 2 ×1,21 / ×1,331 (`enemies.escalate`); Akt 2 kennt keine
+      frühen Gegner mehr (`enemies.tier_floor`). Bosse kämpfen mit eigenem
+      Moveset (`combat._roll_boss_intent`): Salve (3 Treffer, Rüstung zählt
+      pro Treffer), Aufladen (Block, danach garantiert eine Überladung mit
+      1,4-fachem Schaden) und ab 50 % HP Phase 2 mit mehr Angriff, etwas
+      Block und der Säuberung, die die rechteste permanente Karte zerstört.
+      Alle Absichten werden wie gewohnt einen Zug vorher angezeigt.
 - [x] **Oberfläche ("Rift")** — Zeitreise-Sci-Fi-Look: Glas-Panels auf
       violettem Grund, Cyan für die Maschinenwelt, Magenta/Orange für das
       Labor. Die Karte ist eine Zeitachse (Etagen als Jahre 1969 → Ω), ein
@@ -245,26 +256,29 @@ uv run balance-sim --compare balance/gegner-staerker.json
 uv run balance-sim --compare balance/beispiel-neue-karte.json --bot naive
 ```
 
-Aktueller Stand (Smart-Bot, 2000 Runs): Spieler 45 HP / Angriff 2, Exploit
-macht 5 (+2), Starthand 5, danach 3 Karten pro Runde, Handlimit 8; das
-Startdeck hat 11 Karten (keine Heilkarte). Gegner ab der zweiten Hälfte der
-Map bekommen +10 % Leben und Angriff (und damit Block) — aufgeschlagen erst
+Aktueller Stand (Smart-Bot, 2000 Runs über beide Akte): Spieler 45 HP /
+Angriff 2, Exploit macht 5 (+2), Starthand 5, danach 3 Karten pro Runde,
+Handlimit 8; das Startdeck hat 11 Karten (keine Heilkarte). Gegner werden
+pro Hälfte der Zeitachse um 10 % stärker an Leben und Angriff (und damit
+Block) — Akt 1 ×1,0 / ×1,1, Akt 2 ×1,21 / ×1,331 — aufgeschlagen erst
 *nach* der Erzeugung (`enemies.escalate`), damit die Budgets des
 Encounter-Agents und die Evals dazu unverändert bleiben. Nach jedem
 gewonnenen Kampf kommt eine Karte ins Deck, am Start und alle 3 Schritte ein
-Artefakt (die Bots wählen es zufällig). Ziel ist eine Run-Siegquote unter
-50 %, mit dem Boss als Höhepunkt:
+Artefakt (die Bots wählen es zufällig). Der Boss-Moveset ist so eingestellt,
+dass der erste Boss etwa so oft einen Run beendet wie früher der einfache
+Boss (~39 % der Runs); Akt 2 kommt obendrauf:
 
 | Stufe | Züge | HP-Verlust im Run | Sieg im Run |
 | --- | --- | --- | --- |
 | early | 2.5 | 5 | 100 % |
-| mid | 3.5 | 11 | 91 % |
-| elite | 4.2 | 16 | 85 % |
-| boss | 4.8 | 20 | 56 % |
+| mid | 3.5 | 10 | 92 % |
+| elite | 4.2 | 17 | 83 % |
+| boss | 4.8 | 20 | 53 % |
 
-Run-Siegquote: 45 % (Smart-Bot), 18 % (Naive-Bot). Ohne Artefakte
-(`--no-artifacts`) sind es 11 % — die Artefakte sollen dem Spieler helfen,
-die Gegner-Budgets sind deshalb bewusst nicht mitgewachsen.
+Run-Siegquote (beide Akte): 16 % (Smart-Bot), 4 % (Naive-Bot). Ohne
+Artefakte (`--no-artifacts`) schafft es praktisch kein Bot-Run — die
+Artefakte sollen dem Spieler helfen, die Gegner-Budgets sind deshalb bewusst
+nicht mitgewachsen.
 Die Bots wählen Karten stur nach Seltenheit bzw. zufällig; wer gezielt
 auf eine Strategie baut, sollte deutlich öfter gewinnen.
 
@@ -303,7 +317,7 @@ kein neuer Code.
 
 ## Karten
 
-Nach jedem gewonnenen Kampf (außer dem Boss) gibt es drei Karten zur Auswahl
+Nach jedem gewonnenen Kampf (außer dem letzten Boss) gibt es drei Karten zur Auswahl
 (oder Überspringen), gewichtet nach Seltenheit — nach Elite-Kämpfen sind
 seltene wahrscheinlicher. Der Pool (`cards.py`) ist um drei Strategien gebaut:
 

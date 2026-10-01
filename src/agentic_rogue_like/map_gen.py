@@ -26,9 +26,11 @@ _FLOOR_WEIGHTS: dict[NodeType, int] = {
 ELITE_MIN_FLOOR = 3
 
 
-def _node_type_for_floor(floor: int, rng: random.Random) -> NodeType:
+def _node_type_for_floor(floor: int, rng: random.Random, act: int = 1) -> NodeType:
     if floor == 0:
-        return NodeType.COMBAT
+        # A later act opens on a single camp the player lands in, already
+        # resolved (see engine.advance_act) - the boss fight was enough.
+        return NodeType.COMBAT if act <= 1 else NodeType.REST
     if floor == NUM_FLOORS - 1:
         return NodeType.BOSS
 
@@ -38,24 +40,28 @@ def _node_type_for_floor(floor: int, rng: random.Random) -> NodeType:
     return rng.choices(list(weights), weights=list(weights.values()))[0]
 
 
-def generate_map(seed: int) -> dict[str, MapNode]:
+def generate_map(seed: int, act: int = 1) -> dict[str, MapNode]:
     """Build a layered graph: each floor's nodes connect to 1-2 nodes on the next floor.
 
     Every node past floor 0 is guaranteed at least one incoming connection
     and every non-boss node at least one outgoing one, so there are no dead
-    ends and no unreachable nodes.
+    ends and no unreachable nodes. Act 1's map comes from `seed` alone, so
+    it is the same map runs always had; later acts start from a single node.
     """
-    rng = random.Random(seed)
+    rng = random.Random(seed if act <= 1 else f"{seed}-act-{act}")
     nodes: dict[str, MapNode] = {}
     floors: list[list[str]] = []
 
     for floor in range(NUM_FLOORS):
         is_boss_floor = floor == NUM_FLOORS - 1
-        count = 1 if is_boss_floor else rng.randint(MIN_NODES_PER_FLOOR, MAX_NODES_PER_FLOOR)
+        single = is_boss_floor or (floor == 0 and act > 1)
+        count = 1 if single else rng.randint(MIN_NODES_PER_FLOOR, MAX_NODES_PER_FLOOR)
         floor_ids = []
         for i in range(count):
             node_id = f"{floor}-{i}"
-            nodes[node_id] = MapNode(id=node_id, floor=floor, type=_node_type_for_floor(floor, rng))
+            nodes[node_id] = MapNode(
+                id=node_id, floor=floor, type=_node_type_for_floor(floor, rng, act)
+            )
             floor_ids.append(node_id)
         floors.append(floor_ids)
 

@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 
 from .agent.encounter_agent import generate_balanced_enemy
 from .agent.narrator import narrate
+from .enemies import tier_floor
 from .engine import REST_SITUATION, SHOP_SITUATION
 from .events import EVENT_POOL
 from .map_gen import NUM_FLOORS
@@ -81,7 +82,7 @@ class Prefetch:
                     generate_balanced_enemy,
                     # Placeholder - enemy_for_node() swaps in the rng-drawn id.
                     enemy_id="prefetched",
-                    floor=node.floor,
+                    floor=tier_floor(node.floor, NUM_FLOORS, run.act),
                     num_floors=NUM_FLOORS,
                     elite=node.type is NodeType.ELITE,
                     boss=node.type is NodeType.BOSS,

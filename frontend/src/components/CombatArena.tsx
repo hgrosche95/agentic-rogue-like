@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useImperativeHandle, useRef, type ReactNode, type Ref } from "react";
-import type { CardType } from "../api";
+import { ATTACKING_INTENTS, type CardType, type EnemyIntentType } from "../api";
 import { sfx } from "../audio";
 import type { HackerCommand } from "../hackerCommands";
 import type { HpExchange } from "../hooks/useHpExchange";
@@ -7,7 +7,7 @@ import { ENEMY_HIT_MS, PLAYER_HIT_MS } from "../hooks/useLagged";
 import { enemySprite } from "../pixel/enemySprite";
 import { ENEMY_X, FLOOR, PLAYER_X, pct } from "../pixel/layout";
 import type { PixelScene } from "../pixel/scene";
-import { rangeText } from "../readouts";
+import { describeIntent } from "../readouts";
 import { CombatMonitor } from "./CombatMonitor";
 import { PixelStage } from "./PixelStage";
 
@@ -24,9 +24,10 @@ export interface ArenaEnemy {
   attack: number;
   setting: string;
   // what it does next - shown above its head
-  intent: "attack" | "defend";
+  intent: EnemyIntentType;
   intentMin: number;
   intentMax: number;
+  intentHits: number;
 }
 
 export interface ArenaStatus {
@@ -47,17 +48,32 @@ export interface ArenaHandle {
   enemyTurn(turn: { attacked: boolean; blocked: boolean; braced: boolean; daemon: boolean }): void;
 }
 
-// a blade for an attack, a shield for bracing
-export function IntentIcon({ intent }: { intent: "attack" | "defend" }) {
+// a blade for an attack, a shield for bracing - and a mark for each boss move
+export function IntentIcon({ intent }: { intent: EnemyIntentType }) {
   return (
     <svg viewBox="0 0 20 20" aria-hidden="true" className="intent-icon">
-      {intent === "attack" ? (
+      {intent === "attack" && (
         <>
           <path className="fill" d="M16.8 2.2 17.8 3.2 9.2 11.8 8.2 10.8Z" />
           <path d="M5.6 10.4 9.6 14.4M7.6 12.4 3.4 16.6" />
         </>
-      ) : (
+      )}
+      {intent === "defend" && (
         <path className="fill" d="M10 2.5 L16 5 V9.5 C16 13.5 13.2 16.3 10 17.5 C6.8 16.3 4 13.5 4 9.5 V5 Z" />
+      )}
+      {intent === "barrage" && <path d="M3 15 8 5M8.5 15 13.5 5M14 15 19 5" />}
+      {intent === "charge" && <path className="fill" d="M11.5 1.8 4.5 11h4.6l-1.6 7.2L15.5 9h-4.7Z" />}
+      {intent === "overload" && (
+        <path
+          className="fill"
+          d="M10 1.5 12 7.2 18 6.5 13.6 10.6 16.6 16.5 10.8 13.6 7.6 18.5 7.3 12.5 1.8 10.6 7 8.3 5 3Z"
+        />
+      )}
+      {intent === "purge" && (
+        <>
+          <rect x="3.5" y="3.5" width="13" height="13" rx="2" />
+          <path d="M7 7 13 13M13 7 7 13" />
+        </>
       )}
     </svg>
   );
@@ -72,13 +88,13 @@ function enemyTop(enemy: ArenaEnemy): number {
 // The enemy's telegraphed next move, floating over its head - the first
 // thing a turn is planned around, so it is the loudest mark in the scene.
 function IntentMarker({ enemy }: { enemy: ArenaEnemy }) {
-  const attacking = enemy.intent === "attack";
-  const amount = rangeText(enemy.intentMin, enemy.intentMax);
+  const { amount, title } = describeIntent(enemy.intent, enemy.intentMin, enemy.intentMax, enemy.intentHits);
+  const kind = ATTACKING_INTENTS.includes(enemy.intent) ? "is-hit" : "is-guard";
   return (
     <div
-      className={`arena-intent is-${enemy.intent}`}
+      className={`arena-intent ${kind} is-${enemy.intent}`}
       style={{ left: pct.x(ENEMY_X), top: pct.y(enemyTop(enemy) - 2) }}
-      title={attacking ? `Attacks next for ${amount}` : `Braces for ${amount} block next`}
+      title={title}
     >
       <IntentIcon intent={enemy.intent} />
       <b>{amount}</b>

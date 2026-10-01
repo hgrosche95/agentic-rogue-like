@@ -40,3 +40,12 @@ def test_every_non_boss_node_has_outgoing_connection() -> None:
 
 def test_same_seed_is_deterministic() -> None:
     assert generate_map(seed=7) == generate_map(seed=7)
+
+
+def test_later_acts_start_on_a_single_camp_and_end_on_a_boss() -> None:
+    nodes = generate_map(seed=42, act=2)
+    first = [n for n in nodes.values() if n.floor == 0]
+    assert [n.type for n in first] == [NodeType.REST]
+    assert nodes[f"{NUM_FLOORS - 1}-0"].type is NodeType.BOSS
+    assert generate_map(seed=42, act=2) == nodes
+    assert generate_map(seed=42) == generate_map(seed=42, act=1)

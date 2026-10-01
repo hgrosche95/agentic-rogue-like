@@ -44,15 +44,16 @@ from .agent.encounter_schema import EnemyBudget
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
 from .cards import reward_card, roll_card_reward, starter_deck
 from .combat import (
+    ATTACKING_INTENTS,
     MAX_AUTO_PLAYS_PER_TURN,
     MAX_AUTO_TURNS,
     CombatState,
-    EnemyIntentType,
     end_turn,
     play_card,
     start_combat,
 )
-from .enemies import escalate
+from .enemies import escalate, tier_floor
+from .engine import ACT_HEAL_PERCENT, NUM_ACTS
 from .events import random_event
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
@@ -142,12 +143,12 @@ def random_enemy(budget: EnemyBudget, tier: str, rng: random.Random) -> Enemy:
 _TIER_FLOOR = {"early": 0, "mid": NUM_FLOORS // 2, "elite": NUM_FLOORS // 2, "boss": NUM_FLOORS - 1}
 
 
-def tier_for(floor: int, node_type: NodeType) -> str:
+def tier_for(floor: int, node_type: NodeType, act: int = 1) -> str:
     if node_type is NodeType.BOSS:
         return "boss"
     if node_type is NodeType.ELITE:
         return "elite"
-    return "early" if floor < NUM_FLOORS // 2 else "mid"
+    return "early" if tier_floor(floor, NUM_FLOORS, act) < NUM_FLOORS // 2 else "mid"
 
 
 # --------------------------------------------------------------------------- bots
@@ -224,7 +225,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         if state.banished_pile:
             order.append(CardType.RESTORE)
         order.append(CardType.ATTACK)
-        if state.enemy_intent is EnemyIntentType.ATTACK:
+        if state.enemy_intent in ATTACKING_INTENTS:
             order.append(CardType.BLOCK)
         if player.hp < player.max_hp:
             order.append(CardType.HEAL)
@@ -244,7 +245,9 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         for idx, card in enumerate(state.hand):
             if card.type is CardType.REBOOT:
                 back = sum(
-                    1 for c in state.banished_pile if c.type not in (CardType.RESTORE, CardType.REBOOT)
+                    1
+                    for c in state.banished_pile
+                    if c.type not in (CardType.RESTORE, CardType.REBOOT)
                 )
                 if back >= 2 and back > permanents:
                     play_card(state, idx, slot, player, rng)
@@ -303,7 +306,7 @@ def fight(
     player: PlayerState, enemy: Enemy, tier: str, bot: Bot, rng: random.Random
 ) -> FightResult:
     hp_before = player.hp
-    state, _ = start_combat(player.deck, enemy, rng, player.artifacts)
+    state, _ = start_combat(player.deck, enemy, rng, player.artifacts, boss=tier == "boss")
     turns = 0
     while turns < MAX_AUTO_TURNS and state.enemy_hp > 0 and player.hp > 0:
         turns += 1
@@ -321,7 +324,9 @@ def fresh_fights(cfg: SimConfig, bot: Bot, n: int, seed: int) -> dict[str, list[
         rng = random.Random(f"{seed}-{tier}")
         for _ in range(n):
             player = cfg.new_player()
-            enemy = escalate(random_enemy(cfg.budgets[tier], tier, rng), _TIER_FLOOR[tier], NUM_FLOORS)
+            enemy = escalate(
+                random_enemy(cfg.budgets[tier], tier, rng), _TIER_FLOOR[tier], NUM_FLOORS
+            )
             results[tier].append(fight(player, enemy, tier, bot, rng))
     return results
 
@@ -331,6 +336,7 @@ class RunResult:
     won: bool
     floor_reached: int
     fights: list[FightResult]
+    act_reached: int = 1
 
 
 def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -> RunResult:
@@ -340,6 +346,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
     hard-code, and a random pick keeps the numbers an average over all of them.
     """
     rng = random.Random(seed)
+    act = 1
     nodes = generate_map(seed)
     player = cfg.new_player()
     node = nodes["0-0"]
@@ -352,25 +359,33 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
             if offer:
                 gain_artifact(player, rng.choice(offer))
         if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
-            tier = tier_for(node.floor, node.type)
-            enemy = escalate(random_enemy(cfg.budgets[tier], tier, rng), node.floor, NUM_FLOORS)
+            tier = tier_for(node.floor, node.type, act)
+            enemy = escalate(
+                random_enemy(cfg.budgets[tier], tier, rng), node.floor, NUM_FLOORS, act
+            )
             result = fight(player, enemy, tier, bot, rng)
             fights.append(result)
             if not result.won:
-                return RunResult(False, node.floor, fights)
-            if node.type is NodeType.BOSS:
-                return RunResult(True, node.floor, fights)
+                return RunResult(False, node.floor, fights, act)
+            if node.type is NodeType.BOSS and act >= NUM_ACTS:
+                return RunResult(True, node.floor, fights, act)
             heal(player, total(player.artifacts, "heal_after_combat"))
             if cfg.rewards:
-                offer = roll_card_reward(rng, elite=node.type is NodeType.ELITE)
+                offer = roll_card_reward(rng, elite=node.type is not NodeType.COMBAT)
                 pick = offer[pick_reward(offer, bot_name, rng)]
                 player.deck.append(reward_card(pick, player.deck))
+            if node.type is NodeType.BOSS:
+                # mirrors engine.advance_act - the new act starts on its camp
+                act += 1
+                nodes = generate_map(seed, act)
+                node = nodes["0-0"]
+                heal(player, player.max_hp * ACT_HEAL_PERCENT // 100)
         elif node.type is NodeType.REST:
             heal(player, REST_HEAL + total(player.artifacts, "rest_heal"))
         elif node.type is NodeType.EVENT:
             rng.choice(random_event(rng).options).effect(player, rng)
             if player.hp <= 0:
-                return RunResult(False, node.floor, fights)
+                return RunResult(False, node.floor, fights, act)
         node = nodes[rng.choice(node.connections)]
         steps += 1
 
@@ -404,7 +419,8 @@ class Report:
     fresh: dict[str, TierStats | None]
     in_run: dict[str, TierStats | None]
     run_win_rate: float
-    death_floors: dict[int, int]
+    # keyed by (act, floor)
+    death_floors: dict[tuple[int, int], int]
 
 
 def build_report(
@@ -415,10 +431,11 @@ def build_report(
     in_run = {
         t: TierStats.of([f for r in run_results for f in r.fights if f.tier == t]) for t in TIERS
     }
-    death_floors: dict[int, int] = {}
+    death_floors: dict[tuple[int, int], int] = {}
     for r in run_results:
         if not r.won:
-            death_floors[r.floor_reached] = death_floors.get(r.floor_reached, 0) + 1
+            key = (r.act_reached, r.floor_reached)
+            death_floors[key] = death_floors.get(key, 0) + 1
     return Report(
         name=cfg.name,
         fresh=fresh,
@@ -446,7 +463,7 @@ def print_reports(reports: list[Report], cfgs: list[SimConfig]) -> None:
     print("\nRun-Siegquote: " + "  ".join(f"{r.name}: {r.run_win_rate:.0%}" for r in reports))
     for r in reports:
         if r.death_floors:
-            floors = ", ".join(f"Etage {f}: {n}" for f, n in r.death_floors.items())
+            floors = ", ".join(f"Akt {a} Etage {f}: {n}" for (a, f), n in r.death_floors.items())
             print(f"Tode ({r.name}): {floors}")
     for cfg in cfgs:
         b = cfg.budgets

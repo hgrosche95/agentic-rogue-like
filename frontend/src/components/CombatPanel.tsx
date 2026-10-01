@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import {
+  ATTACKING_INTENTS,
   PERMANENT_CARD_TYPES,
   type HandCardView,
   type PendingCombatView,
@@ -12,7 +13,7 @@ import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useCardDrag } from "../hooks/useCardDrag";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
-import { rangeText, unitOf } from "../readouts";
+import { describeIntent, rangeText, unitOf } from "../readouts";
 import { CardFace, type Readout } from "./CardFace";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
 
@@ -146,11 +147,11 @@ export function CombatPanel({
     if (!before || before.combat === combat) return;
     endTurnFrom.current = null;
     const daemon = before.combat.field.some((card) => card?.type === "turret");
-    const attacked = before.combat.enemy_intent === "attack" && !enemySlain;
+    const attacked = ATTACKING_INTENTS.includes(before.combat.enemy_intent) && !enemySlain;
     arenaRef.current?.enemyTurn({
       attacked,
       blocked: player.hp >= before.hp,
-      braced: before.combat.enemy_intent === "defend" && !enemySlain,
+      braced: ["defend", "charge"].includes(before.combat.enemy_intent) && !enemySlain,
       daemon,
     });
     if (daemon) sfx.play("daemon_tick");
@@ -223,7 +224,13 @@ export function CombatPanel({
   const aimedCard = aimedIndex === null ? undefined : combat.hand.find((c) => c.hand_index === aimedIndex);
   const aimedSlot = drag.dragging !== null ? drag.hoverSlot : pointedSlot;
   const aimedLow = aimedCard && readoutOf(aimedCard, null);
-  const attacking = combat.enemy_intent === "attack";
+  const attacking = ATTACKING_INTENTS.includes(combat.enemy_intent);
+  const intent = describeIntent(
+    combat.enemy_intent,
+    combat.enemy_intent_min,
+    combat.enemy_intent_max,
+    combat.enemy_intent_hits,
+  );
 
   return (
     <div className="combat-panel">
@@ -240,12 +247,12 @@ export function CombatPanel({
         enemy={{
           name: combat.enemy_name,
           maxHp: combat.enemy_max_hp,
-          // an enemy's intent value is always its attack stat (api.py)
-          attack: combat.enemy_intent_value,
+          attack: combat.enemy_attack,
           setting,
           intent: combat.enemy_intent,
           intentMin: combat.enemy_intent_min,
           intentMax: combat.enemy_intent_max,
+          intentHits: combat.enemy_intent_hits,
         }}
         exchange={exchange}
         log={log}
@@ -324,14 +331,30 @@ export function CombatPanel({
         <div className="vs-hud is-enemy">
           <div className="vs-body">
             <span className="hud-name">
-              {combat.enemy_name} <small>AI construct · {era}</small>
+              {combat.enemy_name} <small>{combat.boss ? "Core AI" : "AI construct"} · {era}</small>
             </span>
             <HpBar hp={shownEnemyHp} max={combat.enemy_max_hp} side="enemy" />
             <div className="hud-meta">
               {!enemySlain && (
-                <span className={`intent-badge type-${combat.enemy_intent}`}>
+                <span
+                  className={`intent-badge type-${combat.enemy_intent} ${attacking ? "is-hit" : "is-guard"}`}
+                  title={intent.title}
+                >
                   <IntentIcon intent={combat.enemy_intent} />
-                  {attacking ? "Attack" : "Brace"} {rangeText(combat.enemy_intent_min, combat.enemy_intent_max)}
+                  {intent.label} {intent.amount}
+                </span>
+              )}
+              {combat.boss && !enemySlain && (
+                <span
+                  className={`phase-badge${combat.enemy_phase > 1 ? " is-enraged" : ""}`}
+                  title={
+                    combat.enemy_phase > 1
+                      ? `Overclocked: +${combat.enemy_strength} attack, and it purges permanents`
+                      : "Overclocks into phase 2 at half HP"
+                  }
+                >
+                  Phase {combat.enemy_phase}
+                  {combat.enemy_strength > 0 && ` · +${combat.enemy_strength} ATK`}
                 </span>
               )}
               {combat.enemy_block > 0 && (

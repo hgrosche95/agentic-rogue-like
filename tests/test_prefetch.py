@@ -72,8 +72,11 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
     monkeypatch.setattr(prefetch, "narrate", _narrate)
     run = client.post("/runs", json={"seed": 7}).json()
     run_id = run["run_id"]
+    non_combat_entered = 0
 
     while run["status"] == "ongoing":
+        if run["current_node"]["type"] in ("event", "rest", "shop"):
+            non_combat_entered += 1
         run = _resolve(run_id).json()
         if run["pending_event"] is not None:
             run = client.post(f"/runs/{run_id}/event-choice", json={"option_index": 0}).json()
@@ -92,16 +95,15 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
                 ).json()
         if run["card_reward"] is not None:
             run = client.post(f"/runs/{run_id}/card-reward", json={"card_index": None}).json()
+        if run["shop"] is not None:
+            run = client.post(f"/runs/{run_id}/shop/leave").json()
         if run["status"] == "ongoing":
             next_node_id = run["available_choices"][0]["id"]
             run = client.post(f"/runs/{run_id}/choose-node", json={"node_id": next_node_id}).json()
 
     themed = [line for line in run["history"] if line.startswith("themed: ")]
-    non_combat_visited = [
-        n for n in run["nodes"].values() if n["visited"] and n["type"] in ("event", "rest", "shop")
-    ]
-    assert non_combat_visited
-    assert len(themed) == len(non_combat_visited)
+    assert non_combat_entered
+    assert len(themed) == non_combat_entered
     # Every narration ran in the background pool, none on a request thread.
     assert all(name.startswith("prefetch") for name in narrated_on)
 

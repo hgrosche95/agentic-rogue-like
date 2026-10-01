@@ -87,22 +87,35 @@ export interface HandCardView extends Card {
   preview: (number | null)[];
 }
 
-export type EnemyIntentType = "attack" | "defend";
+// attack/defend for every enemy, the rest only for bosses
+export type EnemyIntentType = "attack" | "defend" | "barrage" | "charge" | "overload" | "purge";
+
+// intents that hit the player
+export const ATTACKING_INTENTS: EnemyIntentType[] = ["attack", "barrage", "overload", "purge"];
 
 export interface PendingCombatView {
   enemy_name: string;
   enemy_attack_name: string;
+  // the base attack stat - what the enemy's look is built from
+  enemy_attack: number;
   enemy_hp: number;
   enemy_max_hp: number;
   enemy_block: number;
   enemy_intent: EnemyIntentType;
   enemy_intent_value: number;
-  // the attack's d6 range, and what of it gets through block and armor if
-  // the turn ended now (both 0 while the enemy defends)
+  // one hit's range and the number of hits, and what of all of them gets
+  // through block and armor if the turn ended now (both 0 while the enemy
+  // isn't attacking). For block-raising intents min = max = the block and
+  // hits = 0.
   enemy_intent_min: number;
   enemy_intent_max: number;
+  enemy_intent_hits: number;
   incoming_min: number;
   incoming_max: number;
+  // boss fights: phase 2 starts at half HP and adds strength
+  boss: boolean;
+  enemy_phase: number;
+  enemy_strength: number;
   hand: HandCardView[];
   field: (Card | null)[];
   player_block: number;
@@ -134,6 +147,8 @@ export interface ShopView {
 export interface RunView {
   run_id: string;
   status: RunStatus;
+  act: number;
+  num_acts: number;
   floor: number;
   setting: string;
   player: PlayerState;

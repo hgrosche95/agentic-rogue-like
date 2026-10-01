@@ -34,12 +34,16 @@ export function TopBar({
   player,
   floor,
   numFloors,
+  act,
+  numActs,
   setting,
   children,
 }: {
   player: PlayerState;
   floor: number;
   numFloors: number;
+  act: number;
+  numActs: number;
   setting: string;
   children?: ReactNode;
 }) {
@@ -49,12 +53,12 @@ export function TopBar({
   return (
     <header className="topbar">
       <Brand subtitle={`Timeline · ${setting}`} />
-      <div className="era-track" aria-label={`Era ${floor + 1} of ${numFloors}`}>
+      <div className="era-track" aria-label={`Act ${act} of ${numActs}, era ${floor + 1} of ${numFloors}`}>
         {Array.from({ length: numFloors }, (_, i) => (
           <i key={i} className={i < floor ? "is-past" : i === floor ? "is-now" : undefined} />
         ))}
         <span className="era-text">
-          Era <b>{String(floor + 1).padStart(2, "0")}</b>/{String(numFloors).padStart(2, "0")} · {eraLabel(floor, numFloors)}
+          Act <b>{act}</b>/{numActs} · Era <b>{String(floor + 1).padStart(2, "0")}</b>/{String(numFloors).padStart(2, "0")} · {eraLabel(floor, numFloors, act)}
         </span>
       </div>
       <div className="stats">

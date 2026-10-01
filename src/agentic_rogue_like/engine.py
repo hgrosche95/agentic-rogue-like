@@ -53,6 +53,12 @@ PLAYER_HP = 45
 PLAYER_ATTACK = 2
 REST_HEAL = 15
 
+# Beating an act's boss opens the next act's map (advance_act); beating the
+# last act's boss wins the run. Between acts the player recovers this share
+# of their max HP, on top of the boss's gold and card reward.
+NUM_ACTS = 2
+ACT_HEAL_PERCENT = 50
+
 REST_SITUATION = "a weary adventurer resting and tending their wounds"
 SHOP_SITUATION = "a traveling merchant offering strange wares for sale"
 
@@ -143,6 +149,25 @@ def apply_event_choice(run: RunState, option: EventOption, rng: random.Random) -
     run.history.append(f"> {option.label}: {outcome}")
 
 
+def advance_act(run: RunState) -> None:
+    """Move the run onto the next act's map, at its (already resolved) start camp.
+
+    Called once the current act's boss is beaten. The player keeps
+    everything - deck, artifacts, gold - and recovers ACT_HEAL_PERCENT of
+    their max HP; enemies from here on are stronger (enemies.escalate).
+    """
+    run.act += 1
+    run.nodes = generate_map(run.seed, run.act)
+    run.current_node_id = "0-0"
+    run.nodes["0-0"].visited = True
+    run.floor = 0
+    healed = heal(run.player, run.player.max_hp * ACT_HEAL_PERCENT // 100)
+    run.history.append(
+        f"The way to act {run.act} opens. You catch your breath and recover {healed} HP - "
+        f"the enemies ahead are stronger."
+    )
+
+
 def _finish_combat(
     run: RunState, node: MapNode, enemy_name: str, victory: bool, rng: random.Random
 ) -> None:
@@ -151,15 +176,19 @@ def _finish_combat(
         run.status = RunStatus.DEFEAT
         return
     run.history.append("Victory!")
-    if node.type is NodeType.BOSS:
+    if node.type is NodeType.BOSS and run.act >= NUM_ACTS:
         run.status = RunStatus.VICTORY
-    else:
-        reward = rng.randint(15, 35)
-        run.player.gold += reward
-        run.history.append(f"You loot {reward} gold from the {enemy_name}.")
-        if healed := heal(run.player, total(run.player.artifacts, "heal_after_combat")):
-            run.history.append(f"Your artifacts patch you up for {healed} HP.")
-        run.card_reward = roll_card_reward(rng, elite=node.type is NodeType.ELITE)
+        return
+    reward = rng.randint(15, 35)
+    if node.type is NodeType.BOSS:
+        reward *= 2
+    run.player.gold += reward
+    run.history.append(f"You loot {reward} gold from the {enemy_name}.")
+    if healed := heal(run.player, total(run.player.artifacts, "heal_after_combat")):
+        run.history.append(f"Your artifacts patch you up for {healed} HP.")
+    run.card_reward = roll_card_reward(rng, elite=node.type is not NodeType.COMBAT)
+    if node.type is NodeType.BOSS:
+        advance_act(run)
 
 
 def choose_card_reward(run: RunState, index: int | None) -> None:
@@ -207,11 +236,15 @@ def start_combat_node(
             rng=rng,
             setting=run.setting,
             prefetched=prefetched_enemy,
+            act=run.act,
         ),
         node.floor,
         NUM_FLOORS,
+        run.act,
     )
-    state, log = _start_combat(run.player.deck, enemy, rng, run.player.artifacts)
+    state, log = _start_combat(
+        run.player.deck, enemy, rng, run.player.artifacts, boss=node.type is NodeType.BOSS
+    )
     run.history.extend(log)
     return state
 
@@ -274,11 +307,15 @@ def resolve_node(
                 boss=node.type is NodeType.BOSS,
                 rng=rng,
                 setting=run.setting,
+                act=run.act,
             ),
             node.floor,
             NUM_FLOORS,
+            run.act,
         )
-        victory, log = auto_resolve_combat(run.player.deck, enemy, run.player, rng)
+        victory, log = auto_resolve_combat(
+            run.player.deck, enemy, run.player, rng, boss=node.type is NodeType.BOSS
+        )
         run.history.extend(log)
         _finish_combat(run, node, enemy.name, victory, rng)
         if run.card_reward is not None:
