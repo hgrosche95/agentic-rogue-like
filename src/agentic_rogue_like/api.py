@@ -32,13 +32,12 @@ from pydantic import BaseModel, Field, field_validator
 
 from .combat import (
     FIELD_SIZE,
-    EnemyIntentType,
     action_preview,
-    enemy_attack,
     enemy_block_gain,
     incoming_damage,
     intent_hits,
     max_hand_size,
+    move_name,
     player_armor,
 )
 from .engine import (
@@ -142,6 +141,9 @@ class PendingCombatView(BaseModel):
     enemy_max_hp: int
     enemy_block: int
     enemy_intent: str
+    # The move's own name if its move set gave it one (e.g. "Tusk Charge"),
+    # else null - the UI then calls it by its kind.
+    enemy_intent_name: str | None
     enemy_intent_value: int
     # The range of one hit of the telegraphed attack (the roll on top of
     # the attack stat), how many hits it has, and what of all of them would
@@ -312,11 +314,8 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         hits = intent_hits(combat)
         if hits:
             hit_min, hit_max = hits[0]
-            intent_value = (
-                enemy_attack(combat)
-                if combat.enemy_intent is EnemyIntentType.ATTACK
-                else hit_min - 1
-            )
+            # The hit before its roll.
+            intent_value = hit_min - 1
         else:
             hit_min = hit_max = intent_value = enemy_block_gain(combat)
         incoming_min, incoming_max = incoming_damage(combat)
@@ -328,6 +327,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_max_hp=combat.enemy.hp,
             enemy_block=combat.enemy_block,
             enemy_intent=combat.enemy_intent.value,
+            enemy_intent_name=move_name(combat),
             enemy_intent_value=intent_value,
             enemy_intent_min=hit_min,
             enemy_intent_max=hit_max,

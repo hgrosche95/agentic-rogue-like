@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class NodeType(StrEnum):
@@ -162,12 +162,93 @@ class Shop(BaseModel):
     removal_used: bool = False
 
 
+class MoveKind(StrEnum):
+    """What an enemy can do on its turn - the building blocks of a move set.
+
+    Values match combat.EnemyIntentType, which telegraphs the rolled move
+    (plus OVERLOAD, which is never rolled but always follows a CHARGE).
+    """
+
+    ATTACK = "attack"  # one hit
+    DEFEND = "defend"  # raises block
+    BARRAGE = "barrage"  # several smaller hits, armor counts against each
+    CHARGE = "charge"  # raises a little block; the next turn is a crushing overload
+    PURGE = "purge"  # destroys the rightmost permanent card, then hits
+
+
+# Default power (percent of the enemy's attack stat) per move kind - the
+# numbers the boss move set has always used. For CHARGE it is the power of
+# the overload that follows.
+DEFAULT_MOVE_POWER: dict[MoveKind, int] = {
+    MoveKind.ATTACK: 100,
+    MoveKind.DEFEND: 100,
+    MoveKind.BARRAGE: 25,
+    MoveKind.CHARGE: 140,
+    MoveKind.PURGE: 50,
+}
+DEFAULT_BARRAGE_HITS = 3
+
+
+class EnemyMove(BaseModel):
+    """One entry in an enemy's move set.
+
+    Strength is relative on purpose: `power` is a percentage of the enemy's
+    attack stat, so enemies.escalate() and a boss's phase strength - which
+    both only touch the attack stat - scale every move along with it.
+    """
+
+    kind: MoveKind
+    # Relative chance to be rolled among the moves available that turn.
+    weight: int = Field(default=1, ge=1, le=10)
+    # Shown in the combat log and the intent marker; None falls back to the
+    # enemy's attack_name for hitting moves.
+    name: str | None = Field(default=None, max_length=40)
+    power: int | None = Field(default=None, ge=10, le=300)
+    # BARRAGE only.
+    hits: int | None = Field(default=None, ge=2, le=4)
+
+    @model_validator(mode="after")
+    def _fill_defaults(self) -> EnemyMove:
+        if self.hits is not None and self.kind is not MoveKind.BARRAGE:
+            raise ValueError("only a barrage has hits")
+        if self.power is None:
+            self.power = DEFAULT_MOVE_POWER[self.kind]
+        if self.kind is MoveKind.BARRAGE and self.hits is None:
+            self.hits = DEFAULT_BARRAGE_HITS
+        return self
+
+
+def default_moves() -> list[EnemyMove]:
+    """The move set every enemy had before move sets existed: brace 30% of
+    the time, attack otherwise. DEFEND comes first so the weighted roll
+    draws the same random number the old `random() < 0.3` check did, which
+    keeps seeded runs reproducible across the change."""
+    return [EnemyMove(kind=MoveKind.DEFEND, weight=3), EnemyMove(kind=MoveKind.ATTACK, weight=7)]
+
+
+# Moves that can be rolled on any turn - a move set needs one of them, since
+# PURGE needs a permanent to destroy and a CHARGE is never rolled right
+# after its own overload.
+_ALWAYS_AVAILABLE = frozenset({MoveKind.ATTACK, MoveKind.BARRAGE})
+
+
 class Enemy(BaseModel):
     id: str
     name: str
     hp: int
     attack: int
     attack_name: str
+    description: str = ""
+    # Bosses ignore this and fight with their own phased move set (see
+    # combat._roll_boss_intent).
+    moves: list[EnemyMove] = Field(default_factory=default_moves, min_length=1, max_length=4)
+
+    @field_validator("moves")
+    @classmethod
+    def _always_has_a_move(cls, moves: list[EnemyMove]) -> list[EnemyMove]:
+        if not any(m.kind in _ALWAYS_AVAILABLE for m in moves):
+            raise ValueError("a move set needs an attack or a barrage")
+        return moves
 
 
 class MapNode(BaseModel):

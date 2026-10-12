@@ -304,6 +304,38 @@ nicht mitgewachsen.
 Die Bots wählen Karten stur nach Seltenheit bzw. zufällig; wer gezielt
 auf eine Strategie baut, sollte deutlich öfter gewinnen.
 
+## Gegner-Movesets
+
+Jeder Gegner hat ein Moveset (`Enemy.moves`, `models.EnemyMove`): eine
+Liste aus bis zu 4 Moves, jeder mit Art, Gewicht (wie oft er gewürfelt wird),
+optionalem eigenem Namen und einer Stärke in Prozent seines Angriffswerts.
+Die Absicht für den nächsten Zug wird gewichtet daraus gewürfelt und wie
+gewohnt einen Zug vorher angezeigt.
+
+| Art | Wirkung | Standard-Stärke |
+| --- | --- | --- |
+| `attack` | ein Treffer (+W6) | 100 % |
+| `defend` | Block | 100 % |
+| `barrage` | 2–4 Treffer (+W3 je Treffer), Rüstung zählt pro Treffer | 25 %, 3 Treffer |
+| `charge` | etwas Block, im nächsten Zug garantiert eine Überladung (+W6) | 140 % (der Überladung) |
+| `purge` | zerstört die rechteste permanente Karte, dann ein Treffer (+W6) | 50 % |
+
+Weil die Stärke relativ zum Angriffswert ist, skalieren `enemies.escalate`
+und die Phasen-Stärke eines Bosses jeden Move automatisch mit. Regeln wie
+beim Boss: auf ein Aufladen folgt immer die Überladung, auf eine Überladung
+nie direkt ein Aufladen, und eine Säuberung wird nur gewürfelt, wenn eine
+permanente Karte auf dem Feld liegt. Deshalb braucht jedes Moveset einen
+`attack`- oder `barrage`-Move, der immer verfügbar ist. Das prüft das
+Modell schon beim Anlegen.
+
+Das Standard-Moveset ist genau das alte Verhalten (Angriff, in 30 % der
+Züge Block) und zieht dieselben Zufallszahlen, also spielen Gegner aus dem
+statischen Pool und geseedete Runs exakt wie vorher. Bosse ignorieren ihr
+Moveset und kämpfen weiter mit ihren Phasen (`combat._roll_boss_intent`).
+Der Encounter-Agent erzeugt noch keine Movesets. Das ist der nächste
+Schritt, zusammen mit einer Kostenfunktion, die ein Moveset gegen das
+Etagen-Budget aufrechnet.
+
 ## Artefakte
 
 Artefakte wirken passiv für den Rest des Runs. Zu Beginn wählt man eins aus

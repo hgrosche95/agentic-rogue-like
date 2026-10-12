@@ -102,6 +102,8 @@ export interface PendingCombatView {
   enemy_max_hp: number;
   enemy_block: number;
   enemy_intent: EnemyIntentType;
+  // the move's own name if its move set gave it one, else null
+  enemy_intent_name: string | null;
   enemy_intent_value: number;
   // one hit's range and the number of hits, and what of all of them gets
   // through block and armor if the turn ended now (both 0 while the enemy

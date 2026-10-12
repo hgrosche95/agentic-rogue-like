@@ -157,6 +157,7 @@ def generate_balanced_enemy(
     return Enemy(
         id=enemy_id,
         name=proposal.name,
+        description=proposal.description,
         hp=proposal.hp,
         attack=proposal.attack,
         attack_name=proposal.attack_name,

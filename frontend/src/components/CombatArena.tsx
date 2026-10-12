@@ -28,6 +28,7 @@ export interface ArenaEnemy {
   intentMin: number;
   intentMax: number;
   intentHits: number;
+  intentName: string | null;
 }
 
 export interface ArenaStatus {
@@ -88,7 +89,13 @@ function enemyTop(enemy: ArenaEnemy): number {
 // The enemy's telegraphed next move, floating over its head - the first
 // thing a turn is planned around, so it is the loudest mark in the scene.
 function IntentMarker({ enemy }: { enemy: ArenaEnemy }) {
-  const { amount, title } = describeIntent(enemy.intent, enemy.intentMin, enemy.intentMax, enemy.intentHits);
+  const { amount, title } = describeIntent(
+    enemy.intent,
+    enemy.intentMin,
+    enemy.intentMax,
+    enemy.intentHits,
+    enemy.intentName,
+  );
   const kind = ATTACKING_INTENTS.includes(enemy.intent) ? "is-hit" : "is-guard";
   return (
     <div

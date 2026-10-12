@@ -230,6 +230,7 @@ export function CombatPanel({
     combat.enemy_intent_min,
     combat.enemy_intent_max,
     combat.enemy_intent_hits,
+    combat.enemy_intent_name,
   );
 
   return (
@@ -253,6 +254,7 @@ export function CombatPanel({
           intentMin: combat.enemy_intent_min,
           intentMax: combat.enemy_intent_max,
           intentHits: combat.enemy_intent_hits,
+          intentName: combat.enemy_intent_name,
         }}
         exchange={exchange}
         log={log}
