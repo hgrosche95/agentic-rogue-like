@@ -29,7 +29,12 @@ env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/agentic-rogue-like-api
 
 jobs:
+  # Same checks as on every PR (ci.yml); a red run stops the deploy here.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   deploy-backend:
+    needs: ci
     runs-on: ubuntu-latest
     outputs:
       api_url: ${{ steps.api-url.outputs.url }}

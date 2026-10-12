@@ -231,6 +231,13 @@ Die API erlaubt standardmäßig nur `http://localhost:5173` per CORS
 und in Produktion ohne Rebuild). Das Frontend liest seinerseits die
 API-Adresse aus `VITE_API_BASE_URL` zur Build-Zeit.
 
+Runs leben nur im Speicher der API (`sessions.py`). Ein Run, zu dem
+`SESSION_TTL_SECONDS` lang (Standard: 2 h) kein Request kam, wird verworfen,
+und mehr als `MAX_SESSIONS` (Standard: 500) gleichzeitige Runs verdrängen den
+am längsten unbenutzten — sonst wüchse der Speicher eines lange laufenden
+Containers mit jedem jemals gestarteten Run. Noch laufende Prefetch-Aufrufe
+eines verworfenen Runs werden abgebrochen.
+
 ### Audio
 
 Alle Klänge entstehen zur Laufzeit mit der Web Audio API
@@ -352,10 +359,16 @@ Endlos-Kombos möglich.
 ## Deployment
 
 Jeder Push auf `master` löst `.github/workflows/deploy.yml` aus: baut das
-Backend-Image (`Dockerfile`, `uv`) direkt in der Azure Container Registry,
+Backend-Image (`Dockerfile`, `uv`) und legt es öffentlich in der GitHub Container Registry (ghcr.io) ab,
 aktualisiert die Azure Container App darauf, baut danach das Frontend gegen
 die frisch deployte API-URL und published es nach Azure Static Web Apps.
 Login läuft über OIDC/Federated Credentials — kein Passwort oder
 Registry-Secret im Repo. Zwei Deploys laufen nie gleichzeitig
-(`concurrency`): ein neuer Push wartet, bis der laufende fertig ist. Es gibt aktuell kein separates CI-Test-Gate vor dem
-Deploy; `pytest` läuft nur manuell/lokal.
+(`concurrency`): ein neuer Push wartet, bis der laufende fertig ist.
+
+Vor dem Deploy läuft `.github/workflows/ci.yml` als erster Job: `ruff check`
+und `pytest` fürs Backend, `oxlint` und `tsc -b && vite build` fürs Frontend.
+Schlägt etwas fehl, wird nichts deployt. Derselbe Workflow läuft auch auf
+jedem Pull Request und jedem Push auf andere Branches als `master`. Geprüft
+werden mit ruff nur `src/` und `tests/` — die Render-Skripte unter
+`tools/trailer/` werden nicht ausgeliefert.
