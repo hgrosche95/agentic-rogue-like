@@ -1766,6 +1766,21 @@ button.is-primary:hover:not(:disabled),
   color: #c9fbff;
 }
 
+/* The enemy's one line of flavor (agent-written or the static pool's) -
+   quiet, at most two lines, the full text on hover. */
+.hud-flavor {
+  margin: 2px 0 6px;
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 12px;
+  font-style: italic;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+
 .hud-name small {
   margin-left: 8px;
   font-family: var(--font-mono);

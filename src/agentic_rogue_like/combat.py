@@ -412,6 +412,8 @@ def start_combat(
     _roll_next_intent(state, rng)
     _draw(state, HAND_SIZE + total(artifacts, "opening_hand"), rng)
     log = [f"A {enemy.name} appears! ({enemy.hp} HP)"]
+    if enemy.description:
+        log.append(enemy.description)
     if boss:
         later = " and again at a quarter" if boss_phases >= 3 else ""
         log.append(

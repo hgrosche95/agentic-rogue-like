@@ -134,6 +134,8 @@ class HandCardView(CardView):
 
 class PendingCombatView(BaseModel):
     enemy_name: str
+    # One line of flavor - the encounter agent's, or the static pool's.
+    enemy_description: str
     enemy_attack_name: str
     # The enemy's base attack stat - what its look is built from.
     enemy_attack: int
@@ -321,6 +323,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         incoming_min, incoming_max = incoming_damage(combat)
         pending_combat = PendingCombatView(
             enemy_name=combat.enemy.name,
+            enemy_description=combat.enemy.description,
             enemy_attack_name=combat.enemy.attack_name,
             enemy_attack=combat.enemy.attack,
             enemy_hp=combat.enemy_hp,

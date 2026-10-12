@@ -18,24 +18,71 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
     # these read high compared to the old dice-combat numbers) - a test
     # pins that invariant down so this pool can't quietly drift out of it.
     "early": [
-        Enemy(id="rat-swarm", name="Rat Swarm", hp=34, attack=8, attack_name="Swarm Bite"),
-        Enemy(id="cave-slime", name="Cave Slime", hp=38, attack=7, attack_name="Acid Splash"),
+        Enemy(
+            id="rat-swarm",
+            name="Rat Swarm",
+            hp=34,
+            attack=8,
+            attack_name="Swarm Bite",
+            description="A squeaking carpet of teeth and tails, pouring out of every crack.",
+        ),
+        Enemy(
+            id="cave-slime",
+            name="Cave Slime",
+            hp=38,
+            attack=7,
+            attack_name="Acid Splash",
+            description="A quivering green blob that dissolves all it touches, bones included.",
+        ),
     ],
     "mid": [
-        Enemy(id="bandit", name="Bandit", hp=50, attack=10, attack_name="Dagger Strike"),
-        Enemy(id="wild-boar", name="Wild Boar", hp=56, attack=11, attack_name="Tusk Charge"),
+        Enemy(
+            id="bandit",
+            name="Bandit",
+            hp=50,
+            attack=10,
+            attack_name="Dagger Strike",
+            description="A scarred cutthroat who robs anyone fool enough to walk here alone.",
+        ),
+        Enemy(
+            id="wild-boar",
+            name="Wild Boar",
+            hp=56,
+            attack=11,
+            attack_name="Tusk Charge",
+            description="A tusked brute with a hide like bark, maddened by your torchlight.",
+        ),
     ],
     "elite": [
-        Enemy(id="ogre", name="Ogre", hp=70, attack=12, attack_name="Club Smash"),
+        Enemy(
+            id="ogre",
+            name="Ogre",
+            hp=70,
+            attack=12,
+            attack_name="Club Smash",
+            description="A hulking ogre dragging a club carved from a whole tree trunk.",
+        ),
     ],
     "boss": [
-        Enemy(id="the-warden", name="The Warden", hp=98, attack=13, attack_name="Iron Verdict"),
+        Enemy(
+            id="the-warden",
+            name="The Warden",
+            hp=98,
+            attack=13,
+            attack_name="Iron Verdict",
+            description="The iron-clad jailer of the deep halls. No prisoner has left its keep.",
+        ),
     ],
     # Waits at the end of act 2 - same budget as the Warden, escalate() makes
     # it the stronger of the two.
     "boss2": [
         Enemy(
-            id="the-architect", name="The Architect", hp=102, attack=13, attack_name="Null Decree"
+            id="the-architect",
+            name="The Architect",
+            hp=102,
+            attack=13,
+            attack_name="Null Decree",
+            description="The mind that drew every corridor of this place - and every trap in them.",
         ),
     ],
 }

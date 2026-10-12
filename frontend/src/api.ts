@@ -95,6 +95,8 @@ export const ATTACKING_INTENTS: EnemyIntentType[] = ["attack", "barrage", "overl
 
 export interface PendingCombatView {
   enemy_name: string;
+  // one line of flavor text, may be empty
+  enemy_description: string;
   enemy_attack_name: string;
   // the base attack stat - what the enemy's look is built from
   enemy_attack: number;
