@@ -27,6 +27,10 @@ A variant file only lists what changes, e.g.:
 `extra_cards` entries take every Card field (hits, exhaust, scaling, ...).
 `"rewards": false` plays runs without the after-fight card reward, i.e.
 with the starter deck only, `"artifacts": false` without artifacts.
+
+`balance-sim --calibrate-threat` instead fits threat.py's model: it fights
+a few hundred random move sets and searches for the parameters whose
+threat() best predicts the damage those fights dealt (see calibrate_threat).
 """
 
 from __future__ import annotations
@@ -61,10 +65,13 @@ from .models import (
     Card,
     CardType,
     Enemy,
+    EnemyMove,
+    MoveKind,
     NodeType,
     PlayerState,
     Rarity,
 )
+from .threat import DEFAULT_MODEL, ThreatModel, threat
 
 TIERS = ("early", "mid", "elite", "boss")
 REST_HEAL = 15  # mirrors engine.resolve_node's REST branch
@@ -400,6 +407,135 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
         steps += 1
 
 
+# --------------------------------------------------------------------------- threat calibration
+
+# Power ranges random move sets are drawn from - wider than anything sensible,
+# so the fit also covers the odd move sets an LLM might come up with.
+_POWER_RANGES = {
+    MoveKind.ATTACK: (60, 150),
+    MoveKind.DEFEND: (50, 150),
+    MoveKind.BARRAGE: (15, 50),
+    MoveKind.CHARGE: (100, 220),
+    MoveKind.PURGE: (30, 90),
+}
+# Search grid for calibrate_threat; `scale` is solved for, not searched.
+_THREAT_GRID = {
+    "player_damage": (16.0, 20.0, 24.0, 28.0, 32.0, 40.0, 50.0),
+    "armor": (0.0, 0.5, 1.0, 1.5),
+    "player_block": (4.0, 5.0, 6.0, 7.0, 8.0),
+    "purge_damage": (0.0, 3.0, 6.0, 9.0),
+}
+# Calibration fights give the player this much HP, so a fight's damage is
+# never cut short by the player dying - what is measured is the enemy's
+# full damage output.
+_CALIBRATION_HP = 1000
+
+
+def random_move_set(rng: random.Random) -> list[EnemyMove]:
+    """1-4 random moves with random weights and powers, at least one attack or barrage."""
+    always = EnemyMove(kind=rng.choice([MoveKind.ATTACK, MoveKind.BARRAGE]))
+    moves = [always] + [
+        EnemyMove(kind=rng.choice(list(MoveKind))) for _ in range(rng.randint(0, 3))
+    ]
+    for move in moves:
+        move.weight = rng.randint(1, 5)
+        move.power = rng.randint(*_POWER_RANGES[move.kind])
+        if move.kind is MoveKind.BARRAGE:
+            move.hits = rng.randint(2, 4)
+    rng.shuffle(moves)
+    return moves
+
+
+def mean_damage_taken(enemy: Enemy, bot: Bot, fights: int, seed: int | str) -> float:
+    """Average HP a fresh starter player loses to `enemy` - with HP to spare,
+    so the enemy's full output counts."""
+    rng = random.Random(seed)
+    cfg = SimConfig(player_hp=_CALIBRATION_HP)
+    return statistics.mean(
+        fight(cfg.new_player(), enemy, "mid", bot, rng).hp_lost for _ in range(fights)
+    )
+
+
+def threat_samples(bot: Bot, enemies: int, fights: int, seed: int) -> list[tuple[Enemy, float]]:
+    """Random enemies (one in seven with the default move set) and the damage they dealt."""
+    rng = random.Random(f"{seed}-threat")
+    samples = []
+    for i in range(enemies):
+        moves = {} if rng.random() < 1 / 7 else {"moves": random_move_set(rng)}
+        enemy = Enemy(
+            id=f"calib-{i}",
+            name="calib",
+            hp=rng.randint(30, 110),
+            attack=rng.randint(6, 15),
+            attack_name="Hit",
+            **moves,
+        )
+        samples.append((enemy, mean_damage_taken(enemy, bot, fights, f"{seed}-{i}")))
+    return samples
+
+
+@dataclass
+class ThreatFit:
+    model: ThreatModel
+    r2: float  # share of the variance in damage taken that threat explains
+    median_error: float  # typical relative error of a single prediction
+
+
+def evaluate_threat(model: ThreatModel, samples: list[tuple[Enemy, float]]) -> ThreatFit:
+    predicted = [threat(e, model) for e, _ in samples]
+    actual = [y for _, y in samples]
+    mean = statistics.mean(actual)
+    residual = sum((p - y) ** 2 for p, y in zip(predicted, actual, strict=True))
+    spread = sum((y - mean) ** 2 for y in actual)
+    errors = [abs(p - y) / max(y, 1.0) for p, y in zip(predicted, actual, strict=True)]
+    return ThreatFit(model, 1 - residual / spread, statistics.median(errors))
+
+
+def calibrate_threat(samples: list[tuple[Enemy, float]]) -> ThreatFit:
+    """Grid-search ThreatModel on `samples`; for each grid point the scale is
+    the least-squares fit, so threat comes out in HP actually taken."""
+    best: ThreatFit | None = None
+    actual = [y for _, y in samples]
+    for player_damage in _THREAT_GRID["player_damage"]:
+        for armor in _THREAT_GRID["armor"]:
+            for player_block in _THREAT_GRID["player_block"]:
+                for purge_damage in _THREAT_GRID["purge_damage"]:
+                    raw = ThreatModel(player_damage, armor, player_block, purge_damage)
+                    xs = [threat(e, raw) for e, _ in samples]
+                    xx = sum(x * x for x in xs)
+                    scale = sum(x * y for x, y in zip(xs, actual, strict=True)) / xx if xx else 1.0
+                    fit = evaluate_threat(
+                        ThreatModel(player_damage, armor, player_block, purge_damage, scale),
+                        samples,
+                    )
+                    if best is None or fit.r2 > best.r2:
+                        best = fit
+    assert best is not None
+    return best
+
+
+def print_threat_calibration(bot: Bot, enemies: int, fights: int, seed: int) -> None:
+    samples = threat_samples(bot, enemies, fights, seed)
+    # Fit on two thirds, judge on the rest - a fit is only as good as its
+    # predictions for move sets it has not seen.
+    cut = len(samples) * 2 // 3
+    fit = calibrate_threat(samples[:cut])
+    held_out = evaluate_threat(fit.model, samples[cut:])
+    current = evaluate_threat(DEFAULT_MODEL, samples[cut:])
+    m = fit.model
+    print(f"\n{enemies} zufällige Movesets x {fights} Kämpfe, Fit auf {cut}, Test auf dem Rest")
+    print(
+        f"Gefittet: player_damage={m.player_damage} armor={m.armor} "
+        f"player_block={m.player_block} purge_damage={m.purge_damage} scale={m.scale:.3f}"
+    )
+    print(f"  Fit-Daten:  R² {fit.r2:.3f}, Median-Fehler {fit.median_error:.1%}")
+    print(f"  Test-Daten: R² {held_out.r2:.3f}, Median-Fehler {held_out.median_error:.1%}")
+    print(
+        f"Aktuelles DEFAULT_MODEL auf den Test-Daten: R² {current.r2:.3f}, "
+        f"Median-Fehler {current.median_error:.1%}"
+    )
+
+
 # --------------------------------------------------------------------------- report
 
 
@@ -504,7 +640,18 @@ def main(argv: list[str] | None = None) -> None:
         help="Variante(n) neben die aktuellen Werte stellen (mehrfach möglich)",
     )
     parser.add_argument("--no-artifacts", action="store_true", help="Runs ohne Artefakte")
+    parser.add_argument(
+        "--calibrate-threat",
+        action="store_true",
+        help="statt des Reports die Parameter von threat.py fitten",
+    )
+    parser.add_argument("--threat-enemies", type=int, default=600, help="Movesets fürs Fitten")
+    parser.add_argument("--threat-fights", type=int, default=100, help="Kämpfe pro Moveset")
     args = parser.parse_args(argv)
+
+    if args.calibrate_threat:
+        print_threat_calibration(BOTS[args.bot], args.threat_enemies, args.threat_fights, args.seed)
+        return
 
     base = load_variant(args.variant) if args.variant else SimConfig()
     if args.no_rewards:

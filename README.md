@@ -156,7 +156,8 @@ src/agentic_rogue_like/
 ├── engine.py       Der deterministische Kern-Loop, den CLI und API beide treiben
 ├── agent/          LangGraph-Encounter-Agent, Tool-Schema, Etagen-Budgets, Narrator, Ollama-Anbindung
 ├── prefetch.py     Erzeugt LLM-Inhalte erreichbarer Räume im Hintergrund
-├── balance_sim.py  Bot-Simulation für das Balancing (uv run balance-sim)
+├── threat.py       Bedrohung eines Gegners aus HP, Angriff und Moveset (Kosten fürs Budget)
+├── balance_sim.py  Bot-Simulation für das Balancing (uv run balance-sim), fittet auch threat.py
 ├── cli.py          Terminal-Frontend (input()/print()-Loop)
 ├── api.py          FastAPI-HTTP-Frontend fürs Web-UI (uvicorn agentic_rogue_like.api:app)
 └── sessions.py      Hält Run-Zustand zwischen HTTP-Requests am Leben
@@ -333,8 +334,39 @@ Züge Block) und zieht dieselben Zufallszahlen, also spielen Gegner aus dem
 statischen Pool und geseedete Runs exakt wie vorher. Bosse ignorieren ihr
 Moveset und kämpfen weiter mit ihren Phasen (`combat._roll_boss_intent`).
 Der Encounter-Agent erzeugt noch keine Movesets. Das ist der nächste
-Schritt, zusammen mit einer Kostenfunktion, die ein Moveset gegen das
-Etagen-Budget aufrechnet.
+Schritt; die Kostenfunktion dafür gibt es schon (siehe *Bedrohung* unten).
+
+Jeder Gegner hat außerdem eine Zeile Flavor-Text (`Enemy.description`,
+vom Encounter-Agent oder aus dem statischen Pool). Sie steht im Kampf unter
+seinem Namen und als zweite Zeile im Kampf-Log.
+
+### Bedrohung: was ein Moveset kostet
+
+`threat.py` rechnet einen Gegner in eine Zahl um: wie viel HP er dem
+Spieler im Schnitt abnimmt, bevor er stirbt, aus HP, Angriffswert und
+Moveset, ohne Simulation. Pro Gegnerzug, gewichtet nach Häufigkeit der Moves:
+
+- **Schaden** = was von den Treffern durchkommt: jeder Treffer minus Rüstung
+  (deshalb zahlt eine Salve für ihre vielen kleinen Treffer), der ganze Zug
+  minus Block des Spielers; dazu ein Aufschlag pro Säuberung
+- **Block** = was der Gegner an Block aufbaut
+- **Züge** = HP / (Spieler-Schaden − Block)
+- **Bedrohung** = Züge × Schaden
+
+Die Parameter sind nicht geschätzt, sondern gefittet:
+`uv run balance-sim --calibrate-threat` simuliert 600 zufällige Movesets mit
+je 100 Kämpfen und sucht die Werte, deren Bedrohung den tatsächlichen Schaden
+am besten vorhersagt. Auf 200 zurückgehaltenen Movesets erklärt sie 90 % der
+Streuung (R²), bei einem Median-Fehler von 9 % pro Moveset. Ein Test hält
+fünf sehr verschiedene Gegnertypen (Standard, Tank, Salve, Aufladen,
+Säuberung) auf derselben Bedrohung und prüft, dass sie im Simulator ähnlich
+viel Schaden machen (±30 %).
+
+`agent/budgets.threat_range()` übersetzt die HP-/Angriffs-Budgets jeder Stufe
+in einen Bedrohungs-Bereich (early ~4–9, mid ~9–18, elite ~16–25). Ein Gegner
+mit beliebigem Moveset passt in sein Budget, wenn seine Bedrohung darin
+liegt: Wer härter zuschlägt, zahlt mit HP, und umgekehrt. Bosse sind
+ausgenommen, sie kämpfen mit ihrem eigenen Moveset.
 
 ## Artefakte
 
