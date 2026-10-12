@@ -89,7 +89,10 @@ def generate_map(seed: int, act: int = 1) -> dict[str, MapNode]:
             nodes[node_id].connections = targets
             reached.update(targets)
 
-        for missing in set(next_ids) - reached:
+        # In floor order, not set order: a set of strings iterates in an
+        # order salted per process, which made the same seed draw a
+        # different map in every process.
+        for missing in (node_id for node_id in next_ids if node_id not in reached):
             source = rng.choice(current_ids)
             nodes[source].connections.append(missing)
 
