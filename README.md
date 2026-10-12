@@ -112,7 +112,9 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       prozedural mit der Web Audio API erzeugt (siehe *Audio* unten).
 - [ ] **Encounter-Agent** — ein LangGraph-Agent, der Gegner über constrained
       Tool-Calls generiert und gegen ein Etagen-Budget validiert, mit
-      Retry-Schleife bei Budget-Verstoß. Für Gegner voll eingeklinkt: die
+      Retry-Schleife bei Budget-Verstoß. Normale Gegner bekommen dabei ein
+      eigenes Moveset, das über ihre Bedrohung gegen das Budget geprüft wird
+      (siehe *Gegner-Movesets*). Für Gegner voll eingeklinkt: die
       Engine ruft ihn über `ENCOUNTER_AGENT_ENABLED=1` live an und fällt bei
       jedem Fehler (API nicht erreichbar, Budget nach 3 Versuchen nie
       getroffen, ...) auf den statischen Pool zurück — in einem echten Lauf
@@ -333,8 +335,8 @@ Das Standard-Moveset ist genau das alte Verhalten (Angriff, in 30 % der
 Züge Block) und zieht dieselben Zufallszahlen, also spielen Gegner aus dem
 statischen Pool und geseedete Runs exakt wie vorher. Bosse ignorieren ihr
 Moveset und kämpfen weiter mit ihren Phasen (`combat._roll_boss_intent`).
-Der Encounter-Agent erzeugt noch keine Movesets. Das ist der nächste
-Schritt; die Kostenfunktion dafür gibt es schon (siehe *Bedrohung* unten).
+Der Encounter-Agent erfindet für normale Gegner und Elites ein eigenes
+Moveset mit 2–4 benannten Moves (siehe *Movesets vom Agenten* unten).
 
 Jeder Gegner hat außerdem eine Zeile Flavor-Text (`Enemy.description`,
 vom Encounter-Agent oder aus dem statischen Pool). Sie steht im Kampf unter
@@ -362,11 +364,39 @@ fünf sehr verschiedene Gegnertypen (Standard, Tank, Salve, Aufladen,
 Säuberung) auf derselben Bedrohung und prüft, dass sie im Simulator ähnlich
 viel Schaden machen (±30 %).
 
-`agent/budgets.threat_range()` übersetzt die HP-/Angriffs-Budgets jeder Stufe
+`EnemyBudget.threat_range()` (`agent/encounter_schema.py`) übersetzt die HP-/Angriffs-Budgets jeder Stufe
 in einen Bedrohungs-Bereich (early ~4–9, mid ~9–18, elite ~16–25). Ein Gegner
 mit beliebigem Moveset passt in sein Budget, wenn seine Bedrohung darin
 liegt: Wer härter zuschlägt, zahlt mit HP, und umgekehrt. Bosse sind
 ausgenommen, sie kämpfen mit ihrem eigenen Moveset.
+
+### Movesets vom Agenten
+
+Über Groq antwortet der Encounter-Agent mit einem `MovesetProposal`
+(`agent/encounter_schema.py`): Name, Beschreibung, HP, Angriff und 2–4 Moves,
+jeder mit Art, Name, Gewicht, Stärke und (bei Salven) Trefferzahl. Die Felder
+sind im JSON-Schema beschrieben und begrenzt, damit das Modell weiß, was eine
+Stärke von 140 bedeutet. Geprüft wird dann:
+
+- **Angriff** bleibt eine harte Grenze der Stufe.
+- **Bedrohung** muss im Bereich der Stufe liegen. Das ersetzt die feste
+  HP-Spanne: Eine Salve mit 4 Treffern bekommt weniger HP, ein Tank mit
+  starkem Block darf mehr haben.
+- **HP** nur noch als lockere Plausibilitätsgrenze (50–150 % der HP-Spanne).
+- **Spielbarkeit**: z. B. braucht jedes Moveset einen Angriff oder eine Salve.
+
+Liegt die Bedrohung daneben, bekommt der Agent im nächsten Versuch eine
+konkrete Rückmeldung, etwa *„threat 23.8 outside budget [8.7, 17.5] – too
+dangerous for this floor. Change hp to about 44, or make the moves weaker“*.
+Weil die Bedrohung proportional zu den HP ist, ist der HP-Vorschlag exakt.
+
+Bosse (eigenes Moveset mit Phasen) und das fein-getunte Ollama-Modell bleiben
+beim alten Schema ohne Moves: Das Ollama-Modell wurde genau auf diesen Prompt
+trainiert und kennt keine Movesets. Ebenso pinnen Datengenerierung und
+Eval-Harness unter `training/` das alte Schema (`with_moves: False`), damit
+die Zahlen in `training/RESULTS.md` vergleichbar bleiben. Echte
+Groq-Antworten mit Movesets sind noch nicht ausgewertet; die Tests laufen
+mit simulierten Modell-Antworten.
 
 ## Artefakte
 

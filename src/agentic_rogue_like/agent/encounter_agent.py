@@ -8,6 +8,12 @@ instead of ever handing engine.py an out-of-budget Enemy.
 Two layers, on purpose: generate_balanced_enemy() is strict and raises when the
 agent can't deliver, which is what the tests pin down; enemy_for_node() wraps it
 with the fallback to the static pool and is what the game loop should call.
+
+Regular enemies from Groq come with their own move set (MovesetProposal) and
+are held to the floor's threat range; bosses (fixed move set) and the
+fine-tuned Ollama model (trained on the plain schema and prompt, see
+training/) use the plain EnemyProposal and HP/attack ranges - see
+encounter_schema.py.
 """
 
 from __future__ import annotations
@@ -16,7 +22,7 @@ import logging
 import os
 import random
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -24,7 +30,14 @@ if TYPE_CHECKING:
 from ..enemies import pick_enemy, tier_floor
 from ..models import DEFAULT_SETTING, Enemy
 from .budgets import budget_for
-from .encounter_schema import BudgetViolation, EnemyBudget, EnemyProposal, validate_proposal
+from .encounter_schema import (
+    BudgetViolation,
+    EnemyBudget,
+    EnemyProposal,
+    MovesetProposal,
+    proposal_moves,
+    validate_proposal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +51,9 @@ class EncounterState(TypedDict):
     attempt: int
     last_error: str | None
     proposal: EnemyProposal | None
+    # Ask for a move set? Unset means _with_moves()' default; the training
+    # pipeline pins it to False so its prompts and evals stay comparable.
+    with_moves: NotRequired[bool]
 
 
 def _model() -> Any:
@@ -80,7 +96,51 @@ def _model() -> Any:
     )
 
 
+def _with_moves(state: EncounterState) -> bool:
+    """Whether this call asks for a move set - not for bosses, whose moves are
+    fixed, and not from the fine-tuned Ollama model, which was trained on the
+    plain schema and prompt and has never seen a move set."""
+    if state["budget"].boss:
+        return False
+    if "with_moves" in state:
+        return state["with_moves"]
+    return os.environ.get("ENCOUNTER_AGENT_MODEL_SOURCE") != "ollama"
+
+
 def _build_prompt(state: EncounterState) -> str:
+    if _with_moves(state):
+        prompt = _moveset_prompt(state)
+    else:
+        prompt = _plain_prompt(state)
+    if state["last_error"]:
+        prompt += f" Your previous attempt was rejected: {state['last_error']}. Fix it."
+    return prompt
+
+
+def _moveset_prompt(state: EncounterState) -> str:
+    setting = state.get("setting") or DEFAULT_SETTING
+    budget = state["budget"]
+    low_hp, high_hp = budget.hp_bounds()
+    return (
+        f"Invent an enemy for a {setting}-themed roguelike encounter. "
+        f"Its name, description, attack_name and move names must fit the {setting} setting "
+        f"instead of generic dungeon fantasy. Give it 2 to 4 moves that show how it fights - "
+        f"a hulking brute might slam and charge up, a swarm might barrage, a guardian might "
+        f"defend and purge. Every move set needs at least one attack or barrage. "
+        f"attack is its base strength and must be between {budget.min_attack} and "
+        f"{budget.max_attack}; each move's power is a percentage of it. "
+        f"The whole enemy's danger is checked against this floor's budget: with plain "
+        f"attack and defend moves at power 100, hp between {budget.min_hp} and {budget.max_hp} "
+        f"fits. Stronger moves (high power, barrages, charges, purges) need less hp, "
+        f"defensive ones allow more - hp must stay between {low_hp} and {high_hp}. "
+        f"attack_name is its signature attack. "
+        f"Keep the description under 150 characters and every name under 40 characters."
+    )
+
+
+def _plain_prompt(state: EncounterState) -> str:
+    # The fine-tuned Ollama model was trained on exactly this wording (see
+    # training/data_gen) - change it and its evals no longer apply.
     setting = state.get("setting") or DEFAULT_SETTING
     prompt = (
         f"Invent an enemy for a {setting}-themed roguelike encounter. "
@@ -92,13 +152,12 @@ def _build_prompt(state: EncounterState) -> str:
         f"and attack between {state['budget'].min_attack} and {state['budget'].max_attack}. "
         f"Keep the description under 150 characters and attack_name under 40 characters."
     )
-    if state["last_error"]:
-        prompt += f" Your previous attempt was rejected: {state['last_error']}. Fix it."
     return prompt
 
 
 def generate_enemy(state: EncounterState) -> EncounterState:
-    model = _model().with_structured_output(EnemyProposal)
+    schema = MovesetProposal if _with_moves(state) else EnemyProposal
+    model = _model().with_structured_output(schema)
     proposal = model.invoke(_build_prompt(state))
     return {**state, "proposal": proposal, "attempt": state["attempt"] + 1}
 
@@ -154,6 +213,7 @@ def generate_balanced_enemy(
         raise BudgetViolation(f"agent failed after {MAX_ATTEMPTS} attempts: {result['last_error']}")
 
     proposal = result["proposal"]
+    moves = None if budget.boss else proposal_moves(proposal)
     return Enemy(
         id=enemy_id,
         name=proposal.name,
@@ -161,6 +221,7 @@ def generate_balanced_enemy(
         hp=proposal.hp,
         attack=proposal.attack,
         attack_name=proposal.attack_name,
+        **({} if moves is None else {"moves": moves}),
     )
 
 

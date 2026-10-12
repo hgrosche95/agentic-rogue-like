@@ -3,7 +3,7 @@
 `threat(enemy)` estimates the damage an enemy deals to the player before it
 dies, in HP, from its HP, attack stat and move set alone - no simulation.
 That turns "is this move set balanced?" into a number the encounter agent
-can be held to (see agent/budgets.threat_range), the way the plain HP/attack
+can be held to (see EnemyBudget.threat_range), the way the plain HP/attack
 ranges did when every enemy had the same two moves.
 
 The model, per enemy turn on average - each move weighted by how often it

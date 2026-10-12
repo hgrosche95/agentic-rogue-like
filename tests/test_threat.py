@@ -1,6 +1,6 @@
 import pytest
 
-from agentic_rogue_like.agent.budgets import _BUDGETS, threat_range
+from agentic_rogue_like.agent.budgets import _BUDGETS
 from agentic_rogue_like.balance_sim import (
     calibrate_threat,
     evaluate_threat,
@@ -58,13 +58,13 @@ def test_armor_hurts_a_barrage_more_than_one_big_hit() -> None:
 
 @pytest.mark.parametrize("tier", ["early", "mid", "elite"])
 def test_static_pool_sits_inside_its_tiers_threat_range(tier: str) -> None:
-    low, high = threat_range(_BUDGETS[tier])
+    low, high = _BUDGETS[tier].threat_range()
     for enemy in ENEMY_POOL[tier]:
         assert low <= threat(enemy) <= high
 
 
 def test_tier_threat_ranges_rise() -> None:
-    ranges = [threat_range(_BUDGETS[t]) for t in ("early", "mid", "elite", "boss")]
+    ranges = [_BUDGETS[t].threat_range() for t in ("early", "mid", "elite", "boss")]
     assert all(a[0] < b[0] and a[1] < b[1] for a, b in zip(ranges, ranges[1:], strict=False))
 
 

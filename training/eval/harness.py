@@ -52,6 +52,9 @@ def _initial_state(context: EvalContext) -> encounter_agent.EncounterState:
         "attempt": 0,
         "last_error": None,
         "proposal": None,
+        # Plain schema, so Groq and the fine-tuned models (trained on it) are
+        # measured on the same task as in RESULTS.md.
+        "with_moves": False,
     }
 
 
