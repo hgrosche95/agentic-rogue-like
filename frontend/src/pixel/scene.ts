@@ -51,6 +51,9 @@ const EV: Record<ArenaEvent, number> = {
   compact: 10, // restore
   chain: 5, // amplifier
   token_regen: 7, // draw_bonus
+  free_play: 8, // draw
+  safeguard: 6, // armor
+  opener: 5, // amplifier
   enemy_attack: 20,
   enemy_attack_blocked: 21,
   enemy_brace: 22,

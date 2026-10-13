@@ -282,6 +282,8 @@ export function cardSound(type: CardType): SfxName {
     case "reboot":
     case "compact":
       return "restore";
+    case "free_play":
+      return "draw";
     case "amplifier":
     case "armor":
     case "draw_bonus":
@@ -290,6 +292,8 @@ export function cardSound(type: CardType): SfxName {
     case "fortify":
     case "chain":
     case "token_regen":
+    case "safeguard":
+    case "opener":
       return "permanent";
   }
 }

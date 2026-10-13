@@ -84,8 +84,11 @@ class CardType(StrEnum):
     # The Vibe-Coder's cards (see characters.py) - COMPACT and TOKEN_REGEN
     # only do something for a character with a context window.
     COMPACT = "compact"  # action: frees `value` used tokens
+    FREE_PLAY = "free_play"  # action: the next `value` cards this turn cost no tokens
     CHAIN = "chain"  # actions to its right +value per card already played this turn
     TOKEN_REGEN = "token_regen"  # frees `value` used tokens at the end of every turn
+    SAFEGUARD = "safeguard"  # hallucinating cards fizzle instead of backfiring
+    OPENER = "opener"  # the first `value` cards of every turn cost no tokens
 
 
 PERMANENT_CARD_TYPES = frozenset(
@@ -98,16 +101,20 @@ PERMANENT_CARD_TYPES = frozenset(
         CardType.FORTIFY,
         CardType.CHAIN,
         CardType.TOKEN_REGEN,
+        CardType.SAFEGUARD,
+        CardType.OPENER,
     }
 )
 
 
 class Scaling(StrEnum):
-    """What an attack card's `scale_value` bonus is counted per."""
+    """What an attack or block card's `scale_value` bonus is counted per."""
 
     PERMANENT = "permanent"  # permanent cards on the field
     GRAVEYARD = "graveyard"  # cards in the discard pile
     BANISHED = "banished"  # cards in the banished pile
+    PLAYED = "played"  # cards already played this turn
+    EMPTY_SLOT = "empty_slot"  # empty field slots
 
 
 class Rarity(StrEnum):
@@ -130,7 +137,7 @@ class Card(BaseModel):
     discard_cost: int = 0  # discard this many random other hand cards first
     hits: int = 1  # attacks only: the damage is dealt this many times
     draw: int = 0  # draw this many cards after the effect
-    scaling: Scaling | None = None  # attacks only: +scale_value per ...
+    scaling: Scaling | None = None  # attacks and blocks only: +scale_value per ...
     scale_value: int = 0
     # Tokens it takes from the context window - only characters with one
     # (the Vibe-Coder, see characters.py) pay it, everyone else ignores it.

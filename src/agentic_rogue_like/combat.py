@@ -139,6 +139,8 @@ class CombatState(BaseModel):
     draw_on_play: int = 0
     turn_draw_modifier: int = 0
     plays_this_turn: int = 0  # what Copilot (CHAIN) counts
+    # cards left this turn that cost no tokens (Tab-Tab-Tab, Pair Programming)
+    free_plays: int = 0
 
 
 def _draw(state: CombatState, count: int, rng: random.Random) -> int:
@@ -162,8 +164,11 @@ def cards_per_turn(state: CombatState) -> int:
 
 
 def token_cost(state: CombatState, card: Card) -> int:
-    """What playing `card` takes from the context window - 0 without one."""
-    return 0 if state.token_limit is None else max(0, card.token_cost)
+    """What playing `card` takes from the context window - 0 without one,
+    and 0 while a free play (Tab-Tab-Tab, Pair Programming) is pending."""
+    if state.token_limit is None or state.free_plays:
+        return 0
+    return max(0, card.token_cost)
 
 
 def tokens_left(state: CombatState) -> int | None:
@@ -461,6 +466,8 @@ def play_card(
     # a character without one never rolls here.
     hallucinates = overflows(state, card) and rng.random() < HALLUCINATION_CHANCE
     state.tokens_used += token_cost(state, card)
+    if state.free_plays:
+        state.free_plays -= 1
     # The cost is paid before anything else, so a card like Memory Dump can't
     # throw away the very cards it is about to draw.
     cost_line = _pay_discard_cost(state, card, rng)
@@ -505,6 +512,8 @@ def _hallucinate(state: CombatState, card: Card, slot_index: int, player: Player
     multiplier = _amplifier_multiplier(state, slot_index)
     bonus = _chain_bonus(state, slot_index)
     lead = f"Context overflow - {card.name} hallucinates"
+    if any(c is not None and c.type is CardType.SAFEGUARD for c in state.field):
+        return f"{lead}, but your rubber duck catches it - it does nothing."
     if card.type is CardType.ATTACK:
         hits = [attack_damage(state, card, player, multiplier, bonus)] * max(card.hits, 1)
         taken = _damage_taken(hits, state.player_block, 0)
@@ -512,7 +521,7 @@ def _hallucinate(state: CombatState, card: Card, slot_index: int, player: Player
         player.hp = max(player.hp - taken, 0)
         return f"{lead} and hits you for {taken} damage. You are at {player.hp} HP."
     if card.type is CardType.BLOCK:
-        amount = round((card.value + total(state.artifacts, "block_bonus") + bonus) * multiplier)
+        amount = block_amount(state, card, multiplier, bonus)
         state.enemy_block += amount
         return f"{lead}: {state.enemy.name} gains {amount} block."
     if card.type is CardType.HEAL:
@@ -544,16 +553,29 @@ def attack_damage(
 ) -> int:
     """Damage of one hit of an ATTACK card - also what the UI/bots preview.
     `bonus` is flat damage on top, before the multiplier (Copilot)."""
-    base = card.value + player.attack + bonus
-    if card.scaling is Scaling.PERMANENT:
-        base += card.scale_value * permanent_count(state)
-    elif card.scaling is Scaling.GRAVEYARD:
-        base += card.scale_value * len(state.discard_pile)
-    elif card.scaling is Scaling.BANISHED:
-        base += card.scale_value * len(state.banished_pile)
+    base = card.value + player.attack + bonus + _scaling_bonus(state, card)
     boost = sum(c.value for c in state.field if c and c.type is CardType.DAMAGE_BOOST)
     base += boost * permanent_count(state)
     return round(base * multiplier)
+
+
+def block_amount(state: CombatState, card: Card, multiplier: float = 1.0, bonus: int = 0) -> int:
+    """Block a BLOCK card raises - also what the UI/bots preview."""
+    base = card.value + total(state.artifacts, "block_bonus") + bonus + _scaling_bonus(state, card)
+    return round(base * multiplier)
+
+
+def _scaling_bonus(state: CombatState, card: Card) -> int:
+    """The card's `scale_value` times whatever its `scaling` counts."""
+    count = {
+        None: 0,
+        Scaling.PERMANENT: permanent_count(state),
+        Scaling.GRAVEYARD: len(state.discard_pile),
+        Scaling.BANISHED: len(state.banished_pile),
+        Scaling.PLAYED: state.plays_this_turn,
+        Scaling.EMPTY_SLOT: FIELD_SIZE - permanent_count(state),
+    }[card.scaling]
+    return card.scale_value * count
 
 
 def action_preview(
@@ -574,7 +596,7 @@ def action_preview(
     if card.type is CardType.ATTACK:
         return attack_damage(state, card, player, multiplier, bonus)
     if card.type is CardType.BLOCK:
-        return round((card.value + total(state.artifacts, "block_bonus") + bonus) * multiplier)
+        return block_amount(state, card, multiplier, bonus)
     if card.type is CardType.HEAL:
         return round((card.value + total(state.artifacts, "heal_bonus") + bonus) * multiplier)
     if card.type is CardType.FINAL_STRIKE:
@@ -654,8 +676,12 @@ def _apply_action_effect(
         freed = _free_tokens(state, card.value)
         return f"You play {card.name}, freeing {freed} token(s) of context."
 
+    if card.type is CardType.FREE_PLAY:
+        state.free_plays += card.value
+        return f"You play {card.name} - the next {card.value} card(s) this turn cost no tokens."
+
     if card.type is CardType.BLOCK:
-        amount = round((card.value + total(state.artifacts, "block_bonus") + bonus) * multiplier)
+        amount = block_amount(state, card, multiplier, bonus)
         state.player_block += amount
         return f"You play {card.name}, gaining {amount} block."
 
@@ -761,6 +787,7 @@ def end_turn(
     state.enemy_intent = _next_intent(state, rng)
     state.turn += 1
     state.plays_this_turn = 0
+    state.free_plays = sum(c.value for c in state.field if c and c.type is CardType.OPENER)
     if state.token_limit is not None:
         _free_tokens(state, token_regen(state))
     # Unplayed hand cards carry over to next turn; a fixed number of cards

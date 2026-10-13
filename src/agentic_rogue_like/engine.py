@@ -92,7 +92,7 @@ def new_run(
     # ... and so does the starting card pick: three uncommon/rare cards, one of
     # which (or none) joins the starter deck before the first room.
     run.card_reward = roll_card_reward(
-        random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS
+        random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS, pool=hero.reward_pool
     )
     return run
 
@@ -208,7 +208,11 @@ def _finish_combat(
     run.history.append(f"You loot {reward} gold from the {enemy_name}.")
     if healed := heal(run.player, total(run.player.artifacts, "heal_after_combat")):
         run.history.append(f"Your artifacts patch you up for {healed} HP.")
-    run.card_reward = roll_card_reward(rng, elite=node.type is not NodeType.COMBAT)
+    run.card_reward = roll_card_reward(
+        rng,
+        elite=node.type is not NodeType.COMBAT,
+        pool=CHARACTERS[run.player.character].reward_pool,
+    )
     if node.type is NodeType.BOSS:
         advance_act(run)
 

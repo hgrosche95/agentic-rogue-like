@@ -3,7 +3,13 @@ import random
 import pytest
 
 from agentic_rogue_like import combat
-from agentic_rogue_like.cards import starter_deck, vibe_coder_starter_deck
+from agentic_rogue_like.cards import (
+    REWARD_POOL,
+    VIBE_CODER_REWARD_POOL,
+    roll_card_reward,
+    starter_deck,
+    vibe_coder_starter_deck,
+)
 from agentic_rogue_like.characters import CHARACTERS
 from agentic_rogue_like.combat import (
     CARDS_PER_TURN,
@@ -16,7 +22,8 @@ from agentic_rogue_like.combat import (
     start_combat,
 )
 from agentic_rogue_like.engine import new_run
-from agentic_rogue_like.models import Card, CardType, Character, Enemy, PlayerState
+from agentic_rogue_like.models import Card, CardType, Character, Enemy, PlayerState, Rarity
+from agentic_rogue_like.shop import roll_shop
 
 VIBE = CHARACTERS[Character.VIBE_CODER]
 PROMPT = Card(id="prompt", name="Prompt", type=CardType.ATTACK, value=4, description="")
@@ -209,3 +216,120 @@ def test_auto_resolve_never_plays_past_the_window() -> None:
         player.hp = player.max_hp
         _, log = auto_resolve_combat(player.deck, _enemy(hp=60), player, random.Random(seed))
         assert not any("hallucinates" in line for line in log)
+
+
+# ---- the Vibe-Coder's reward cards
+
+
+def _vibe_card(name: str) -> Card:
+    return next(c for c in VIBE_CODER_REWARD_POOL if c.name == name).model_copy(deep=True)
+
+
+def test_vibe_reward_cards_are_well_formed() -> None:
+    names = [c.name for c in REWARD_POOL + VIBE_CODER_REWARD_POOL]
+    assert len(set(names)) == len(names)
+    assert all(c.rarity is not Rarity.STARTER for c in VIBE_CODER_REWARD_POOL)
+    # token-free cards that refill the hand could otherwise loop forever
+    for card in VIBE_CODER_REWARD_POOL:
+        if card.type is CardType.RETRIEVE or card.draw:
+            assert card.exhaust, card.name
+
+
+def test_only_the_vibe_coder_is_offered_his_cards() -> None:
+    vibe_names = {c.name for c in VIBE_CODER_REWARD_POOL}
+    rng = random.Random(1)
+    chronos_offers = {c.name for _ in range(300) for c in roll_card_reward(rng)}
+    vibe_offers = {c.name for _ in range(300) for c in roll_card_reward(rng, pool=VIBE.reward_pool)}
+
+    assert not chronos_offers & vibe_names
+    assert vibe_names <= vibe_offers
+
+
+def test_vibe_coder_rewards_and_shops_come_from_his_pool() -> None:
+    pool = {c.name for c in VIBE.reward_pool}
+    vibe_names = {c.name for c in VIBE_CODER_REWARD_POOL}
+    seen: set[str] = set()
+    for seed in range(40):
+        run = new_run(seed, character=Character.VIBE_CODER)
+        seen |= {c.name for c in run.card_reward}
+        seen |= {item.card.name for item in roll_shop(run).cards}
+
+    assert seen <= pool
+    assert seen & vibe_names
+
+
+def test_tab_tab_tab_makes_the_next_card_free() -> None:
+    player, state = _vibe_fight([_vibe_card("Tab-Tab-Tab"), BIG, BIG])
+
+    play_card(state, 0, 0, player, random.Random(2))
+    play_card(state, 0, 0, player, random.Random(2))
+    assert state.tokens_used == 0
+    play_card(state, 0, 0, player, random.Random(2))
+    assert state.tokens_used == BIG.token_cost
+
+
+def test_a_free_play_doesnt_carry_over_to_the_next_turn() -> None:
+    player, state = _vibe_fight([_vibe_card("Tab-Tab-Tab")])
+    play_card(state, 0, 0, player, random.Random(2))
+
+    end_turn(state, player, random.Random(2))
+
+    assert state.free_plays == 0
+
+
+def test_pair_programming_makes_the_first_card_of_every_turn_free() -> None:
+    player, state = _vibe_fight([_vibe_card("Pair Programming")])
+    play_card(state, 0, 4, player, random.Random(2))
+    end_turn(state, player, random.Random(2))
+    used = state.tokens_used
+    state.hand = [BIG, BIG]
+
+    play_card(state, 0, 0, player, random.Random(2))
+    assert state.tokens_used == used
+    play_card(state, 0, 0, player, random.Random(2))
+    assert state.tokens_used == used + BIG.token_cost
+
+
+def test_copy_paste_is_free_and_fetches_the_last_card() -> None:
+    copy_paste = _vibe_card("Copy-Paste")
+    player, state = _vibe_fight([BIG, copy_paste], deck=[])
+
+    play_card(state, 0, 0, player, random.Random(2))
+    play_card(state, 0, 0, player, random.Random(2))
+
+    assert state.tokens_used == BIG.token_cost
+    assert state.hand == [BIG]
+    assert copy_paste in state.banished_pile
+
+
+def test_ship_it_grows_with_every_card_played_this_turn() -> None:
+    ship_it = _vibe_card("Ship It")
+    player, state = _vibe_fight([PROMPT, PROMPT])
+
+    assert action_preview(state, ship_it, player, 0) == 0
+    play_card(state, 0, 0, player, random.Random(2))
+    play_card(state, 0, 0, player, random.Random(2))
+    assert action_preview(state, ship_it, player, 0) == 2 * ship_it.scale_value
+
+
+def test_vibe_check_blocks_more_the_emptier_the_field() -> None:
+    vibe_check = _vibe_card("Vibe Check")
+    player, state = _vibe_fight([COPILOT])
+
+    assert action_preview(state, vibe_check, player, 1) == 1 + 5 * 2
+    play_card(state, 0, 0, player, random.Random(2))
+    state.plays_this_turn = 0  # leave Copilot's bonus out of it
+    assert action_preview(state, vibe_check, player, 1) == 1 + 4 * 2
+
+
+def test_rubber_duck_makes_hallucinations_fizzle(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(combat, "HALLUCINATION_CHANCE", 1.0)
+    player, state = _vibe_fight([_vibe_card("Rubber Duck"), BIG])
+    play_card(state, 0, 4, player, random.Random(2))
+    state.tokens_used = VIBE.token_limit
+
+    log = play_card(state, 0, 0, player, random.Random(2))
+
+    assert "rubber duck" in log
+    assert player.hp == 50
+    assert state.enemy_hp == 200

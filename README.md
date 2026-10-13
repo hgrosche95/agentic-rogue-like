@@ -75,6 +75,14 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       `balance-sim --character vibe_coder`: ein festes Budget für den ganzen
       Kampf ließ ihn fast jeden Gegner in Zug 1 umhauen oder gegen Bosse
       leerlaufen; so landen beide Charaktere bei ~9 % Run-Siegquote.
+      Belohnungen, Startangebot und Shops ziehen für ihn zusätzlich aus
+      seinem eigenen Pool (`VIBE_CODER_REWARD_POOL`, nie für Dr. Chronos):
+      YOLO Deploy (14 Schaden für 2 Tokens, 1 Karte abwerfen), Copy-Paste
+      (gratis, holt die letzte Karte aus dem Friedhof), Vibe Check (+2 Block
+      pro freiem Slot), Tab-Tab-Tab (gratis, die nächste Karte auch),
+      Rubber Duck (Halluzinationen verpuffen nur), Ship It (+5 Schaden pro
+      schon gespielter Karte im Zug, 3 Tokens) und Pair Programming (die
+      erste Karte jedes Zuges ist gratis).
       Konzeptbild: [`docs/characters/vibe-coder.png`](docs/characters/vibe-coder.png).
       In der Arena steht vorerst noch Dr. Chronos' Sprite.
 - [x] **Deck-Building** — zu Beginn des Runs (nach dem ersten Artefakt)

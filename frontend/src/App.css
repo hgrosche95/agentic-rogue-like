@@ -2217,6 +2217,11 @@ button.is-primary:hover:not(:disabled),
   padding-top: 0.5rem;
 }
 
+/* ... and a long one-word name clear of the tag itself */
+.card-header:has(~ .card-tag) {
+  padding-right: 1.6rem;
+}
+
 .card-gem {
   position: absolute;
   right: 9px;

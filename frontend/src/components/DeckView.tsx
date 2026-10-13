@@ -20,8 +20,11 @@ const TYPE_ORDER: CardType[] = [
   "turret",
   "fortify",
   "compact",
+  "free_play",
   "chain",
   "token_regen",
+  "safeguard",
+  "opener",
 ];
 
 // The whole deck, identical cards stacked into one tile with a count.

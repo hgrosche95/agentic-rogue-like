@@ -22,8 +22,11 @@ export type CardType =
   | "fortify"
   // the Vibe-Coder's cards
   | "compact"
+  | "free_play"
   | "chain"
-  | "token_regen";
+  | "token_regen"
+  | "safeguard"
+  | "opener";
 
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
@@ -34,6 +37,8 @@ export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "fortify",
   "chain",
   "token_regen",
+  "safeguard",
+  "opener",
 ];
 
 export type Rarity = "starter" | "common" | "uncommon" | "rare";

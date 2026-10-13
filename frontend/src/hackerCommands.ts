@@ -57,5 +57,11 @@ export function commandFor(card: Card, enemyName: string): string {
       return `copilot --accept-all`;
     case "token_regen":
       return `crack open ./energy-drink`;
+    case "free_play":
+      return `<tab> <tab> <tab>`;
+    case "safeguard":
+      return `explain --to rubber-duck`;
+    case "opener":
+      return `pair --driver copilot`;
   }
 }

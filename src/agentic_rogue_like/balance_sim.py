@@ -70,6 +70,7 @@ from .models import (
     NodeType,
     PlayerState,
     Rarity,
+    Scaling,
 )
 
 TIERS = ("early", "mid", "elite", "boss")
@@ -213,6 +214,15 @@ def _permanent_slot(state: CombatState, card: Card) -> int | None:
     return empty[-1]
 
 
+# Ship It (attacks scaling with the cards already played) waits for a turn
+# this long - played first it hits for next to nothing.
+SHIP_IT_MIN_PLAYS = 3
+
+
+def _hold_back(state: CombatState, card: Card) -> bool:
+    return card.scaling is Scaling.PLAYED and state.plays_this_turn < SHIP_IT_MIN_PLAYS
+
+
 def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> None:
     """A reasonable human-ish policy: set up permanents, block only against an
     attack intent, heal only when hurt, fire Final Strike when it kills or the
@@ -251,7 +261,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
 
         permanents = sum(1 for c in state.field if c is not None)
         # card flow first - it only makes the rest of the turn better
-        order: list[CardType] = [CardType.DRAW]
+        order: list[CardType] = [CardType.DRAW, CardType.FREE_PLAY]
         if state.discard_pile:
             order.append(CardType.RETRIEVE)
         if state.banished_pile:
@@ -292,7 +302,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
                 (
                     i
                     for i, c in enumerate(state.hand)
-                    if c.type is wanted and not overflows(state, c)
+                    if c.type is wanted and not overflows(state, c) and not _hold_back(state, c)
                 ),
                 None,
             )
@@ -399,11 +409,14 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
     act = 1
     nodes = generate_map(seed)
     player = cfg.new_player()
+    pool = CHARACTERS[cfg.character].reward_pool
     node = nodes["0-0"]
     fights: list[FightResult] = []
     steps = 0
     if cfg.rewards:  # mirrors engine.new_run's starting card pick
-        offer = roll_card_reward(random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS)
+        offer = roll_card_reward(
+            random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS, pool=pool
+        )
         player.deck.append(reward_card(offer[pick_reward(offer, bot_name, rng)], player.deck))
 
     while True:
@@ -424,7 +437,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 return RunResult(True, node.floor, fights, act)
             heal(player, total(player.artifacts, "heal_after_combat"))
             if cfg.rewards:
-                offer = roll_card_reward(rng, elite=node.type is not NodeType.COMBAT)
+                offer = roll_card_reward(rng, elite=node.type is not NodeType.COMBAT, pool=pool)
                 pick = offer[pick_reward(offer, bot_name, rng)]
                 player.deck.append(reward_card(pick, player.deck))
             if node.type is NodeType.BOSS:

@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from .cards import starter_deck, vibe_coder_starter_deck
+from .cards import REWARD_POOL, VIBE_CODER_REWARD_POOL, starter_deck, vibe_coder_starter_deck
 from .models import Card, Character
 
 
@@ -33,6 +33,8 @@ class CharacterProfile:
     hp: int
     attack: int
     deck: Callable[[], list[Card]]
+    # What card rewards, the starting pick and shops offer him.
+    reward_pool: list[Card]
     # Tokens per fight - None: no context window, token costs are ignored.
     token_limit: int | None = None
     token_regen: int = 0  # used tokens freed at the end of every turn
@@ -49,6 +51,7 @@ CHARACTERS: dict[Character, CharacterProfile] = {
         hp=45,
         attack=2,
         deck=starter_deck,
+        reward_pool=REWARD_POOL,
     ),
     Character.VIBE_CODER: CharacterProfile(
         id=Character.VIBE_CODER,
@@ -62,6 +65,7 @@ CHARACTERS: dict[Character, CharacterProfile] = {
         hp=45,
         attack=2,
         deck=vibe_coder_starter_deck,
+        reward_pool=REWARD_POOL + VIBE_CODER_REWARD_POOL,
         token_limit=4,
         token_regen=3,
         draw_on_play=1,
