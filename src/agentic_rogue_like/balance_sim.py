@@ -25,6 +25,9 @@ A variant file only lists what changes, e.g.:
     }
 
 `extra_cards` entries take every Card field (hits, exhaust, scaling, ...).
+`"character": "vibe_coder"` plays the variant as that character (stats and
+starter deck from characters.py) - `--character` sets it for every run
+that doesn't name one.
 `"rewards": false` plays runs without the after-fight card reward, i.e.
 with the starter deck only, `"artifacts": false` without artifacts.
 """
@@ -42,13 +45,15 @@ from pathlib import Path
 from .agent.budgets import _BUDGETS
 from .agent.encounter_schema import EnemyBudget
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
-from .cards import START_CARD_WEIGHTS, reward_card, roll_card_reward, starter_deck
+from .cards import START_CARD_WEIGHTS, reward_card, roll_card_reward
+from .characters import CHARACTERS
 from .combat import (
     ATTACKING_INTENTS,
     MAX_AUTO_PLAYS_PER_TURN,
     MAX_AUTO_TURNS,
     CombatState,
     end_turn,
+    overflows,
     play_card,
     start_combat,
 )
@@ -60,10 +65,12 @@ from .models import (
     PERMANENT_CARD_TYPES,
     Card,
     CardType,
+    Character,
     Enemy,
     NodeType,
     PlayerState,
     Rarity,
+    Scaling,
 )
 
 TIERS = ("early", "mid", "elite", "boss")
@@ -77,14 +84,23 @@ REST_HEAL = 15  # mirrors engine.resolve_node's REST branch
 class SimConfig:
     name: str = "aktuell"
     budgets: dict[str, EnemyBudget] = field(default_factory=lambda: dict(_BUDGETS))
-    player_hp: int = 45  # mirrors engine.PLAYER_HP
-    player_attack: int = 2  # mirrors engine.PLAYER_ATTACK
-    deck_factory: Callable[[], list[Card]] = starter_deck
+    character: Character = Character.CHRONOS
+    # None: the character's own (characters.py)
+    player_hp: int | None = None
+    player_attack: int | None = None
+    deck_factory: Callable[[], list[Card]] | None = None
     rewards: bool = True
     artifacts: bool = True
 
+    def __post_init__(self) -> None:
+        hero = CHARACTERS[self.character]
+        self.player_hp = hero.hp if self.player_hp is None else self.player_hp
+        self.player_attack = hero.attack if self.player_attack is None else self.player_attack
+        self.deck_factory = self.deck_factory or hero.deck
+
     def new_player(self) -> PlayerState:
         return PlayerState(
+            character=self.character,
             hp=self.player_hp,
             max_hp=self.player_hp,
             attack=self.player_attack,
@@ -92,9 +108,10 @@ class SimConfig:
         )
 
 
-def load_variant(path: Path) -> SimConfig:
+def load_variant(path: Path, character: Character = Character.CHRONOS) -> SimConfig:
     raw = json.loads(path.read_text())
-    base = SimConfig(name=path.stem)
+    base = SimConfig(name=path.stem, character=Character(raw.get("character", character)))
+    starter = base.deck_factory
 
     for tier, overrides in raw.get("budgets", {}).items():
         if tier not in TIERS:
@@ -112,7 +129,7 @@ def load_variant(path: Path) -> SimConfig:
     removed: list[str] = list(raw.get("remove_cards", []))
 
     def deck() -> list[Card]:
-        cards = starter_deck()
+        cards = starter()
         for name in removed:
             idx = next((i for i, c in enumerate(cards) if c.name == name), None)
             if idx is None:
@@ -159,25 +176,28 @@ Bot = Callable[[CombatState, PlayerState, random.Random], None]
 def naive_bot(state: CombatState, player: PlayerState, rng: random.Random) -> None:
     """combat.auto_resolve_combat's policy: hand card 0 into the first free slot."""
     for _ in range(MAX_AUTO_PLAYS_PER_TURN):
-        if not state.hand or state.enemy_hp <= 0:
+        if state.enemy_hp <= 0 or player.hp <= 0:
             return
+        idx = next((i for i, c in enumerate(state.hand) if not overflows(state, c)), None)
         slot = next((i for i, c in enumerate(state.field) if c is None), None)
-        if slot is None:
+        if idx is None or slot is None:
             return
-        play_card(state, 0, slot, player, rng)
+        play_card(state, idx, slot, player, rng)
 
 
 def _empty_slots(state: CombatState) -> list[int]:
     return [i for i, c in enumerate(state.field) if c is None]
 
 
+# Permanents that boost the action cards to their right.
+_LEFT_BOOSTS = (CardType.AMPLIFIER, CardType.CHAIN)
+
+
 def _best_action_slot(state: CombatState) -> int | None:
-    """Free slot with the most Amplifiers to its left."""
+    """Free slot with the most Amplifiers/Copilots to its left."""
     best, best_score = None, -1
     for i in _empty_slots(state):
-        amps = sum(
-            1 for j, c in enumerate(state.field) if c and c.type is CardType.AMPLIFIER and j < i
-        )
+        amps = sum(1 for j, c in enumerate(state.field) if c and c.type in _LEFT_BOOSTS and j < i)
         if amps > best_score:
             best, best_score = i, amps
     return best
@@ -189,21 +209,43 @@ def _permanent_slot(state: CombatState, card: Card) -> int | None:
     empty = _empty_slots(state)
     if len(empty) <= 1:
         return None
-    if card.type is CardType.AMPLIFIER:
+    if card.type in _LEFT_BOOSTS:
         return empty[0]
     return empty[-1]
+
+
+# Ship It (attacks scaling with the cards already played) waits for a turn
+# this long - played first it hits for next to nothing.
+SHIP_IT_MIN_PLAYS = 3
+
+
+def _hold_back(state: CombatState, card: Card) -> bool:
+    return card.scaling is Scaling.PLAYED and state.plays_this_turn < SHIP_IT_MIN_PLAYS
 
 
 def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> None:
     """A reasonable human-ish policy: set up permanents, block only against an
     attack intent, heal only when hurt, fire Final Strike when it kills or the
-    field is clogged, otherwise hit as hard as possible."""
+    field is clogged, otherwise hit as hard as possible. Never plays past the
+    context window: cards that would overflow it stay in hand."""
     for _ in range(MAX_AUTO_PLAYS_PER_TURN):
-        if not state.hand or state.enemy_hp <= 0:
+        if not state.hand or state.enemy_hp <= 0 or player.hp <= 0:
             return
         played = False
+        # 0. /compact as soon as it frees its full value - it costs nothing.
+        for idx, card in enumerate(state.hand):
+            if card.type is CardType.COMPACT and state.tokens_used >= card.value:
+                slot = _best_action_slot(state)
+                if slot is not None:
+                    play_card(state, idx, slot, player, rng)
+                    played = True
+                break
+        if played:
+            continue
         # 1. permanents first - they pay off for the rest of the fight.
         for idx, card in enumerate(state.hand):
+            if overflows(state, card):
+                continue
             if card.type in PERMANENT_CARD_TYPES:
                 slot = _permanent_slot(state, card)
                 if slot is not None:
@@ -219,7 +261,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
 
         permanents = sum(1 for c in state.field if c is not None)
         # card flow first - it only makes the rest of the turn better
-        order: list[CardType] = [CardType.DRAW]
+        order: list[CardType] = [CardType.DRAW, CardType.FREE_PLAY]
         if state.discard_pile:
             order.append(CardType.RETRIEVE)
         if state.banished_pile:
@@ -230,7 +272,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         if player.hp < player.max_hp:
             order.append(CardType.HEAL)
         for idx, card in enumerate(state.hand):
-            if card.type is CardType.FINAL_STRIKE:
+            if card.type is CardType.FINAL_STRIKE and not overflows(state, card):
                 dmg = card.value * permanents
                 if permanents and (
                     dmg >= state.enemy_hp + state.enemy_block or len(_empty_slots(state)) <= 1
@@ -243,7 +285,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         # System Restore pays with the field, so only when the banished pile
         # holds more than the field would lose.
         for idx, card in enumerate(state.hand):
-            if card.type is CardType.REBOOT:
+            if card.type is CardType.REBOOT and not overflows(state, card):
                 back = sum(
                     1
                     for c in state.banished_pile
@@ -256,7 +298,14 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         if played:
             continue
         for wanted in order:
-            idx = next((i for i, c in enumerate(state.hand) if c.type is wanted), None)
+            idx = next(
+                (
+                    i
+                    for i, c in enumerate(state.hand)
+                    if c.type is wanted and not overflows(state, c) and not _hold_back(state, c)
+                ),
+                None,
+            )
             if idx is not None:
                 play_card(state, idx, slot, player, rng)
                 played = True
@@ -264,7 +313,10 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         if not played:
             # Unplayed cards stay in hand, but the hand is capped at the
             # end of the turn, so a Firewall is played rather than
-            # hoarded - one-shot cards are kept for when they matter.
+            # hoarded - one-shot cards are kept for when they matter. With a
+            # context window, tokens are worth more than a full hand.
+            if state.token_limit is not None:
+                return
             idx = next(
                 (
                     i
@@ -313,12 +365,13 @@ def fight(
         player.artifacts,
         boss=tier == "boss",
         boss_phases=boss_phases(act),
+        character=player.character,
     )
     turns = 0
     while turns < MAX_AUTO_TURNS and state.enemy_hp > 0 and player.hp > 0:
         turns += 1
         bot(state, player, rng)
-        if state.enemy_hp <= 0:
+        if state.enemy_hp <= 0 or player.hp <= 0:
             break
         end_turn(state, player, rng)
     return FightResult(tier, state.enemy_hp <= 0, turns, max(hp_before - player.hp, 0))
@@ -356,16 +409,21 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
     act = 1
     nodes = generate_map(seed)
     player = cfg.new_player()
+    pool = CHARACTERS[cfg.character].reward_pool
     node = nodes["0-0"]
     fights: list[FightResult] = []
     steps = 0
     if cfg.rewards:  # mirrors engine.new_run's starting card pick
-        offer = roll_card_reward(random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS)
+        offer = roll_card_reward(
+            random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS, pool=pool
+        )
         player.deck.append(reward_card(offer[pick_reward(offer, bot_name, rng)], player.deck))
 
     while True:
         if cfg.artifacts and steps % ARTIFACT_EVERY_STEPS == 0:
-            offer = roll_artifact_offer(rng, player.artifacts)
+            offer = roll_artifact_offer(
+                rng, player.artifacts, pool=CHARACTERS[cfg.character].artifact_pool
+            )
             if offer:
                 gain_artifact(player, rng.choice(offer))
         if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
@@ -381,7 +439,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 return RunResult(True, node.floor, fights, act)
             heal(player, total(player.artifacts, "heal_after_combat"))
             if cfg.rewards:
-                offer = roll_card_reward(rng, elite=node.type is not NodeType.COMBAT)
+                offer = roll_card_reward(rng, elite=node.type is not NodeType.COMBAT, pool=pool)
                 pick = offer[pick_reward(offer, bot_name, rng)]
                 player.deck.append(reward_card(pick, player.deck))
             if node.type is NodeType.BOSS:
@@ -504,14 +562,21 @@ def main(argv: list[str] | None = None) -> None:
         help="Variante(n) neben die aktuellen Werte stellen (mehrfach möglich)",
     )
     parser.add_argument("--no-artifacts", action="store_true", help="Runs ohne Artefakte")
+    parser.add_argument(
+        "--character",
+        choices=[c.value for c in Character],
+        default=Character.CHRONOS.value,
+        help='Charakter für alle Varianten ohne eigenes "character"',
+    )
     args = parser.parse_args(argv)
 
-    base = load_variant(args.variant) if args.variant else SimConfig()
+    character = Character(args.character)
+    base = load_variant(args.variant, character) if args.variant else SimConfig(character=character)
     if args.no_rewards:
         base.rewards = False
     if args.no_artifacts:
         base.artifacts = False
-    cfgs = [base, *(load_variant(p) for p in args.compare)]
+    cfgs = [base, *(load_variant(p, character) for p in args.compare)]
     bot = BOTS[args.bot]
     print(f"Bot: {args.bot}, {args.fights} Kämpfe/Stufe, {args.runs} Runs, Seed {args.seed}")
     reports = [build_report(c, bot, args.fights, args.runs, args.seed, args.bot) for c in cfgs]

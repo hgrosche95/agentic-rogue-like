@@ -2217,6 +2217,11 @@ button.is-primary:hover:not(:disabled),
   padding-top: 0.5rem;
 }
 
+/* ... and a long one-word name clear of the tag itself */
+.card-header:has(~ .card-tag) {
+  padding-right: 1.6rem;
+}
+
 .card-gem {
   position: absolute;
   right: 9px;
@@ -3212,4 +3217,105 @@ body > .card-flight {
     animation: none;
     transform: translate(-50%, -135%);
   }
+}
+
+/* ---------- characters ---------- */
+.character-blurb {
+  max-width: 420px;
+  margin: 0.8rem auto 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--text-dim);
+}
+
+.character-blurb > span {
+  display: block;
+  margin-bottom: 0.2rem;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--human);
+}
+
+/* the Vibe-Coder: neon green and violet instead of the lab's magenta/amber */
+.is-player .vs-portrait.is-vibe_coder {
+  background: linear-gradient(135deg, #3ee08a, #7a5cff);
+  box-shadow: 0 0 24px rgba(62, 224, 138, 0.5);
+}
+
+/* his context window, next to block and armor */
+.token-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 9px;
+  color: var(--safe);
+  border: 1px solid currentColor;
+  border-radius: 99px;
+  background: rgba(20, 12, 50, 0.6);
+}
+
+.token-meter.is-full {
+  color: var(--warm);
+}
+
+.token-pips {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.token-pips > i {
+  width: 6px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid currentColor;
+  opacity: 0.85;
+}
+
+.token-pips > i.is-used {
+  background: currentColor;
+}
+
+.token-pips > i.is-over {
+  color: var(--danger);
+  background: var(--danger);
+  box-shadow: 0 0 6px var(--danger);
+}
+
+/* a card's token cost, bottom left - the rarity gem sits bottom right */
+.card-tokens {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--safe);
+}
+
+.card-tokens > small {
+  margin-left: 2px;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+/* playing it now would push past the context window */
+.hand-card.is-overflowing .card-tokens {
+  color: var(--danger);
+}
+
+.hand-card.is-overflowing {
+  outline: 1px dashed color-mix(in srgb, var(--danger) 70%, transparent);
+  outline-offset: -4px;
 }

@@ -88,6 +88,65 @@ def starter_deck() -> list[Card]:
     return cards
 
 
+def vibe_coder_starter_deck() -> list[Card]:
+    """The Vibe-Coder's starter deck (see characters.py) - weaker single cards
+    than starter_deck(), since every card he plays draws him a new one."""
+    cards = [
+        Card(
+            id=f"prompt-{i}",
+            name="Prompt",
+            type=CardType.ATTACK,
+            value=4,
+            description="Deal 4 (+ATK) damage.",
+        )
+        for i in range(4)
+    ]
+    cards += [
+        Card(
+            id=f"make-it-safe-{i}",
+            name="Make It Safe",
+            type=CardType.BLOCK,
+            value=4,
+            description="Gain 4 block until your next turn.",
+        )
+        for i in range(3)
+    ]
+    cards.append(
+        Card(
+            id="copilot-0",
+            name="Copilot",
+            type=CardType.CHAIN,
+            value=1,
+            token_cost=2,
+            description=(
+                "Permanent. Action cards played to its right get +1 for every "
+                "card you already played this turn."
+            ),
+        )
+    )
+    cards.append(
+        Card(
+            id="energy-drink-0",
+            name="Energy Drink",
+            type=CardType.TOKEN_REGEN,
+            value=1,
+            description="Permanent. Frees 1 token at the end of each turn.",
+        )
+    )
+    cards.append(
+        Card(
+            id="compact-0",
+            name="/compact",
+            type=CardType.COMPACT,
+            value=4,
+            exhaust=True,
+            token_cost=0,
+            description="One-shot. Costs no tokens. Frees 4 used tokens.",
+        )
+    )
+    return cards
+
+
 # Templates - `reward_card()` stamps out a fresh copy with a unique id.
 REWARD_POOL: list[Card] = [
     # ---- attacks
@@ -115,6 +174,7 @@ REWARD_POOL: list[Card] = [
         type=CardType.ATTACK,
         value=16,
         exhaust=True,
+        token_cost=2,
         rarity=Rarity.UNCOMMON,
         description="One-shot. Deal 16 (+ATK) damage.",
     ),
@@ -145,6 +205,7 @@ REWARD_POOL: list[Card] = [
         value=2,
         scaling=Scaling.BANISHED,
         scale_value=4,
+        token_cost=2,
         rarity=Rarity.RARE,
         description="Deal 2 (+ATK) damage, +4 per banished card.",
     ),
@@ -164,6 +225,7 @@ REWARD_POOL: list[Card] = [
         type=CardType.BLOCK,
         value=15,
         exhaust=True,
+        token_cost=2,
         rarity=Rarity.COMMON,
         description="One-shot. Gain 15 block.",
     ),
@@ -193,6 +255,7 @@ REWARD_POOL: list[Card] = [
         value=4,
         discard_cost=99,
         exhaust=True,
+        token_cost=2,
         rarity=Rarity.UNCOMMON,
         description="One-shot. Discard your hand, then draw 4 cards.",
     ),
@@ -220,6 +283,7 @@ REWARD_POOL: list[Card] = [
         type=CardType.REBOOT,
         value=0,
         exhaust=True,
+        token_cost=2,
         rarity=Rarity.RARE,
         description=(
             "One-shot. Destroy all permanent cards on the field. Return every "
@@ -232,6 +296,7 @@ REWARD_POOL: list[Card] = [
         name="Load Balancer",
         type=CardType.DAMAGE_BOOST,
         value=1,
+        token_cost=2,
         rarity=Rarity.RARE,
         description="Permanent. Attacks deal +1 damage per permanent card on the field.",
     ),
@@ -240,6 +305,7 @@ REWARD_POOL: list[Card] = [
         name="Daemon",
         type=CardType.TURRET,
         value=4,
+        token_cost=2,
         rarity=Rarity.UNCOMMON,
         description="Permanent. Deal 4 damage to the enemy at the end of each turn.",
     ),
@@ -260,6 +326,89 @@ REWARD_POOL: list[Card] = [
         discard_cost=2,
         rarity=Rarity.COMMON,
         description="Discard 2 random cards. Hit twice for 3 (+ATK) damage.",
+    ),
+]
+
+# The Vibe-Coder's own cards (see characters.py), offered to him on top of
+# REWARD_POOL and never to anyone else - they play with his context window
+# and his draw-after-every-card. Built around two payoffs:
+# - long turns: Tab-Tab-Tab, Copy-Paste and Pair Programming stretch a turn
+#   with token-free cards, Ship It and Copilot cash in on every card already
+#   played in it;
+# - gambling past the window: Rubber Duck takes the sting out of
+#   hallucinations, YOLO Deploy hits hard for a big slice of it.
+# Token-free cards that refill the hand are one-shot like REWARD_POOL's,
+# or two Copy-Pastes could fetch each other forever.
+VIBE_CODER_REWARD_POOL: list[Card] = [
+    Card(
+        id="yolo-deploy",
+        name="YOLO Deploy",
+        type=CardType.ATTACK,
+        value=14,
+        discard_cost=1,
+        token_cost=2,
+        rarity=Rarity.COMMON,
+        description="Discard 1 random card. Deal 14 (+ATK) damage.",
+    ),
+    Card(
+        id="copy-paste",
+        name="Copy-Paste",
+        type=CardType.RETRIEVE,
+        value=1,
+        exhaust=True,
+        token_cost=0,
+        rarity=Rarity.COMMON,
+        description=(
+            "One-shot. Costs no tokens. Return the last card from your graveyard to your hand."
+        ),
+    ),
+    Card(
+        id="vibe-check",
+        name="Vibe Check",
+        type=CardType.BLOCK,
+        value=1,
+        scaling=Scaling.EMPTY_SLOT,
+        scale_value=2,
+        rarity=Rarity.COMMON,
+        description="Gain 1 block, +2 per empty slot on the field.",
+    ),
+    Card(
+        id="tab-tab-tab",
+        name="Tab-Tab-Tab",
+        type=CardType.FREE_PLAY,
+        value=1,
+        exhaust=True,
+        token_cost=0,
+        rarity=Rarity.UNCOMMON,
+        description="One-shot. Costs no tokens. The next card you play this turn is free too.",
+    ),
+    Card(
+        id="rubber-duck",
+        name="Rubber Duck",
+        type=CardType.SAFEGUARD,
+        value=0,
+        rarity=Rarity.UNCOMMON,
+        description="Permanent. Cards that hallucinate fizzle instead of backfiring.",
+    ),
+    Card(
+        id="ship-it",
+        name="Ship It",
+        type=CardType.ATTACK,
+        value=0,
+        scaling=Scaling.PLAYED,
+        scale_value=5,
+        token_cost=3,
+        rarity=Rarity.RARE,
+        description="Deal 0 (+ATK) damage, +5 per card you already played this turn.",
+    ),
+    Card(
+        id="pair-programming",
+        name="Pair Programming",
+        type=CardType.OPENER,
+        value=1,
+        token_cost=2,
+        rarity=Rarity.RARE,
+        description="Permanent. The first card you play each turn costs no tokens.",
     ),
 ]
 
@@ -285,14 +434,17 @@ def roll_card_reward(
     elite: bool = False,
     count: int = 3,
     weights: dict[Rarity, int] | None = None,
+    pool: list[Card] | None = None,
 ) -> list[Card]:
-    """`count` distinct reward templates, weighted by rarity - by `weights`
-    if given, else the normal or elite reward weights."""
+    """`count` distinct reward templates from `pool` (REWARD_POOL by default,
+    see CharacterProfile.reward_pool), weighted by rarity - by `weights` if
+    given, else the normal or elite reward weights."""
     weights = weights or _RARITY_WEIGHTS[elite]
+    pool = REWARD_POOL if pool is None else pool
     offer: list[Card] = []
     while len(offer) < count:
         rarity = rng.choices(list(weights), weights=list(weights.values()))[0]
-        options = [c for c in REWARD_POOL if c.rarity is rarity and c not in offer]
+        options = [c for c in pool if c.rarity is rarity and c not in offer]
         if options:
             offer.append(rng.choice(options))
     return offer

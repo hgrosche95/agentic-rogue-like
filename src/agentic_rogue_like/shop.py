@@ -19,6 +19,7 @@ import random
 
 from .artifacts import gain_artifact, roll_artifact_offer
 from .cards import reward_card, roll_card_reward
+from .characters import CHARACTERS
 from .models import Rarity, RunState, Shop, ShopArtifact, ShopCard
 
 SHOP_CARDS = 4
@@ -45,11 +46,18 @@ def roll_shop(run: RunState) -> Shop:
     rng = random.Random(f"{run.seed}-shop-{run.current_node_id}")
     cards = [
         ShopCard(card=card, price=_price(CARD_PRICES.get(card.rarity, 25), rng))
-        for card in roll_card_reward(rng, count=SHOP_CARDS)
+        for card in roll_card_reward(
+            rng, count=SHOP_CARDS, pool=CHARACTERS[run.player.character].reward_pool
+        )
     ]
     artifacts = [
         ShopArtifact(artifact=artifact, price=_price(ARTIFACT_PRICE, rng))
-        for artifact in roll_artifact_offer(rng, run.player.artifacts, SHOP_ARTIFACTS)
+        for artifact in roll_artifact_offer(
+            rng,
+            run.player.artifacts,
+            SHOP_ARTIFACTS,
+            pool=CHARACTERS[run.player.character].artifact_pool,
+        )
     ]
     return Shop(
         cards=cards,

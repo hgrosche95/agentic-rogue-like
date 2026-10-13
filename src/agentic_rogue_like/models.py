@@ -59,6 +59,11 @@ class Artifact(BaseModel):
     lifesteal: int = 0  # healed per attack card played
     heal_after_combat: int = 0
     rest_heal: int = 0
+    # Only for a character with a context window (the Vibe-Coder):
+    token_window: int = 0  # tokens the window holds
+    token_regen: int = 0  # used tokens freed at the end of every turn
+    opening_free_plays: int = 0  # the first N cards of every fight cost no tokens
+    hallucination_percent: int = 0  # cards past the window hallucinate this % more often
 
 
 class CardType(StrEnum):
@@ -81,6 +86,14 @@ class CardType(StrEnum):
     DAMAGE_BOOST = "damage_boost"  # attacks +value per permanent on the field
     TURRET = "turret"  # deals `value` damage at the end of every turn
     FORTIFY = "fortify"  # +value block per permanent at the end of every turn
+    # The Vibe-Coder's cards (see characters.py) - COMPACT and TOKEN_REGEN
+    # only do something for a character with a context window.
+    COMPACT = "compact"  # action: frees `value` used tokens
+    FREE_PLAY = "free_play"  # action: the next `value` cards this turn cost no tokens
+    CHAIN = "chain"  # actions to its right +value per card already played this turn
+    TOKEN_REGEN = "token_regen"  # frees `value` used tokens at the end of every turn
+    SAFEGUARD = "safeguard"  # hallucinating cards fizzle instead of backfiring
+    OPENER = "opener"  # the first `value` cards of every turn cost no tokens
 
 
 PERMANENT_CARD_TYPES = frozenset(
@@ -91,16 +104,22 @@ PERMANENT_CARD_TYPES = frozenset(
         CardType.DAMAGE_BOOST,
         CardType.TURRET,
         CardType.FORTIFY,
+        CardType.CHAIN,
+        CardType.TOKEN_REGEN,
+        CardType.SAFEGUARD,
+        CardType.OPENER,
     }
 )
 
 
 class Scaling(StrEnum):
-    """What an attack card's `scale_value` bonus is counted per."""
+    """What an attack or block card's `scale_value` bonus is counted per."""
 
     PERMANENT = "permanent"  # permanent cards on the field
     GRAVEYARD = "graveyard"  # cards in the discard pile
     BANISHED = "banished"  # cards in the banished pile
+    PLAYED = "played"  # cards already played this turn
+    EMPTY_SLOT = "empty_slot"  # empty field slots
 
 
 class Rarity(StrEnum):
@@ -123,11 +142,22 @@ class Card(BaseModel):
     discard_cost: int = 0  # discard this many random other hand cards first
     hits: int = 1  # attacks only: the damage is dealt this many times
     draw: int = 0  # draw this many cards after the effect
-    scaling: Scaling | None = None  # attacks only: +scale_value per ...
+    scaling: Scaling | None = None  # attacks and blocks only: +scale_value per ...
     scale_value: int = 0
+    # Tokens it takes from the context window - only characters with one
+    # (the Vibe-Coder, see characters.py) pay it, everyone else ignores it.
+    token_cost: int = 1
+
+
+class Character(StrEnum):
+    """Who the run is played as - see characters.py for what each one changes."""
+
+    CHRONOS = "chronos"
+    VIBE_CODER = "vibe_coder"
 
 
 class PlayerState(BaseModel):
+    character: Character = Character.CHRONOS
     hp: int
     max_hp: int
     attack: int = 5

@@ -11,16 +11,21 @@ import {
   createRun,
   endCombatTurn,
   leaveShop,
+  listCharacters,
   listSettings,
   playCard,
   resolveCurrentNode,
+  type Character,
+  type CharacterView,
   type PendingCombatView,
   type RunView,
 } from "./api";
+import { FALLBACK_CHARACTERS, ShowTokensContext } from "./characters";
 import { music, sfx, type Mood } from "./audio";
 import { ArtifactBar } from "./components/ArtifactBar";
 import { ArtifactScreen } from "./components/ArtifactScreen";
 import { AudioControls } from "./components/AudioControls";
+import { CharacterPicker } from "./components/CharacterPicker";
 import { CombatPanel } from "./components/CombatPanel";
 import { DeckButton, DeckView } from "./components/DeckView";
 import { DungeonMap } from "./components/DungeonMap";
@@ -65,6 +70,8 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [settings, setSettings] = useState<string[]>(FALLBACK_SETTINGS);
   const [selectedSetting, setSelectedSetting] = useState(FALLBACK_SETTINGS[0]);
+  const [characters, setCharacters] = useState<CharacterView[]>(FALLBACK_CHARACTERS);
+  const [selectedCharacter, setSelectedCharacter] = useState<Character>("chronos");
   const [isMapOpen, setIsMapOpen] = useState(false);
   // Hovering a room on the map previews it in the next-jump panel.
   const [focusedJump, setFocusedJump] = useState<string | null>(null);
@@ -110,6 +117,11 @@ function App() {
       .catch(() => {
         // Keep the dungeon-only fallback - createRun still works either way.
       });
+    listCharacters()
+      .then(setCharacters)
+      .catch(() => {
+        // Keep Dr. Chronos alone - he's the API's default anyway.
+      });
   }, []);
 
   async function runAction(action: () => Promise<RunView>, label = "Loading...") {
@@ -153,6 +165,15 @@ function App() {
         <AudioControls className="is-floating" />
         <Brand />
         <p className="title-tagline">A time-travel deckbuilder against a rogue AGI</p>
+        <CharacterPicker
+          characters={characters}
+          selected={selectedCharacter}
+          onSelect={(character) => {
+            sfx.play("select");
+            setSelectedCharacter(character);
+          }}
+          disabled={isLoading}
+        />
         <SettingPicker
           settings={settings}
           selected={selectedSetting}
@@ -164,7 +185,7 @@ function App() {
           disabled={isLoading || selectedSetting.trim() === ""}
           onClick={() => {
             sfx.play("select");
-            runAction(() => createRun(selectedSetting), "Building the dungeon...");
+            runAction(() => createRun(selectedSetting, selectedCharacter), "Building the dungeon...");
           }}
         >
           Start run
@@ -212,7 +233,10 @@ function App() {
     !run.shop &&
     !run.node_resolved;
 
-  return (
+  // cards show their token cost only to a character with a context window
+  const showTokens = characters.some((c) => c.id === run.player.character && c.token_limit !== null);
+
+  const screen = (
     <main className={`game${inCombat ? " is-combat" : ""}`}>
       <TopBar
         player={run.player}
@@ -369,6 +393,8 @@ function App() {
       {error && <p className="error toast">{error}</p>}
     </main>
   );
+
+  return <ShowTokensContext.Provider value={showTokens}>{screen}</ShowTokensContext.Provider>;
 }
 
 export default App;

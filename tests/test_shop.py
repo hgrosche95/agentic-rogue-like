@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from agentic_rogue_like.api import app
 from agentic_rogue_like.engine import new_run, open_shop, resolve_node
-from agentic_rogue_like.models import MapNode, NodeType
+from agentic_rogue_like.models import Character, MapNode, NodeType
 from agentic_rogue_like.shop import (
     MIN_DECK_SIZE,
     REMOVAL_PRICE,
@@ -163,8 +163,8 @@ def test_api_shop_flow(monkeypatch) -> None:
 def _patched_new_run(original):
     """Every API run starts in a shop room with 300 gold."""
 
-    def new_run(seed, setting="dungeon"):
-        run = original(seed, setting=setting)
+    def new_run(seed, setting="dungeon", character=Character.CHRONOS):
+        run = original(seed, setting=setting, character=character)
         node = run.nodes[run.current_node_id]
         run.nodes[node.id] = node.model_copy(update={"type": NodeType.SHOP})
         run.player.gold = 300
