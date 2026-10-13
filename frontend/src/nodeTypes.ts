@@ -1,6 +1,6 @@
 import type { NodeType } from "./api";
 
-// The map draws each type as a colored diamond with an SVG icon (see NodeIcon
+// The map draws each type as a colored tile with an SVG icon (see NodeIcon
 // in DungeonMap). Icons are drawn shapes or plain characters, never dingbat
 // symbols (swords/skull/crown): those render as fixed-color emoji on most
 // platforms and ignore the CSS colors that tell node types apart.

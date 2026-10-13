@@ -127,14 +127,18 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       Der Boss von Akt 2 hat ab 25 % HP eine dritte Phase: noch mehr Angriff,
       kein Blocken mehr, Salven mit 4 Treffern.
       Alle Absichten werden wie gewohnt einen Zug vorher angezeigt.
-- [x] **Oberfläche ("Rift")** — Zeitreise-Sci-Fi-Look: Glas-Panels auf
-      violettem Grund, Cyan für die Maschinenwelt, Magenta/Orange für das
-      Labor. Die Karte ist eine Zeitachse (Etagen als Jahre 1969 → Ω), ein
-      Klick springt in den nächsten Raum, daneben Vorschau, Artefakte und
-      System-Log. Im Kampf ist die Arena die Bühne: sie blendet ohne Rahmen
-      in die Seite aus, ihre Pixel-Palette ist aus den Farben der UI gebaut, und
-      der Riss läuft als Lichtnaht zwischen Menschen- und KI-Seite nach unten
-      weiter. Karten lassen sich anklicken oder per Drag & Drop (auch per
+- [x] **Oberfläche ("Pixel")** — die ganze UI spricht die Sprache der
+      Pixel-Arena: dieselbe feste Palette (`pixel/palette.ts`), harte
+      4-px-Konturen mit Bevel statt Glas, keine Unschärfe und keine Verläufe,
+      Pixel-Schriften (Silkscreen für Überschriften und Labels, Pixelify Sans
+      für Fließtext). Die Karte ist eine Zeitachse (Etagen als Jahre
+      1969 → Ω) aus Pixel-Kacheln mit rechtwinkligen Wegen, ein Klick springt
+      in den nächsten Raum, daneben Vorschau, Artefakte und System-Log. Im
+      Kampf ist die Arena die Bühne: ein gerahmtes Bild, dessen Breite auf ein
+      Vielfaches der 240 logischen Pixel gerundet wird, damit die ganzzahlig
+      skalierte Szene es genau füllt. Die HP-Schilder von Spieler und Gegner
+      sitzen oben links und rechts in der Szene, neben dem Monitor, und der
+      Execution Stack steht wie ein Rack auf dem Arena-Boden. Karten lassen sich anklicken oder per Drag & Drop (auch per
       Touch) auf das Feld ziehen; Lebenspunkte ändern sich erst, wenn der
       Treffer in der Animation einschlägt; die nächste Aktion des Gegners
       schwebt über seinem Kopf. Belohnungen, Artefakte und Events öffnen als
