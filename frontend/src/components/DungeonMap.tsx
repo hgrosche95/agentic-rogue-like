@@ -31,10 +31,10 @@ function nodeIndex(id: string): number {
   return Number(id.split("-")[1]);
 }
 
-// A diamond around the origin, `r` being the radius of the matching circle.
-function Diamond({ r, className }: { r: number; className: string }) {
-  const d = r * 1.25;
-  return <polygon className={className} points={`0,${-d} ${d},0 0,${d} ${-d},0`} />;
+// A square pixel tile around the origin, `r` being the radius of the matching circle.
+function Tile({ r, className }: { r: number; className: string }) {
+  const d = Math.round(r * 0.9);
+  return <rect className={className} x={-d} y={-d} width={2 * d} height={2 * d} />;
 }
 
 // The icon on a node, drawn in a 16x16 box around the origin. Shapes rather
@@ -76,11 +76,11 @@ export function NodeIcon({ type }: { type: NodeType }) {
   }
 }
 
-// The small diamond badge used by the legend and the next-jump panel.
+// The small tile badge used by the legend and the next-jump panel.
 export function NodeBadge({ type, size = 22 }: { type: NodeType; size?: number }) {
   return (
     <svg className={`node-badge type-${type}`} viewBox="-14 -14 28 28" width={size} height={size} aria-hidden="true">
-      <Diamond r={10} className="map-node-shape" />
+      <Tile r={10} className="map-node-shape" />
       <g transform="scale(0.7)">
         <NodeIcon type={type} />
       </g>
@@ -88,14 +88,15 @@ export function NodeBadge({ type, size = 22 }: { type: NodeType; size?: number }
   );
 }
 
-// A trail between two rooms: a gentle S-curve along the direction the eras run.
+// A trail between two rooms: a right-angled step along the direction the eras
+// run, like a path on a pixel board.
 function trail(from: { x: number; y: number }, to: { x: number; y: number }, horizontal: boolean): string {
   if (horizontal) {
-    const mx = (from.x + to.x) / 2;
-    return `M ${from.x} ${from.y} C ${mx} ${from.y}, ${mx} ${to.y}, ${to.x} ${to.y}`;
+    const mx = Math.round((from.x + to.x) / 2);
+    return `M ${from.x} ${from.y} H ${mx} V ${to.y} H ${to.x}`;
   }
-  const my = (from.y + to.y) / 2;
-  return `M ${from.x} ${from.y} C ${from.x} ${my}, ${to.x} ${my}, ${to.x} ${to.y}`;
+  const my = Math.round((from.y + to.y) / 2);
+  return `M ${from.x} ${from.y} V ${my} H ${to.x} V ${to.y}`;
 }
 
 export function DungeonMap({
@@ -246,16 +247,16 @@ export function DungeonMap({
             >
               {/* the transform attribute places the node; CSS animates this inner group */}
 <g className="map-node-body">
-                {(isCurrent || isReachable) && <circle className="map-node-halo" r={r + 11} />}
-                <Diamond r={r} className="map-node-shape" />
-                <Diamond r={r - 5} className="map-node-inner" />
+                {(isCurrent || isReachable) && <rect className="map-node-halo" x={-r - 6} y={-r - 6} width={2 * r + 12} height={2 * r + 12} />}
+                <Tile r={r} className="map-node-shape" />
+                <Tile r={r - 5} className="map-node-inner" />
                 <g transform={node.type === "boss" ? "scale(1.3)" : undefined}>
                   {isVisited ? <path className="map-node-check" d="M -6 0 L -1.5 5 L 7 -6" /> : <NodeIcon type={node.type} />}
                 </g>
               </g>
               {isCurrent && (
                 <g className="map-now" transform={`translate(0 ${-r * 1.25 - 16})`}>
-                  <rect x={-20} y={-9} width={40} height={17} rx={8.5} />
+                  <rect x={-22} y={-9} width={44} height={17} />
                   <text>NOW</text>
                 </g>
               )}

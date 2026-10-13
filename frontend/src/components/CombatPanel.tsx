@@ -81,15 +81,6 @@ function SlotPreview({ index, card, low }: { index: number; card?: HandCardView;
   );
 }
 
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0].toUpperCase())
-    .join("");
-}
-
 // What a hand card will come out with: in `slot` when the player is pointing
 // at one, otherwise in the weakest free slot - with the best free slot as a
 // hint that position matters. Undefined for cards without such a number.
@@ -259,44 +250,39 @@ export function CombatPanel({
 
   return (
     <div className="combat-panel">
-      <CombatArena
-        ref={arenaRef}
-        status={{
-          block: combat.player_block,
-          armor: combat.armor,
-          enemyBlock: combat.enemy_block,
-          turrets: combat.field.filter((card) => card?.type === "turret").length,
-          amplifiers: combat.field.filter((card) => card?.type === "amplifier").length,
-          fortify: combat.field.filter((card) => card?.type === "fortify").length,
-        }}
-        enemy={{
-          name: combat.enemy_name,
-          maxHp: combat.enemy_max_hp,
-          attack: combat.enemy_attack,
-          setting,
-          intent: combat.enemy_intent,
-          intentMin: combat.enemy_intent_min,
-          intentMax: combat.enemy_intent_max,
-          intentHits: combat.enemy_intent_hits,
-        }}
-        exchange={exchange}
-        log={log}
-        commands={commands}
-        typing={typing}
-        slain={enemySlain}
-        onContinue={onContinue}
-        hero={player.character}
-        contextFull={combat.token_limit !== null && combat.tokens_used >= combat.token_limit}
-      />
+      {/* the HUD plates sit in the scene's top corners, clear of the monitor */}
+      <div className="arena-wrap">
+        <CombatArena
+          ref={arenaRef}
+          status={{
+            block: combat.player_block,
+            armor: combat.armor,
+            enemyBlock: combat.enemy_block,
+            turrets: combat.field.filter((card) => card?.type === "turret").length,
+            amplifiers: combat.field.filter((card) => card?.type === "amplifier").length,
+            fortify: combat.field.filter((card) => card?.type === "fortify").length,
+          }}
+          enemy={{
+            name: combat.enemy_name,
+            maxHp: combat.enemy_max_hp,
+            attack: combat.enemy_attack,
+            setting,
+            intent: combat.enemy_intent,
+            intentMin: combat.enemy_intent_min,
+            intentMax: combat.enemy_intent_max,
+            intentHits: combat.enemy_intent_hits,
+          }}
+          exchange={exchange}
+          log={log}
+          commands={commands}
+          typing={typing}
+          slain={enemySlain}
+          onContinue={onContinue}
+          hero={player.character}
+          contextFull={combat.token_limit !== null && combat.tokens_used >= combat.token_limit}
+        />
 
-      {/* the rift keeps going below the scene, between the two sides of the table */}
-      <div className="combat-seam" aria-hidden="true" />
-
-      <div className="combat-row">
         <div className="vs-hud is-player">
-          <span className={`vs-portrait is-${player.character}`} aria-hidden="true">
-            <span>{HERO[player.character].initials}</span>
-          </span>
           <div className="vs-body">
             <span className="hud-name">
               {HERO[player.character].name} <small>Human · {era}</small>
@@ -318,41 +304,6 @@ export function CombatPanel({
               {combat.token_limit !== null && <TokenMeter combat={combat} />}
               <ArtifactBar artifacts={player.artifacts} compact />
             </div>
-          </div>
-        </div>
-
-        <div className="field-zone">
-          <div className="zone-head">
-            <span className="zone-label">Execution stack</span>
-            <span className="zone-label">
-              Hand {combat.hand.length}/{combat.max_hand_size}
-            </span>
-          </div>
-          <div className="field">
-            {combat.field.map((card, slotIndex) =>
-              card === null && pendingCard && pending?.slotIndex === slotIndex &&
-              PERMANENT_CARD_TYPES.includes(pendingCard.type) ? (
-                <div key={slotIndex} className={`field-slot is-occupied is-landing type-${pendingCard.type}`}>
-                  <CardFace card={pendingCard} onField />
-                </div>
-              ) : card === null ? (
-                <button
-                  key={slotIndex}
-                  data-slot-index={slotIndex}
-                  className={`field-slot is-empty${aimedCard ? " is-targetable" : ""}${drag.hoverSlot === slotIndex ? " is-drop-target" : ""}`}
-                  disabled={busy || selectedHandIndex === null || discarding !== null}
-                  onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
-                  onPointerEnter={() => setPointedSlot(slotIndex)}
-                  onPointerLeave={() => setPointedSlot((s) => (s === slotIndex ? null : s))}
-                >
-                  <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} />
-                </button>
-              ) : (
-                <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
-                  <CardFace card={card} onField />
-                </div>
-              ),
-            )}
           </div>
         </div>
 
@@ -394,9 +345,44 @@ export function CombatPanel({
               {enemySlain && <span className="intent-badge is-defeated">Defeated</span>}
             </div>
           </div>
-          <span className="vs-portrait" aria-hidden="true">
-            <span>{initials(combat.enemy_name)}</span>
-          </span>
+        </div>
+      </div>
+
+      {/* the stack stands on the arena floor */}
+      <div className="combat-row">
+        <div className="field-zone">
+          <div className="zone-head">
+            <span className="zone-label">Execution stack</span>
+            <span className="zone-label">
+              Hand {combat.hand.length}/{combat.max_hand_size}
+            </span>
+          </div>
+          <div className="field">
+            {combat.field.map((card, slotIndex) =>
+              card === null && pendingCard && pending?.slotIndex === slotIndex &&
+              PERMANENT_CARD_TYPES.includes(pendingCard.type) ? (
+                <div key={slotIndex} className={`field-slot is-occupied is-landing type-${pendingCard.type}`}>
+                  <CardFace card={pendingCard} onField />
+                </div>
+              ) : card === null ? (
+                <button
+                  key={slotIndex}
+                  data-slot-index={slotIndex}
+                  className={`field-slot is-empty${aimedCard ? " is-targetable" : ""}${drag.hoverSlot === slotIndex ? " is-drop-target" : ""}`}
+                  disabled={busy || selectedHandIndex === null || discarding !== null}
+                  onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
+                  onPointerEnter={() => setPointedSlot(slotIndex)}
+                  onPointerLeave={() => setPointedSlot((s) => (s === slotIndex ? null : s))}
+                >
+                  <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} />
+                </button>
+              ) : (
+                <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
+                  <CardFace card={card} onField />
+                </div>
+              ),
+            )}
+          </div>
         </div>
       </div>
 
