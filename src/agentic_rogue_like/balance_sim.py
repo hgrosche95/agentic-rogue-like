@@ -421,7 +421,9 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
 
     while True:
         if cfg.artifacts and steps % ARTIFACT_EVERY_STEPS == 0:
-            offer = roll_artifact_offer(rng, player.artifacts)
+            offer = roll_artifact_offer(
+                rng, player.artifacts, pool=CHARACTERS[cfg.character].artifact_pool
+            )
             if offer:
                 gain_artifact(player, rng.choice(offer))
         if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):

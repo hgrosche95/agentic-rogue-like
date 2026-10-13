@@ -59,6 +59,11 @@ class Artifact(BaseModel):
     lifesteal: int = 0  # healed per attack card played
     heal_after_combat: int = 0
     rest_heal: int = 0
+    # Only for a character with a context window (the Vibe-Coder):
+    token_window: int = 0  # tokens the window holds
+    token_regen: int = 0  # used tokens freed at the end of every turn
+    opening_free_plays: int = 0  # the first N cards of every fight cost no tokens
+    hallucination_percent: int = 0  # cards past the window hallucinate this % more often
 
 
 class CardType(StrEnum):

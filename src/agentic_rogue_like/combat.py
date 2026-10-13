@@ -183,14 +183,21 @@ def overflows(state: CombatState, card: Card) -> bool:
     return cost > 0 and state.tokens_used + cost > state.token_limit
 
 
+def hallucination_chance(state: CombatState) -> float:
+    """Chance a card past the context window backfires, after artifacts."""
+    percent = 100 + total(state.artifacts, "hallucination_percent")
+    return max(0.0, HALLUCINATION_CHANCE * percent / 100)
+
+
 def token_regen(state: CombatState) -> int:
-    """Used tokens freed at the end of this turn: the character's own plus Energy Drinks."""
+    """Used tokens freed at the end of this turn: the character's own (after
+    artifacts) plus Energy Drinks."""
     drinks = sum(c.value for c in state.field if c and c.type is CardType.TOKEN_REGEN)
     return state.token_regen + drinks
 
 
 def _free_tokens(state: CombatState, amount: int) -> int:
-    freed = min(amount, state.tokens_used)
+    freed = max(0, min(amount, state.tokens_used))
     state.tokens_used -= freed
     return freed
 
@@ -410,10 +417,15 @@ def start_combat(
         artifacts=artifacts,
         boss=boss,
         boss_phases=boss_phases,
-        token_limit=hero.token_limit,
-        token_regen=hero.token_regen,
+        token_limit=(
+            None
+            if hero.token_limit is None
+            else max(1, hero.token_limit + total(artifacts, "token_window"))
+        ),
+        token_regen=hero.token_regen + total(artifacts, "token_regen"),
         draw_on_play=hero.draw_on_play,
         turn_draw_modifier=hero.turn_draw_modifier,
+        free_plays=total(artifacts, "opening_free_plays"),
     )
     state.enemy_intent = _next_intent(state, rng)
     _draw(state, HAND_SIZE + total(artifacts, "opening_hand"), rng)
@@ -464,7 +476,7 @@ def play_card(
     card = state.hand.pop(hand_index)
     # Rolled before anything else is paid, and only past the context window -
     # a character without one never rolls here.
-    hallucinates = overflows(state, card) and rng.random() < HALLUCINATION_CHANCE
+    hallucinates = overflows(state, card) and rng.random() < hallucination_chance(state)
     state.tokens_used += token_cost(state, card)
     if state.free_plays:
         state.free_plays -= 1

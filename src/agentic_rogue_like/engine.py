@@ -88,7 +88,9 @@ def new_run(
     run = RunState(seed=seed, player=player, nodes=nodes, current_node_id="0-0", setting=setting)
     # Its own rng, so offering artifacts doesn't shift the run rng's sequence
     # (enemies, events, rewards) compared to a run without them.
-    run.artifact_offer = roll_artifact_offer(random.Random(f"{seed}-artifacts-0"), [])
+    run.artifact_offer = roll_artifact_offer(
+        random.Random(f"{seed}-artifacts-0"), [], pool=hero.artifact_pool
+    )
     # ... and so does the starting card pick: three uncommon/rare cards, one of
     # which (or none) joins the starter deck before the first room.
     run.card_reward = roll_card_reward(
@@ -107,7 +109,8 @@ def move_to(run: RunState, node_id: str) -> None:
     run.steps += 1
     if run.steps % ARTIFACT_EVERY_STEPS == 0:
         rng = random.Random(f"{run.seed}-artifacts-{run.steps}")
-        run.artifact_offer = roll_artifact_offer(rng, run.player.artifacts) or None
+        pool = CHARACTERS[run.player.character].artifact_pool
+        run.artifact_offer = roll_artifact_offer(rng, run.player.artifacts, pool=pool) or None
 
 
 def choose_artifact(run: RunState, index: int) -> None:

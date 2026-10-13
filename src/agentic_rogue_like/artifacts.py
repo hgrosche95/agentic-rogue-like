@@ -9,6 +9,9 @@ ARTIFACT_POOL, not new code, as long as it only combines existing hooks.
 
 They are there to help the player: a few trade a drawback for a bigger
 upside (Overclocked CPU, Glass Cannon, ...), but none is a net loss.
+
+VIBE_CODER_ARTIFACT_POOL holds the Vibe-Coder's own artifacts - they work on
+his context window, so only he is offered them (CharacterProfile.artifact_pool).
 """
 
 from __future__ import annotations
@@ -154,6 +157,44 @@ ARTIFACT_POOL: list[Artifact] = [
 ]
 
 
+VIBE_CODER_ARTIFACT_POOL: list[Artifact] = [
+    Artifact(
+        id="pro-plan",
+        name="Pro Plan",
+        description="Your context window holds 1 more token.",
+        token_window=1,
+    ),
+    Artifact(
+        id="mechanical-keyboard",
+        name="Mechanical Keyboard",
+        description="The first card you play in every fight costs no tokens.",
+        opening_free_plays=1,
+    ),
+    Artifact(
+        id="lo-fi-beats",
+        name="Lo-fi Beats",
+        description=(
+            "1 more token frees up at the end of every turn. Heal 3 HP after every won fight."
+        ),
+        token_regen=1,
+        heal_after_combat=3,
+    ),
+    Artifact(
+        id="system-prompt",
+        name="System Prompt",
+        description="Cards past your context window hallucinate half as often.",
+        hallucination_percent=-50,
+    ),
+    Artifact(
+        id="max-mode",
+        name="Max Mode",
+        description="+3 ATK, but 1 token less frees up at the end of every turn.",
+        attack=3,
+        token_regen=-1,
+    ),
+]
+
+
 def total(artifacts: list[Artifact], field: str) -> int:
     """Sum of one bonus field over all artifacts."""
     return sum(getattr(a, field) for a in artifacts)
@@ -165,11 +206,16 @@ def every_nth_turn(artifacts: list[Artifact], field: str, every_field: str, turn
 
 
 def roll_artifact_offer(
-    rng: random.Random, owned: list[Artifact], count: int = ARTIFACT_CHOICES
+    rng: random.Random,
+    owned: list[Artifact],
+    count: int = ARTIFACT_CHOICES,
+    pool: list[Artifact] | None = None,
 ) -> list[Artifact]:
-    """`count` distinct artifacts the player doesn't own yet (fewer if the pool runs dry)."""
+    """`count` distinct artifacts from `pool` (ARTIFACT_POOL by default, see
+    CharacterProfile.artifact_pool) the player doesn't own yet - fewer if the
+    pool runs dry."""
     owned_ids = {a.id for a in owned}
-    options = [a for a in ARTIFACT_POOL if a.id not in owned_ids]
+    options = [a for a in (ARTIFACT_POOL if pool is None else pool) if a.id not in owned_ids]
     return rng.sample(options, min(count, len(options)))
 
 

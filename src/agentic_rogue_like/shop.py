@@ -52,7 +52,12 @@ def roll_shop(run: RunState) -> Shop:
     ]
     artifacts = [
         ShopArtifact(artifact=artifact, price=_price(ARTIFACT_PRICE, rng))
-        for artifact in roll_artifact_offer(rng, run.player.artifacts, SHOP_ARTIFACTS)
+        for artifact in roll_artifact_offer(
+            rng,
+            run.player.artifacts,
+            SHOP_ARTIFACTS,
+            pool=CHARACTERS[run.player.character].artifact_pool,
+        )
     ]
     return Shop(
         cards=cards,

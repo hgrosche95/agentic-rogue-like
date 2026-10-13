@@ -83,6 +83,11 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       Rubber Duck (Halluzinationen verpuffen nur), Ship It (+5 Schaden pro
       schon gespielter Karte im Zug, 3 Tokens) und Pair Programming (die
       erste Karte jedes Zuges ist gratis).
+      Genauso bekommt er eigene Artefakte (`VIBE_CODER_ARTIFACT_POOL`):
+      Pro Plan (+1 Token Kontextfenster), Mechanical Keyboard (erste Karte
+      jedes Kampfes gratis), Lo-fi Beats (+1 Token pro Zug, 3 HP nach jedem
+      Sieg), System Prompt (halb so viele Halluzinationen) und Max Mode
+      (+3 ATK, 1 Token weniger pro Zug).
       Konzeptbild: [`docs/characters/vibe-coder.png`](docs/characters/vibe-coder.png).
       In der Arena steht vorerst noch Dr. Chronos' Sprite.
 - [x] **Deck-Building** — zu Beginn des Runs (nach dem ersten Artefakt)

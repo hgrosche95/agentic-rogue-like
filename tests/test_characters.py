@@ -3,6 +3,12 @@ import random
 import pytest
 
 from agentic_rogue_like import combat
+from agentic_rogue_like.artifacts import (
+    ARTIFACT_POOL,
+    VIBE_CODER_ARTIFACT_POOL,
+    gain_artifact,
+    roll_artifact_offer,
+)
 from agentic_rogue_like.cards import (
     REWARD_POOL,
     VIBE_CODER_REWARD_POOL,
@@ -18,6 +24,7 @@ from agentic_rogue_like.combat import (
     action_preview,
     auto_resolve_combat,
     end_turn,
+    hallucination_chance,
     play_card,
     start_combat,
 )
@@ -44,10 +51,12 @@ def _vibe_player(deck: list[Card]) -> PlayerState:
     return PlayerState(character=Character.VIBE_CODER, hp=50, max_hp=50, attack=0, deck=deck)
 
 
-def _vibe_fight(hand: list[Card], deck: list[Card] | None = None):
+def _vibe_fight(hand: list[Card], deck: list[Card] | None = None, artifacts=None):
     """A Vibe-Coder fight whose hand is exactly `hand`, with `deck` left to draw."""
     player = _vibe_player(hand)
-    state, _ = start_combat([], _enemy(), random.Random(1), character=Character.VIBE_CODER)
+    state, _ = start_combat(
+        [], _enemy(), random.Random(1), artifacts, character=Character.VIBE_CODER
+    )
     state.hand = list(hand)
     state.draw_pile = list(deck if deck is not None else [PROMPT] * 20)
     return player, state
@@ -333,3 +342,80 @@ def test_rubber_duck_makes_hallucinations_fizzle(monkeypatch: pytest.MonkeyPatch
     assert "rubber duck" in log
     assert player.hp == 50
     assert state.enemy_hp == 200
+
+
+# ---- the Vibe-Coder's artifacts
+
+
+def _vibe_artifact(name: str):
+    return next(a for a in VIBE_CODER_ARTIFACT_POOL if a.name == name)
+
+
+def test_only_the_vibe_coder_is_offered_his_artifacts() -> None:
+    vibe_ids = {a.id for a in VIBE_CODER_ARTIFACT_POOL}
+    rng = random.Random(1)
+    chronos_offers = {a.id for _ in range(200) for a in roll_artifact_offer(rng, [])}
+    vibe_offers = {
+        a.id for _ in range(200) for a in roll_artifact_offer(rng, [], pool=VIBE.artifact_pool)
+    }
+
+    assert not chronos_offers & vibe_ids
+    assert vibe_ids <= vibe_offers
+    assert len({a.id for a in ARTIFACT_POOL + VIBE_CODER_ARTIFACT_POOL}) == len(
+        ARTIFACT_POOL + VIBE_CODER_ARTIFACT_POOL
+    )
+
+
+def test_vibe_coder_artifact_offers_and_shops_come_from_his_pool() -> None:
+    pool = {a.id for a in VIBE.artifact_pool}
+    seen: set[str] = set()
+    for seed in range(40):
+        run = new_run(seed, character=Character.VIBE_CODER)
+        seen |= {a.id for a in run.artifact_offer}
+        seen |= {item.artifact.id for item in roll_shop(run).artifacts}
+
+    assert seen <= pool
+    assert seen & {a.id for a in VIBE_CODER_ARTIFACT_POOL}
+
+
+def test_pro_plan_widens_the_context_window() -> None:
+    _, state = _vibe_fight([], artifacts=[_vibe_artifact("Pro Plan")])
+
+    assert state.token_limit == VIBE.token_limit + 1
+
+
+def test_lo_fi_beats_and_max_mode_change_the_tokens_freed_per_turn() -> None:
+    for name, delta in (("Lo-fi Beats", 1), ("Max Mode", -1)):
+        player, state = _vibe_fight([], artifacts=[_vibe_artifact(name)])
+        state.tokens_used = VIBE.token_limit
+
+        end_turn(state, player, random.Random(2))
+
+        assert state.tokens_used == VIBE.token_limit - (VIBE.token_regen + delta), name
+
+
+def test_max_mode_raises_attack() -> None:
+    player = _vibe_player([])
+
+    gain_artifact(player, _vibe_artifact("Max Mode"))
+
+    assert player.attack == 3
+
+
+def test_mechanical_keyboard_makes_the_first_card_of_the_fight_free() -> None:
+    player, state = _vibe_fight([BIG, BIG, BIG], artifacts=[_vibe_artifact("Mechanical Keyboard")])
+
+    play_card(state, 0, 0, player, random.Random(2))
+    assert state.tokens_used == 0
+    play_card(state, 0, 0, player, random.Random(2))
+    assert state.tokens_used == BIG.token_cost
+
+    end_turn(state, player, random.Random(2))
+    assert state.free_plays == 0
+
+
+def test_system_prompt_halves_the_hallucination_chance() -> None:
+    _, plain = _vibe_fight([])
+    _, prompted = _vibe_fight([], artifacts=[_vibe_artifact("System Prompt")])
+
+    assert hallucination_chance(prompted) == hallucination_chance(plain) / 2
