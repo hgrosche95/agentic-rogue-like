@@ -253,7 +253,8 @@ body {
   gap: 8px;
 }
 
-@media (max-width: 1100px) {
+/* the era pips need the room the logo leaves them */
+@media (max-width: 1380px) {
   .era-track i {
     display: none;
   }
@@ -262,15 +263,19 @@ body {
   }
 }
 
+/* narrower still, the era moves out of the header for good: the map shows
+   it, and so does each HUD plate in a fight */
+@media (max-width: 1180px) {
+  .era-track {
+    display: none;
+  }
+}
+
 @media (max-width: 760px) {
   .topbar {
     grid-template-columns: 1fr auto;
     gap: 10px 16px;
     padding-top: 10px;
-  }
-  /* the eras are on the map and in the combat HUD; the logo needs the room */
-  .era-track {
-    display: none;
   }
   .brand-name {
     font-size: 15px;
@@ -2488,6 +2493,59 @@ button.is-primary:hover:not(:disabled),
   }
 }
 
+/* short screens (a 720px-high laptop): the scene can only be 300px high
+   (integer scaling), so the header, stack and hand pack tighter to keep the
+   whole table on screen without scrolling */
+@media (max-height: 820px) and (min-width: 901px) {
+  .topbar {
+    min-height: 56px;
+    margin-bottom: 6px;
+  }
+  .field-zone {
+    padding: 8px 12px 10px;
+  }
+  .zone-head {
+    margin-bottom: 6px;
+  }
+  .field .field-slot {
+    flex-basis: 76px;
+  }
+  .hand {
+    padding-top: 4px;
+  }
+  .hand .hand-card {
+    width: 120px;
+    height: 162px;
+  }
+  .hand .hand-card .card-body {
+    font-size: 0.78rem;
+  }
+  .field-hint {
+    margin-top: 2px;
+    font-size: 12px;
+  }
+  .hand .hand-card {
+    margin: 0 -6px;
+  }
+}
+
+/* ... where the 720px scene would be half covered by the HUD plates, they
+   move out beside it - still top left and top right, in the free margins */
+@media (max-height: 820px) and (min-width: 1200px) {
+  .arena-wrap > .vs-hud {
+    top: 0;
+    width: min(250px, calc((100vw - var(--arena-w)) / 2 - 64px));
+  }
+  .arena-wrap > .vs-hud.is-player {
+    left: auto;
+    right: calc(100% + 28px);
+  }
+  .arena-wrap > .vs-hud.is-enemy {
+    right: auto;
+    left: calc(100% + 28px);
+  }
+}
+
 /* -- a played card's flight from hand to slot (see cardFlight.ts) -- */
 /* body > : the clone keeps its .hand-card class, whose later
    position: relative would otherwise put it back into the page flow, at the
@@ -2579,7 +2637,7 @@ body > .card-flight {
   flex-direction: column;
   gap: 1rem;
   /* the scene as wide as the screen allows, with room left for the text */
-  max-width: max(960px, calc((100vh - 380px) * 2.4));
+  max-width: max(960px, calc((100vh - 445px) * 2.4));
   margin: 0 auto;
   padding-top: 76px;
 }
@@ -2684,11 +2742,11 @@ body > .card-flight {
 /* the AGI's message, typed out like the arena monitor's log */
 .intro-terminal {
   position: relative;
-  min-height: 15em;
+  min-height: 13em;
   padding: 1rem 1.2rem;
   font-family: var(--font-body);
-  font-size: 1.05rem;
-  line-height: 1.45;
+  font-size: 0.98rem;
+  line-height: 1.35;
   color: #b4ecf5;
   background: var(--px-ink);
   border: var(--px-border);
