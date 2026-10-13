@@ -21,11 +21,13 @@ def _play_combat(run_id: str, run: dict) -> dict:
     while run["pending_combat"] is not None:
         combat = run["pending_combat"]
         empty_slot = next((i for i, c in enumerate(combat["field"]) if c is None), None)
+        # never past the Vibe-Coder's context window - always false for Dr. Chronos
+        card = next((c for c in combat["hand"] if not c["overflows"]), None)
 
-        if combat["hand"] and empty_slot is not None:
+        if card is not None and empty_slot is not None:
             run = client.post(
                 f"/runs/{run_id}/combat/play-card",
-                json={"hand_index": combat["hand"][0]["hand_index"], "slot_index": empty_slot},
+                json={"hand_index": card["hand_index"], "slot_index": empty_slot},
             ).json()
         else:
             excess = max(0, len(combat["hand"]) - combat["max_hand_size"])
@@ -40,8 +42,8 @@ def _play_combat(run_id: str, run: dict) -> dict:
     return run
 
 
-def _play_full_run(seed: int) -> dict:
-    run = client.post("/runs", json={"seed": seed}).json()
+def _play_full_run(seed: int, character: str = "chronos") -> dict:
+    run = client.post("/runs", json={"seed": seed, "character": character}).json()
     run_id = run["run_id"]
     steps = 0
 
@@ -174,3 +176,54 @@ def test_end_turn_requires_discarding_down_to_the_hand_limit() -> None:
         f"/runs/{run_id}/combat/end-turn", json={"discard_indices": list(range(excess))}
     ).json()
     assert any("you discard" in line for line in run["history"][-3:])
+
+
+def test_characters_are_listed() -> None:
+    characters = client.get("/characters").json()
+
+    assert [c["id"] for c in characters] == ["chronos", "vibe_coder"]
+    assert characters[0]["token_limit"] is None
+    assert characters[1]["token_limit"] > 0
+
+
+def test_unknown_character_is_rejected() -> None:
+    response = client.post("/runs", json={"seed": 1, "character": "wizard"})
+
+    assert response.status_code == 422
+
+
+def test_vibe_coder_fight_shows_and_spends_the_context_window() -> None:
+    run = client.post("/runs", json={"seed": 3, "character": "vibe_coder"}).json()
+    run_id = run["run_id"]
+    assert run["player"]["character"] == "vibe_coder"
+
+    combat = _resolve(run_id).json()["pending_combat"]
+    assert combat["token_limit"] > 0
+    assert combat["tokens_used"] == 0
+    assert all("token_cost" in c and not c["overflows"] for c in combat["hand"])
+
+    card = next(c for c in combat["hand"] if c["token_cost"] == 1)
+    hand_size = len(combat["hand"])
+    run = client.post(
+        f"/runs/{run_id}/combat/play-card",
+        json={"hand_index": card["hand_index"], "slot_index": 0},
+    ).json()
+
+    combat = run["pending_combat"]
+    assert combat["tokens_used"] == 1
+    assert len(combat["hand"]) == hand_size  # drew a card for the one played
+
+
+def test_chronos_fight_has_no_context_window() -> None:
+    run_id = client.post("/runs", json={"seed": 3}).json()["run_id"]
+
+    combat = _resolve(run_id).json()["pending_combat"]
+
+    assert combat["token_limit"] is None
+    assert combat["tokens_used"] == 0
+
+
+def test_vibe_coder_run_always_terminates() -> None:
+    for seed in range(5):
+        run = _play_full_run(seed, character="vibe_coder")
+        assert run["status"] in ("victory", "defeat")

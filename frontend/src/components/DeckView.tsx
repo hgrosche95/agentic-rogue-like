@@ -19,6 +19,9 @@ const TYPE_ORDER: CardType[] = [
   "damage_boost",
   "turret",
   "fortify",
+  "compact",
+  "chain",
+  "token_regen",
 ];
 
 // The whole deck, identical cards stacked into one tile with a count.

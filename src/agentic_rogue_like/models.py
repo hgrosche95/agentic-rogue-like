@@ -81,6 +81,11 @@ class CardType(StrEnum):
     DAMAGE_BOOST = "damage_boost"  # attacks +value per permanent on the field
     TURRET = "turret"  # deals `value` damage at the end of every turn
     FORTIFY = "fortify"  # +value block per permanent at the end of every turn
+    # The Vibe-Coder's cards (see characters.py) - COMPACT and TOKEN_REGEN
+    # only do something for a character with a context window.
+    COMPACT = "compact"  # action: frees `value` used tokens
+    CHAIN = "chain"  # actions to its right +value per card already played this turn
+    TOKEN_REGEN = "token_regen"  # frees `value` used tokens at the end of every turn
 
 
 PERMANENT_CARD_TYPES = frozenset(
@@ -91,6 +96,8 @@ PERMANENT_CARD_TYPES = frozenset(
         CardType.DAMAGE_BOOST,
         CardType.TURRET,
         CardType.FORTIFY,
+        CardType.CHAIN,
+        CardType.TOKEN_REGEN,
     }
 )
 
@@ -125,9 +132,20 @@ class Card(BaseModel):
     draw: int = 0  # draw this many cards after the effect
     scaling: Scaling | None = None  # attacks only: +scale_value per ...
     scale_value: int = 0
+    # Tokens it takes from the context window - only characters with one
+    # (the Vibe-Coder, see characters.py) pay it, everyone else ignores it.
+    token_cost: int = 1
+
+
+class Character(StrEnum):
+    """Who the run is played as - see characters.py for what each one changes."""
+
+    CHRONOS = "chronos"
+    VIBE_CODER = "vibe_coder"
 
 
 class PlayerState(BaseModel):
+    character: Character = Character.CHRONOS
     hp: int
     max_hp: int
     attack: int = 5

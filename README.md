@@ -61,6 +61,22 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       erste bezahlbare Karte in den ersten freien Slot, dann Rundenende),
       das Web-UI interaktiv Karte für Karte über eigene Endpunkte
       (`/combat/play-card`, `/combat/end-turn`).
+- [x] **Zweiter Charakter: der Vibe-Coder** — auf dem Startbildschirm
+      wählbar neben Dr. Chronos (`characters.py`). Er zieht nach jeder
+      gespielten Karte eine nach, am Rundenende aber nur 2 statt 3; bremsen
+      tut ihn sein Kontextfenster: jede Karte kostet Tokens (`token_cost`,
+      meist 1), das Fenster fasst 4, und am Rundenende werden 3 wieder frei.
+      Eine Karte über dem Fenster wird trotzdem gespielt, halluziniert aber
+      mit 50 %: ein Angriff trifft ihn selbst, ein Block oder eine Heilung
+      geht an den Gegner, alles andere verpufft. Eigenes Startdeck mit
+      Prompt, Make It Safe, Copilot (Aktionskarten rechts davon +1 pro schon
+      gespielter Karte im Zug, höchstens +3), Energy Drink (+1 Token pro Zug)
+      und /compact (0 Tokens, gibt 4 frei). Die Zahlen kommen aus
+      `balance-sim --character vibe_coder`: ein festes Budget für den ganzen
+      Kampf ließ ihn fast jeden Gegner in Zug 1 umhauen oder gegen Bosse
+      leerlaufen; so landen beide Charaktere bei ~9 % Run-Siegquote.
+      Konzeptbild: [`docs/characters/vibe-coder.png`](docs/characters/vibe-coder.png).
+      In der Arena steht vorerst noch Dr. Chronos' Sprite.
 - [x] **Deck-Building** — zu Beginn des Runs (nach dem ersten Artefakt)
       eine von drei Karten der Seltenheit Uncommon/Rare ins Startdeck
       nehmen (oder überspringen), danach nach jedem Sieg eine von drei Karten wählen
@@ -149,6 +165,7 @@ src/agentic_rogue_like/
 ├── map_gen.py      Prozedurale Etagen-/Node-Map
 ├── combat.py       Kartenbasierter Kampf: Deck/Hand/Feld, Zieh-/Ablagelogik
 ├── cards.py        Startdeck mit IT-Namen (Exploit, Firewall, Kernel Panic, ...; Aktions- + permanente Karten)
+├── characters.py   Spielbare Charaktere (Dr. Chronos, Vibe-Coder): Werte, Startdeck, Kontextfenster
 ├── artifacts.py    Artefakt-Pool und -Angebote (passive Run-Boni)
 ├── shop.py         Schwarzmarkt: zufälliges Angebot aus Karten und Artefakten, Preise, Kaufen
 ├── events.py       Event-/Rest-/Shop-Auflösung

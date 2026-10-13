@@ -1,9 +1,12 @@
+import { useContext } from "react";
 import { PERMANENT_CARD_TYPES, type Card, type CardType } from "../api";
+import { ShowTokensContext } from "../characters";
 import { unitOf } from "../readouts";
 
 // Each card is a module: a drawn type icon in the socket top left (where
-// other deckbuilders put a cost - this game has none), and, in combat, a
-// readout with the number the card will really come out with.
+// other deckbuilders put a cost - this game has none, except the
+// Vibe-Coder's tokens, bottom left), and, in combat, a readout with the
+// number the card will really come out with.
 
 type Kind = "strike" | "shield" | "repair" | "purge" | "flow" | "module";
 
@@ -68,6 +71,7 @@ export interface Readout {
 // drops that prefix and keeps the room for what the card does; the same
 // goes for one-shot cards and their "1×" tag
 export function CardFace({ card, onField = false, readout }: { card: Card; onField?: boolean; readout?: Readout }) {
+  const showTokens = useContext(ShowTokensContext);
   const description = card.description.replace(
     onField ? /^(Permanent|One-shot)\.\s*/ : /^One-shot\.\s*/,
     "",
@@ -95,6 +99,12 @@ export function CardFace({ card, onField = false, readout }: { card: Card; onFie
         </div>
       )}
       <div className="card-body">{description}</div>
+      {showTokens && !onField && (
+        <span className="card-tokens" title={`Costs ${card.token_cost} token(s) of context`}>
+          {card.token_cost}
+          <small>tok</small>
+        </span>
+      )}
       {card.rarity !== "starter" && <span className={`card-gem rarity-${card.rarity}`} />}
     </>
   );

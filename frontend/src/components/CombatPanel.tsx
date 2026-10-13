@@ -9,6 +9,7 @@ import {
 import { cardSound, hitsOf, sfx } from "../audio";
 import { flyCard } from "../cardFlight";
 import { ArtifactBar } from "./ArtifactBar";
+import { HERO } from "../characters";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useCardDrag } from "../hooks/useCardDrag";
 import { useHpExchange } from "../hooks/useHpExchange";
@@ -16,6 +17,30 @@ import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { describeIntent, rangeText, unitOf } from "../readouts";
 import { CardFace, type Readout } from "./CardFace";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
+
+// The Vibe-Coder's context window: one pip per token, lit while used; past
+// the window the extra pips glow red - every card from there may hallucinate.
+function TokenMeter({ combat }: { combat: PendingCombatView }) {
+  const limit = combat.token_limit ?? 0;
+  const pips = Math.max(limit, combat.tokens_used);
+  const full = combat.tokens_used >= limit;
+  return (
+    <span
+      className={`token-meter${full ? " is-full" : ""}`}
+      title={`Context window: ${combat.tokens_used}/${limit} tokens used, ${combat.token_regen} free up at the end of the turn. Cards past the window may hallucinate.`}
+    >
+      <span className="token-label">Context</span>
+      <span className="token-pips" aria-hidden="true">
+        {Array.from({ length: pips }, (_, i) => (
+          <i key={i} className={i >= limit ? "is-over" : i < combat.tokens_used ? "is-used" : undefined} />
+        ))}
+      </span>
+      <span className="token-count">
+        {combat.tokens_used}/{limit}
+      </span>
+    </span>
+  );
+}
 
 function Pile({ label, count, kind }: { label: string; count: number; kind: string }) {
   return (
@@ -267,12 +292,12 @@ export function CombatPanel({
 
       <div className="combat-row">
         <div className="vs-hud is-player">
-          <span className="vs-portrait" aria-hidden="true">
-            <span>DC</span>
+          <span className={`vs-portrait is-${player.character}`} aria-hidden="true">
+            <span>{HERO[player.character].initials}</span>
           </span>
           <div className="vs-body">
             <span className="hud-name">
-              Dr. Chronos <small>Human · {era}</small>
+              {HERO[player.character].name} <small>Human · {era}</small>
             </span>
             <HpBar hp={shownPlayerHp} max={player.max_hp} side="player" />
             <div className="hud-meta">
@@ -288,6 +313,7 @@ export function CombatPanel({
               )}
               {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
               {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
+              {combat.token_limit !== null && <TokenMeter combat={combat} />}
               <ArtifactBar artifacts={player.artifacts} compact />
             </div>
           </div>
@@ -382,7 +408,7 @@ export function CombatPanel({
                 key={card.hand_index}
                 data-hand-index={card.hand_index}
                 style={fanStyle(i, combat.hand.length)}
-                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : ""}${drag.dragging === card.hand_index ? " is-dragged" : ""}`}
+                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : ""}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}`}
                 disabled={busy}
                 onMouseEnter={() => sfx.play("hover")}
                 onPointerDown={(event) => drag.onPointerDown(event, card.hand_index)}
@@ -421,6 +447,9 @@ export function CombatPanel({
           ? "Enemy defeated."
           : discarding !== null
             ? `Hand limit is ${combat.max_hand_size}: pick ${excess} card(s) to discard (${discarding.length}/${excess}).`
+            : selectedHandIndex !== null &&
+                combat.hand.find((card) => card.hand_index === selectedHandIndex)?.overflows
+            ? "Context window full - this card may hallucinate and backfire. Choose a slot to risk it."
             : selectedHandIndex === null
             ? "Drag a card onto an empty slot of the stack - or click it, then click a slot."
             : "Choose an empty slot to run the selected card."}

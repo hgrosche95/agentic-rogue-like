@@ -51,5 +51,11 @@ export function commandFor(card: Card, enemyName: string): string {
       return `nohup ./daemon --target=${target} &`;
     case "fortify":
       return `mainframe --harden`;
+    case "compact":
+      return `/compact`;
+    case "chain":
+      return `copilot --accept-all`;
+    case "token_regen":
+      return `crack open ./energy-drink`;
   }
 }

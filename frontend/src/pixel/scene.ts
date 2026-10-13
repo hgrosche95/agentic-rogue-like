@@ -47,6 +47,10 @@ const EV: Record<ArenaEvent, number> = {
   damage_boost: 12,
   turret: 13,
   fortify: 14,
+  // the Vibe-Coder's cards borrow the closest existing effect
+  compact: 10, // restore
+  chain: 5, // amplifier
+  token_regen: 7, // draw_bonus
   enemy_attack: 20,
   enemy_attack_blocked: 21,
   enemy_brace: 22,

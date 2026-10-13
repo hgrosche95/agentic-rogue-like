@@ -14,7 +14,8 @@ from dataclasses import replace
 from .agent.encounter_agent import enemy_for_node
 from .agent.narrator import narrate
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
-from .cards import START_CARD_WEIGHTS, reward_card, roll_card_reward, starter_deck
+from .cards import START_CARD_WEIGHTS, reward_card, roll_card_reward
+from .characters import CHARACTERS
 from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
@@ -26,6 +27,7 @@ from .models import (
     DEFAULT_SETTING,
     Artifact,
     Card,
+    Character,
     Enemy,
     MapNode,
     NodeType,
@@ -49,8 +51,9 @@ Narrator = Callable[[str, str], str | None]
 
 # Tuned with `balance-sim` together with enemies.escalate() for a run win
 # rate below 50% - see the README's Balancing section.
-PLAYER_HP = 45
-PLAYER_ATTACK = 2
+# Dr. Chronos's - every character's own stats live in characters.py.
+PLAYER_HP = CHARACTERS[Character.CHRONOS].hp
+PLAYER_ATTACK = CHARACTERS[Character.CHRONOS].attack
 REST_HEAL = 15
 
 # Beating an act's boss opens the next act's map (advance_act); beating the
@@ -69,9 +72,17 @@ REST_SITUATION = "a weary adventurer resting and tending their wounds"
 SHOP_SITUATION = "a traveling merchant offering strange wares for sale"
 
 
-def new_run(seed: int, setting: str = DEFAULT_SETTING) -> RunState:
+def new_run(
+    seed: int, setting: str = DEFAULT_SETTING, character: Character = Character.CHRONOS
+) -> RunState:
+    hero = CHARACTERS[character]
     player = PlayerState(
-        hp=PLAYER_HP, max_hp=PLAYER_HP, attack=PLAYER_ATTACK, gold=0, deck=starter_deck()
+        character=character,
+        hp=hero.hp,
+        max_hp=hero.hp,
+        attack=hero.attack,
+        gold=0,
+        deck=hero.deck(),
     )
     nodes = generate_map(seed)
     run = RunState(seed=seed, player=player, nodes=nodes, current_node_id="0-0", setting=setting)
@@ -260,6 +271,7 @@ def start_combat_node(
         run.player.artifacts,
         boss=node.type is NodeType.BOSS,
         boss_phases=boss_phases(run.act),
+        character=run.player.character,
     )
     run.history.extend(log)
     return state
