@@ -21,6 +21,9 @@ export type ArenaEvent =
   | "player_healed"
   | "enemy_die";
 
+// Who stands at the keyboard - see characters.py.
+export type Hero = "chronos" | "vibe_coder";
+
 export interface SceneStatus {
   typing: boolean;
   block: number;
@@ -124,6 +127,9 @@ export class PixelScene {
   private status: SceneStatus = { typing: false, block: 0, armor: 0, enemyBlock: 0, turrets: 0, amplifiers: 0, fortify: 0 };
   private playerVisible = true;
   private night = false;
+  private hero: Hero = "chronos";
+  // the Vibe-Coder's context window is full - his chat bubble flickers
+  private contextFull = false;
 
   // -- enemy
   private enemy: EnemySprite | null = null;
@@ -224,6 +230,14 @@ export class PixelScene {
 
   setStatus(status: SceneStatus) {
     this.status = status;
+  }
+
+  setHero(hero: Hero) {
+    this.hero = hero;
+  }
+
+  setContextFull(full: boolean) {
+    this.contextFull = full;
   }
 
   setPlayerVisible(visible: boolean) {
@@ -1137,6 +1151,10 @@ export class PixelScene {
   }
 
   private drawPlayer() {
+    if (this.hero === "vibe_coder") {
+      this.drawVibeCoder();
+      return;
+    }
     const s = this.shown;
     const knock = this.playerKnock > 0 ? -Math.ceil(this.playerKnock / 4) : 0;
     this.flashDraw = this.playerFlash > 0 && this.playerFlash % 2 === 0;
@@ -1242,6 +1260,143 @@ export class PixelScene {
       this.rect(ox + 6, oy - 24, 1, 14, c);
       this.rect(hx + 5, oy - 34, 1, 4, c);
       this.rect(hx + 1, oy - 35, 3, 1, c);
+    }
+  }
+
+  // The Vibe-Coder: same stance and poses as Dr. Chronos, so every card's
+  // animation works for him too - but a hoodie, headphones, jeans and
+  // sneakers, an energy drink in the back hand, a laptop backpack instead of
+  // the copper pack, and a chat bubble over his head: he prompts, he doesn't
+  // type. It flickers amber once his context window is full.
+  private drawVibeCoder() {
+    const s = this.shown;
+    const knock = this.playerKnock > 0 ? -Math.ceil(this.playerKnock / 4) : 0;
+    this.flashDraw = this.playerFlash > 0 && this.playerFlash % 2 === 0;
+
+    this.dither(PLAYER_X - 9 + knock, FLOOR, 18, 2, C.ink);
+
+    for (this.pass = 0; this.pass < 2; this.pass++) {
+      // jeans and sneakers stay planted
+      this.ox = PLAYER_X + knock;
+      this.oy = FLOOR;
+      this.part(-4, -8, 3, 6, C.cyanDark);
+      this.part(1, -8, 3, 6, C.cyanMid);
+      this.part(-5, -2, 5, 2, C.white);
+      this.part(1, -2, 6, 2, C.white);
+
+      this.ox = PLAYER_X + knock + s.lean;
+      this.oy = FLOOR + s.bob;
+
+      // laptop backpack
+      this.part(-10, -23, 4, 11, C.cloth1);
+
+      // back arm with the can
+      this.limb(-2, -22, s.bx - 1, s.by, C.violetLight);
+      this.part(s.bx - 1, s.by, 2, 2, C.skin);
+      this.part(s.bx - 1, s.by - 3, 2, 3, C.green);
+
+      // hoodie, the hood bunched up behind the neck
+      this.part(-7, -27, 5, 4, C.violet);
+      this.part(-6, -24, 12, 17, C.lavender);
+      this.part(-7, -10, 14, 3, C.lavender);
+
+      // head and hair
+      const hx = s.tilt;
+      this.part(-4 + hx, -34, 9, 9, C.skin);
+      this.part(5 + hx, -30, 1, 2, C.skin);
+      this.part(-5 + hx, -38, 10, 5, C.cloth0);
+      this.part(-6 + hx, -35, 3, 6, C.cloth0);
+      const sway = Math.floor(this.tick / 12) % 2;
+      this.part(-3 + hx + sway, -40, 2, 2, C.cloth0);
+      this.part(1 + hx, -40 + sway, 2, 2, C.cloth0);
+      this.part(4 + hx, -37, 2, 2, C.cloth0);
+
+      // front arm with what it holds
+      this.limb(3, -22, s.fx, s.fy, C.lavender);
+      this.part(s.fx, s.fy, 2, 2, C.skin);
+      if (this.item === 1) this.part(s.fx + 1, s.fy - 4, 3, 4, C.green);
+      if (this.item === 2) this.part(s.fx + 1, s.fy - 1, 6, 2, C.brass);
+    }
+    this.pass = 1;
+    if (this.flashDraw) return;
+
+    const ox = PLAYER_X + knock + s.lean;
+    const oy = FLOOR + s.bob;
+    const L = PLAYER_X + knock;
+    // jeans seam, sneaker soles and stripes
+    this.rect(L - 4, FLOOR - 8, 1, 6, C.ink);
+    this.rect(L + 2, FLOOR - 8, 1, 6, C.cyan);
+    this.rect(L - 5, FLOOR - 1, 5, 1, C.steel);
+    this.rect(L + 1, FLOOR - 1, 6, 1, C.steel);
+    this.rect(L + 4, FLOOR - 2, 2, 1, C.green);
+    this.rect(L - 2, FLOOR - 2, 2, 1, C.green);
+    // backpack strap and zipper
+    this.rect(ox - 9, oy - 21, 2, 1, C.green);
+    this.rect(ox - 6, oy - 23, 1, 9, C.cloth0);
+    // the can's label
+    this.rect(ox + s.bx - 1, oy + s.by - 2, 2, 1, C.greenHi);
+    // hoodie shading, drawstrings, pocket, logo
+    this.rect(ox - 6, oy - 24, 2, 17, C.violetLight);
+    this.rect(ox - 7, oy - 10, 2, 3, C.violetLight);
+    this.rect(ox + 1, oy - 24, 1, 5, C.green);
+    this.rect(ox + 3, oy - 24, 1, 4, C.green);
+    this.rect(ox + 1, oy - 19, 1, 1, C.greenHi);
+    this.rect(ox - 3, oy - 13, 7, 1, C.violetLight);
+    this.rect(ox - 2, oy - 19, 2, 2, C.green);
+    this.rect(ox - 7, oy - 8, 14, 1, C.violetLight);
+    this.rect(ox + 3, oy - 21, 1, 1, C.violetLight);
+    // face: eye, brow, a smirk
+    const hx = ox + s.tilt;
+    this.rect(hx - 4, oy - 33, 1, 7, C.skinShade);
+    this.rect(hx + 3, oy - 31, 1, 2, C.ink);
+    this.rect(hx + 2, oy - 32, 3, 1, C.cloth0);
+    this.rect(hx + 3, oy - 27, 2, 1, C.skinShade);
+    this.rect(hx + 5, oy - 28, 1, 1, C.skinShade);
+    // green streak in the hair
+    this.rect(hx, oy - 38, 3, 1, C.green);
+    this.rect(hx + 3, oy - 37, 1, 1, C.green);
+    // headphones: band over the hair, cup on the ear with its light
+    this.rect(hx - 3, oy - 39, 7, 1, C.iron);
+    this.rect(hx - 4, oy - 38, 1, 4, C.iron);
+    this.rect(hx - 4, oy - 33, 3, 4, C.cloth1);
+    this.rect(hx - 3, oy - 32, 1, 2, this.status.typing && this.tick % 20 < 10 ? C.greenHi : C.green);
+    // held items
+    if (this.item === 1) {
+      this.rect(ox + s.fx + 2, oy + s.fy - 3, 1, 1, C.greenHi);
+      this.rect(ox + s.fx + 2, oy + s.fy - 5, 1, 1, C.wood4);
+    }
+    if (this.item === 2) {
+      this.rect(ox + s.fx + 1, oy + s.fy - 1, 6, 1, C.brassHi);
+      this.rect(ox + s.fx + 7, oy + s.fy - 1, 1, 2, this.tick % 4 < 2 ? C.white : C.red);
+    }
+
+    this.drawChatBubble(hx + 6, oy - 48);
+
+    if (this.rim > 0.15) {
+      const c = this.rim > 0.6 ? this.rimColor : C.cyanMid;
+      this.rect(ox + 6, oy - 24, 1, 14, c);
+      this.rect(hx + 5, oy - 34, 1, 4, c);
+      this.rect(hx + 1, oy - 39, 3, 1, c);
+    }
+  }
+
+  // his prompt bubble: three dots that run while he types; amber and
+  // glitching while the context window is full
+  private drawChatBubble(x: number, y: number) {
+    const full = this.contextFull;
+    if (full && hash(Math.floor(this.tick / 6)) < 0.15) return;
+    const fill = full ? C.amberHi : C.white;
+    const edge = full ? C.amberDark : C.ink;
+    this.rect(x, y + 1, 13, 6, edge);
+    this.rect(x + 1, y, 11, 8, edge);
+    this.rect(x + 1, y + 1, 11, 6, fill);
+    // tail down toward his head
+    this.rect(x + 1, y + 8, 2, 1, edge);
+    this.rect(x, y + 9, 1, 1, edge);
+    for (let k = 0; k < 3; k++) {
+      const lit = this.status.typing ? Math.floor(this.tick / 8) % 3 === k : false;
+      const dot = full ? C.red : lit ? C.green : C.steel;
+      this.rect(x + 3 + k * 3, y + 3 - (lit ? 1 : 0), 2, 2, dot);
     }
   }
 

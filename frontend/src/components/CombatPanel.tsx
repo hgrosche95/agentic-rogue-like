@@ -285,6 +285,8 @@ export function CombatPanel({
         typing={typing}
         slain={enemySlain}
         onContinue={onContinue}
+        hero={player.character}
+        contextFull={combat.token_limit !== null && combat.tokens_used >= combat.token_limit}
       />
 
       {/* the rift keeps going below the scene, between the two sides of the table */}

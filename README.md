@@ -89,7 +89,11 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       Sieg), System Prompt (halb so viele Halluzinationen) und Max Mode
       (+3 ATK, 1 Token weniger pro Zug).
       Konzeptbild: [`docs/characters/vibe-coder.png`](docs/characters/vibe-coder.png).
-      In der Arena steht vorerst noch Dr. Chronos' Sprite.
+      In der Arena steht er als eigene Pixel-Figur am selben Pult (Hoodie,
+      Headset, Energy Drink, Laptop-Rucksack), mit derselben Pose und
+      denselben Kartenanimationen wie Dr. Chronos; über seinem Kopf schwebt
+      eine Chat-Blase, die beim Tippen pulsiert und bei vollem Kontextfenster
+      orange flackert.
 - [x] **Deck-Building** — zu Beginn des Runs (nach dem ersten Artefakt)
       eine von drei Karten der Seltenheit Uncommon/Rare ins Startdeck
       nehmen (oder überspringen), danach nach jedem Sieg eine von drei Karten wählen
