@@ -401,6 +401,10 @@ export function CombatPanel({
                 <div key={slotIndex} className={`field-slot is-occupied is-landing type-${pendingCard.type}`}>
                   <CardFace card={pendingCard} onField />
                 </div>
+              ) : card === null && combat.locked_slots.includes(slotIndex) ? (
+                <div key={slotIndex} className="field-slot is-locked" title="Locked by the enemy for this turn">
+                  <span className="slot-lock">Locked</span>
+                </div>
               ) : card === null ? (
                 <button
                   key={slotIndex}

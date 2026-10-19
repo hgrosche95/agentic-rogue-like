@@ -78,6 +78,13 @@ export function IntentIcon({ intent }: { intent: EnemyIntentType }) {
           <circle cx="15.1" cy="13" r="2.2" />
         </>
       )}
+      {intent === "lock" && (
+        <>
+          <rect className="fill" x="4.5" y="9" width="11" height="8.5" />
+          <path d="M7 9V6.5a3 3 0 0 1 6 0V9" />
+        </>
+      )}
+      {intent === "corrupt" && <path d="M2.5 6h4l2 4h3l2-4h4M2.5 14h4l2-4M11.5 10l2 4h4" />}
       {intent === "purge" && (
         <>
           <rect x="3.5" y="3.5" width="13" height="13" rx="2" />

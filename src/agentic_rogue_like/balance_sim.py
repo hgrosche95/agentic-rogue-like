@@ -61,6 +61,7 @@ from .combat import (
     MAX_AUTO_TURNS,
     CombatState,
     end_turn,
+    free_slots,
     overflows,
     play_card,
     start_combat,
@@ -199,14 +200,14 @@ def naive_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         if state.enemy_hp <= 0 or player.hp <= 0:
             return
         idx = next((i for i, c in enumerate(state.hand) if not overflows(state, c)), None)
-        slot = next((i for i, c in enumerate(state.field) if c is None), None)
+        slot = next(iter(free_slots(state)), None)
         if idx is None or slot is None:
             return
         play_card(state, idx, slot, player, rng)
 
 
 def _empty_slots(state: CombatState) -> list[int]:
-    return [i for i, c in enumerate(state.field) if c is None]
+    return free_slots(state)
 
 
 # Permanents that boost the action cards to their right.
@@ -244,7 +245,7 @@ def _hold_back(state: CombatState, card: Card) -> bool:
 
 
 def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> None:
-    """A reasonable human-ish policy: set up permanents, block only against an
+    """A reasonable human-ish policy: flush glitches, set up permanents, block only against an
     attack intent, heal only when hurt, fire Final Strike when it kills or the
     field is clogged, otherwise hit as hard as possible. Never plays past the
     context window: cards that would overflow it stay in hand."""
@@ -252,7 +253,13 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         if not state.hand or state.enemy_hp <= 0 or player.hp <= 0:
             return
         played = False
-        # 0. /compact as soon as it frees its full value - it costs nothing.
+        # 0. Flush Glitch cards first - free, and they only clog the hand.
+        glitch = next((i for i, c in enumerate(state.hand) if c.type is CardType.GLITCH), None)
+        slots = free_slots(state)
+        if glitch is not None and slots:
+            play_card(state, glitch, slots[-1], player, rng)
+            continue
+        # /compact as soon as it frees its full value - it costs nothing.
         for idx, card in enumerate(state.hand):
             if card.type is CardType.COMPACT and state.tokens_used >= card.value:
                 slot = _best_action_slot(state)
@@ -539,6 +546,8 @@ _POWER_RANGES = {
     MoveKind.CHARGE: (100, 220),
     MoveKind.PURGE: (30, 90),
     MoveKind.INFECT: (30, 80),
+    MoveKind.LOCK: (30, 80),
+    MoveKind.CORRUPT: (30, 80),
 }
 # Search grid for calibrate_threat; `scale` is solved for, not searched.
 _THREAT_GRID = {
@@ -566,6 +575,8 @@ def random_move_set(rng: random.Random) -> list[EnemyMove]:
             move.hits = rng.randint(2, 4)
         if move.kind is MoveKind.INFECT:
             move.stacks = rng.randint(2, 5)
+        if move.kind is MoveKind.CORRUPT:
+            move.stacks = rng.randint(1, 3)
     rng.shuffle(moves)
     return moves
 

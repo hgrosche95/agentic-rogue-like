@@ -26,7 +26,9 @@ export type CardType =
   | "chain"
   | "token_regen"
   | "safeguard"
-  | "opener";
+  | "opener"
+  // junk an enemy's corrupt move shuffles in
+  | "glitch";
 
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
@@ -124,13 +126,30 @@ export interface HandCardView extends Card {
 }
 
 // attack/defend for every enemy, the rest only for bosses
-export type EnemyIntentType = "attack" | "defend" | "barrage" | "charge" | "overload" | "purge" | "infect";
+export type EnemyIntentType =
+  | "attack"
+  | "defend"
+  | "barrage"
+  | "charge"
+  | "overload"
+  | "purge"
+  | "infect"
+  | "lock"
+  | "corrupt";
 
 // Lasting effects on either side of a fight - see models.Status.
 export type Status = "malware" | "exposed" | "throttled";
 
 // intents that hit the player
-export const ATTACKING_INTENTS: EnemyIntentType[] = ["attack", "barrage", "overload", "purge", "infect"];
+export const ATTACKING_INTENTS: EnemyIntentType[] = [
+  "attack",
+  "barrage",
+  "overload",
+  "purge",
+  "infect",
+  "lock",
+  "corrupt",
+];
 
 export interface PendingCombatView {
   enemy_name: string;
@@ -168,6 +187,8 @@ export interface PendingCombatView {
   // statuses on either side and their stacks / turns left
   enemy_status: Partial<Record<Status, number>>;
   player_status: Partial<Record<Status, number>>;
+  // field slots an enemy's lock has shut for this turn
+  locked_slots: number[];
   hand: HandCardView[];
   field: (Card | null)[];
   player_block: number;

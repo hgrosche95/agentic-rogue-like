@@ -57,6 +57,7 @@ const EV: Record<ArenaEvent, number> = {
   free_play: 8, // draw
   safeguard: 6, // armor
   opener: 5, // amplifier
+  glitch: 8, // draw - flushing junk out of the hand
   enemy_attack: 20,
   enemy_attack_blocked: 21,
   enemy_brace: 22,

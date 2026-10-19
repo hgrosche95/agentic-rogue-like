@@ -95,7 +95,9 @@ class MoveProposal(BaseModel):
             "charge: raises a little block, then next turn always a crushing overload. "
             "purge: destroys the player's rightmost permanent card, then hits. "
             "infect: a light hit that leaves Malware on the player, which costs them HP "
-            "every turn as it fades."
+            "every turn as it fades. lock: a light hit that locks one of the player's empty "
+            "field slots for their next turn. corrupt: a light hit that shuffles useless "
+            "Glitch cards into the player's draw pile."
         )
     )
     name: str = Field(min_length=1, max_length=40, description="What the move is called.")
@@ -106,14 +108,17 @@ class MoveProposal(BaseModel):
         description=(
             "Strength in percent of the enemy's attack: damage per hit, block raised, or "
             "for charge the overload's damage. Typical: attack 100, defend 100, "
-            "barrage 25 per hit, charge 140, purge 50, infect 50."
+            "barrage 25 per hit, charge 140, purge 50, infect / lock / corrupt 50."
         ),
     )
     hits: int | None = Field(
         default=None, ge=2, le=4, description="barrage only: how many hits (2-4)."
     )
     stacks: int | None = Field(
-        default=None, ge=1, le=6, description="infect only: Malware stacks it leaves (1-6)."
+        default=None,
+        ge=1,
+        le=6,
+        description="infect: Malware stacks it leaves (1-6). corrupt: Glitch cards (1-3).",
     )
 
 

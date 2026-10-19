@@ -197,6 +197,8 @@ class PendingCombatView(BaseModel):
     # Statuses on either side and their stacks / turns left (models.Status).
     enemy_status: dict[str, int]
     player_status: dict[str, int]
+    # Field slots an enemy's lock move has shut for this turn.
+    locked_slots: list[int]
     hand: list[HandCardView]
     field: list[CardView | None]
     player_block: int
@@ -431,6 +433,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_enraged=is_enraged(combat),
             enemy_status={s.value: n for s, n in combat.enemy_status.items()},
             player_status={s.value: n for s, n in combat.player_status.items()},
+            locked_slots=combat.locked_slots,
             hand=[
                 HandCardView(
                     hand_index=i,

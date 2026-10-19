@@ -283,6 +283,7 @@ export function cardSound(type: CardType): SfxName {
     case "compact":
       return "restore";
     case "free_play":
+    case "glitch":
       return "draw";
     case "amplifier":
     case "armor":

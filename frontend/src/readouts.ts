@@ -70,6 +70,18 @@ function describeKind(
         amount: range,
         title: `Hits for ${range} and leaves Malware on you - it costs HP every turn as it fades`,
       };
+    case "lock":
+      return {
+        label: "Lock",
+        amount: range,
+        title: `Hits for ${range} and locks one of your empty field slots for your next turn`,
+      };
+    case "corrupt":
+      return {
+        label: "Corrupt",
+        amount: range,
+        title: `Hits for ${range} and shuffles useless Glitch cards into your draw pile`,
+      };
   }
 }
 

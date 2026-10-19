@@ -135,6 +135,13 @@ INFECT_REMAINING = 1.0
 INFECT_STACKING = 1.2
 
 
+# What the field moves cost the player beyond their light hit, in HP: a
+# locked slot for a turn, and one Glitch card in the draw pile. Set where
+# such enemies, at equal threat, deal what plain ones do in simulated fights.
+LOCK_DAMAGE = 2.75
+GLITCH_DAMAGE = 2.5
+
+
 def _malware(stacks: int, turns: float) -> float:
     """HP one infection of `stacks` Malware takes: stacks, stacks-1, ... per
     turn, but only for the turns the fight still has left."""
@@ -168,6 +175,10 @@ def _per_turn(
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + model.purge_damage)
         elif move.kind is MoveKind.INFECT:
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + _malware(move.stacks, turns))
+        elif move.kind is MoveKind.LOCK:
+            damage += p * (through_block(hit(move.power, _D6_MEAN)) + LOCK_DAMAGE)
+        elif move.kind is MoveKind.CORRUPT:
+            damage += p * (through_block(hit(move.power, _D6_MEAN)) + GLITCH_DAMAGE * move.stacks)
         elif move.kind is MoveKind.DEFEND:
             block += p * round(enemy.attack * move.power / 100)
         elif move.kind is MoveKind.CHARGE:

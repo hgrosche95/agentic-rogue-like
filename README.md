@@ -535,6 +535,27 @@ Zufalls-Movesets erklärt das Modell weiter 92 % der Streuung. Die
 Run-Siegquoten bleiben praktisch gleich (Chronos 10 %, Vibe-Coder 13 %).
 Im Kampf zeigen Badges die Status auf beiden Seiten.
 
+## Feld-Moves
+
+Zwei Gegner-Moves greifen in das Feld und das Deck ein, jeweils mit einem
+leichten Treffer (50 % des Angriffs):
+
+- **lock** sperrt einen zufälligen freien Feld-Slot für den nächsten Zug des
+  Spielers. Der Slot ist im Kampf gestreift und „Locked“ markiert, Karten
+  lassen sich dort nicht spielen (auch nicht von Bots oder per API).
+- **corrupt** mischt Glitch-Karten (1–3) ins Ziehdeck. Ein Glitch tut nichts,
+  kostet keine Tokens und verschwindet beim Ausspielen. Er kostet also nur
+  einen Zug-Platz in der Hand, und er gilt nur für diesen Kampf: Das Deck des
+  Runs sieht ihn nie.
+
+Im Pool tragen sie der Gremlin (early, „Jam the Gears“) und der Corrupted
+Scribe (mid, „Ink Blot“). Der Encounter-Agent kennt beide Moves. `threat.py`
+bewertet eine Sperre mit 2,75 HP und jeden Glitch mit 2,5 HP zusätzlich zum
+Treffer, beides am Simulator eingestellt (±20 %). Mit den neuen Moves in den
+Zufalls-Movesets erklärt das Modell weiter 92 % der Streuung, die
+Run-Siegquoten bleiben bei 10 % (Chronos) und 13 % (Vibe-Coder). Der
+Smart-Bot spielt Glitches sofort aus, wie es ein Mensch tun würde.
+
 ## Karten-Upgrades
 
 Im Safehouse lässt sich eine Karte einmal verbessern: Sie bekommt ein „+“ am

@@ -94,6 +94,8 @@ class CardType(StrEnum):
     TOKEN_REGEN = "token_regen"  # frees `value` used tokens at the end of every turn
     SAFEGUARD = "safeguard"  # hallucinating cards fizzle instead of backfiring
     OPENER = "opener"  # the first `value` cards of every turn cost no tokens
+    # Junk an enemy's corrupt move shuffles in: does nothing, gone once played.
+    GLITCH = "glitch"
 
 
 PERMANENT_CARD_TYPES = frozenset(
@@ -223,6 +225,8 @@ class MoveKind(StrEnum):
     CHARGE = "charge"  # raises a little block; the next turn is a crushing overload
     PURGE = "purge"  # destroys the rightmost permanent card, then hits
     INFECT = "infect"  # a light hit that leaves Malware on the player
+    LOCK = "lock"  # a light hit that locks one of the player's empty field slots for a turn
+    CORRUPT = "corrupt"  # a light hit that shuffles Glitch cards into the player's draw pile
 
 
 # Default power (percent of the enemy's attack stat) per move kind - the
@@ -235,9 +239,12 @@ DEFAULT_MOVE_POWER: dict[MoveKind, int] = {
     MoveKind.CHARGE: 140,
     MoveKind.PURGE: 50,
     MoveKind.INFECT: 50,
+    MoveKind.LOCK: 50,
+    MoveKind.CORRUPT: 50,
 }
 DEFAULT_BARRAGE_HITS = 3
 DEFAULT_INFECT_STACKS = 3
+DEFAULT_CORRUPT_GLITCHES = 2
 
 
 class EnemyMove(BaseModel):
@@ -257,17 +264,20 @@ class EnemyMove(BaseModel):
     power: int | None = Field(default=None, ge=10, le=300)
     # BARRAGE only.
     hits: int | None = Field(default=None, ge=2, le=4)
-    # INFECT only: Malware stacks it leaves on the player.
+    # INFECT: Malware stacks it leaves on the player. CORRUPT: Glitch cards
+    # it shuffles in.
     stacks: int | None = Field(default=None, ge=1, le=6)
 
     @model_validator(mode="after")
     def _fill_defaults(self) -> EnemyMove:
         if self.hits is not None and self.kind is not MoveKind.BARRAGE:
             raise ValueError("only a barrage has hits")
-        if self.stacks is not None and self.kind is not MoveKind.INFECT:
-            raise ValueError("only an infect move has stacks")
+        if self.stacks is not None and self.kind not in (MoveKind.INFECT, MoveKind.CORRUPT):
+            raise ValueError("only infect and corrupt moves have stacks")
         if self.kind is MoveKind.INFECT and self.stacks is None:
             self.stacks = DEFAULT_INFECT_STACKS
+        if self.kind is MoveKind.CORRUPT and self.stacks is None:
+            self.stacks = DEFAULT_CORRUPT_GLITCHES
         if self.power is None:
             self.power = DEFAULT_MOVE_POWER[self.kind]
         if self.kind is MoveKind.BARRAGE and self.hits is None:

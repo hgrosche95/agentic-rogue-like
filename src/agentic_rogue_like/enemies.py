@@ -17,13 +17,15 @@ from .models import Affix, Enemy, EnemyMove, MoveKind
 from .threat import threat
 
 # Shorthands for the move sets below.
-_ATTACK, _DEFEND, _BARRAGE, _CHARGE, _PURGE, _INFECT = (
+_ATTACK, _DEFEND, _BARRAGE, _CHARGE, _PURGE, _INFECT, _LOCK, _CORRUPT = (
     MoveKind.ATTACK,
     MoveKind.DEFEND,
     MoveKind.BARRAGE,
     MoveKind.CHARGE,
     MoveKind.PURGE,
     MoveKind.INFECT,
+    MoveKind.LOCK,
+    MoveKind.CORRUPT,
 )
 
 
@@ -91,6 +93,18 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
                 _move(_DEFEND, "Shield Up", 1),
             ],
         ),
+        Enemy(
+            id="gremlin",
+            name="Gremlin",
+            hp=33,
+            attack=8,
+            attack_name="Wrench Whack",
+            description="A grinning little saboteur with a wrench and a love of moving parts.",
+            moves=[
+                _move(_ATTACK, "Wrench Whack", 3),
+                _move(_LOCK, "Jam the Gears", 2),
+            ],
+        ),
     ],
     "mid": [
         Enemy(
@@ -154,6 +168,19 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
                 _move(_ATTACK, "Bone Saw", 3),
                 _move(_INFECT, "Miasma", 2, stacks=3),
                 _move(_DEFEND, "Beak Mask", 1),
+            ],
+        ),
+        Enemy(
+            id="corrupted-scribe",
+            name="Corrupted Scribe",
+            hp=56,
+            attack=10,
+            attack_name="Quill Stab",
+            description="Its ink writes back. Whatever it touches starts to read wrong.",
+            moves=[
+                _move(_ATTACK, "Quill Stab", 3),
+                _move(_CORRUPT, "Ink Blot", 2, stacks=2),
+                _move(_DEFEND, "Tome Shield", 1),
             ],
         ),
     ],

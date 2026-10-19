@@ -116,6 +116,8 @@ class EnemyIntentType(StrEnum):
     OVERLOAD = "overload"  # one crushing hit - never rolled, always follows a CHARGE
     PURGE = "purge"  # destroys the rightmost permanent, then hits
     INFECT = "infect"  # a light hit that leaves Malware on the player
+    LOCK = "lock"  # a light hit that locks an empty field slot for the player's next turn
+    CORRUPT = "corrupt"  # a light hit that shuffles Glitch cards into the draw pile
 
 
 # Intents that hit the player - everything else deals no damage.
@@ -126,8 +128,17 @@ ATTACKING_INTENTS = frozenset(
         EnemyIntentType.OVERLOAD,
         EnemyIntentType.PURGE,
         EnemyIntentType.INFECT,
+        EnemyIntentType.LOCK,
+        EnemyIntentType.CORRUPT,
     }
 )
+
+# The light hit every field move (infect, lock, corrupt) comes with.
+_LIGHT_HIT_KINDS = {
+    EnemyIntentType.INFECT: MoveKind.INFECT,
+    EnemyIntentType.LOCK: MoveKind.LOCK,
+    EnemyIntentType.CORRUPT: MoveKind.CORRUPT,
+}
 
 # Statuses (models.Status).
 EXPOSED_FACTOR = 1.5  # attack cards against an exposed enemy
@@ -175,6 +186,8 @@ class CombatState(BaseModel):
     # Statuses and their stacks / turns left (models.Status).
     enemy_status: dict[Status, int] = Field(default_factory=dict)
     player_status: dict[Status, int] = Field(default_factory=dict)
+    # Field slots an enemy's lock move has shut for the player's current turn.
+    locked_slots: list[int] = Field(default_factory=list)
     # cards left this turn that cost no tokens (Tab-Tab-Tab, Pair Programming)
     free_plays: int = 0
 
@@ -301,8 +314,8 @@ def intent_hits(state: CombatState) -> list[tuple[int, int]]:
     if intent is EnemyIntentType.PURGE:
         hit = round(base * _move_power(state, MoveKind.PURGE) / 100)
         return [(hit + 1, hit + 6)]
-    if intent is EnemyIntentType.INFECT:
-        hit = round(base * _move_power(state, MoveKind.INFECT) / 100)
+    if intent in _LIGHT_HIT_KINDS:
+        hit = round(base * _move_power(state, _LIGHT_HIT_KINDS[intent]) / 100)
         return [(hit + 1, hit + 6)]
     return []
 
@@ -570,6 +583,8 @@ def play_card(
         raise ValueError(f"slot_index {slot_index} is out of range")
     if state.field[slot_index] is not None:
         raise ValueError(f"slot {slot_index} is occupied")
+    if slot_index in state.locked_slots:
+        raise ValueError(f"slot {slot_index} is locked this turn")
 
     card = state.hand.pop(hand_index)
     # Rolled before anything else is paid, and only past the context window -
@@ -656,6 +671,11 @@ def _pay_discard_cost(state: CombatState, card: Card, rng: random.Random) -> str
     return f"You discard {names}. "
 
 
+def free_slots(state: CombatState) -> list[int]:
+    """Slots a card can be played into right now - empty and not locked."""
+    return [i for i, c in enumerate(state.field) if c is None and i not in state.locked_slots]
+
+
 def permanent_count(state: CombatState) -> int:
     return sum(1 for c in state.field if c is not None)
 
@@ -704,7 +724,7 @@ def action_preview(
     Reads the same helpers _apply_action_effect uses, so the preview is what
     the play will actually do.
     """
-    if state.field[slot_index] is not None:
+    if state.field[slot_index] is not None or slot_index in state.locked_slots:
         return None
     multiplier = _amplifier_multiplier(state, slot_index)
     bonus = _chain_bonus(state, slot_index)
@@ -798,6 +818,9 @@ def _apply_action_effect(
         state.free_plays += card.value
         return f"You play {card.name} - the next {card.value} card(s) this turn cost no tokens."
 
+    if card.type is CardType.GLITCH:
+        return f"You flush a {card.name} out of your hand."
+
     if card.type is CardType.BLOCK:
         amount = block_amount(state, card, multiplier, bonus)
         state.player_block += amount
@@ -842,6 +865,8 @@ def end_turn(
     log: list[str] = []
     if line := _discard_excess(state, discard):
         log.append(line)
+    # A lock only lasts the player turn it was cast for.
+    state.locked_slots = []
 
     # Permanents that act on their own resolve before the enemy does, so a
     # Daemon can finish a fight and a Mainframe's block is up in time.
@@ -961,6 +986,20 @@ def _tick_statuses(state: CombatState, player: PlayerState) -> list[str]:
     return log
 
 
+def _glitch(state: CombatState, n: int) -> Card:
+    """A junk card for the draw pile - this fight only, the deck never sees it."""
+    serial = len(state.draw_pile) + len(state.discard_pile) + len(state.banished_pile) + n
+    return Card(
+        id=f"glitch-{state.turn}-{serial}",
+        name="Glitch",
+        type=CardType.GLITCH,
+        value=0,
+        exhaust=True,
+        token_cost=0,
+        description="Does nothing. Play it to flush it out.",
+    )
+
+
 def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -> list[str]:
     """Resolve everything but a plain attack or brace."""
     name = state.enemy.name
@@ -992,11 +1031,24 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
         EnemyIntentType.INFECT: "infects you"
         if own
         else f"infects you with {state.enemy.attack_name}",
+        EnemyIntentType.LOCK: "jams your field" if own else "strikes",
+        EnemyIntentType.CORRUPT: "corrupts your code" if own else "strikes",
     }[intent]
     rolled = " + ".join(str(h) for h in hits)
     log.append(
         f"{name} {uses}{move} ({rolled}). You take {taken} damage. You are at {player.hp} HP."
     )
+    if intent is EnemyIntentType.LOCK:
+        empty = [i for i, c in enumerate(state.field) if c is None]
+        if empty:
+            slot = rng.choice(empty)
+            state.locked_slots = [slot]
+            log.append(f"Slot {slot + 1} is locked for your next turn.")
+    if intent is EnemyIntentType.CORRUPT:
+        glitches = [_glitch(state, i) for i in range(current_move(state).stacks)]
+        for glitch in glitches:
+            state.draw_pile.insert(rng.randrange(len(state.draw_pile) + 1), glitch)
+        log.append(f"{len(glitches)} Glitch card(s) seep into your draw pile.")
     if intent is EnemyIntentType.INFECT:
         stacks = current_move(state).stacks if current_move(state) else 0
         state.player_status[Status.MALWARE] = state.player_status.get(Status.MALWARE, 0) + stacks
@@ -1041,7 +1093,7 @@ def auto_resolve_combat(
             index = next((i for i, c in enumerate(state.hand) if not overflows(state, c)), None)
             if index is None:
                 break
-            empty_slot = next((i for i, c in enumerate(state.field) if c is None), None)
+            empty_slot = next(iter(free_slots(state)), None)
             if empty_slot is None:
                 break
             log.append(play_card(state, index, empty_slot, player, rng))
