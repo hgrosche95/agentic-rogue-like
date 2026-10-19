@@ -95,10 +95,15 @@ function readoutOf(card: HandCardView, slot: number | null): Readout | undefined
 }
 
 // The hand fans out like cards held in a hand: each one turned a little
-// further from the middle and dropped along an arc.
+// further from the middle and dropped along an arc. Past five cards the arc
+// flattens, so the outer cards of a big hand (over the limit, about to
+// discard) don't sink off the bottom of the screen.
 function fanStyle(index: number, count: number): CSSProperties {
+  const edge = Math.max(1, (count - 1) / 2);
   const k = index - (count - 1) / 2;
-  return { "--rot": `${k * 2.5}deg`, "--lift": `${k * k * 2.5}px` } as CSSProperties;
+  const rot = k * Math.min(2.5, 6 / edge);
+  const lift = k * k * Math.min(2.5, 12 / (edge * edge));
+  return { "--rot": `${rot}deg`, "--lift": `${lift}px` } as CSSProperties;
 }
 
 export function CombatPanel({
