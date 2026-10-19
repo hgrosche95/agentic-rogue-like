@@ -627,6 +627,11 @@ Permanente liegen *unter* den Zeilen: Ein Overclock in Zeile 1 verstärkt jede
 Anweisung rechts davon, eine Zeile kann Permanent und Anweisung zugleich
 tragen. Bis zum Zugende lassen sich eingereihte Karten umsortieren
 (`combat.move_queued`, `POST /runs/{id}/combat/move-queued`).
+`combat.program_preview` zeigt dabei, wo der Kampf nach dem Programm steht
+(HP und Block beider Seiten) – sonst plant man blind, weil eingereihter
+Schaden erst am Zugende ankommt. Die API liefert sie im Kampf mit. Der
+Vibe-Coder hat 6 Zeilen statt 5: Er zieht nach jeder Karte und füllte 5
+Zeilen in fast jedem dritten Zug.
 
 Drei Kontrollfluss-Karten gibt es nur in Programm-Runs als Belohnung
 (`cards.PROGRAM_REWARD_POOL`):
@@ -647,18 +652,18 @@ Ob die Reihenfolge wirklich zählt, misst `balance-sim --program --order
 {played,best,random}`: Der Smart-Bot spielt seine Karten, dann bleibt das
 Programm wie gespielt, wird zufällig gemischt oder auf die beste aller
 Anordnungen gebracht (jede auf einer Kopie des Kampfes ausprobiert). Mit
-`--pool`, 400 Runs:
+`--pool`, 1000 Runs, mit Kontrollfluss-Karten und Programm-Artefakten
+(Schwankung etwa ±1 Prozentpunkt):
 
 | Run-Siegquote | Classic | wie gespielt | zufällig | beste Reihenfolge |
 | --- | --- | --- | --- | --- |
-| Chronos | 8 % | 8 % | 5 % | 14 % |
-| Vibe-Coder | 10 % | 4 % | 3 % | 6 % |
+| Chronos | 10 % | 7 % | 5 % | 13 % |
+| Vibe-Coder | 10 % | 8 % | 6 % | 10 % |
 
-Beste gegen zufällige Reihenfolge ist bei Chronos fast das Dreifache, die
-Reihenfolge ist also eine echte Entscheidung. Der Vibe-Coder ist im
-Programm-Modus noch schwächer als in Classic: Seine Karten leben vom Jetzt
-(Ship It zählt die schon gespielten Karten), das braucht eigenes Balancing.
-Das Frontend kennt den Modus noch nicht.
+Wer die Reihenfolge ignoriert, steht etwas schlechter als in Classic, wer sie
+durchdenkt, gleich gut oder besser – bei beiden Charakteren. „Beste
+Reihenfolge“ ist eine Obergrenze (der Bot probiert jeden Zug alles durch),
+ein Spieler landet dazwischen. Das Frontend kennt den Modus noch nicht.
 
 ### Programm-Artefakte
 
@@ -685,8 +690,7 @@ Artefakt, 23–26 mit einem Programm-Artefakt, so viel wie mit den klassischen
 (Tunnel Vision 24, Backdoor 26, Heat Sink 27). Der Abstand zwischen bester
 und zufälliger Reihenfolge wächst dabei von 5 auf bis zu 10 HP (Hot Path,
 Compiler, Tail Call): Die Artefakte machen die Reihenfolge wichtiger, nicht
-nur den Spieler stärker. Im ganzen Run (400 Runs, `--pool`): Chronos 12 %
-mit bester gegen 3 % mit zufälliger Reihenfolge, Vibe-Coder 6 % gegen 3 %.
+nur den Spieler stärker.
 
 ## Karten-Upgrades
 
