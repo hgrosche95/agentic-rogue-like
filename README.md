@@ -660,6 +660,34 @@ Programm-Modus noch schwächer als in Classic: Seine Karten leben vom Jetzt
 (Ship It zählt die schon gespielten Karten), das braucht eigenes Balancing.
 Das Frontend kennt den Modus noch nicht.
 
+### Programm-Artefakte
+
+Sechs Artefakte gibt es nur in Programm-Runs (`artifacts.PROGRAM_ARTIFACT_POOL`,
+zusätzlich zum Pool des Charakters). Sie belohnen, *wo* etwas im Programm
+steht und *was neben was* läuft, keine reinen Werte:
+
+| Artefakt | Wirkung |
+| --- | --- |
+| Hot Path | die Karte in Zeile 2 läuft als `+`-Version (das Deck behält die normale), aber Gegner haben 10 % mehr HP |
+| Branch Predictor | sobald der Gegner auf ≤ 50 % HP ist, bekommt jede weitere Aktion +3 |
+| Tail Call | jeden 2. Zug läuft die Aktion in der letzten Zeile einmal mehr |
+| Pipeline | die Aktion direkt nach einer Kontrollfluss-Karte bekommt +3 |
+| Compiler | die Aktion in der letzten Zeile bekommt +1 pro anderem Kartentyp, der vorher lief |
+| Extra Line | eine 6. Zeile (ohne Permanent darunter), jeden 2. Zug 1 Karte mehr |
+
+Ein längeres Feld für alle bringt wenig: Chronos füllt nur in 10 % der Züge
+alle 5 Zeilen (der Vibe-Coder in 29 %), ihm fehlen Karten, nicht Platz. Darum
+ist die 6. Zeile ein Artefakt und bringt Karten mit.
+
+Gemessen in Einzelkämpfen (mittlere Gegner und Elites, Starterdeck plus Fork,
+Loop und If Wounded, 300 Kämpfe): HP-Verlust mit bester Reihenfolge 31 ohne
+Artefakt, 23–26 mit einem Programm-Artefakt, so viel wie mit den klassischen
+(Tunnel Vision 24, Backdoor 26, Heat Sink 27). Der Abstand zwischen bester
+und zufälliger Reihenfolge wächst dabei von 5 auf bis zu 10 HP (Hot Path,
+Compiler, Tail Call): Die Artefakte machen die Reihenfolge wichtiger, nicht
+nur den Spieler stärker. Im ganzen Run (400 Runs, `--pool`): Chronos 12 %
+mit bester gegen 3 % mit zufälliger Reihenfolge, Vibe-Coder 6 % gegen 3 %.
+
 ## Karten-Upgrades
 
 Im Safehouse lässt sich eine Karte einmal verbessern: Sie bekommt ein „+“ am

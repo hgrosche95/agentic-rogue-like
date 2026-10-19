@@ -34,7 +34,6 @@ from .cards import can_upgrade, upgrade_card
 from .characters import CHARACTERS
 from .combat import (
     AFFIX_DESCRIPTIONS,
-    FIELD_SIZE,
     action_preview,
     enemy_block_gain,
     incoming_damage,
@@ -461,7 +460,8 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
                 HandCardView(
                     hand_index=i,
                     preview=[
-                        action_preview(combat, card, run.player, slot) for slot in range(FIELD_SIZE)
+                        action_preview(combat, card, run.player, slot)
+                        for slot in range(len(combat.program))
                     ],
                     overflows=overflows(combat, card),
                     **CardView.of(card).model_dump(),

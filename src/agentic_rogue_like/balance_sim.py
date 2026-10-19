@@ -61,7 +61,14 @@ from pathlib import Path
 
 from .agent.budgets import _BUDGETS
 from .agent.encounter_schema import EnemyBudget
-from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
+from .artifacts import (
+    ARTIFACT_EVERY_STEPS,
+    PROGRAM_ARTIFACT_POOL,
+    gain_artifact,
+    heal,
+    roll_artifact_offer,
+    total,
+)
 from .cards import (
     PROGRAM_REWARD_POOL,
     START_CARD_WEIGHTS,
@@ -90,6 +97,7 @@ from .events import GameEvent, apply_option, option_value, random_event
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
     PERMANENT_CARD_TYPES,
+    Artifact,
     Card,
     CardType,
     Character,
@@ -154,6 +162,11 @@ class SimConfig:
         """Mirrors characters.reward_pool."""
         pool = CHARACTERS[self.character].reward_pool
         return pool + PROGRAM_REWARD_POOL if self.program else pool
+
+    def artifact_pool(self) -> list[Artifact]:
+        """Mirrors characters.artifact_pool."""
+        pool = CHARACTERS[self.character].artifact_pool
+        return pool + PROGRAM_ARTIFACT_POOL if self.program else pool
 
 
 def load_variant(path: Path, character: Character = Character.CHRONOS) -> SimConfig:
@@ -647,9 +660,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
 
     while True:
         if cfg.artifacts and steps % ARTIFACT_EVERY_STEPS == 0:
-            offer = roll_artifact_offer(
-                rng, player.artifacts, pool=CHARACTERS[cfg.character].artifact_pool
-            )
+            offer = roll_artifact_offer(rng, player.artifacts, pool=cfg.artifact_pool())
             if offer:
                 gain_artifact(player, rng.choice(offer))
         if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):

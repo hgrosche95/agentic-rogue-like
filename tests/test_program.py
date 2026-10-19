@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from agentic_rogue_like.api import app
+from agentic_rogue_like.artifacts import PROGRAM_ARTIFACT_POOL
 from agentic_rogue_like.balance_sim import _program_score, arrange_program
 from agentic_rogue_like.cards import (
     CARD_UPGRADES,
@@ -12,7 +13,7 @@ from agentic_rogue_like.cards import (
     starter_deck,
     upgrade_card,
 )
-from agentic_rogue_like.characters import reward_pool
+from agentic_rogue_like.characters import artifact_pool, reward_pool
 from agentic_rogue_like.combat import (
     EnemyIntentType,
     end_turn,
@@ -22,7 +23,7 @@ from agentic_rogue_like.combat import (
     start_combat,
 )
 from agentic_rogue_like.engine import available_choices, move_to, new_run, resolve_node
-from agentic_rogue_like.models import Card, Enemy, PlayerState, RunStatus
+from agentic_rogue_like.models import Artifact, Card, Enemy, PlayerState, RunStatus
 from agentic_rogue_like.sessions import get_session
 
 
@@ -31,10 +32,17 @@ def _card(name: str) -> Card:
     return next(c for c in pool if c.name == name).model_copy(deep=True)
 
 
-def _fight(hp: int = 100, program_mode: bool = True):
+def _artifact(name: str) -> Artifact:
+    return next(a for a in PROGRAM_ARTIFACT_POOL if a.name == name)
+
+
+def _fight(hp: int = 100, program_mode: bool = True, artifact: str | None = None):
     enemy = Enemy(id="e", name="Foe", hp=hp, attack=8, attack_name="Hit")
     player = PlayerState(hp=100, max_hp=100, attack=0, deck=starter_deck())
-    state, _ = start_combat(player.deck, enemy, random.Random(1), program_mode=program_mode)
+    artifacts = [_artifact(artifact)] if artifact else []
+    state, _ = start_combat(
+        player.deck, enemy, random.Random(1), artifacts, program_mode=program_mode
+    )
     state.enemy_intent = EnemyIntentType.DEFEND  # nothing hits back
     state.hand = []
     return state, player
@@ -48,11 +56,18 @@ def _queue(state, player, *names: str, slots: list[int] | None = None) -> None:
         )
 
 
-def _damage_dealt(*names: str, hp: int = 100) -> int:
-    state, player = _fight(hp)
-    _queue(state, player, *names)
+def _damage_dealt(
+    *names: str,
+    hp: int = 100,
+    artifact: str | None = None,
+    slots: list[int] | None = None,
+    turn: int = 1,
+) -> int:
+    state, player = _fight(hp, artifact=artifact)
+    state.turn = turn
+    _queue(state, player, *names, slots=slots)
     end_turn(state, player, random.Random(9))
-    return hp - state.enemy_hp
+    return state.enemy.hp - state.enemy_hp
 
 
 def test_actions_wait_for_the_end_of_the_turn() -> None:
@@ -193,3 +208,57 @@ def test_a_program_run_plays_out_on_its_own() -> None:
             move_to(run, available_choices(run)[0])
     assert any("queue" in line for line in run.history)
     assert any(line.startswith("[") for line in run.history)  # program lines ran
+
+
+# ---- program artifacts
+
+
+def test_hot_path_runs_its_line_upgraded() -> None:
+    assert _damage_dealt("Exploit", artifact="Hot Path", slots=[0]) == 5
+    assert _damage_dealt("Exploit", artifact="Hot Path", slots=[1]) == 8
+
+    state, player = _fight(artifact="Hot Path")
+    assert state.enemy_hp == 110  # its price
+    _queue(state, player, "Exploit", slots=[1])
+    end_turn(state, player, random.Random(2))
+    assert [c.name for c in state.discard_pile] == ["Exploit"]  # the deck's card stays plain
+
+
+def test_branch_predictor_boosts_what_runs_after_half_hp() -> None:
+    names = ("Exploit", "Exploit", "Exploit")
+    assert _damage_dealt(*names, hp=20) == 15
+    assert _damage_dealt(*names, hp=20, artifact="Branch Predictor") == 18
+
+
+def test_tail_call_runs_the_last_line_again_every_second_turn() -> None:
+    assert _damage_dealt("Exploit", artifact="Tail Call", slots=[4], turn=1) == 5
+    assert _damage_dealt("Exploit", artifact="Tail Call", slots=[4], turn=2) == 10
+    assert _damage_dealt("Exploit", artifact="Tail Call", slots=[3], turn=2) == 5
+
+
+def test_pipeline_boosts_the_action_after_control_flow() -> None:
+    assert _damage_dealt("Fork", "Exploit", artifact="Pipeline") == 16
+    assert _damage_dealt("Exploit", "Fork", artifact="Pipeline") == 5
+
+
+def test_compiler_counts_the_other_types_before_the_last_line() -> None:
+    assert _damage_dealt("Firewall", "Exploit", artifact="Compiler", slots=[0, 4]) == 6
+    assert _damage_dealt("Firewall", "Exploit", artifact="Compiler", slots=[0, 3]) == 5
+
+
+def test_extra_line_takes_actions_only() -> None:
+    state, player = _fight(artifact="Extra Line")
+    assert len(state.program) == 6
+    assert 5 in free_slots(state, _card("Exploit"))
+    assert 5 not in free_slots(state, _card("Overclock"))
+    _queue(state, player, "Exploit", slots=[5])
+    with pytest.raises(ValueError, match="occupied"):
+        _queue(state, player, "Overclock", slots=[5])
+    end_turn(state, player, random.Random(2))
+    assert state.enemy_hp == 95
+
+
+def test_program_artifacts_are_only_offered_in_program_runs() -> None:
+    names = {a.name for a in PROGRAM_ARTIFACT_POOL}
+    assert not names & {a.name for a in artifact_pool(new_run(1))}
+    assert names <= {a.name for a in artifact_pool(new_run(1, program_mode=True))}

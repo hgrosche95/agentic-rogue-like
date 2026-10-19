@@ -19,7 +19,7 @@ import random
 
 from .artifacts import gain_artifact, roll_artifact_offer
 from .cards import reward_card, roll_card_reward
-from .characters import CHARACTERS, reward_pool
+from .characters import artifact_pool, reward_pool
 from .models import Rarity, RunState, Shop, ShopArtifact, ShopCard
 
 SHOP_CARDS = 4
@@ -54,7 +54,7 @@ def roll_shop(run: RunState) -> Shop:
             rng,
             run.player.artifacts,
             SHOP_ARTIFACTS,
-            pool=CHARACTERS[run.player.character].artifact_pool,
+            pool=artifact_pool(run),
         )
     ]
     return Shop(

@@ -195,6 +195,64 @@ VIBE_CODER_ARTIFACT_POOL: list[Artifact] = [
 ]
 
 
+# Offered only in program-mode runs (RunState.program_mode), on top of the
+# character's pool: they reward where things sit in a program and what runs
+# next to what, never plain stats - see combat.run_program.
+PROGRAM_ARTIFACT_POOL: list[Artifact] = [
+    Artifact(
+        id="hot-path",
+        name="Hot Path",
+        description=(
+            "The card in line 2 of your program runs as its upgraded version, but "
+            "enemies have 10% more HP."
+        ),
+        hot_path=2,
+        enemy_hp_percent=10,
+    ),
+    Artifact(
+        id="branch-predictor",
+        name="Branch Predictor",
+        description=(
+            "Once the enemy is at half HP or less, every further action in your program gets +3."
+        ),
+        wounded_bonus=3,
+    ),
+    Artifact(
+        id="tail-call",
+        name="Tail Call",
+        description="Every 2nd turn, the action in the last line of your program runs once more.",
+        tail_call=1,
+        tail_call_every=2,
+    ),
+    Artifact(
+        id="pipeline",
+        name="Pipeline",
+        description="The action right after a control flow card gets +3.",
+        pipeline=3,
+    ),
+    Artifact(
+        id="compiler",
+        name="Compiler",
+        description=(
+            "The action in the last line of your program gets +1 for every other card type "
+            "that ran before it."
+        ),
+        compiler_bonus=1,
+    ),
+    Artifact(
+        id="extra-line",
+        name="Extra Line",
+        description=(
+            "Your program gets a 6th line, with no permanent under it. Every 2nd turn, "
+            "draw 1 extra card."
+        ),
+        extra_lines=1,
+        extra_draw=1,
+        extra_draw_every=2,
+    ),
+]
+
+
 def total(artifacts: list[Artifact], field: str) -> int:
     """Sum of one bonus field over all artifacts."""
     return sum(getattr(a, field) for a in artifacts)

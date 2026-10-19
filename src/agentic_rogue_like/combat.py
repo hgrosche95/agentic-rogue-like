@@ -54,6 +54,7 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 from .artifacts import every_nth_turn, heal, total
+from .cards import can_upgrade, upgrade_card
 from .characters import profile
 from .models import (
     DEFAULT_BARRAGE_HITS,
@@ -151,6 +152,7 @@ QUEUED_TYPES = CONTROL_FLOW_TYPES | {
     CardType.HEAL,
     CardType.FINAL_STRIKE,
 }
+
 
 # Statuses (models.Status).
 EXPOSED_FACTOR = 1.5  # attack cards against an exposed enemy
@@ -553,6 +555,9 @@ def start_combat(
         free_plays=total(artifacts, "opening_free_plays"),
         program_mode=program_mode,
     )
+    if program_mode:
+        lines = FIELD_SIZE + total(artifacts, "extra_lines")
+        state.program, state.program_glitched = [None] * lines, [False] * lines
     _roll_next_intent(state, rng)
     _draw(state, HAND_SIZE + total(artifacts, "opening_hand"), rng)
     log = [f"A {enemy.name} appears! ({enemy.hp} HP)"]
@@ -601,7 +606,7 @@ def play_card(
 ) -> str:
     if not 0 <= hand_index < len(state.hand):
         raise ValueError(f"hand_index {hand_index} is out of range")
-    if not 0 <= slot_index < FIELD_SIZE:
+    if not 0 <= slot_index < len(state.program):
         raise ValueError(f"slot_index {slot_index} is out of range")
     if slot_taken(state, slot_index, state.hand[hand_index]):
         raise ValueError(f"slot {slot_index} is occupied")
@@ -665,7 +670,7 @@ def move_queued(state: CombatState, from_slot: int, to_slot: int) -> None:
     if not state.program_mode:
         raise ValueError("only a program can be rearranged")
     for slot in (from_slot, to_slot):
-        if not 0 <= slot < FIELD_SIZE:
+        if not 0 <= slot < len(state.program):
             raise ValueError(f"slot {slot} is out of range")
     if state.program[from_slot] is None:
         raise ValueError(f"no queued card in line {from_slot}")
@@ -683,12 +688,27 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
     amplifiers and Copilots to its left count, Copilot counting the actions
     already run). Control flow steers the actions after it: fork runs the
     next one twice, if_wounded does so only if the enemy is at half HP or
-    less by the time it runs, loop runs the last one again. Once the enemy is down the rest is
-    skipped - one-shots included, which are then kept for the next fight.
+    less by the time it runs, loop runs the last one again. Once the enemy
+    is down the rest is skipped - one-shots included, which are then kept
+    for the next fight.
+
+    The program artifacts hook in here: Hot Path upgrades the card in its
+    line for the run, Branch Predictor boosts every action once the enemy is
+    at half HP, Tail Call runs the last line once more, Pipeline boosts the
+    action right after control flow and Compiler the last line's action, by
+    the other card types that ran before it.
     """
     log: list[str] = []
     forks, last, ran = 0, None, 0
-    for slot in range(FIELD_SIZE):
+    hot = total(state.artifacts, "hot_path") - 1
+    pipeline = total(state.artifacts, "pipeline")
+    predictor = total(state.artifacts, "wounded_bonus")
+    last_line = len(state.program) - 1
+    tail_call = every_nth_turn(state.artifacts, "tail_call", "tail_call_every", state.turn)
+    compiler = total(state.artifacts, "compiler_bonus")
+    types: set[CardType] = set()  # what ran so far
+    after_flow = False
+    for slot in range(len(state.program)):
         card = state.program[slot]
         if card is None:
             continue
@@ -698,40 +718,52 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
             state.discard_pile.append(card)  # never ran, so never used up
             continue
         line = f"[{slot + 1}] "
-        if card.type is CardType.FORK:
-            forks += card.value
-            log.append(line + f"{card.name}: the next action runs {1 + forks} times.")
-        elif card.type is CardType.IF_WOUNDED:
-            wounded = state.enemy_hp * 2 <= state.enemy.hp
-            forks += card.value if wounded else 0
-            state_line = "at half HP or less" if wounded else "still above half HP"
-            log.append(line + f"{card.name}: the enemy is {state_line}.")
-        elif card.type is CardType.LOOP:
+        # Hot Path: the card runs as its upgrade, the deck keeps the original.
+        run = card
+        if slot == hot and not glitched and can_upgrade(card):
+            run = upgrade_card(card)
+            line += "(hot path) "
+        if run.type is CardType.FORK:
+            forks += run.value
+            log.append(line + f"{run.name}: the next action runs {1 + forks} times.")
+        elif run.type is CardType.IF_WOUNDED:
+            forks += run.value if _wounded(state) else 0
+            state_line = "at half HP or less" if _wounded(state) else "still above half HP"
+            log.append(line + f"{run.name}: the enemy is {state_line}.")
+        elif run.type is CardType.LOOP:
+            repeats = run.value + (tail_call if slot == last_line else 0)
             if last is None:
-                log.append(line + f"{card.name}: nothing has run yet to repeat.")
-            else:
-                for _ in range(card.value):
-                    state.plays_this_turn = ran
-                    log.append(
-                        line + f"{card.name} -> " + _run_line(state, last, slot, player, rng)
-                    )
-                    ran += 1
-                    if state.enemy_hp <= 0:
-                        break
+                log.append(line + f"{run.name}: nothing has run yet to repeat.")
+            for _ in range(repeats if last is not None else 0):
+                state.plays_this_turn = ran
+                wounded = predictor if _wounded(state) else 0
+                log.append(
+                    line + f"{run.name} -> " + _run_line(state, last, slot, player, rng, wounded)
+                )
+                ran += 1
+                if state.enemy_hp <= 0:
+                    break
         else:
+            bonus = pipeline if after_flow else 0
+            if slot == last_line:
+                bonus += compiler * len(types - {run.type})
+                forks += tail_call
             for _ in range(1 + forks):
                 state.plays_this_turn = ran
+                wounded = predictor if _wounded(state) else 0
                 if glitched:
-                    log.append(line + _hallucinate(state, card, slot, player))
+                    log.append(line + _hallucinate(state, run, slot, player))
                 else:
-                    log.append(line + _run_line(state, card, slot, player, rng))
+                    log.append(line + _run_line(state, run, slot, player, rng, bonus + wounded))
                 ran += 1
                 if state.enemy_hp <= 0:
                     break
             forks = 0
-            last = None if glitched else card
-        if card.type in CONTROL_FLOW_TYPES and card.draw:
-            log.append(line + f"You draw {_draw(state, card.draw, rng)} card(s).")
+            last = None if glitched else run
+        after_flow = run.type in CONTROL_FLOW_TYPES
+        types.add(run.type)
+        if run.type in CONTROL_FLOW_TYPES and run.draw:
+            log.append(line + f"You draw {_draw(state, run.draw, rng)} card(s).")
         if card.exhaust and card.type not in CONTROL_FLOW_TYPES:
             state.banished_pile.append(card)
         else:
@@ -741,12 +773,23 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
     return log
 
 
+def _wounded(state: CombatState) -> bool:
+    """If Wounded's (and Branch Predictor's) condition: the enemy at half HP or less."""
+    return state.enemy_hp * 2 <= state.enemy.hp
+
+
 def _run_line(
-    state: CombatState, card: Card, slot: int, player: PlayerState, rng: random.Random
+    state: CombatState,
+    card: Card,
+    slot: int,
+    player: PlayerState,
+    rng: random.Random,
+    bonus: int = 0,
 ) -> str:
-    """One action card's effect, as if played into `slot` right now."""
+    """One action card's effect, as if played into `slot` right now - with
+    `bonus` on top of the Copilots' (Pipeline)."""
     multiplier = _amplifier_multiplier(state, slot)
-    bonus = _chain_bonus(state, slot)
+    bonus += _chain_bonus(state, slot)
     line = _apply_action_effect(state, card, multiplier, player, rng, bonus)
     if card.applies is not None and state.enemy_hp > 0:
         line += " " + _afflict(state, card.applies, card.applies_amount)
@@ -805,7 +848,8 @@ def slot_taken(state: CombatState, slot_index: int, card: Card | None = None) ->
     sits on top of the field - a permanent and a queued action can share a slot."""
     if card is not None and queues(state, card):
         return state.program[slot_index] is not None
-    return state.field[slot_index] is not None
+    # Extra program lines (extra_lines) have no field slot under them.
+    return slot_index >= FIELD_SIZE or state.field[slot_index] is not None
 
 
 def free_slots(state: CombatState, card: Card | None = None) -> list[int]:
@@ -813,7 +857,7 @@ def free_slots(state: CombatState, card: Card | None = None) -> list[int]:
     into right now - free and not locked."""
     return [
         i
-        for i in range(FIELD_SIZE)
+        for i in range(len(state.program))
         if not slot_taken(state, i, card) and i not in state.locked_slots
     ]
 

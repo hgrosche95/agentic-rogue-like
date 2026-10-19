@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from .artifacts import ARTIFACT_POOL, VIBE_CODER_ARTIFACT_POOL
+from .artifacts import ARTIFACT_POOL, PROGRAM_ARTIFACT_POOL, VIBE_CODER_ARTIFACT_POOL
 from .cards import (
     PROGRAM_REWARD_POOL,
     REWARD_POOL,
@@ -94,3 +94,10 @@ def reward_pool(run: RunState) -> list[Card]:
     character's pool, plus the control flow cards in a program-mode run."""
     pool = CHARACTERS[run.player.character].reward_pool
     return pool + PROGRAM_REWARD_POOL if run.program_mode else pool
+
+
+def artifact_pool(run: RunState) -> list[Artifact]:
+    """What the run's artifact offers and shops offer: the character's pool,
+    plus the program artifacts in a program-mode run."""
+    pool = CHARACTERS[run.player.character].artifact_pool
+    return pool + PROGRAM_ARTIFACT_POOL if run.program_mode else pool

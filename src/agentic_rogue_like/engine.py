@@ -15,7 +15,7 @@ from .agent.event_agent import event_for_room
 from .agent.narrator import narrate
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
 from .cards import START_CARD_WEIGHTS, can_upgrade, reward_card, roll_card_reward, upgrade_card
-from .characters import CHARACTERS, reward_pool
+from .characters import CHARACTERS, artifact_pool, reward_pool
 from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
@@ -106,7 +106,7 @@ def new_run(
     # Its own rng, so offering artifacts doesn't shift the run rng's sequence
     # (enemies, events, rewards) compared to a run without them.
     run.artifact_offer = roll_artifact_offer(
-        random.Random(f"{seed}-artifacts-0"), [], pool=hero.artifact_pool
+        random.Random(f"{seed}-artifacts-0"), [], pool=artifact_pool(run)
     )
     # ... and so does the starting card pick: three uncommon/rare cards, one of
     # which (or none) joins the starter deck before the first room.
@@ -126,8 +126,9 @@ def move_to(run: RunState, node_id: str) -> None:
     run.steps += 1
     if run.steps % ARTIFACT_EVERY_STEPS == 0:
         rng = random.Random(f"{run.seed}-artifacts-{run.steps}")
-        pool = CHARACTERS[run.player.character].artifact_pool
-        run.artifact_offer = roll_artifact_offer(rng, run.player.artifacts, pool=pool) or None
+        run.artifact_offer = (
+            roll_artifact_offer(rng, run.player.artifacts, pool=artifact_pool(run)) or None
+        )
 
 
 def choose_artifact(run: RunState, index: int) -> None:

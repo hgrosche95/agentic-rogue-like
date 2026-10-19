@@ -64,6 +64,14 @@ class Artifact(BaseModel):
     token_regen: int = 0  # used tokens freed at the end of every turn
     opening_free_plays: int = 0  # the first N cards of every fight cost no tokens
     hallucination_percent: int = 0  # cards past the window hallucinate this % more often
+    # Only in program mode (combat.run_program):
+    hot_path: int = 0  # the card in this line (1-based) runs as its upgraded version
+    extra_lines: int = 0  # program lines beyond the field's slots
+    wounded_bonus: int = 0  # flat bonus for actions run once the enemy is at half HP
+    tail_call: int = 0  # extra runs of the program's last line ...
+    tail_call_every: int = 1  # ... on every Nth turn only
+    pipeline: int = 0  # flat bonus for the action right after control flow
+    compiler_bonus: int = 0  # the last line's action +this per card type that ran before it
 
 
 class CardType(StrEnum):
