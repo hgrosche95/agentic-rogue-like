@@ -14,8 +14,14 @@ export function EventPrompt({
       <p>{event.description}</p>
       <div className="choice-buttons">
         {event.options.map((option) => (
-          <button key={option.index} disabled={disabled} onClick={() => onChoose(option.index)}>
-            {option.label}
+          <button
+            key={option.index}
+            className="event-option"
+            disabled={disabled}
+            onClick={() => onChoose(option.index)}
+          >
+            <span className="event-option-label">{option.label}</span>
+            <span className="event-option-effects">{option.effects}</span>
           </button>
         ))}
       </div>

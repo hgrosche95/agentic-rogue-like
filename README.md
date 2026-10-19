@@ -196,7 +196,7 @@ src/agentic_rogue_like/
 ├── characters.py   Spielbare Charaktere (Dr. Chronos, Vibe-Coder): Werte, Startdeck, Kontextfenster
 ├── artifacts.py    Artefakt-Pool und -Angebote (passive Run-Boni)
 ├── shop.py         Schwarzmarkt: zufälliges Angebot aus Karten und Artefakten, Preise, Kaufen
-├── events.py       Event-/Rest-/Shop-Auflösung
+├── events.py       Events aus festen Effekt-Bausteinen: Regeln, Bewertung, fester Pool
 ├── enemies.py      Statischer Gegner-Pool (Fallback für den Encounter-Agent)
 ├── engine.py       Der deterministische Kern-Loop, den CLI und API beide treiben
 ├── agent/          LangGraph-Encounter-Agent, Tool-Schema, Etagen-Budgets, Narrator, Ollama-Anbindung
@@ -555,6 +555,38 @@ Treffer, beides am Simulator eingestellt (±20 %). Mit den neuen Moves in den
 Zufalls-Movesets erklärt das Modell weiter 92 % der Streuung, die
 Run-Siegquoten bleiben bei 10 % (Chronos) und 13 % (Vibe-Coder). Der
 Smart-Bot spielt Glitches sofort aus, wie es ein Mensch tun würde.
+
+## Events
+
+Ein Event ist eine Situation mit 2–3 Optionen, gebaut nur aus festen
+Effekt-Bausteinen (`events.py`): Gold, HP, max. HP, eine Karte bestimmter
+Seltenheit, eine zufällige Karte verlieren, eine zufällige Karte verbessern,
+oder ein Glücksspiel aus zwei solchen Listen. Weil Events damit Daten sind,
+gelten für den festen Pool (8 Events) und für vom Agenten erfundene Events
+dieselben Regeln (`validate_event`):
+
+- höchstens eine Option „nichts tun“,
+- jede andere Option hat einen Preis (negativer Betrag, Karte verlieren oder
+  ein Glücksspiel, dessen Fehlschlag etwas kostet),
+- jede Option ist zwischen −10 und 40 Gold wert.
+
+Der Wert wird in Gold gerechnet, angelehnt an die Schwarzmarkt-Preise (Karten
+25/45/70, Upgrade 40, HP 5, max. HP 8). Im Spiel steht unter jeder Option,
+was sie kostet und bringt, z. B. „+50 gold, -4 HP“ oder „70%: +60 gold -
+otherwise: -10 HP“. Events töten nie (HP fallen höchstens auf 1).
+
+Mit `ENCOUNTER_AGENT_ENABLED=1` (nur Groq) erfindet `agent/event_agent.py`
+Events zum Setting, mit derselben Retry-Schleife wie der Encounter-Agent
+(die Ablehnung nennt die verletzte Regel) und Rückfall auf den festen Pool.
+`prefetch.py` erzeugt sie für erreichbare Event-Räume im Voraus.
+
+HP waren zuerst mit 3 Gold bewertet. Im Simulator schnitten Bots, die die
+wertvollste Option nahmen, dann schlechter ab als Bots, die immer gingen:
+HP sind mehr wert. Mit 5 Gold pro HP lohnt sich die beste Wahl für Chronos
+wieder (10,9 % Run-Siegquote gegen 10,6 % beim Weitergehen). Für den
+Vibe-Coder noch nicht ganz (10,4 % gegen 11,8 %), vermutlich weil
+zusätzliche Karten sein Deck verwässern. Weil der Simulator keine Shops kennt,
+bewerten Bots Gold dabei mit 0.
 
 ## Karten-Upgrades
 

@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable
-from dataclasses import replace
 
 from .agent.encounter_agent import enemy_for_node
+from .agent.event_agent import event_for_room
 from .agent.narrator import narrate
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
 from .cards import START_CARD_WEIGHTS, can_upgrade, reward_card, roll_card_reward, upgrade_card
@@ -21,7 +21,7 @@ from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
 from .enemies import escalate, with_affix
-from .events import EventOption, GameEvent, random_event
+from .events import EventOption, GameEvent, apply_option
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
     DEFAULT_SETTING,
@@ -132,7 +132,12 @@ def choose_artifact(run: RunState, index: int) -> None:
     run.artifact_offer = None
 
 
-def start_event(run: RunState, rng: random.Random, narrator: Narrator | None = None) -> GameEvent:
+def start_event(
+    run: RunState,
+    rng: random.Random,
+    narrator: Narrator | None = None,
+    prefetched_event: Callable[[], GameEvent] | None = None,
+) -> GameEvent:
     """First half of resolving an EVENT node: draw the event, record its text.
 
     Split out from `resolve_node` so a caller that can't supply an option
@@ -143,12 +148,13 @@ def start_event(run: RunState, rng: random.Random, narrator: Narrator | None = N
     node.visited = True
     run.floor = node.floor
 
-    event = random_event(rng)
-    flavor = (narrator or narrate)(run.setting, event.description)
+    event, written_by_agent = event_for_room(rng, run.setting, prefetched_event)
+    # The agent already writes for the setting; the static pool gets themed.
+    flavor = None if written_by_agent else (narrator or narrate)(run.setting, event.description)
     if flavor:
         # EVENT_POOL entries are shared singletons re-picked by every run -
-        # replace() makes a themed copy instead of mutating the pool itself.
-        event = replace(event, description=flavor)
+        # model_copy() makes a themed copy instead of mutating the pool itself.
+        event = event.model_copy(update={"description": flavor})
     run.history.append(event.description)
     return event
 
@@ -245,7 +251,8 @@ def upgradable_indices(run: RunState) -> list[int]:
 
 def apply_event_choice(run: RunState, option: EventOption, rng: random.Random) -> None:
     """Second half of resolving an EVENT node: apply the chosen option's effect."""
-    outcome = option.effect(run.player, rng)
+    pool = CHARACTERS[run.player.character].reward_pool
+    outcome = apply_option(option, run.player, pool, rng)
     run.history.append(f"> {option.label}: {outcome}")
 
 

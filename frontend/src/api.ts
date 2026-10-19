@@ -109,6 +109,8 @@ export interface MapNode {
 export interface EventOptionView {
   index: number;
   label: string;
+  // what it does in game terms, e.g. "+50 gold, -6 HP" - the price is visible up front
+  effects: string;
 }
 
 export interface PendingEventView {

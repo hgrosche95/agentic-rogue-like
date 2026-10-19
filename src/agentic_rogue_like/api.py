@@ -66,6 +66,7 @@ from .engine import (
     start_combat_node,
     start_event,
 )
+from .events import describe_option
 from .models import (
     MAX_CUSTOM_SETTING_LENGTH,
     SETTING_PRESETS,
@@ -105,6 +106,9 @@ app.add_middleware(
 class EventOptionView(BaseModel):
     index: int
     label: str
+    # What it does in game terms ("+60 gold, -8 HP", "70%: ... - otherwise: ..."),
+    # so the trade-off is visible before picking.
+    effects: str
 
 
 class PendingEventView(BaseModel):
@@ -390,7 +394,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         pending_event = PendingEventView(
             description=session.pending_event.description,
             options=[
-                EventOptionView(index=i, label=option.label)
+                EventOptionView(index=i, label=option.label, effects=describe_option(option))
                 for i, option in enumerate(session.pending_event.options)
             ],
         )
@@ -557,7 +561,12 @@ def resolve_current_node(run_id: str) -> RunView:
 
     prefetch = session.prefetch
     if node.type is NodeType.EVENT:
-        session.pending_event = start_event(run, session.rng, narrator=prefetch.narrator)
+        session.pending_event = start_event(
+            run,
+            session.rng,
+            narrator=prefetch.narrator,
+            prefetched_event=prefetch.take_event(node.id),
+        )
     elif node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
         session.combat = start_combat_node(
             run, session.rng, prefetched_enemy=prefetch.take_enemy(node.id)
