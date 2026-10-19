@@ -35,6 +35,30 @@ jobs:
       - name: Test
         run: uv run pytest
 
+  # training/ is its own uv project (see training/README.md). Only its
+  # default and dev groups are installed - no torch - and its tests script
+  # the model, so this stays offline like the backend suite.
+  training:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: training
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Lint
+        run: uv run ruff check eval tests
+
+      - name: Test
+        run: uv run pytest
+
   frontend:
     runs-on: ubuntu-latest
     steps:

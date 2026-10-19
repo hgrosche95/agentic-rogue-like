@@ -75,12 +75,32 @@ def test_a_harder_hitting_move_set_may_not_have_the_plain_hp() -> None:
         validate_proposal(_moveset(hp=60), MID)
 
 
-def test_the_suggested_hp_fixes_the_violation() -> None:
-    with pytest.raises(BudgetViolation) as exc:
-        validate_proposal(_moveset(hp=60), MID)
-    suggested = int(str(exc.value).split("hp to about ")[1].split(",")[0])
-
-    validate_proposal(_moveset(hp=suggested), MID)
+@pytest.mark.parametrize("tier", ["early", "mid", "elite"])
+@pytest.mark.parametrize("too", ["dangerous", "weak"])
+def test_the_suggested_hp_fixes_the_violation(tier: str, too: str) -> None:
+    budget = _BUDGETS[tier]
+    low_hp, high_hp = budget.hp_bounds()
+    feeble = [
+        MoveProposal(kind=MoveKind.ATTACK, name="Nibble", weight=1, power=60),
+        MoveProposal(kind=MoveKind.DEFEND, name="Cower", weight=1, power=60),
+    ]
+    # Every HP that misses the range must get a suggestion that hits it -
+    # including the ones where plain rounding would land a hair outside.
+    for hp in range(low_hp, high_hp + 1):
+        proposal = (
+            _moveset(hp=hp, attack=budget.max_attack)
+            if too == "dangerous"
+            else _moveset(hp=hp, attack=budget.min_attack, moves=feeble)
+        )
+        try:
+            validate_proposal(proposal, budget)
+            continue
+        except BudgetViolation as exc:
+            if "hp to about" not in str(exc) or f"too {too}" not in str(exc):
+                continue
+            suggested = int(str(exc).split("hp to about ")[1].split(",")[0])
+        if low_hp <= suggested <= high_hp and suggested not in (low_hp, high_hp):
+            validate_proposal(proposal.model_copy(update={"hp": suggested}), budget)
 
 
 def test_a_defensive_move_set_may_have_more_hp_than_the_plain_range() -> None:

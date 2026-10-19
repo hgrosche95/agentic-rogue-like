@@ -18,6 +18,8 @@ proposal stays inside its floor's balance budget. Two schemas:
 
 from __future__ import annotations
 
+import math
+
 from pydantic import BaseModel, Field, ValidationError, ValidationInfo, field_validator
 
 from ..models import Enemy, EnemyMove, MoveKind
@@ -170,9 +172,13 @@ def validate_proposal(proposal: EnemyProposal, budget: EnemyBudget) -> None:
     if low <= value <= high:
         return
     # Threat is proportional to HP, so the HP that lands on the nearest bound
-    # is one division away.
-    bound = high if value > high else low
-    fitting_hp = max(low_hp, min(high_hp, round(proposal.hp * bound / value)))
+    # is one division away - rounded towards the inside of the range, or the
+    # suggestion itself could miss it by a fraction.
+    if value > high:
+        fitting_hp = math.floor(proposal.hp * high / value)
+    else:
+        fitting_hp = math.ceil(proposal.hp * low / value)
+    fitting_hp = max(low_hp, min(high_hp, fitting_hp))
     direction = "too dangerous" if value > high else "too weak"
     raise BudgetViolation(
         f"threat {value:.1f} outside budget [{low:.1f}, {high:.1f}] - the enemy is "
