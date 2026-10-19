@@ -59,6 +59,16 @@ def _play_full_run(seed: int) -> dict:
         if run["shop"] is not None:
             run = client.post(f"/runs/{run_id}/shop/leave").json()
 
+        if run["rest"] is not None:
+            # Alternate the three choices, so full runs exercise all of them.
+            if steps % 3 == 0 and run["rest"]["upgrades"]:
+                index = run["rest"]["upgrades"][0]["deck_index"]
+                run = client.post(f"/runs/{run_id}/rest/upgrade", json={"index": index}).json()
+            elif steps % 3 == 1 and run["rest"]["can_remove"]:
+                run = client.post(f"/runs/{run_id}/rest/remove", json={"index": 0}).json()
+            else:
+                run = client.post(f"/runs/{run_id}/rest/heal").json()
+
         if run["status"] != "ongoing":
             break
 

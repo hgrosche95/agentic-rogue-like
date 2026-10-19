@@ -69,6 +69,11 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 - [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
       drei wählen, danach alle 3 Schritte auf der Map ein weiteres
       (`/runs/{id}/artifact`). 20 Stück in `artifacts.py`, siehe *Artefakte* unten.
+- [x] **Rastplatz mit Wahl** — ein Safehouse heilt nicht mehr automatisch,
+      man wählt eins von dreien: heilen (15 HP, mit Artefakten mehr), eine
+      Karte dauerhaft verbessern oder eine Karte kostenlos aus dem Deck
+      entfernen (`/runs/{id}/rest/heal`, `/rest/upgrade`, `/rest/remove`).
+      Siehe *Karten-Upgrades* unten.
 - [x] **Schwarzmarkt** — jeder Shop-Raum bietet eine zufällige Auswahl
       aus 4 Karten (nach Seltenheit gewichtet, wie eine Kartenbelohnung) und
       2 Artefakten, die man noch nicht hat, gegen Credits (Gold): Karten
@@ -444,6 +449,23 @@ kein neuer Code.
 | Quick Boot | Starthand +2 Karten |
 | Rate Limiter | Gegner treffen um 3 schwächer, aber −1 ATK |
 | Vampire Process | Jede gespielte Angriffskarte heilt 1 HP |
+
+## Karten-Upgrades
+
+Im Safehouse lässt sich eine Karte einmal verbessern: Sie bekommt ein „+“ am
+Namen und einen stärkeren Wert, z. B. Exploit 5 → 8 Schaden, Firewall 5 → 8
+Block, Overclock 25 % → 40 %, Encryption 1 → 2 Rüstung, Daemon 4 → 6
+Schaden, DDoS 3 → 4 Treffer. Die Upgrades stehen pro Karte ausgeschrieben in
+`cards.CARD_UPGRADES` (grob +40 % auf die Hauptzahl oder ein Effekt mehr),
+nicht als Formel, damit jedes eine bewusste Entscheidung ist. Prefetch und
+System Restore haben keins: ein zweiter Zusatz-Zug pro Runde würde die
+Ziehregel aushebeln, und System Restore hat nichts zu skalieren.
+
+Heilen, Verbessern und Entfernen sind eine echte Abwägung, kein Gratis-Bonus:
+In `balance-sim` heilt der Smart-Bot unter 65 % HP und verbessert sonst eine
+Karte. Die Run-Siegquote bleibt dabei gleich (9 %, mit und ohne Upgrades),
+die Kämpfe werden aber etwas kürzer. Mit `"rest_upgrades": false` in einer
+Variante heilt der Bot wieder immer.
 
 ## Karten
 

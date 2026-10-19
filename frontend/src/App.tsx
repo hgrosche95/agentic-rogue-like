@@ -14,6 +14,9 @@ import {
   listSettings,
   playCard,
   resolveCurrentNode,
+  restHeal,
+  restRemove,
+  restUpgrade,
   type PendingCombatView,
   type RunView,
 } from "./api";
@@ -33,6 +36,7 @@ import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
 import { CloseButton, Overlay } from "./components/Overlay";
 import { eraLabel, numFloorsOf } from "./eras";
+import { RestScreen } from "./components/RestScreen";
 import { RewardScreen } from "./components/RewardScreen";
 import { SettingPicker } from "./components/SettingPicker";
 import { ShopScreen } from "./components/ShopScreen";
@@ -210,6 +214,7 @@ function App() {
     !run.card_reward &&
     !run.artifact_offer &&
     !run.shop &&
+    !run.rest &&
     !run.node_resolved;
 
   return (
@@ -335,6 +340,20 @@ function App() {
             onBuyCard={(index) => runAction(() => buyShopCard(run.run_id, index))}
             onBuyArtifact={(index) => runAction(() => buyShopArtifact(run.run_id, index))}
             onLeave={() => runAction(() => leaveShop(run.run_id))}
+          />
+        </Overlay>
+      )}
+      {!combat && ongoing && run.rest && (
+        <Overlay label="Safehouse" className="is-wide">
+          <RestScreen
+            rest={run.rest}
+            hp={run.player.hp}
+            maxHp={run.player.max_hp}
+            deck={run.player.deck}
+            disabled={isLoading}
+            onHeal={() => runAction(() => restHeal(run.run_id))}
+            onUpgrade={(index) => runAction(() => restUpgrade(run.run_id, index))}
+            onRemove={(index) => runAction(() => restRemove(run.run_id, index))}
           />
         </Overlay>
       )}

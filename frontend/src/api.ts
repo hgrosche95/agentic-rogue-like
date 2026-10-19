@@ -43,6 +43,10 @@ export interface Card {
   exhaust: boolean;
   // attacks only: the damage is dealt this many times
   hits: number;
+  // scaling attacks: the bonus per permanent / graveyard / banished card
+  scale_value: number;
+  // reworked once at a safehouse - its name carries a "+"
+  upgraded: boolean;
 }
 
 // A passive bonus for the rest of the run. Only the text is shown - the
@@ -145,6 +149,20 @@ export interface ShopArtifact {
 }
 
 // What a black market room sells, until the player leaves it.
+// A safehouse: heal, upgrade a card, or remove one - one of the three.
+export interface RestUpgrade {
+  deck_index: number;
+  card: Card;
+  upgraded: Card;
+}
+
+export interface RestView {
+  heal_amount: number;
+  upgrades: RestUpgrade[];
+  can_remove: boolean;
+  min_deck_size: number;
+}
+
 export interface ShopView {
   cards: ShopCard[];
   artifacts: ShopArtifact[];
@@ -171,6 +189,7 @@ export interface RunView {
   card_reward: Card[] | null;
   artifact_offer: Artifact[] | null;
   shop: ShopView | null;
+  rest: RestView | null;
   nodes: Record<string, MapNode>;
 }
 
@@ -253,6 +272,24 @@ export function removeShopCard(runId: string, index: number): Promise<RunView> {
 
 export function leaveShop(runId: string): Promise<RunView> {
   return request<RunView>(`/runs/${runId}/shop/leave`, { method: "POST" });
+}
+
+export function restHeal(runId: string): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/rest/heal`, { method: "POST" });
+}
+
+export function restUpgrade(runId: string, index: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/rest/upgrade`, {
+    method: "POST",
+    body: JSON.stringify({ index }),
+  });
+}
+
+export function restRemove(runId: string, index: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/rest/remove`, {
+    method: "POST",
+    body: JSON.stringify({ index }),
+  });
 }
 
 export function playCard(runId: string, handIndex: number, slotIndex: number): Promise<RunView> {

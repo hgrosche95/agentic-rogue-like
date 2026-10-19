@@ -50,7 +50,14 @@ from pathlib import Path
 from .agent.budgets import _BUDGETS
 from .agent.encounter_schema import EnemyBudget
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
-from .cards import START_CARD_WEIGHTS, reward_card, roll_card_reward, starter_deck
+from .cards import (
+    START_CARD_WEIGHTS,
+    can_upgrade,
+    reward_card,
+    roll_card_reward,
+    starter_deck,
+    upgrade_card,
+)
 from .combat import (
     ATTACKING_INTENTS,
     MAX_AUTO_PLAYS_PER_TURN,
@@ -95,6 +102,9 @@ class SimConfig:
     artifacts: bool = True
     # Fight enemies.py's static pool instead of random enemies in the budgets.
     pool: bool = False
+    # Let bots upgrade a card at rest sites (see rest_choice) instead of
+    # always healing.
+    rest_upgrades: bool = True
 
     def new_player(self) -> PlayerState:
         return PlayerState(
@@ -119,6 +129,7 @@ def load_variant(path: Path) -> SimConfig:
     base.player_attack = player.get("attack", base.player_attack)
     base.rewards = raw.get("rewards", base.rewards)
     base.artifacts = raw.get("artifacts", base.artifacts)
+    base.rest_upgrades = raw.get("rest_upgrades", base.rest_upgrades)
 
     card_overrides: dict[str, dict] = raw.get("cards", {})
     extra: list[dict] = raw.get("extra_cards", [])
@@ -304,6 +315,35 @@ def pick_reward(offer: list[Card], bot_name: str, rng: random.Random) -> int:
     return rng.choice([i for i, c in enumerate(offer) if _RARITY_RANK[c.rarity] == best])
 
 
+# Below this share of max HP the smart bot heals at a rest site; above it, it
+# upgrades a card instead.
+REST_HEAL_BELOW = 0.65
+# Which cards the smart bot upgrades first: what it plays most and what
+# scales hardest. Everything else upgradable comes after, in deck order.
+_UPGRADE_PRIORITY = ("Exploit", "Kernel Panic", "Overclock", "Firewall", "Encryption")
+
+
+def rest_choice(player: PlayerState, heal_amount: int, bot_name: str) -> int | None:
+    """Deck index to upgrade at a rest site, or None to heal.
+
+    Naive always heals - the old rest site. Smart heals when hurt, else
+    upgrades by _UPGRADE_PRIORITY.
+    """
+    if bot_name == "naive" or player.hp < player.max_hp * REST_HEAL_BELOW:
+        return None
+    upgradable = [i for i, c in enumerate(player.deck) if can_upgrade(c)]
+    if not upgradable:
+        return None
+
+    def rank(i: int) -> int:
+        name = player.deck[i].name
+        return (
+            _UPGRADE_PRIORITY.index(name) if name in _UPGRADE_PRIORITY else len(_UPGRADE_PRIORITY)
+        )
+
+    return min(upgradable, key=rank)
+
+
 # --------------------------------------------------------------------------- simulation
 
 
@@ -416,7 +456,12 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 node = nodes["0-0"]
                 heal(player, player.max_hp * ACT_HEAL_PERCENT // 100)
         elif node.type is NodeType.REST:
-            heal(player, REST_HEAL + total(player.artifacts, "rest_heal"))
+            amount = REST_HEAL + total(player.artifacts, "rest_heal")
+            index = rest_choice(player, amount, bot_name) if cfg.rest_upgrades else None
+            if index is None:
+                heal(player, amount)
+            else:
+                player.deck[index] = upgrade_card(player.deck[index])
         elif node.type is NodeType.EVENT:
             rng.choice(random_event(rng).options).effect(player, rng)
             if player.hp <= 0:

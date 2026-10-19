@@ -14,7 +14,14 @@ from dataclasses import replace
 from .agent.encounter_agent import enemy_for_node
 from .agent.narrator import narrate
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
-from .cards import START_CARD_WEIGHTS, reward_card, roll_card_reward, starter_deck
+from .cards import (
+    START_CARD_WEIGHTS,
+    can_upgrade,
+    reward_card,
+    roll_card_reward,
+    starter_deck,
+    upgrade_card,
+)
 from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
@@ -30,10 +37,11 @@ from .models import (
     MapNode,
     NodeType,
     PlayerState,
+    RestSite,
     RunState,
     RunStatus,
 )
-from .shop import leave_shop, roll_shop
+from .shop import MIN_DECK_SIZE, leave_shop, roll_shop
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
 # Index into the offered cards, or None to skip the reward.
@@ -43,6 +51,9 @@ ChooseArtifact = Callable[[list[Artifact]], int]
 # Called while a shop is open, to buy from it (shop.buy_card/buy_artifact);
 # the shop closes when it returns.
 BrowseShop = Callable[[RunState], None]
+# What to do at a rest site: ("heal", None), or ("upgrade" | "remove", deck index).
+RestAction = tuple[str, int | None]
+ChooseRest = Callable[[RunState], RestAction]
 # (setting, situation) -> flavor text or None. Defaults to a live narrate()
 # call; the web API passes one that reads background-prefetched text instead.
 Narrator = Callable[[str, str], str | None]
@@ -152,6 +163,77 @@ def open_shop(run: RunState, narrator: Narrator | None = None) -> None:
         f"A merchant lays out {len(run.shop.cards)} cards and "
         f"{len(run.shop.artifacts)} artifacts. You have {run.player.gold} gold."
     )
+
+
+def open_rest(run: RunState, narrator: Narrator | None = None) -> None:
+    """Enter a REST room and leave its choice open (run.rest): heal, upgrade
+    a card, or remove a card - one of the three.
+
+    Like open_shop, split out from resolve_node so the web API can wait for
+    the player's pick in a second request.
+    """
+    node = run.nodes[run.current_node_id]
+    node.visited = True
+    run.floor = node.floor
+    flavor = (narrator or narrate)(run.setting, REST_SITUATION)
+    if flavor:
+        run.history.append(flavor)
+    run.rest = RestSite(heal_amount=REST_HEAL + total(run.player.artifacts, "rest_heal"))
+
+
+def _open_rest(run: RunState) -> RestSite:
+    if run.rest is None:
+        raise ValueError("no rest site open")
+    return run.rest
+
+
+def rest_heal(run: RunState) -> None:
+    healed = heal(run.player, _open_rest(run).heal_amount)
+    run.history.append(f"You rest and recover {healed} HP.")
+    run.rest = None
+
+
+def rest_upgrade(run: RunState, deck_index: int) -> None:
+    """Upgrade card `deck_index` for good. Raises ValueError for a bad index
+    or a card that can't be upgraded (see cards.can_upgrade)."""
+    _open_rest(run)
+    deck = run.player.deck
+    if not 0 <= deck_index < len(deck):
+        raise ValueError(f"deck index {deck_index} is out of range")
+    before = deck[deck_index]
+    deck[deck_index] = upgrade_card(before)
+    run.history.append(f"You rework {before.name} into {deck[deck_index].name}.")
+    run.rest = None
+
+
+def rest_remove(run: RunState, deck_index: int) -> None:
+    """Remove card `deck_index` for free - unlike the black market's removal,
+    it costs the rest instead of gold, and doesn't raise the market's price."""
+    _open_rest(run)
+    deck = run.player.deck
+    if not 0 <= deck_index < len(deck):
+        raise ValueError(f"deck index {deck_index} is out of range")
+    if len(deck) <= MIN_DECK_SIZE:
+        raise ValueError(f"your deck can't get smaller than {MIN_DECK_SIZE} cards")
+    card = deck.pop(deck_index)
+    run.history.append(f"You strip {card.name} out of your deck.")
+    run.rest = None
+
+
+def apply_rest_action(run: RunState, action: RestAction) -> None:
+    kind, index = action
+    if kind == "heal":
+        rest_heal(run)
+    elif kind == "upgrade" and index is not None:
+        rest_upgrade(run, index)
+    elif kind == "remove" and index is not None:
+        rest_remove(run, index)
+    else:
+        raise ValueError(f"unknown rest action {action!r}")
+
+
+def upgradable_indices(run: RunState) -> list[int]:
+    return [i for i, card in enumerate(run.player.deck) if can_upgrade(card)]
 
 
 def apply_event_choice(run: RunState, option: EventOption, rng: random.Random) -> None:
@@ -294,6 +376,7 @@ def resolve_node(
     choose_card: ChooseCardReward | None = None,
     choose_artifact_option: ChooseArtifact | None = None,
     browse_shop: BrowseShop | None = None,
+    choose_rest: ChooseRest | None = None,
 ) -> None:
     if run.artifact_offer is not None:
         offer = run.artifact_offer
@@ -350,11 +433,9 @@ def resolve_node(
             )
 
     elif node.type is NodeType.REST:
-        flavor = (narrator or narrate)(run.setting, REST_SITUATION)
-        if flavor:
-            run.history.append(flavor)
-        healed = heal(run.player, REST_HEAL + total(run.player.artifacts, "rest_heal"))
-        run.history.append(f"You rest and recover {healed} HP.")
+        # without a choose_rest callback (bots, tests) the player heals
+        open_rest(run, narrator)
+        apply_rest_action(run, choose_rest(run) if choose_rest else ("heal", None))
 
     elif node.type is NodeType.SHOP:
         # without a browse_shop callback (bots, tests) nothing is bought

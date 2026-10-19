@@ -6,10 +6,18 @@ import random
 
 from dotenv import load_dotenv
 
-from .engine import available_choices, move_to, new_run, resolve_node
+from .cards import upgrade_card
+from .engine import (
+    RestAction,
+    available_choices,
+    move_to,
+    new_run,
+    resolve_node,
+    upgradable_indices,
+)
 from .events import EventOption, GameEvent
 from .models import Artifact, Card, RunState, RunStatus
-from .shop import buy_artifact, buy_card
+from .shop import MIN_DECK_SIZE, buy_artifact, buy_card
 
 
 def _prompt_index(count: int) -> int:
@@ -70,6 +78,29 @@ def _browse_shop(run: RunState) -> None:
             print(exc)
 
 
+def _choose_rest(run: RunState) -> RestAction:
+    deck = run.player.deck
+    upgradable = upgradable_indices(run)
+    options: list[str] = ["heal"]
+    print(f"\nA place to rest - {run.player.hp}/{run.player.max_hp} HP. Choose one:")
+    print(f"  1. Rest - heal {run.rest.heal_amount} HP")
+    if upgradable:
+        options.append("upgrade")
+        print(f"  {len(options)}. Upgrade a card")
+    if len(deck) > MIN_DECK_SIZE:
+        options.append("remove")
+        print(f"  {len(options)}. Remove a card")
+    kind = options[_prompt_index(len(options))]
+    if kind == "heal":
+        return "heal", None
+    indices = upgradable if kind == "upgrade" else list(range(len(deck)))
+    for n, i in enumerate(indices, start=1):
+        card = deck[i]
+        after = f" -> {upgrade_card(card).description}" if kind == "upgrade" else ""
+        print(f"  {n}. {card.name} - {card.description}{after}")
+    return kind, indices[_prompt_index(len(indices))]
+
+
 def _choose_next_node(run: RunState, choices: list[str]) -> str:
     print("\nPaths ahead:")
     for i, node_id in enumerate(choices, start=1):
@@ -97,6 +128,7 @@ def main() -> None:
                 choose_card=_choose_card,
                 choose_artifact_option=_choose_artifact,
                 browse_shop=_browse_shop,
+                choose_rest=_choose_rest,
             )
             for line in run.history[last_printed:]:
                 print(line)

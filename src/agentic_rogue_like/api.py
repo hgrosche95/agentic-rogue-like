@@ -30,6 +30,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
+from .cards import can_upgrade, upgrade_card
 from .combat import (
     FIELD_SIZE,
     action_preview,
@@ -50,9 +51,13 @@ from .engine import (
     finalize_combat,
     move_to,
     new_run,
+    open_rest,
     open_shop,
     play_combat_card,
     resolve_node,
+    rest_heal,
+    rest_remove,
+    rest_upgrade,
     start_combat_node,
     start_event,
 )
@@ -64,6 +69,7 @@ from .models import (
     MapNode,
     NodeType,
     PlayerState,
+    RestSite,
     RunStatus,
     Shop,
 )
@@ -109,6 +115,9 @@ class CardView(BaseModel):
     rarity: str
     exhaust: bool
     hits: int
+    # Scaling attacks: the bonus per permanent / graveyard / banished card.
+    scale_value: int
+    upgraded: bool
 
     @classmethod
     def of(cls, card: Card) -> CardView:
@@ -121,6 +130,8 @@ class CardView(BaseModel):
             rarity=card.rarity.value,
             exhaust=card.exhaust,
             hits=max(card.hits, 1),
+            scale_value=card.scale_value,
+            upgraded=card.upgraded,
         )
 
 
@@ -210,6 +221,36 @@ class ShopView(BaseModel):
         )
 
 
+class RestUpgradeView(BaseModel):
+    deck_index: int
+    # The card as it is and as it would be - so the choice shows the change.
+    card: CardView
+    upgraded: CardView
+
+
+class RestView(BaseModel):
+    heal_amount: int
+    upgrades: list[RestUpgradeView]
+    # Removing a card is free here, down to min_deck_size.
+    can_remove: bool
+    min_deck_size: int
+
+    @classmethod
+    def of(cls, rest: RestSite, deck: list[Card]) -> RestView:
+        return cls(
+            heal_amount=rest.heal_amount,
+            upgrades=[
+                RestUpgradeView(
+                    deck_index=i, card=CardView.of(card), upgraded=CardView.of(upgrade_card(card))
+                )
+                for i, card in enumerate(deck)
+                if can_upgrade(card)
+            ],
+            can_remove=len(deck) > MIN_DECK_SIZE,
+            min_deck_size=MIN_DECK_SIZE,
+        )
+
+
 class RunView(BaseModel):
     run_id: str
     status: RunStatus
@@ -229,6 +270,8 @@ class RunView(BaseModel):
     artifact_offer: list[Artifact] | None
     # The shop being browsed, until the player leaves it.
     shop: ShopView | None
+    # The rest site's choice, until the player makes it.
+    rest: RestView | None
     # Every node in the run, not just the current/reachable ones - the
     # frontend draws the whole dungeon graph, not just the next step.
     nodes: dict[str, MapNode]
@@ -298,6 +341,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         and session.combat is None
         and run.card_reward is None
         and run.shop is None
+        and run.rest is None
     )
 
     pending_event = None
@@ -383,6 +427,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         ),
         artifact_offer=run.artifact_offer,
         shop=None if run.shop is None else ShopView.of(run.shop),
+        rest=None if run.rest is None else RestView.of(run.rest, run.player.deck),
         nodes=run.nodes,
     )
 
@@ -451,6 +496,8 @@ def resolve_current_node(run_id: str) -> RunView:
         )
     elif node.type is NodeType.SHOP:
         open_shop(run, narrator=prefetch.narrator)
+    elif node.type is NodeType.REST:
+        open_rest(run, narrator=prefetch.narrator)
     else:
         resolve_node(run, session.rng, narrator=prefetch.narrator)
 
@@ -566,6 +613,34 @@ def leave_shop_endpoint(run_id: str) -> RunView:
     return _shop_action(run_id, leave_shop)
 
 
+def _rest_action(run_id: str, action) -> RunView:
+    session = _get_session_or_404(run_id)
+    if session.run.rest is None:
+        raise HTTPException(status_code=409, detail="no rest site open")
+    try:
+        action(session.run)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _run_view(run_id, session)
+
+
+@app.post("/runs/{run_id}/rest/heal")
+def rest_heal_endpoint(run_id: str) -> RunView:
+    return _rest_action(run_id, rest_heal)
+
+
+@app.post("/runs/{run_id}/rest/upgrade")
+def rest_upgrade_endpoint(run_id: str, request: ShopBuyRequest) -> RunView:
+    """`index` is the card's position in the deck (RunView.player.deck)."""
+    return _rest_action(run_id, lambda run: rest_upgrade(run, request.index))
+
+
+@app.post("/runs/{run_id}/rest/remove")
+def rest_remove_endpoint(run_id: str, request: ShopBuyRequest) -> RunView:
+    """`index` is the card's position in the deck (RunView.player.deck)."""
+    return _rest_action(run_id, lambda run: rest_remove(run, request.index))
+
+
 @app.post("/runs/{run_id}/choose-node")
 def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
     session = _get_session_or_404(run_id)
@@ -578,6 +653,7 @@ def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
         or session.combat is not None
         or run.card_reward is not None
         or run.shop is not None
+        or run.rest is not None
     ):
         raise HTTPException(status_code=409, detail="current node is not resolved yet")
     if request.node_id not in available_choices(run):

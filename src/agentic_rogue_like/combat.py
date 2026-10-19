@@ -228,7 +228,7 @@ def _damage_taken(hits: list[int], block: int, armor: int) -> int:
 
 def player_armor(state: CombatState) -> int:
     """Flat reduction of the enemy's hit: armor cards on the field plus artifacts."""
-    armor = sum(1 for c in state.field if c is not None and c.type is CardType.ARMOR)
+    armor = sum(c.value for c in state.field if c is not None and c.type is CardType.ARMOR)
     return armor + total(state.artifacts, "armor")
 
 
@@ -427,12 +427,13 @@ def start_combat(
 
 
 def _amplifier_multiplier(state: CombatState, slot_index: int) -> float:
-    boosts = sum(
-        1
+    """1 + every amplifier's percent to the left of `slot_index` (25 each, 40 upgraded)."""
+    boost = sum(
+        c.value
         for i, c in enumerate(state.field)
         if c is not None and c.type is CardType.AMPLIFIER and i < slot_index
     )
-    return 1 + 0.25 * boosts
+    return 1 + boost / 100
 
 
 def play_card(

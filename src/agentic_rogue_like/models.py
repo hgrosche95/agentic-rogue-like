@@ -125,6 +125,8 @@ class Card(BaseModel):
     draw: int = 0  # draw this many cards after the effect
     scaling: Scaling | None = None  # attacks only: +scale_value per ...
     scale_value: int = 0
+    # Improved once at a rest site (cards.upgrade_card) - never twice.
+    upgraded: bool = False
 
 
 class PlayerState(BaseModel):
@@ -275,6 +277,12 @@ DEFAULT_SETTING = SETTING_PRESETS[0]
 MAX_CUSTOM_SETTING_LENGTH = 40
 
 
+class RestSite(BaseModel):
+    """An open rest site: heal, upgrade a card, or remove a card - one of them."""
+
+    heal_amount: int
+
+
 class RunState(BaseModel):
     seed: int
     # Which map of the run the player is on - beating an act's boss opens
@@ -300,3 +308,6 @@ class RunState(BaseModel):
     shop: Shop | None = None
     # Cards removed at black markets so far - each removal costs more.
     cards_removed: int = 0
+    # The rest site the player is at, until they pick what to do there (see
+    # engine.open_rest); the run can't move on while it is open.
+    rest: RestSite | None = None
