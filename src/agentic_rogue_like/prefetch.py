@@ -27,12 +27,15 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 
 from .agent.encounter_agent import generate_balanced_enemy
+from .agent.event_agent import agent_enabled as event_agent_enabled
+from .agent.event_agent import generate_valid_event
 from .agent.narrator import narrate
 from .enemies import tier_floor
 from .engine import REST_SITUATION, SHOP_SITUATION
-from .events import EVENT_POOL
+from .events import EVENT_POOL, GameEvent
 from .map_gen import NUM_FLOORS
 from .models import Enemy, NodeType, RunState, RunStatus
+from .style import agent_hint, play_style
 
 _COMBAT_TYPES = (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS)
 
@@ -46,8 +49,8 @@ def _situations(node_type: NodeType) -> list[str]:
         return [REST_SITUATION]
     if node_type is NodeType.SHOP:
         return [SHOP_SITUATION]
-    if node_type is NodeType.EVENT:
-        # Which event an EVENT room holds is only drawn from the run's rng
+    if node_type is NodeType.EVENT and not event_agent_enabled():
+        # Which static event a room holds is only drawn from the run's rng
         # once it is entered, so narrate the whole (small) pool up front.
         return [event.description for event in EVENT_POOL]
     return []
@@ -60,6 +63,8 @@ class Prefetch:
     # Keyed by situation text: the setting is fixed for a run, so a
     # narration is interchangeable between rooms of the same kind.
     flavors: dict[str, Future[str | None]] = field(default_factory=dict)
+    # Keyed by node id: each event room gets its own agent-written event.
+    events: dict[str, Future[GameEvent]] = field(default_factory=dict)
 
     def warm(self, run: RunState) -> None:
         """Start generating content for the current room and every room reachable from it."""
@@ -70,9 +75,10 @@ class Prefetch:
 
         # Enemies for rooms the player walked past are dead weight. cancel()
         # only stops ones still queued; a running call just finishes unused.
-        for node_id in list(self.enemies):
-            if node_id not in upcoming:
-                self.enemies.pop(node_id).cancel()
+        for pending in (self.enemies, self.events):
+            for node_id in list(pending):
+                if node_id not in upcoming:
+                    pending.pop(node_id).cancel()
 
         for node in (run.nodes[node_id] for node_id in upcoming):
             if node.visited:
@@ -87,17 +93,30 @@ class Prefetch:
                     elite=node.type is NodeType.ELITE,
                     boss=node.type is NodeType.BOSS,
                     setting=run.setting,
+                    # The deck is as it will be on entering: warm() runs after
+                    # every reward, on the step onto the map.
+                    counter_hint=agent_hint(
+                        None if node.type is NodeType.BOSS else play_style(run.player.deck)
+                    ),
                 )
+            if node.type is NodeType.EVENT and event_agent_enabled() and node.id not in self.events:
+                self.events[node.id] = _executor.submit(generate_valid_event, run.setting)
             for situation in _situations(node.type):
                 if situation not in self.flavors:
                     self.flavors[situation] = _executor.submit(narrate, run.setting, situation)
 
     def cancel_all(self) -> None:
         """Drop everything still queued, e.g. when the run's session is evicted."""
-        for future in [*self.enemies.values(), *self.flavors.values()]:
+        for future in [*self.enemies.values(), *self.flavors.values(), *self.events.values()]:
             future.cancel()
         self.enemies.clear()
         self.flavors.clear()
+        self.events.clear()
+
+    def take_event(self, node_id: str) -> Callable[[], GameEvent] | None:
+        """The prefetched event for `node_id` as a blocking getter, or None if none was started."""
+        future = self.events.pop(node_id, None)
+        return None if future is None else future.result
 
     def take_enemy(self, node_id: str) -> Callable[[], Enemy] | None:
         """The prefetched enemy for `node_id` as a blocking getter, or None if none was started."""

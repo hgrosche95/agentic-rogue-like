@@ -68,7 +68,7 @@ from .combat import (
 )
 from .enemies import ENEMY_POOL, escalate, pick_enemy, tier_floor, with_affix
 from .engine import ACT_HEAL_PERCENT, NUM_ACTS, boss_phases
-from .events import random_event
+from .events import GameEvent, apply_option, option_value, random_event
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
     PERMANENT_CARD_TYPES,
@@ -83,6 +83,7 @@ from .models import (
     Rarity,
     Scaling,
 )
+from .style import play_style
 from .threat import DEFAULT_MODEL, ThreatModel, threat
 
 TIERS = ("early", "mid", "elite", "boss")
@@ -107,6 +108,8 @@ class SimConfig:
     pool: bool = False
     # Elites get a random affix, as in the game (enemies.with_affix).
     affixes: bool = True
+    # The AGI answers the bot's play style, as in the game (style.py).
+    adaptive: bool = True
     # Let bots upgrade a card at rest sites (see rest_choice) instead of
     # always healing.
     rest_upgrades: bool = True
@@ -144,6 +147,7 @@ def load_variant(path: Path, character: Character = Character.CHRONOS) -> SimCon
     base.artifacts = raw.get("artifacts", base.artifacts)
     base.rest_upgrades = raw.get("rest_upgrades", base.rest_upgrades)
     base.affixes = raw.get("affixes", base.affixes)
+    base.adaptive = raw.get("adaptive", base.adaptive)
 
     card_overrides: dict[str, dict] = raw.get("cards", {})
     extra: list[dict] = raw.get("extra_cards", [])
@@ -399,6 +403,34 @@ def rest_choice(player: PlayerState, heal_amount: int, bot_name: str) -> int | N
     return min(upgradable, key=rank)
 
 
+def _worth_to_bot(option) -> float:
+    """option_value, minus gold: bots never shop (the simulator has no shops),
+    so gold buys them nothing and trading HP for it would only hurt."""
+    without_gold = option.model_copy(
+        update={
+            "effects": [e for e in option.effects if e.kind.value != "gold"],
+            "fail_effects": [e for e in option.fail_effects if e.kind.value != "gold"],
+        }
+    )
+    return option_value(without_gold) if without_gold.effects else 0.0
+
+
+def pick_event_option(event: GameEvent, player: PlayerState, bot_name: str, rng: random.Random):
+    """Naive picks at random; smart takes the option worth the most to it (see
+    _worth_to_bot) - unless it is low on HP, then the best one that costs no HP."""
+    if bot_name == "naive":
+        return rng.choice(event.options)
+
+    def hurts(option) -> bool:
+        effects = option.effects + option.fail_effects
+        return any(e.kind.value in ("hp", "max_hp") and e.amount < 0 for e in effects)
+
+    options = event.options
+    if player.hp < player.max_hp * REST_HEAL_BELOW:
+        options = [o for o in options if not hurts(o)] or options
+    return max(options, key=_worth_to_bot)
+
+
 # --------------------------------------------------------------------------- simulation
 
 
@@ -489,6 +521,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 gain_artifact(player, rng.choice(offer))
         if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
             tier = tier_for(node.floor, node.type, act)
+            style = play_style(player.deck) if cfg.adaptive else None
             if cfg.pool:
                 base = pick_enemy(
                     floor=node.floor,
@@ -497,11 +530,12 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                     boss=node.type is NodeType.BOSS,
                     rng=rng,
                     act=act,
+                    style=style,
                 )
             else:
                 base = random_enemy(cfg.budgets[tier], tier, rng)
             if node.type is NodeType.ELITE and cfg.affixes:
-                base = with_affix(base, rng)
+                base = with_affix(base, rng, style)
             enemy = escalate(base, node.floor, NUM_FLOORS, act)
             result = fight(player, enemy, tier, bot, rng, act)
             fights.append(result)
@@ -528,9 +562,9 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
             else:
                 player.deck[index] = upgrade_card(player.deck[index])
         elif node.type is NodeType.EVENT:
-            rng.choice(random_event(rng).options).effect(player, rng)
-            if player.hp <= 0:
-                return RunResult(False, node.floor, fights, act)
+            event = random_event(rng)
+            option = pick_event_option(event, player, bot_name, rng)
+            apply_option(option, player, pool, rng)
         node = nodes[rng.choice(node.connections)]
         steps += 1
 

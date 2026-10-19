@@ -66,6 +66,7 @@ from .engine import (
     start_combat_node,
     start_event,
 )
+from .events import describe_option
 from .models import (
     MAX_CUSTOM_SETTING_LENGTH,
     SETTING_PRESETS,
@@ -81,6 +82,7 @@ from .models import (
 )
 from .sessions import RunSession, create_session, get_session
 from .shop import MIN_DECK_SIZE, buy_artifact, buy_card, leave_shop, remove_card
+from .style import play_style, style_counts
 
 app = FastAPI(title="agentic-rogue-like")
 
@@ -105,6 +107,9 @@ app.add_middleware(
 class EventOptionView(BaseModel):
     index: int
     label: str
+    # What it does in game terms ("+60 gold, -8 HP", "70%: ... - otherwise: ..."),
+    # so the trade-off is visible before picking.
+    effects: str
 
 
 class PendingEventView(BaseModel):
@@ -312,6 +317,10 @@ class RunView(BaseModel):
     shop: ShopView | None
     # The rest site's choice, until the player makes it.
     rest: RestView | None
+    # What the AGI has read from the cards the player chose (style.py): the
+    # style it answers once one dominates (else null), and the counts behind it.
+    play_style: str | None
+    style_counts: dict[str, int]
     # Every node in the run, not just the current/reachable ones - the
     # frontend draws the whole dungeon graph, not just the next step.
     nodes: dict[str, MapNode]
@@ -390,7 +399,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         pending_event = PendingEventView(
             description=session.pending_event.description,
             options=[
-                EventOptionView(index=i, label=option.label)
+                EventOptionView(index=i, label=option.label, effects=describe_option(option))
                 for i, option in enumerate(session.pending_event.options)
             ],
         )
@@ -481,6 +490,8 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         artifact_offer=run.artifact_offer,
         shop=None if run.shop is None else ShopView.of(run.shop),
         rest=None if run.rest is None else RestView.of(run.rest, run.player.deck),
+        play_style=(style.value if (style := play_style(run.player.deck)) else None),
+        style_counts={s.value: n for s, n in style_counts(run.player.deck).items()},
         nodes=run.nodes,
     )
 
@@ -557,7 +568,12 @@ def resolve_current_node(run_id: str) -> RunView:
 
     prefetch = session.prefetch
     if node.type is NodeType.EVENT:
-        session.pending_event = start_event(run, session.rng, narrator=prefetch.narrator)
+        session.pending_event = start_event(
+            run,
+            session.rng,
+            narrator=prefetch.narrator,
+            prefetched_event=prefetch.take_event(node.id),
+        )
     elif node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
         session.combat = start_combat_node(
             run, session.rng, prefetched_enemy=prefetch.take_enemy(node.id)

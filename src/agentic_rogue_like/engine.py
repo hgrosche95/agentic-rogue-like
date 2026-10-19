@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable
-from dataclasses import replace
 
 from .agent.encounter_agent import enemy_for_node
+from .agent.event_agent import event_for_room
 from .agent.narrator import narrate
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
 from .cards import START_CARD_WEIGHTS, can_upgrade, reward_card, roll_card_reward, upgrade_card
@@ -21,7 +21,7 @@ from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
 from .enemies import escalate, with_affix
-from .events import EventOption, GameEvent, random_event
+from .events import EventOption, GameEvent, apply_option
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
     DEFAULT_SETTING,
@@ -37,6 +37,7 @@ from .models import (
     RunStatus,
 )
 from .shop import MIN_DECK_SIZE, leave_shop, roll_shop
+from .style import answers, play_style, taunt
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
 # Index into the offered cards, or None to skip the reward.
@@ -132,7 +133,12 @@ def choose_artifact(run: RunState, index: int) -> None:
     run.artifact_offer = None
 
 
-def start_event(run: RunState, rng: random.Random, narrator: Narrator | None = None) -> GameEvent:
+def start_event(
+    run: RunState,
+    rng: random.Random,
+    narrator: Narrator | None = None,
+    prefetched_event: Callable[[], GameEvent] | None = None,
+) -> GameEvent:
     """First half of resolving an EVENT node: draw the event, record its text.
 
     Split out from `resolve_node` so a caller that can't supply an option
@@ -143,12 +149,13 @@ def start_event(run: RunState, rng: random.Random, narrator: Narrator | None = N
     node.visited = True
     run.floor = node.floor
 
-    event = random_event(rng)
-    flavor = (narrator or narrate)(run.setting, event.description)
+    event, written_by_agent = event_for_room(rng, run.setting, prefetched_event)
+    # The agent already writes for the setting; the static pool gets themed.
+    flavor = None if written_by_agent else (narrator or narrate)(run.setting, event.description)
     if flavor:
         # EVENT_POOL entries are shared singletons re-picked by every run -
-        # replace() makes a themed copy instead of mutating the pool itself.
-        event = replace(event, description=flavor)
+        # model_copy() makes a themed copy instead of mutating the pool itself.
+        event = event.model_copy(update={"description": flavor})
     run.history.append(event.description)
     return event
 
@@ -245,7 +252,8 @@ def upgradable_indices(run: RunState) -> list[int]:
 
 def apply_event_choice(run: RunState, option: EventOption, rng: random.Random) -> None:
     """Second half of resolving an EVENT node: apply the chosen option's effect."""
-    outcome = option.effect(run.player, rng)
+    pool = CHARACTERS[run.player.character].reward_pool
+    outcome = apply_option(option, run.player, pool, rng)
     run.history.append(f"> {option.label}: {outcome}")
 
 
@@ -314,12 +322,40 @@ def choose_card_reward(run: RunState, index: int | None) -> None:
     run.card_reward = None
 
 
-def _affixed(run: RunState, node: MapNode, enemy: Enemy) -> Enemy:
-    """An elite gets a random affix (enemies.with_affix). Rolled from its own
-    rng, seeded per room, so it never shifts the run rng's other draws."""
-    if node.type is not NodeType.ELITE:
-        return enemy
-    return with_affix(enemy, random.Random(f"{run.seed}-affix-{run.act}-{node.id}"))
+def _room_enemy(
+    run: RunState,
+    node: MapNode,
+    rng: random.Random,
+    prefetched: Callable[[], Enemy] | None = None,
+) -> Enemy:
+    """The enemy of a combat room, ready to fight: picked (agent or pool),
+    affixed if elite, escalated for the timeline.
+
+    Once the player's deck shows a clear style (style.play_style), the AGI
+    prefers enemies and affixes that answer it - and an enemy that does opens
+    its fight with a taunt. An elite's affix comes from its own rng, seeded
+    per room, so it never shifts the run rng's other draws.
+    """
+    boss = node.type is NodeType.BOSS
+    style = None if boss else play_style(run.player.deck)
+    enemy = enemy_for_node(
+        enemy_id=f"agent-{rng.getrandbits(32):08x}",
+        floor=node.floor,
+        num_floors=NUM_FLOORS,
+        elite=node.type is NodeType.ELITE,
+        boss=boss,
+        rng=rng,
+        setting=run.setting,
+        prefetched=prefetched,
+        act=run.act,
+        style=style,
+    )
+    if node.type is NodeType.ELITE:
+        affix_rng = random.Random(f"{run.seed}-affix-{run.act}-{node.id}")
+        enemy = with_affix(enemy, affix_rng, style)
+    if style is not None and answers(enemy, style):
+        enemy = enemy.model_copy(update={"taunt": taunt(style)})
+    return escalate(enemy, node.floor, NUM_FLOORS, run.act)
 
 
 def start_combat_node(
@@ -338,26 +374,7 @@ def start_combat_node(
     node.visited = True
     run.floor = node.floor
 
-    enemy = escalate(
-        _affixed(
-            run,
-            node,
-            enemy_for_node(
-                enemy_id=f"agent-{rng.getrandbits(32):08x}",
-                floor=node.floor,
-                num_floors=NUM_FLOORS,
-                elite=node.type is NodeType.ELITE,
-                boss=node.type is NodeType.BOSS,
-                rng=rng,
-                setting=run.setting,
-                prefetched=prefetched_enemy,
-                act=run.act,
-            ),
-        ),
-        node.floor,
-        NUM_FLOORS,
-        run.act,
-    )
+    enemy = _room_enemy(run, node, rng, prefetched_enemy)
     state, log = _start_combat(
         run.player.deck,
         enemy,
@@ -425,25 +442,7 @@ def resolve_node(
     run.floor = node.floor
 
     if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
-        enemy = escalate(
-            _affixed(
-                run,
-                node,
-                enemy_for_node(
-                    enemy_id=f"agent-{rng.getrandbits(32):08x}",
-                    floor=node.floor,
-                    num_floors=NUM_FLOORS,
-                    elite=node.type is NodeType.ELITE,
-                    boss=node.type is NodeType.BOSS,
-                    rng=rng,
-                    setting=run.setting,
-                    act=run.act,
-                ),
-            ),
-            node.floor,
-            NUM_FLOORS,
-            run.act,
-        )
+        enemy = _room_enemy(run, node, rng)
         victory, log = auto_resolve_combat(
             run.player.deck,
             enemy,

@@ -25,6 +25,7 @@ import {
 } from "./api";
 import { FALLBACK_CHARACTERS, ShowTokensContext } from "./characters";
 import { music, sfx, type Mood } from "./audio";
+import { AgiPanel } from "./components/AgiPanel";
 import { ArtifactBar } from "./components/ArtifactBar";
 import { ArtifactScreen } from "./components/ArtifactScreen";
 import { AudioControls } from "./components/AudioControls";
@@ -321,6 +322,7 @@ function App() {
               onChoose={jumpTo}
             />
             <ArtifactBar artifacts={run.player.artifacts} />
+            <AgiPanel style={run.play_style} counts={run.style_counts} />
             <HistoryLog history={run.history} />
           </aside>
         </div>

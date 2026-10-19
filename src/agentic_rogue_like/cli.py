@@ -15,7 +15,7 @@ from .engine import (
     resolve_node,
     upgradable_indices,
 )
-from .events import EventOption, GameEvent
+from .events import EventOption, GameEvent, describe_option
 from .models import Artifact, Card, RunState, RunStatus
 from .shop import MIN_DECK_SIZE, buy_artifact, buy_card
 
@@ -31,7 +31,7 @@ def _prompt_index(count: int) -> int:
 def _choose_event_option(event: GameEvent) -> EventOption:
     print(f"\n{event.description}")
     for i, option in enumerate(event.options, start=1):
-        print(f"  {i}. {option.label}")
+        print(f"  {i}. {option.label} - {describe_option(option)}")
     return event.options[_prompt_index(len(event.options))]
 
 

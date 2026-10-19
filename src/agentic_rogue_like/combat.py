@@ -536,6 +536,8 @@ def start_combat(
     _roll_next_intent(state, rng)
     _draw(state, HAND_SIZE + total(artifacts, "opening_hand"), rng)
     log = [f"A {enemy.name} appears! ({enemy.hp} HP)"]
+    if enemy.taunt:
+        log.append(enemy.taunt)
     if enemy.description:
         log.append(enemy.description)
     if enemy.affix is not None:

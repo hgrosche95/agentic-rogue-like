@@ -196,7 +196,8 @@ src/agentic_rogue_like/
 ├── characters.py   Spielbare Charaktere (Dr. Chronos, Vibe-Coder): Werte, Startdeck, Kontextfenster
 ├── artifacts.py    Artefakt-Pool und -Angebote (passive Run-Boni)
 ├── shop.py         Schwarzmarkt: zufälliges Angebot aus Karten und Artefakten, Preise, Kaufen
-├── events.py       Event-/Rest-/Shop-Auflösung
+├── events.py       Events aus festen Effekt-Bausteinen: Regeln, Bewertung, fester Pool
+├── style.py        Spielstil aus dem Deck lesen, und womit die AGI darauf antwortet
 ├── enemies.py      Statischer Gegner-Pool (Fallback für den Encounter-Agent)
 ├── engine.py       Der deterministische Kern-Loop, den CLI und API beide treiben
 ├── agent/          LangGraph-Encounter-Agent, Tool-Schema, Etagen-Budgets, Narrator, Ollama-Anbindung
@@ -555,6 +556,64 @@ Treffer, beides am Simulator eingestellt (±20 %). Mit den neuen Moves in den
 Zufalls-Movesets erklärt das Modell weiter 92 % der Streuung, die
 Run-Siegquoten bleiben bei 10 % (Chronos) und 13 % (Vibe-Coder). Der
 Smart-Bot spielt Glitches sofort aus, wie es ein Mensch tun würde.
+
+## Events
+
+Ein Event ist eine Situation mit 2–3 Optionen, gebaut nur aus festen
+Effekt-Bausteinen (`events.py`): Gold, HP, max. HP, eine Karte bestimmter
+Seltenheit, eine zufällige Karte verlieren, eine zufällige Karte verbessern,
+oder ein Glücksspiel aus zwei solchen Listen. Weil Events damit Daten sind,
+gelten für den festen Pool (8 Events) und für vom Agenten erfundene Events
+dieselben Regeln (`validate_event`):
+
+- höchstens eine Option „nichts tun“,
+- jede andere Option hat einen Preis (negativer Betrag, Karte verlieren oder
+  ein Glücksspiel, dessen Fehlschlag etwas kostet),
+- jede Option ist zwischen −10 und 40 Gold wert.
+
+Der Wert wird in Gold gerechnet, angelehnt an die Schwarzmarkt-Preise (Karten
+25/45/70, Upgrade 40, HP 5, max. HP 8). Im Spiel steht unter jeder Option,
+was sie kostet und bringt, z. B. „+50 gold, -4 HP“ oder „70%: +60 gold -
+otherwise: -10 HP“. Events töten nie (HP fallen höchstens auf 1).
+
+Mit `ENCOUNTER_AGENT_ENABLED=1` (nur Groq) erfindet `agent/event_agent.py`
+Events zum Setting, mit derselben Retry-Schleife wie der Encounter-Agent
+(die Ablehnung nennt die verletzte Regel) und Rückfall auf den festen Pool.
+`prefetch.py` erzeugt sie für erreichbare Event-Räume im Voraus.
+
+HP waren zuerst mit 3 Gold bewertet. Im Simulator schnitten Bots, die die
+wertvollste Option nahmen, dann schlechter ab als Bots, die immer gingen:
+HP sind mehr wert. Mit 5 Gold pro HP lohnt sich die beste Wahl für Chronos
+wieder (10,9 % Run-Siegquote gegen 10,6 % beim Weitergehen). Für den
+Vibe-Coder noch nicht ganz (10,4 % gegen 11,8 %), vermutlich weil
+zusätzliche Karten sein Deck verwässern. Weil der Simulator keine Shops kennt,
+bewerten Bots Gold dabei mit 0.
+
+## Die AGI passt sich an
+
+Die AGI liest aus den Karten, die der Spieler *selbst* gewählt hat
+(Belohnungen, Shop, Events, nie das Startdeck), welchen Stil er spielt
+(`style.py`): Permanente, Friedhof, Einmal-Karten, Malware, und nur für Karten
+ohne speziellen Stil reine Angriffe oder Block. Ein Stil zählt ab 3 Karten,
+und wenn er vor allen anderen liegt. Dann antwortet sie darauf:
+
+| Stil | Antwort (Moves) | Antwort (Elite-Zusatz) |
+| --- | --- | --- |
+| Permanente | purge, lock | – |
+| Friedhof | corrupt | – |
+| Einmal-Karten | starker Block (≥120 %) | Armored |
+| Angriffe | starker Block (≥120 %) | Thorny |
+| Block | infect (Malware ignoriert Block) | Enraged |
+| Malware | – | Regenerating |
+
+Gegner aus dem Pool und Elite-Zusätze, die antworten, sind 3× so
+wahrscheinlich (nie erzwungen, Bosse ausgenommen). Der Encounter-Agent
+bekommt einen Satz im Prompt, der ihm sagt, worauf sein Moveset zielen soll.
+Weil jeder Gegner seine Bedrohung behält, macht das Kämpfe anders, nicht
+schwerer: Im Simulator bleibt die Run-Siegquote mit und ohne Anpassung gleich
+(Chronos 11 %, Vibe-Coder 10 %; Vergleich mit `"adaptive": false`). Ein
+antwortender Gegner eröffnet den Kampf mit einer Zeile der AGI, und auf der
+Karte zeigt das Panel „AGI analysis“, was sie bisher gelesen hat.
 
 ## Karten-Upgrades
 

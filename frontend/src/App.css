@@ -667,6 +667,31 @@ button.is-primary:hover:not(:disabled),
   align-items: start;
 }
 
+/* the AGI's read on the player's chosen cards (AgiPanel) */
+.agi-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.agi-counts li {
+  padding: 2px 6px;
+  color: var(--text-dim);
+  border: 2px solid var(--line);
+}
+
+.agi-counts li.is-lead {
+  color: var(--px-ink);
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
 .map-side {
   display: flex;
   flex-direction: column;
@@ -1198,6 +1223,20 @@ button.is-primary:hover:not(:disabled),
   top: 0;
   height: 8px;
   background: var(--accent-2);
+}
+
+/* an event option: its label, and under it what it costs and gives */
+.event-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.event-option-effects {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.8;
 }
 
 .event-prompt p {

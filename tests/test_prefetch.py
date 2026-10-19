@@ -4,9 +4,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from agentic_rogue_like import prefetch
-from agentic_rogue_like.agent import encounter_agent
+from agentic_rogue_like.agent import encounter_agent, event_agent
 from agentic_rogue_like.api import app
 from agentic_rogue_like.engine import new_run
+from agentic_rogue_like.events import EventEffect, EventOption, GameEvent
 from agentic_rogue_like.models import Enemy
 from agentic_rogue_like.sessions import get_session
 
@@ -30,8 +31,24 @@ def _prefetched_enemy(**kwargs) -> Enemy:
     )
 
 
-def _live_call_is_a_bug(**kwargs) -> Enemy:
-    raise AssertionError("combat room waited on a live agent call instead of the prefetch")
+def _live_call_is_a_bug(*args, **kwargs):
+    raise AssertionError("a room waited on a live agent call instead of the prefetch")
+
+
+PREFETCHED_EVENT_TEXT = "A prefetched rift flickers open."
+
+
+def _prefetched_event(setting: str) -> GameEvent:
+    return GameEvent(
+        description=PREFETCHED_EVENT_TEXT,
+        options=[
+            EventOption(
+                label="Reach in",
+                effects=[EventEffect(kind="gold", amount=40), EventEffect(kind="hp", amount=-5)],
+            ),
+            EventOption(label="Back away"),
+        ],
+    )
 
 
 @pytest.fixture
@@ -41,6 +58,8 @@ def agent_enabled(monkeypatch):
     monkeypatch.setenv("ENCOUNTER_AGENT_ENABLED", "1")
     monkeypatch.setattr(prefetch, "generate_balanced_enemy", _prefetched_enemy)
     monkeypatch.setattr(encounter_agent, "generate_balanced_enemy", _live_call_is_a_bug)
+    monkeypatch.setattr(prefetch, "generate_valid_event", _prefetched_event)
+    monkeypatch.setattr(event_agent, "generate_valid_event", _live_call_is_a_bug)
     monkeypatch.setattr(prefetch, "narrate", lambda setting, situation: f"themed: {situation}")
 
 
@@ -76,13 +95,16 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
     monkeypatch.setattr(prefetch, "narrate", _narrate)
     run = client.post("/runs", json={"seed": 7}).json()
     run_id = run["run_id"]
-    non_combat_entered = 0
+    narrated_rooms = event_rooms = 0
 
     while run["status"] == "ongoing":
-        if run["current_node"]["type"] in ("event", "rest", "shop"):
-            non_combat_entered += 1
+        # Rest and shop rooms get narration; event rooms an agent-written event.
+        narrated_rooms += run["current_node"]["type"] in ("rest", "shop")
         run = _resolve(run_id).json()
         if run["pending_event"] is not None:
+            event_rooms += 1
+            assert run["pending_event"]["description"] == PREFETCHED_EVENT_TEXT
+            assert run["pending_event"]["options"][0]["effects"] == "+40 gold, -5 HP"
             run = client.post(f"/runs/{run_id}/event-choice", json={"option_index": 0}).json()
         while run["pending_combat"] is not None:
             combat = run["pending_combat"]
@@ -113,8 +135,8 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
             run = client.post(f"/runs/{run_id}/choose-node", json={"node_id": next_node_id}).json()
 
     themed = [line for line in run["history"] if line.startswith("themed: ")]
-    assert non_combat_entered
-    assert len(themed) == non_combat_entered
+    assert narrated_rooms and event_rooms
+    assert len(themed) == narrated_rooms
     # Every narration ran in the background pool, none on a request thread.
     assert all(name.startswith("prefetch") for name in narrated_on)
 

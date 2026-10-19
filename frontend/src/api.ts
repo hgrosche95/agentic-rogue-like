@@ -109,6 +109,8 @@ export interface MapNode {
 export interface EventOptionView {
   index: number;
   label: string;
+  // what it does in game terms, e.g. "+50 gold, -6 HP" - the price is visible up front
+  effects: string;
 }
 
 export interface PendingEventView {
@@ -136,6 +138,9 @@ export type EnemyIntentType =
   | "infect"
   | "lock"
   | "corrupt";
+
+// How the player plays, read from their chosen cards - see style.py.
+export type PlayStyle = "permanents" | "graveyard" | "one_shot" | "aggro" | "turtle" | "malware";
 
 // Lasting effects on either side of a fight - see models.Status.
 export type Status = "malware" | "exposed" | "throttled";
@@ -258,6 +263,9 @@ export interface RunView {
   artifact_offer: Artifact[] | null;
   shop: ShopView | null;
   rest: RestView | null;
+  // what the AGI has read from the cards the player chose
+  play_style: PlayStyle | null;
+  style_counts: Partial<Record<PlayStyle, number>>;
   nodes: Record<string, MapNode>;
 }
 
