@@ -1,38 +1,93 @@
-"""Static placeholder enemy pool for Phase 1.
+"""The static enemy pool - what the game fights whenever the encounter agent
+is off or fails (see agent/encounter_agent.enemy_for_node).
 
-Phase 2 replaces this fixed pool with the encounter agent generating
-enemies via a constrained tool call, validated against a per-floor budget.
-The `Enemy` shape here is exactly the schema that tool call will have to
-produce. This module stays agent-unaware on purpose - agent/encounter_agent.py
-imports pick_enemy() as its fallback, so the dependency can only go one way.
+Each regular enemy has a hand-made move set, held to the same budget rules
+as an agent-generated one, so falling back to the pool is a change of
+authorship, not of difficulty.
+
+This module stays agent-unaware on purpose - agent/encounter_agent.py imports
+pick_enemy() as its fallback, so the dependency can only go one way.
 """
 
 from __future__ import annotations
 
 import random
 
-from .models import Enemy
+from .models import Enemy, EnemyMove, MoveKind
+
+# Shorthands for the move sets below.
+_ATTACK, _DEFEND, _BARRAGE, _CHARGE, _PURGE = (
+    MoveKind.ATTACK,
+    MoveKind.DEFEND,
+    MoveKind.BARRAGE,
+    MoveKind.CHARGE,
+    MoveKind.PURGE,
+)
+
+
+def _move(kind: MoveKind, name: str, weight: int, **extra: int) -> EnemyMove:
+    return EnemyMove(kind=kind, name=name, weight=weight, **extra)
+
 
 ENEMY_POOL: dict[str, list[Enemy]] = {
-    # Kept inside agent/budgets.py's ranges (see its own comment for why
-    # these read high compared to the old dice-combat numbers) - a test
-    # pins that invariant down so this pool can't quietly drift out of it.
+    # Every regular enemy has its own move set and is held to the same rules
+    # as one the encounter agent generates (agent/encounter_schema.py): attack
+    # inside its tier's range, threat (threat.py) inside its tier's threat
+    # range, HP within the loose bounds around it - a test pins that down. HP
+    # was solved for each move set so the tiers stay as hard as they were:
+    # a barrage or charge costs HP, a strong guard buys some. Mid enemies sit
+    # ~12% above the threat they replace: threat.py is calibrated against the
+    # starter deck, and by mid-run decks kill faster, so low-HP move sets
+    # played easier than their threat says (`balance-sim --pool`: mid win
+    # rate 92% before the bump, 90% after, 88% with the old pool).
     "early": [
         Enemy(
             id="rat-swarm",
             name="Rat Swarm",
-            hp=34,
+            hp=31,
             attack=8,
             attack_name="Swarm Bite",
             description="A squeaking carpet of teeth and tails, pouring out of every crack.",
+            moves=[
+                _move(_ATTACK, "Swarm Bite", 3),
+                _move(_BARRAGE, "Gnawing Frenzy", 2, hits=3, power=30),
+            ],
         ),
         Enemy(
             id="cave-slime",
             name="Cave Slime",
-            hp=38,
+            hp=44,
             attack=7,
             attack_name="Acid Splash",
             description="A quivering green blob that dissolves all it touches, bones included.",
+            moves=[
+                _move(_ATTACK, "Acid Splash", 3),
+                _move(_DEFEND, "Gelatinous Wall", 2, power=130),
+            ],
+        ),
+        Enemy(
+            id="goblin-lookout",
+            name="Goblin Lookout",
+            hp=31,
+            attack=8,
+            attack_name="Rusty Shiv",
+            description="A twitchy goblin with a bag of rocks and a very good throwing arm.",
+            moves=[
+                _move(_ATTACK, "Rusty Shiv", 4),
+                _move(_CHARGE, "Wind-Up Throw", 1, power=130),
+            ],
+        ),
+        Enemy(
+            id="skeleton",
+            name="Skeleton",
+            hp=32,
+            attack=9,
+            attack_name="Bone Club",
+            description="Rattling bones held together by spite and a dented round shield.",
+            moves=[
+                _move(_ATTACK, "Bone Club", 3),
+                _move(_DEFEND, "Shield Up", 1),
+            ],
         ),
     ],
     "mid": [
@@ -43,26 +98,93 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
             attack=10,
             attack_name="Dagger Strike",
             description="A scarred cutthroat who robs anyone fool enough to walk here alone.",
+            moves=[
+                _move(_ATTACK, "Dagger Strike", 3),
+                _move(_BARRAGE, "Knife Flurry", 1, hits=3, power=35),
+                _move(_DEFEND, "Parry", 1, power=90),
+            ],
         ),
         Enemy(
             id="wild-boar",
             name="Wild Boar",
-            hp=56,
+            hp=49,
             attack=11,
-            attack_name="Tusk Charge",
+            attack_name="Gore",
             description="A tusked brute with a hide like bark, maddened by your torchlight.",
+            moves=[
+                _move(_ATTACK, "Gore", 2),
+                _move(_CHARGE, "Tusk Charge", 2, power=160),
+            ],
+        ),
+        Enemy(
+            id="rust-monster",
+            name="Rust Monster",
+            hp=46,
+            attack=10,
+            attack_name="Corroding Bite",
+            description="An armored insect whose feelers turn steel to flaking rust - and eat it.",
+            moves=[
+                _move(_ATTACK, "Corroding Bite", 3),
+                _move(_PURGE, "Devour Metal", 2, power=60),
+            ],
+        ),
+        Enemy(
+            id="cultist",
+            name="Cultist",
+            hp=65,
+            attack=9,
+            attack_name="Dark Bolt",
+            description="A hooded zealot chanting to something that is, unfortunately, listening.",
+            moves=[
+                _move(_ATTACK, "Dark Bolt", 2),
+                _move(_DEFEND, "Unholy Ward", 2, power=120),
+                _move(_CHARGE, "Ritual Chant", 1, power=180),
+            ],
         ),
     ],
     "elite": [
         Enemy(
             id="ogre",
             name="Ogre",
-            hp=70,
+            hp=62,
             attack=12,
             attack_name="Club Smash",
             description="A hulking ogre dragging a club carved from a whole tree trunk.",
+            moves=[
+                _move(_ATTACK, "Club Smash", 3),
+                _move(_CHARGE, "Ground Pound", 2, power=170),
+                _move(_DEFEND, "Thick Hide", 1),
+            ],
+        ),
+        Enemy(
+            id="gargoyle",
+            name="Gargoyle",
+            hp=65,
+            attack=12,
+            attack_name="Stone Claw",
+            description="A winged statue that was never quite as still as it looked.",
+            moves=[
+                _move(_ATTACK, "Stone Claw", 2),
+                _move(_BARRAGE, "Rending Dive", 2, hits=3, power=35),
+                _move(_DEFEND, "Petrify", 2, power=150),
+            ],
+        ),
+        Enemy(
+            id="mimic",
+            name="Mimic",
+            hp=56,
+            attack=13,
+            attack_name="Gnash",
+            description="The treasure chest has teeth. And a tongue. And it is very hungry.",
+            moves=[
+                _move(_ATTACK, "Gnash", 3),
+                _move(_PURGE, "Swallow Whole", 1, power=70),
+                _move(_DEFEND, "Play Dead", 1, power=120),
+            ],
         ),
     ],
+    # Bosses fight with their own phased move set (combat._roll_boss_intent),
+    # so they keep the plain HP/attack budget and no move set of their own.
     "boss": [
         Enemy(
             id="the-warden",

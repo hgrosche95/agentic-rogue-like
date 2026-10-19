@@ -28,6 +28,10 @@ A variant file only lists what changes, e.g.:
 `"rewards": false` plays runs without the after-fight card reward, i.e.
 with the starter deck only, `"artifacts": false` without artifacts.
 
+`balance-sim --pool` fights the static enemy pool (enemies.py, what the game
+uses whenever the encounter agent is off) instead of random enemies inside
+the budgets - so a change to the pool shows up in the numbers.
+
 `balance-sim --calibrate-threat` instead fits threat.py's model: it fights
 a few hundred random move sets and searches for the parameters whose
 threat() best predicts the damage those fights dealt (see calibrate_threat).
@@ -56,7 +60,7 @@ from .combat import (
     play_card,
     start_combat,
 )
-from .enemies import escalate, tier_floor
+from .enemies import ENEMY_POOL, escalate, pick_enemy, tier_floor
 from .engine import ACT_HEAL_PERCENT, NUM_ACTS, boss_phases
 from .events import random_event
 from .map_gen import NUM_FLOORS, generate_map
@@ -89,6 +93,8 @@ class SimConfig:
     deck_factory: Callable[[], list[Card]] = starter_deck
     rewards: bool = True
     artifacts: bool = True
+    # Fight enemies.py's static pool instead of random enemies in the budgets.
+    pool: bool = False
 
     def new_player(self) -> PlayerState:
         return PlayerState(
@@ -338,9 +344,12 @@ def fresh_fights(cfg: SimConfig, bot: Bot, n: int, seed: int) -> dict[str, list[
         rng = random.Random(f"{seed}-{tier}")
         for _ in range(n):
             player = cfg.new_player()
-            enemy = escalate(
-                random_enemy(cfg.budgets[tier], tier, rng), _TIER_FLOOR[tier], NUM_FLOORS
+            base = (
+                rng.choice(ENEMY_POOL[tier]).model_copy(deep=True)
+                if cfg.pool
+                else random_enemy(cfg.budgets[tier], tier, rng)
             )
+            enemy = escalate(base, _TIER_FLOOR[tier], NUM_FLOORS)
             results[tier].append(fight(player, enemy, tier, bot, rng))
     return results
 
@@ -377,9 +386,18 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 gain_artifact(player, rng.choice(offer))
         if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
             tier = tier_for(node.floor, node.type, act)
-            enemy = escalate(
-                random_enemy(cfg.budgets[tier], tier, rng), node.floor, NUM_FLOORS, act
-            )
+            if cfg.pool:
+                base = pick_enemy(
+                    floor=node.floor,
+                    num_floors=NUM_FLOORS,
+                    elite=node.type is NodeType.ELITE,
+                    boss=node.type is NodeType.BOSS,
+                    rng=rng,
+                    act=act,
+                )
+            else:
+                base = random_enemy(cfg.budgets[tier], tier, rng)
+            enemy = escalate(base, node.floor, NUM_FLOORS, act)
             result = fight(player, enemy, tier, bot, rng, act)
             fights.append(result)
             if not result.won:
@@ -641,6 +659,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--no-artifacts", action="store_true", help="Runs ohne Artefakte")
     parser.add_argument(
+        "--pool",
+        action="store_true",
+        help="Gegner aus dem statischen Pool (enemies.py) statt zufällig in den Budgets",
+    )
+    parser.add_argument(
         "--calibrate-threat",
         action="store_true",
         help="statt des Reports die Parameter von threat.py fitten",
@@ -659,6 +682,8 @@ def main(argv: list[str] | None = None) -> None:
     if args.no_artifacts:
         base.artifacts = False
     cfgs = [base, *(load_variant(p) for p in args.compare)]
+    for cfg in cfgs:
+        cfg.pool = args.pool
     bot = BOTS[args.bot]
     print(f"Bot: {args.bot}, {args.fights} Kämpfe/Stufe, {args.runs} Runs, Seed {args.seed}")
     reports = [build_report(c, bot, args.fights, args.runs, args.seed, args.bot) for c in cfgs]

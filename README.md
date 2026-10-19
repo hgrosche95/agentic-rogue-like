@@ -273,6 +273,10 @@ uv run balance-sim --compare balance/gegner-staerker.json
 uv run balance-sim --compare balance/beispiel-neue-karte.json --bot naive
 ```
 
+Mit `--pool` kämpft der Bot gegen den statischen Gegnerpool aus
+`enemies.py` statt gegen Zufallsgegner innerhalb der Budgets: das, was das
+Spiel ohne Encounter-Agent tatsächlich vorsetzt.
+
 Aktueller Stand (Smart-Bot, 2000 Runs über beide Akte): Spieler 45 HP /
 Angriff 2, Exploit macht 5 (+2), Starthand 5, danach 3 Karten pro Runde,
 Handlimit 8; das Startdeck hat 11 Karten (keine Heilkarte). Gegner werden
@@ -332,8 +336,16 @@ permanente Karte auf dem Feld liegt. Deshalb braucht jedes Moveset einen
 Modell schon beim Anlegen.
 
 Das Standard-Moveset ist genau das alte Verhalten (Angriff, in 30 % der
-Züge Block) und zieht dieselben Zufallszahlen, also spielen Gegner aus dem
-statischen Pool und geseedete Runs exakt wie vorher. Bosse ignorieren ihr
+Züge Block) und zieht dieselben Zufallszahlen. Der statische Gegnerpool
+(`enemies.py`, was ohne Agent gespielt wird) nutzt es nicht mehr: Er hat
+11 Gegner (4 early, 4 mid, 3 elite) mit eigenem, benanntem Moveset, z. B.
+Rattenschwarm mit Salve, Wildschwein mit Aufladen, Rostmonster mit
+Säuberung, Gargoyle mit Salve und starkem Block. Für jeden wurden die HP so
+gewählt, dass seine Bedrohung der des alten Gegners seiner Stufe entspricht;
+dieselbe Prüfung wie für Agenten-Gegner hält den Pool im Budget. Mit
+`balance-sim --pool` (2000 Runs) bleibt die Schwierigkeit fast gleich:
+Siegquote mid 88 % → 90 %, elite 81 % → 78 %, Boss 56 % → 52 %, Run 10 % → 9 %.
+Bosse ignorieren ihr
 Moveset und kämpfen weiter mit ihren Phasen (`combat._roll_boss_intent`).
 Der Encounter-Agent erfindet für normale Gegner und Elites ein eigenes
 Moveset mit 2–4 benannten Moves (siehe *Movesets vom Agenten* unten).

@@ -183,7 +183,8 @@ def test_combat_view_names_the_telegraphed_move() -> None:
 
     run_id = client.post("/runs", json={"seed": 3}).json()["run_id"]
     run = _resolve(run_id).json()
-    assert run["pending_combat"]["enemy_intent_name"] is None  # default move set: unnamed
+    # The static pool's moves are named.
+    assert run["pending_combat"]["enemy_intent_name"] is not None
 
     combat = get_session(run_id).combat
     combat.enemy = combat.enemy.model_copy(

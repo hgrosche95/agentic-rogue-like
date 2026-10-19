@@ -7,6 +7,7 @@ from langchain_groq import ChatGroq
 from agentic_rogue_like.agent import encounter_agent
 from agentic_rogue_like.agent.encounter_schema import BudgetViolation, EnemyBudget, EnemyProposal
 from agentic_rogue_like.agent.ollama_model import DEFAULT_MODEL_NAME, OllamaChatModel
+from agentic_rogue_like.enemies import ENEMY_POOL
 
 
 class _AlwaysOverpowered:
@@ -91,7 +92,7 @@ def test_enemy_for_node_uses_static_pool_when_agent_disabled(monkeypatch) -> Non
             rng=random.Random(1),
         )
 
-    assert enemy.name in ("Rat Swarm", "Cave Slime")
+    assert enemy.name in {e.name for e in ENEMY_POOL["early"]}
 
 
 def test_enemy_for_node_uses_agent_when_enabled_and_it_succeeds(monkeypatch) -> None:
@@ -107,7 +108,7 @@ def test_enemy_for_node_falls_back_when_the_api_is_unreachable(monkeypatch) -> N
 
     enemy = _enemy_for_node(_ApiIsDown())
 
-    assert enemy.name in ("Rat Swarm", "Cave Slime")
+    assert enemy.name in {e.name for e in ENEMY_POOL["early"]}
 
 
 def test_enemy_for_node_falls_back_when_the_agent_never_meets_its_budget(monkeypatch) -> None:
