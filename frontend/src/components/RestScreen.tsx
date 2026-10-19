@@ -12,6 +12,7 @@ function changeOf({ card, upgraded }: RestUpgrade): string {
   if (upgraded.value !== card.value) return `${card.value}${unit} → ${upgraded.value}${unit}`;
   if (upgraded.hits !== card.hits) return `${card.hits}× → ${upgraded.hits}×`;
   if (upgraded.scale_value !== card.scale_value) return `+${card.scale_value} → +${upgraded.scale_value} each`;
+  if (upgraded.token_cost !== card.token_cost) return `${card.token_cost} → ${upgraded.token_cost} tokens`;
   return `now: ${card.description}`;
 }
 

@@ -6,7 +6,7 @@ import type { HpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS } from "../hooks/useLagged";
 import { enemySprite } from "../pixel/enemySprite";
 import { ENEMY_X, FLOOR, PLAYER_X, pct } from "../pixel/layout";
-import type { PixelScene } from "../pixel/scene";
+import type { Hero, PixelScene } from "../pixel/scene";
 import { describeIntent } from "../readouts";
 import { CombatMonitor } from "./CombatMonitor";
 import { PixelStage } from "./PixelStage";
@@ -130,6 +130,8 @@ export function CombatArena({
   typing,
   slain = false,
   onContinue,
+  hero = "chronos",
+  contextFull = false,
   children,
   ref,
 }: {
@@ -141,6 +143,9 @@ export function CombatArena({
   typing: boolean;
   slain?: boolean;
   onContinue?: () => void;
+  // who stands at the keyboard, and whether the Vibe-Coder's window is full
+  hero?: Hero;
+  contextFull?: boolean;
   children?: ReactNode;
   ref?: Ref<ArenaHandle>;
 }) {
@@ -148,6 +153,14 @@ export function CombatArena({
   const onScene = useCallback((scene: PixelScene) => {
     sceneRef.current = scene;
   }, []);
+
+  useEffect(() => {
+    sceneRef.current?.setHero(hero);
+  }, [hero]);
+
+  useEffect(() => {
+    sceneRef.current?.setContextFull(contextFull);
+  }, [contextFull]);
 
   const { name, maxHp, attack, setting } = enemy;
   useEffect(() => {

@@ -156,6 +156,39 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M0 2 Q-1.8 4.5 0 6.5 Q1.8 4.5 0 2 Z" />
     </>
   ),
+  // ---- the Vibe-Coder's
+  // a five-pointed star badge
+  "pro-plan": <path d="M0 -6.5 L1.9 -2.2 L6.5 -1.8 L3 1.3 L4 6 L0 3.6 L-4 6 L-3 1.3 L-6.5 -1.8 L-1.9 -2.2 Z" />,
+  // a keyboard with a row of keys and a space bar
+  "mechanical-keyboard": (
+    <>
+      <rect x="-7" y="-4" width="14" height="8" rx="1.2" />
+      <path d="M-4.5 -1.5 H-3.5 M-1.5 -1.5 H-0.5 M1.5 -1.5 H2.5 M4 -1.5 H4.5 M-3 1.5 H3" />
+    </>
+  ),
+  // headphones
+  "lo-fi-beats": (
+    <>
+      <path d="M-5.5 2 V0 A5.5 5.5 0 0 1 5.5 0 V2" />
+      <rect x="-7" y="1" width="3" height="5" rx="1" />
+      <rect x="4" y="1" width="3" height="5" rx="1" />
+    </>
+  ),
+  // a shell prompt: chevron and cursor
+  "system-prompt": (
+    <>
+      <path d="M-6 -4 L-2 0 L-6 4" />
+      <path d="M0 4 H6" />
+    </>
+  ),
+  // a gauge with its needle pinned to the max
+  "max-mode": (
+    <>
+      <path d="M-6.5 3 A6.5 6.5 0 1 1 6.5 3" />
+      <path d="M0 2 L5 -2.5" />
+      <circle cx="0" cy="2" r="0.8" />
+    </>
+  ),
 };
 
 // Anything the frontend doesn't know yet (a newer server) gets a plain gem.

@@ -61,6 +61,39 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       erste bezahlbare Karte in den ersten freien Slot, dann Rundenende),
       das Web-UI interaktiv Karte für Karte über eigene Endpunkte
       (`/combat/play-card`, `/combat/end-turn`).
+- [x] **Zweiter Charakter: der Vibe-Coder** — auf dem Startbildschirm
+      wählbar neben Dr. Chronos (`characters.py`). Er zieht nach jeder
+      gespielten Karte eine nach, am Rundenende aber nur 2 statt 3; bremsen
+      tut ihn sein Kontextfenster: jede Karte kostet Tokens (`token_cost`,
+      meist 1), das Fenster fasst 4, und am Rundenende werden 3 wieder frei.
+      Eine Karte über dem Fenster wird trotzdem gespielt, halluziniert aber
+      mit 50 %: ein Angriff trifft ihn selbst, ein Block oder eine Heilung
+      geht an den Gegner, alles andere verpufft. Eigenes Startdeck mit
+      Prompt, Make It Safe, Copilot (Aktionskarten rechts davon +1 pro schon
+      gespielter Karte im Zug, höchstens +3), Energy Drink (+1 Token pro Zug)
+      und /compact (0 Tokens, gibt 4 frei). Die Zahlen kommen aus
+      `balance-sim --character vibe_coder`: ein festes Budget für den ganzen
+      Kampf ließ ihn fast jeden Gegner in Zug 1 umhauen oder gegen Bosse
+      leerlaufen; so landen beide Charaktere bei ~9 % Run-Siegquote.
+      Belohnungen, Startangebot und Shops ziehen für ihn zusätzlich aus
+      seinem eigenen Pool (`VIBE_CODER_REWARD_POOL`, nie für Dr. Chronos):
+      YOLO Deploy (14 Schaden für 2 Tokens, 1 Karte abwerfen), Copy-Paste
+      (gratis, holt die letzte Karte aus dem Friedhof), Vibe Check (+2 Block
+      pro freiem Slot), Tab-Tab-Tab (gratis, die nächste Karte auch),
+      Rubber Duck (Halluzinationen verpuffen nur), Ship It (+5 Schaden pro
+      schon gespielter Karte im Zug, 3 Tokens) und Pair Programming (die
+      erste Karte jedes Zuges ist gratis).
+      Genauso bekommt er eigene Artefakte (`VIBE_CODER_ARTIFACT_POOL`):
+      Pro Plan (+1 Token Kontextfenster), Mechanical Keyboard (erste Karte
+      jedes Kampfes gratis), Lo-fi Beats (+1 Token pro Zug, 3 HP nach jedem
+      Sieg), System Prompt (halb so viele Halluzinationen) und Max Mode
+      (+3 ATK, 1 Token weniger pro Zug).
+      Konzeptbild: [`docs/characters/vibe-coder.png`](docs/characters/vibe-coder.png).
+      In der Arena steht er als eigene Pixel-Figur am selben Pult (Hoodie,
+      Headset, Energy Drink, Laptop-Rucksack), mit derselben Pose und
+      denselben Kartenanimationen wie Dr. Chronos; über seinem Kopf schwebt
+      eine Chat-Blase, die beim Tippen pulsiert und bei vollem Kontextfenster
+      orange flackert.
 - [x] **Deck-Building** — zu Beginn des Runs (nach dem ersten Artefakt)
       eine von drei Karten der Seltenheit Uncommon/Rare ins Startdeck
       nehmen (oder überspringen), danach nach jedem Sieg eine von drei Karten wählen
@@ -99,14 +132,18 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       Der Boss von Akt 2 hat ab 25 % HP eine dritte Phase: noch mehr Angriff,
       kein Blocken mehr, Salven mit 4 Treffern.
       Alle Absichten werden wie gewohnt einen Zug vorher angezeigt.
-- [x] **Oberfläche ("Rift")** — Zeitreise-Sci-Fi-Look: Glas-Panels auf
-      violettem Grund, Cyan für die Maschinenwelt, Magenta/Orange für das
-      Labor. Die Karte ist eine Zeitachse (Etagen als Jahre 1969 → Ω), ein
-      Klick springt in den nächsten Raum, daneben Vorschau, Artefakte und
-      System-Log. Im Kampf ist die Arena die Bühne: sie blendet ohne Rahmen
-      in die Seite aus, ihre Pixel-Palette ist aus den Farben der UI gebaut, und
-      der Riss läuft als Lichtnaht zwischen Menschen- und KI-Seite nach unten
-      weiter. Karten lassen sich anklicken oder per Drag & Drop (auch per
+- [x] **Oberfläche ("Pixel")** — die ganze UI spricht die Sprache der
+      Pixel-Arena: dieselbe feste Palette (`pixel/palette.ts`), harte
+      4-px-Konturen mit Bevel statt Glas, keine Unschärfe und keine Verläufe,
+      Pixel-Schriften (Silkscreen für Überschriften und Labels, Pixelify Sans
+      für Fließtext). Die Karte ist eine Zeitachse (Etagen als Jahre
+      1969 → Ω) aus Pixel-Kacheln mit rechtwinkligen Wegen, ein Klick springt
+      in den nächsten Raum, daneben Vorschau, Artefakte und System-Log. Im
+      Kampf ist die Arena die Bühne: ein gerahmtes Bild, dessen Breite auf ein
+      Vielfaches der 240 logischen Pixel gerundet wird, damit die ganzzahlig
+      skalierte Szene es genau füllt. Die HP-Schilder von Spieler und Gegner
+      sitzen oben links und rechts in der Szene, neben dem Monitor, und der
+      Execution Stack steht wie ein Rack auf dem Arena-Boden. Karten lassen sich anklicken oder per Drag & Drop (auch per
       Touch) auf das Feld ziehen; Lebenspunkte ändern sich erst, wenn der
       Treffer in der Animation einschlägt; die nächste Aktion des Gegners
       schwebt über seinem Kopf. Belohnungen, Artefakte und Events öffnen als
@@ -156,6 +193,7 @@ src/agentic_rogue_like/
 ├── map_gen.py      Prozedurale Etagen-/Node-Map
 ├── combat.py       Kartenbasierter Kampf: Deck/Hand/Feld, Zieh-/Ablagelogik
 ├── cards.py        Startdeck mit IT-Namen (Exploit, Firewall, Kernel Panic, ...; Aktions- + permanente Karten)
+├── characters.py   Spielbare Charaktere (Dr. Chronos, Vibe-Coder): Werte, Startdeck, Kontextfenster
 ├── artifacts.py    Artefakt-Pool und -Angebote (passive Run-Boni)
 ├── shop.py         Schwarzmarkt: zufälliges Angebot aus Karten und Artefakten, Preise, Kaufen
 ├── events.py       Event-/Rest-/Shop-Auflösung

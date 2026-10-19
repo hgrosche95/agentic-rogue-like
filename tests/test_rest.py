@@ -210,3 +210,21 @@ def test_cli_rest_prompt_upgrades_the_chosen_card(monkeypatch, capsys) -> None:
     first = next(i for i, c in enumerate(run.player.deck) if can_upgrade(c))
     assert action == ("upgrade", first)
     assert "->" in capsys.readouterr().out  # shows what the upgrade does
+
+
+def test_every_characters_cards_can_be_upgraded_at_a_rest_site() -> None:
+    from agentic_rogue_like.cards import VIBE_CODER_REWARD_POOL
+    from agentic_rogue_like.characters import CHARACTERS
+
+    for character in CHARACTERS.values():
+        deck = character.deck()
+        assert sum(can_upgrade(c) for c in deck) >= len(deck) - 2, character.name
+    for card in VIBE_CODER_REWARD_POOL:
+        assert can_upgrade(card), card.name
+
+
+def test_a_vibe_coder_upgrade_can_cut_the_token_cost() -> None:
+    from agentic_rogue_like.cards import VIBE_CODER_REWARD_POOL
+
+    duck = next(c for c in VIBE_CODER_REWARD_POOL if c.name == "Rubber Duck")
+    assert (duck.token_cost, upgrade_card(duck).token_cost) == (1, 0)

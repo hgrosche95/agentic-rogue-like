@@ -31,6 +31,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
 from .cards import can_upgrade, upgrade_card
+from .characters import CHARACTERS
 from .combat import (
     FIELD_SIZE,
     action_preview,
@@ -39,7 +40,9 @@ from .combat import (
     intent_hits,
     max_hand_size,
     move_name,
+    overflows,
     player_armor,
+    token_regen,
 )
 from .engine import (
     NUM_ACTS,
@@ -66,6 +69,7 @@ from .models import (
     SETTING_PRESETS,
     Artifact,
     Card,
+    Character,
     MapNode,
     NodeType,
     PlayerState,
@@ -118,6 +122,7 @@ class CardView(BaseModel):
     # Scaling attacks: the bonus per permanent / graveyard / banished card.
     scale_value: int
     upgraded: bool
+    token_cost: int
 
     @classmethod
     def of(cls, card: Card) -> CardView:
@@ -132,6 +137,7 @@ class CardView(BaseModel):
             hits=max(card.hits, 1),
             scale_value=card.scale_value,
             upgraded=card.upgraded,
+            token_cost=card.token_cost,
         )
 
 
@@ -141,6 +147,9 @@ class HandCardView(CardView):
     # combat.action_preview) - null for occupied slots and for cards
     # without such a number.
     preview: list[int | None]
+    # Playing it now would push past the context window - it may
+    # hallucinate. Always false for characters without one.
+    overflows: bool
 
 
 class PendingCombatView(BaseModel):
@@ -181,6 +190,20 @@ class PendingCombatView(BaseModel):
     draw_count: int
     discard_count: int
     banished_count: int
+    # The character's context window (see characters.py) - token_limit is
+    # null for characters without one, and the rest is 0 then.
+    token_limit: int | None
+    tokens_used: int
+    token_regen: int
+
+
+class CharacterView(BaseModel):
+    id: Character
+    name: str
+    title: str
+    description: str
+    hp: int
+    token_limit: int | None
 
 
 class ShopCardView(BaseModel):
@@ -280,6 +303,7 @@ class RunView(BaseModel):
 class NewRunRequest(BaseModel):
     seed: int | None = None
     setting: str = SETTING_PRESETS[0]
+    character: Character = Character.CHRONOS
 
     @field_validator("setting")
     @classmethod
@@ -391,6 +415,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
                     preview=[
                         action_preview(combat, card, run.player, slot) for slot in range(FIELD_SIZE)
                     ],
+                    overflows=overflows(combat, card),
                     **CardView.of(card).model_dump(),
                 )
                 for i, card in enumerate(combat.hand)
@@ -402,6 +427,9 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             draw_count=len(combat.draw_pile),
             discard_count=len(combat.discard_pile),
             banished_count=len(combat.banished_pile),
+            token_limit=combat.token_limit,
+            tokens_used=combat.tokens_used,
+            token_regen=token_regen(combat) if combat.token_limit is not None else 0,
         )
 
     choices = []
@@ -454,10 +482,25 @@ def list_settings() -> list[str]:
     return list(SETTING_PRESETS)
 
 
+@app.get("/characters")
+def list_characters() -> list[CharacterView]:
+    return [
+        CharacterView(
+            id=hero.id,
+            name=hero.name,
+            title=hero.title,
+            description=hero.description,
+            hp=hero.hp,
+            token_limit=hero.token_limit,
+        )
+        for hero in CHARACTERS.values()
+    ]
+
+
 @app.post("/runs")
 def create_run(request: NewRunRequest) -> RunView:
     seed = request.seed if request.seed is not None else random.randint(0, 1_000_000)
-    run = new_run(seed, setting=request.setting)
+    run = new_run(seed, setting=request.setting, character=request.character)
     run_id = create_session(run, random.Random(seed))
     session = get_session(run_id)
     session.prefetch.warm(run)
@@ -517,7 +560,8 @@ def play_card_endpoint(run_id: str, request: PlayCardRequest) -> RunView:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if session.combat.enemy_hp <= 0:
+    # A hallucinated attack can knock the player out on their own turn.
+    if session.run.player.hp <= 0 or session.combat.enemy_hp <= 0:
         _finish_fight(session)
 
     return _run_view(run_id, session)

@@ -14,14 +14,8 @@ from dataclasses import replace
 from .agent.encounter_agent import enemy_for_node
 from .agent.narrator import narrate
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
-from .cards import (
-    START_CARD_WEIGHTS,
-    can_upgrade,
-    reward_card,
-    roll_card_reward,
-    starter_deck,
-    upgrade_card,
-)
+from .cards import START_CARD_WEIGHTS, can_upgrade, reward_card, roll_card_reward, upgrade_card
+from .characters import CHARACTERS
 from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
@@ -33,6 +27,7 @@ from .models import (
     DEFAULT_SETTING,
     Artifact,
     Card,
+    Character,
     Enemy,
     MapNode,
     NodeType,
@@ -60,8 +55,9 @@ Narrator = Callable[[str, str], str | None]
 
 # Tuned with `balance-sim` together with enemies.escalate() for a run win
 # rate below 50% - see the README's Balancing section.
-PLAYER_HP = 45
-PLAYER_ATTACK = 2
+# Dr. Chronos's - every character's own stats live in characters.py.
+PLAYER_HP = CHARACTERS[Character.CHRONOS].hp
+PLAYER_ATTACK = CHARACTERS[Character.CHRONOS].attack
 REST_HEAL = 15
 
 # Beating an act's boss opens the next act's map (advance_act); beating the
@@ -80,19 +76,29 @@ REST_SITUATION = "a weary adventurer resting and tending their wounds"
 SHOP_SITUATION = "a traveling merchant offering strange wares for sale"
 
 
-def new_run(seed: int, setting: str = DEFAULT_SETTING) -> RunState:
+def new_run(
+    seed: int, setting: str = DEFAULT_SETTING, character: Character = Character.CHRONOS
+) -> RunState:
+    hero = CHARACTERS[character]
     player = PlayerState(
-        hp=PLAYER_HP, max_hp=PLAYER_HP, attack=PLAYER_ATTACK, gold=0, deck=starter_deck()
+        character=character,
+        hp=hero.hp,
+        max_hp=hero.hp,
+        attack=hero.attack,
+        gold=0,
+        deck=hero.deck(),
     )
     nodes = generate_map(seed)
     run = RunState(seed=seed, player=player, nodes=nodes, current_node_id="0-0", setting=setting)
     # Its own rng, so offering artifacts doesn't shift the run rng's sequence
     # (enemies, events, rewards) compared to a run without them.
-    run.artifact_offer = roll_artifact_offer(random.Random(f"{seed}-artifacts-0"), [])
+    run.artifact_offer = roll_artifact_offer(
+        random.Random(f"{seed}-artifacts-0"), [], pool=hero.artifact_pool
+    )
     # ... and so does the starting card pick: three uncommon/rare cards, one of
     # which (or none) joins the starter deck before the first room.
     run.card_reward = roll_card_reward(
-        random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS
+        random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS, pool=hero.reward_pool
     )
     return run
 
@@ -107,7 +113,8 @@ def move_to(run: RunState, node_id: str) -> None:
     run.steps += 1
     if run.steps % ARTIFACT_EVERY_STEPS == 0:
         rng = random.Random(f"{run.seed}-artifacts-{run.steps}")
-        run.artifact_offer = roll_artifact_offer(rng, run.player.artifacts) or None
+        pool = CHARACTERS[run.player.character].artifact_pool
+        run.artifact_offer = roll_artifact_offer(rng, run.player.artifacts, pool=pool) or None
 
 
 def choose_artifact(run: RunState, index: int) -> None:
@@ -279,7 +286,11 @@ def _finish_combat(
     run.history.append(f"You loot {reward} gold from the {enemy_name}.")
     if healed := heal(run.player, total(run.player.artifacts, "heal_after_combat")):
         run.history.append(f"Your artifacts patch you up for {healed} HP.")
-    run.card_reward = roll_card_reward(rng, elite=node.type is not NodeType.COMBAT)
+    run.card_reward = roll_card_reward(
+        rng,
+        elite=node.type is not NodeType.COMBAT,
+        pool=CHARACTERS[run.player.character].reward_pool,
+    )
     if node.type is NodeType.BOSS:
         advance_act(run)
 
@@ -342,6 +353,7 @@ def start_combat_node(
         run.player.artifacts,
         boss=node.type is NodeType.BOSS,
         boss_phases=boss_phases(run.act),
+        character=run.player.character,
     )
     run.history.extend(log)
     return state

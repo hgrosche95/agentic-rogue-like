@@ -9,6 +9,7 @@ import {
 import { cardSound, hitsOf, sfx } from "../audio";
 import { flyCard } from "../cardFlight";
 import { ArtifactBar } from "./ArtifactBar";
+import { HERO } from "../characters";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useCardDrag } from "../hooks/useCardDrag";
 import { useHpExchange } from "../hooks/useHpExchange";
@@ -16,6 +17,30 @@ import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { describeIntent, rangeText, unitOf } from "../readouts";
 import { CardFace, type Readout } from "./CardFace";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
+
+// The Vibe-Coder's context window: one pip per token, lit while used; past
+// the window the extra pips glow red - every card from there may hallucinate.
+function TokenMeter({ combat }: { combat: PendingCombatView }) {
+  const limit = combat.token_limit ?? 0;
+  const pips = Math.max(limit, combat.tokens_used);
+  const full = combat.tokens_used >= limit;
+  return (
+    <span
+      className={`token-meter${full ? " is-full" : ""}`}
+      title={`Context window: ${combat.tokens_used}/${limit} tokens used, ${combat.token_regen} free up at the end of the turn. Cards past the window may hallucinate.`}
+    >
+      <span className="token-label">Context</span>
+      <span className="token-pips" aria-hidden="true">
+        {Array.from({ length: pips }, (_, i) => (
+          <i key={i} className={i >= limit ? "is-over" : i < combat.tokens_used ? "is-used" : undefined} />
+        ))}
+      </span>
+      <span className="token-count">
+        {combat.tokens_used}/{limit}
+      </span>
+    </span>
+  );
+}
 
 function Pile({ label, count, kind }: { label: string; count: number; kind: string }) {
   return (
@@ -56,15 +81,6 @@ function SlotPreview({ index, card, low }: { index: number; card?: HandCardView;
   );
 }
 
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0].toUpperCase())
-    .join("");
-}
-
 // What a hand card will come out with: in `slot` when the player is pointing
 // at one, otherwise in the weakest free slot - with the best free slot as a
 // hint that position matters. Undefined for cards without such a number.
@@ -79,10 +95,15 @@ function readoutOf(card: HandCardView, slot: number | null): Readout | undefined
 }
 
 // The hand fans out like cards held in a hand: each one turned a little
-// further from the middle and dropped along an arc.
+// further from the middle and dropped along an arc. Past five cards the arc
+// flattens, so the outer cards of a big hand (over the limit, about to
+// discard) don't sink off the bottom of the screen.
 function fanStyle(index: number, count: number): CSSProperties {
+  const edge = Math.max(1, (count - 1) / 2);
   const k = index - (count - 1) / 2;
-  return { "--rot": `${k * 2.5}deg`, "--lift": `${k * k * 2.5}px` } as CSSProperties;
+  const rot = k * Math.min(2.5, 6 / edge);
+  const lift = k * k * Math.min(2.5, 12 / (edge * edge));
+  return { "--rot": `${rot}deg`, "--lift": `${lift}px` } as CSSProperties;
 }
 
 export function CombatPanel({
@@ -235,46 +256,43 @@ export function CombatPanel({
 
   return (
     <div className="combat-panel">
-      <CombatArena
-        ref={arenaRef}
-        status={{
-          block: combat.player_block,
-          armor: combat.armor,
-          enemyBlock: combat.enemy_block,
-          turrets: combat.field.filter((card) => card?.type === "turret").length,
-          amplifiers: combat.field.filter((card) => card?.type === "amplifier").length,
-          fortify: combat.field.filter((card) => card?.type === "fortify").length,
-        }}
-        enemy={{
-          name: combat.enemy_name,
-          maxHp: combat.enemy_max_hp,
-          attack: combat.enemy_attack,
-          setting,
-          intent: combat.enemy_intent,
-          intentMin: combat.enemy_intent_min,
-          intentMax: combat.enemy_intent_max,
-          intentHits: combat.enemy_intent_hits,
-          intentName: combat.enemy_intent_name,
-        }}
-        exchange={exchange}
-        log={log}
-        commands={commands}
-        typing={typing}
-        slain={enemySlain}
-        onContinue={onContinue}
-      />
+      {/* the HUD plates sit in the scene's top corners, clear of the monitor */}
+      <div className="arena-wrap">
+        <CombatArena
+          ref={arenaRef}
+          status={{
+            block: combat.player_block,
+            armor: combat.armor,
+            enemyBlock: combat.enemy_block,
+            turrets: combat.field.filter((card) => card?.type === "turret").length,
+            amplifiers: combat.field.filter((card) => card?.type === "amplifier").length,
+            fortify: combat.field.filter((card) => card?.type === "fortify").length,
+          }}
+          enemy={{
+            name: combat.enemy_name,
+            maxHp: combat.enemy_max_hp,
+            attack: combat.enemy_attack,
+            setting,
+            intent: combat.enemy_intent,
+            intentMin: combat.enemy_intent_min,
+            intentMax: combat.enemy_intent_max,
+            intentHits: combat.enemy_intent_hits,
+            intentName: combat.enemy_intent_name,
+          }}
+          exchange={exchange}
+          log={log}
+          commands={commands}
+          typing={typing}
+          slain={enemySlain}
+          onContinue={onContinue}
+          hero={player.character}
+          contextFull={combat.token_limit !== null && combat.tokens_used >= combat.token_limit}
+        />
 
-      {/* the rift keeps going below the scene, between the two sides of the table */}
-      <div className="combat-seam" aria-hidden="true" />
-
-      <div className="combat-row">
         <div className="vs-hud is-player">
-          <span className="vs-portrait" aria-hidden="true">
-            <span>DC</span>
-          </span>
           <div className="vs-body">
             <span className="hud-name">
-              Dr. Chronos <small>Human · {era}</small>
+              {HERO[player.character].name} <small>Human · {era}</small>
             </span>
             <HpBar hp={shownPlayerHp} max={player.max_hp} side="player" />
             <div className="hud-meta">
@@ -290,43 +308,9 @@ export function CombatPanel({
               )}
               {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
               {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
+              {combat.token_limit !== null && <TokenMeter combat={combat} />}
               <ArtifactBar artifacts={player.artifacts} compact />
             </div>
-          </div>
-        </div>
-
-        <div className="field-zone">
-          <div className="zone-head">
-            <span className="zone-label">Execution stack</span>
-            <span className="zone-label">
-              Hand {combat.hand.length}/{combat.max_hand_size}
-            </span>
-          </div>
-          <div className="field">
-            {combat.field.map((card, slotIndex) =>
-              card === null && pendingCard && pending?.slotIndex === slotIndex &&
-              PERMANENT_CARD_TYPES.includes(pendingCard.type) ? (
-                <div key={slotIndex} className={`field-slot is-occupied is-landing type-${pendingCard.type}`}>
-                  <CardFace card={pendingCard} onField />
-                </div>
-              ) : card === null ? (
-                <button
-                  key={slotIndex}
-                  data-slot-index={slotIndex}
-                  className={`field-slot is-empty${aimedCard ? " is-targetable" : ""}${drag.hoverSlot === slotIndex ? " is-drop-target" : ""}`}
-                  disabled={busy || selectedHandIndex === null || discarding !== null}
-                  onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
-                  onPointerEnter={() => setPointedSlot(slotIndex)}
-                  onPointerLeave={() => setPointedSlot((s) => (s === slotIndex ? null : s))}
-                >
-                  <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} />
-                </button>
-              ) : (
-                <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
-                  <CardFace card={card} onField />
-                </div>
-              ),
-            )}
           </div>
         </div>
 
@@ -373,9 +357,44 @@ export function CombatPanel({
               {enemySlain && <span className="intent-badge is-defeated">Defeated</span>}
             </div>
           </div>
-          <span className="vs-portrait" aria-hidden="true">
-            <span>{initials(combat.enemy_name)}</span>
-          </span>
+        </div>
+      </div>
+
+      {/* the stack stands on the arena floor */}
+      <div className="combat-row">
+        <div className="field-zone">
+          <div className="zone-head">
+            <span className="zone-label">Execution stack</span>
+            <span className="zone-label">
+              Hand {combat.hand.length}/{combat.max_hand_size}
+            </span>
+          </div>
+          <div className="field">
+            {combat.field.map((card, slotIndex) =>
+              card === null && pendingCard && pending?.slotIndex === slotIndex &&
+              PERMANENT_CARD_TYPES.includes(pendingCard.type) ? (
+                <div key={slotIndex} className={`field-slot is-occupied is-landing type-${pendingCard.type}`}>
+                  <CardFace card={pendingCard} onField />
+                </div>
+              ) : card === null ? (
+                <button
+                  key={slotIndex}
+                  data-slot-index={slotIndex}
+                  className={`field-slot is-empty${aimedCard ? " is-targetable" : ""}${drag.hoverSlot === slotIndex ? " is-drop-target" : ""}`}
+                  disabled={busy || selectedHandIndex === null || discarding !== null}
+                  onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
+                  onPointerEnter={() => setPointedSlot(slotIndex)}
+                  onPointerLeave={() => setPointedSlot((s) => (s === slotIndex ? null : s))}
+                >
+                  <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} />
+                </button>
+              ) : (
+                <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
+                  <CardFace card={card} onField />
+                </div>
+              ),
+            )}
+          </div>
         </div>
       </div>
 
@@ -389,7 +408,7 @@ export function CombatPanel({
                 key={card.hand_index}
                 data-hand-index={card.hand_index}
                 style={fanStyle(i, combat.hand.length)}
-                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : ""}${drag.dragging === card.hand_index ? " is-dragged" : ""}`}
+                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : ""}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}`}
                 disabled={busy}
                 onMouseEnter={() => sfx.play("hover")}
                 onPointerDown={(event) => drag.onPointerDown(event, card.hand_index)}
@@ -428,6 +447,9 @@ export function CombatPanel({
           ? "Enemy defeated."
           : discarding !== null
             ? `Hand limit is ${combat.max_hand_size}: pick ${excess} card(s) to discard (${discarding.length}/${excess}).`
+            : selectedHandIndex !== null &&
+                combat.hand.find((card) => card.hand_index === selectedHandIndex)?.overflows
+            ? "Context window full - this card may hallucinate and backfire. Choose a slot to risk it."
             : selectedHandIndex === null
             ? "Drag a card onto an empty slot of the stack - or click it, then click a slot."
             : "Choose an empty slot to run the selected card."}

@@ -31,6 +31,13 @@ half HP and enter phase 2, gaining strength and block. Later acts' bosses
 have a third phase at a quarter HP: stronger again, no more bracing, and a
 four-hit barrage.
 
+Characters with a context window (the Vibe-Coder, see characters.py) pay
+every card's token_cost out of it, and part of it frees up again at the end
+of every turn. A card that would push them past it still plays, but
+hallucinates with HALLUCINATION_CHANCE: an attack hits them instead, a
+block or heal goes to the enemy, anything else fizzles. Dr. Chronos has no
+window - none of that touches his fights, nor the rng sequence they roll.
+
 Two ways to drive this engine:
 - step by step (start_combat / play_card / end_turn) - what the web API
   calls, one HTTP request per action, for real interactive play;
@@ -47,6 +54,7 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 from .artifacts import every_nth_turn, heal, total
+from .characters import profile
 from .models import (
     DEFAULT_BARRAGE_HITS,
     DEFAULT_MOVE_POWER,
@@ -54,6 +62,7 @@ from .models import (
     Artifact,
     Card,
     CardType,
+    Character,
     Enemy,
     EnemyMove,
     MoveKind,
@@ -69,6 +78,10 @@ MAX_AUTO_TURNS = 50
 # Bots stop playing after this many cards in one turn - a backstop so a
 # card combo nobody foresaw can never hang the simulator or the tests.
 MAX_AUTO_PLAYS_PER_TURN = 30
+# Chance that a card played past the context window backfires.
+HALLUCINATION_CHANCE = 0.5
+# Copilot (CHAIN) counts at most this many cards played before it in a turn.
+CHAIN_MAX_PLAYS = 3
 
 # Move strength scales off the attack stat (plus a boss's phase strength).
 # How hard each kind hits by default is models.DEFAULT_MOVE_POWER; a move in
@@ -125,6 +138,17 @@ class CombatState(BaseModel):
     boss_phases: int = 2
     phase: int = 1
     enemy_strength: int = 0
+    # The character's card flow (see characters.py): the context window
+    # (None: no window, token costs are ignored) and the tokens spent from
+    # it, cards drawn after every play, and the change to the end-of-turn draw.
+    token_limit: int | None = None
+    tokens_used: int = 0
+    token_regen: int = 0  # used tokens freed at the end of every turn
+    draw_on_play: int = 0
+    turn_draw_modifier: int = 0
+    plays_this_turn: int = 0  # what Copilot (CHAIN) counts
+    # cards left this turn that cost no tokens (Tab-Tab-Tab, Pair Programming)
+    free_plays: int = 0
 
 
 def _draw(state: CombatState, count: int, rng: random.Random) -> int:
@@ -144,7 +168,46 @@ def cards_per_turn(state: CombatState) -> int:
     """Cards drawn for turn `state.turn`."""
     draw_bonus = sum(c.value for c in state.field if c and c.type is CardType.DRAW_BONUS)
     artifact_bonus = every_nth_turn(state.artifacts, "extra_draw", "extra_draw_every", state.turn)
-    return max(0, CARDS_PER_TURN + draw_bonus + artifact_bonus)
+    return max(0, CARDS_PER_TURN + state.turn_draw_modifier + draw_bonus + artifact_bonus)
+
+
+def token_cost(state: CombatState, card: Card) -> int:
+    """What playing `card` takes from the context window - 0 without one,
+    and 0 while a free play (Tab-Tab-Tab, Pair Programming) is pending."""
+    if state.token_limit is None or state.free_plays:
+        return 0
+    return max(0, card.token_cost)
+
+
+def tokens_left(state: CombatState) -> int | None:
+    if state.token_limit is None:
+        return None
+    return max(0, state.token_limit - state.tokens_used)
+
+
+def overflows(state: CombatState, card: Card) -> bool:
+    """Whether `card` would push past the context window - and may hallucinate."""
+    cost = token_cost(state, card)
+    return cost > 0 and state.tokens_used + cost > state.token_limit
+
+
+def hallucination_chance(state: CombatState) -> float:
+    """Chance a card past the context window backfires, after artifacts."""
+    percent = 100 + total(state.artifacts, "hallucination_percent")
+    return max(0.0, HALLUCINATION_CHANCE * percent / 100)
+
+
+def token_regen(state: CombatState) -> int:
+    """Used tokens freed at the end of this turn: the character's own (after
+    artifacts) plus Energy Drinks."""
+    drinks = sum(c.value for c in state.field if c and c.type is CardType.TOKEN_REGEN)
+    return state.token_regen + drinks
+
+
+def _free_tokens(state: CombatState, amount: int) -> int:
+    freed = max(0, min(amount, state.tokens_used))
+    state.tokens_used -= freed
+    return freed
 
 
 def max_hand_size(state: CombatState) -> int:
@@ -383,15 +446,17 @@ def start_combat(
     artifacts: list[Artifact] | None = None,
     boss: bool = False,
     boss_phases: int = 2,
+    character: Character = Character.CHRONOS,
 ) -> tuple[CombatState, list[str]]:
     """Shuffle a *copy* of `deck` into the draw pile and draw an opening hand.
 
     `deck` (the player's owned cards) is read, never mutated - the piles
     below are the combat-scoped working copy that gets folded back once the
     fight ends. `boss` switches on the boss move set, with `boss_phases`
-    phases (2 or 3).
+    phases (2 or 3). `character` sets the card flow (see characters.py).
     """
     artifacts = list(artifacts or [])
+    hero = profile(character)
     hp_percent = total(artifacts, "enemy_hp_percent")
     if hp_percent:
         enemy = enemy.model_copy(update={"hp": max(1, round(enemy.hp * (100 + hp_percent) / 100))})
@@ -408,6 +473,15 @@ def start_combat(
         artifacts=artifacts,
         boss=boss,
         boss_phases=boss_phases,
+        token_limit=(
+            None
+            if hero.token_limit is None
+            else max(1, hero.token_limit + total(artifacts, "token_window"))
+        ),
+        token_regen=hero.token_regen + total(artifacts, "token_regen"),
+        draw_on_play=hero.draw_on_play,
+        turn_draw_modifier=hero.turn_draw_modifier,
+        free_plays=total(artifacts, "opening_free_plays"),
     )
     _roll_next_intent(state, rng)
     _draw(state, HAND_SIZE + total(artifacts, "opening_hand"), rng)
@@ -436,6 +510,18 @@ def _amplifier_multiplier(state: CombatState, slot_index: int) -> float:
     return 1 + boost / 100
 
 
+def _chain_bonus(state: CombatState, slot_index: int) -> int:
+    """Flat bonus from the Copilots (CHAIN) left of `slot_index`: their value
+    for every card already played this turn, up to CHAIN_MAX_PLAYS of them -
+    uncapped, a long chain would grow quadratically."""
+    chain = sum(
+        c.value
+        for i, c in enumerate(state.field)
+        if c is not None and c.type is CardType.CHAIN and i < slot_index
+    )
+    return chain * min(state.plays_this_turn, CHAIN_MAX_PLAYS)
+
+
 def play_card(
     state: CombatState, hand_index: int, slot_index: int, player: PlayerState, rng: random.Random
 ) -> str:
@@ -447,31 +533,74 @@ def play_card(
         raise ValueError(f"slot {slot_index} is occupied")
 
     card = state.hand.pop(hand_index)
+    # Rolled before anything else is paid, and only past the context window -
+    # a character without one never rolls here.
+    hallucinates = overflows(state, card) and rng.random() < hallucination_chance(state)
+    state.tokens_used += token_cost(state, card)
+    if state.free_plays:
+        state.free_plays -= 1
     # The cost is paid before anything else, so a card like Memory Dump can't
     # throw away the very cards it is about to draw.
     cost_line = _pay_discard_cost(state, card, rng)
 
-    if card.type in PERMANENT_CARD_TYPES:
+    if hallucinates:
+        line = cost_line + _hallucinate(state, card, slot_index, player)
+        (state.banished_pile if card.exhaust else state.discard_pile).append(card)
+    elif card.type in PERMANENT_CARD_TYPES:
         state.field[slot_index] = card
-        return cost_line + f"You play {card.name} in slot {slot_index + 1} - it stays on the field."
-
-    # Action card: the multiplier is read from the field *before* the effect
-    # runs, so e.g. Final Strike destroying the very Amplifier it benefited
-    # from still counts that benefit.
-    multiplier = _amplifier_multiplier(state, slot_index)
-    line = cost_line + _apply_action_effect(state, card, multiplier, player, rng)
-
-    if card.exhaust:
-        state.banished_pile.append(card)
-        line += " It's used up and banished for the rest of the fight."
+        line = cost_line + f"You play {card.name} in slot {slot_index + 1} - it stays on the field."
     else:
-        state.discard_pile.append(card)
+        # Action card: the multiplier is read from the field *before* the
+        # effect runs, so e.g. Final Strike destroying the very Amplifier it
+        # benefited from still counts that benefit.
+        multiplier = _amplifier_multiplier(state, slot_index)
+        bonus = _chain_bonus(state, slot_index)
+        line = cost_line + _apply_action_effect(state, card, multiplier, player, rng, bonus)
 
-    if card.draw:
-        drawn = _draw(state, card.draw, rng)
+        if card.exhaust:
+            state.banished_pile.append(card)
+            line += " It's used up and banished for the rest of the fight."
+        else:
+            state.discard_pile.append(card)
+
+        if card.draw:
+            drawn = _draw(state, card.draw, rng)
+            line += f" You draw {drawn} card(s)."
+
+    state.plays_this_turn += 1
+    if state.draw_on_play:
+        drawn = _draw(state, state.draw_on_play, rng)
         line += f" You draw {drawn} card(s)."
-
+    if state.token_limit is not None:
+        line += f" Context: {state.tokens_used}/{state.token_limit} tokens."
     return line + _check_boss_phase(state)
+
+
+def _hallucinate(state: CombatState, card: Card, slot_index: int, player: PlayerState) -> str:
+    """A card played past the context window backfires: an attack hits the
+    player (block soaks it first), a block or heal goes to the enemy, and
+    everything else - permanents included - fizzles without effect."""
+    multiplier = _amplifier_multiplier(state, slot_index)
+    bonus = _chain_bonus(state, slot_index)
+    lead = f"Context overflow - {card.name} hallucinates"
+    if any(c is not None and c.type is CardType.SAFEGUARD for c in state.field):
+        return f"{lead}, but your rubber duck catches it - it does nothing."
+    if card.type is CardType.ATTACK:
+        hits = [attack_damage(state, card, player, multiplier, bonus)] * max(card.hits, 1)
+        taken = _damage_taken(hits, state.player_block, 0)
+        state.player_block = max(0, state.player_block - sum(hits))
+        player.hp = max(player.hp - taken, 0)
+        return f"{lead} and hits you for {taken} damage. You are at {player.hp} HP."
+    if card.type is CardType.BLOCK:
+        amount = block_amount(state, card, multiplier, bonus)
+        state.enemy_block += amount
+        return f"{lead}: {state.enemy.name} gains {amount} block."
+    if card.type is CardType.HEAL:
+        amount = round((card.value + total(state.artifacts, "heal_bonus") + bonus) * multiplier)
+        healed = min(amount, state.enemy.hp - state.enemy_hp)
+        state.enemy_hp += healed
+        return f"{lead}: {state.enemy.name} heals {healed} HP."
+    return f"{lead} and does nothing."
 
 
 def _pay_discard_cost(state: CombatState, card: Card, rng: random.Random) -> str:
@@ -491,19 +620,33 @@ def permanent_count(state: CombatState) -> int:
 
 
 def attack_damage(
-    state: CombatState, card: Card, player: PlayerState, multiplier: float = 1.0
+    state: CombatState, card: Card, player: PlayerState, multiplier: float = 1.0, bonus: int = 0
 ) -> int:
-    """Damage of one hit of an ATTACK card - also what the UI/bots preview."""
-    base = card.value + player.attack
-    if card.scaling is Scaling.PERMANENT:
-        base += card.scale_value * permanent_count(state)
-    elif card.scaling is Scaling.GRAVEYARD:
-        base += card.scale_value * len(state.discard_pile)
-    elif card.scaling is Scaling.BANISHED:
-        base += card.scale_value * len(state.banished_pile)
+    """Damage of one hit of an ATTACK card - also what the UI/bots preview.
+    `bonus` is flat damage on top, before the multiplier (Copilot)."""
+    base = card.value + player.attack + bonus + _scaling_bonus(state, card)
     boost = sum(c.value for c in state.field if c and c.type is CardType.DAMAGE_BOOST)
     base += boost * permanent_count(state)
     return round(base * multiplier)
+
+
+def block_amount(state: CombatState, card: Card, multiplier: float = 1.0, bonus: int = 0) -> int:
+    """Block a BLOCK card raises - also what the UI/bots preview."""
+    base = card.value + total(state.artifacts, "block_bonus") + bonus + _scaling_bonus(state, card)
+    return round(base * multiplier)
+
+
+def _scaling_bonus(state: CombatState, card: Card) -> int:
+    """The card's `scale_value` times whatever its `scaling` counts."""
+    count = {
+        None: 0,
+        Scaling.PERMANENT: permanent_count(state),
+        Scaling.GRAVEYARD: len(state.discard_pile),
+        Scaling.BANISHED: len(state.banished_pile),
+        Scaling.PLAYED: state.plays_this_turn,
+        Scaling.EMPTY_SLOT: FIELD_SIZE - permanent_count(state),
+    }[card.scaling]
+    return card.scale_value * count
 
 
 def action_preview(
@@ -520,22 +663,28 @@ def action_preview(
     if state.field[slot_index] is not None:
         return None
     multiplier = _amplifier_multiplier(state, slot_index)
+    bonus = _chain_bonus(state, slot_index)
     if card.type is CardType.ATTACK:
-        return attack_damage(state, card, player, multiplier)
+        return attack_damage(state, card, player, multiplier, bonus)
     if card.type is CardType.BLOCK:
-        return round((card.value + total(state.artifacts, "block_bonus")) * multiplier)
+        return block_amount(state, card, multiplier, bonus)
     if card.type is CardType.HEAL:
-        return round((card.value + total(state.artifacts, "heal_bonus")) * multiplier)
+        return round((card.value + total(state.artifacts, "heal_bonus") + bonus) * multiplier)
     if card.type is CardType.FINAL_STRIKE:
         return round(card.value * permanent_count(state) * multiplier)
     return None
 
 
 def _apply_action_effect(
-    state: CombatState, card: Card, multiplier: float, player: PlayerState, rng: random.Random
+    state: CombatState,
+    card: Card,
+    multiplier: float,
+    player: PlayerState,
+    rng: random.Random,
+    bonus: int = 0,
 ) -> str:
     if card.type is CardType.ATTACK:
-        damage = attack_damage(state, card, player, multiplier)
+        damage = attack_damage(state, card, player, multiplier, bonus)
         hits = max(card.hits, 1)
         absorbed = dealt = 0
         for _ in range(hits):
@@ -594,13 +743,21 @@ def _apply_action_effect(
             f"restoring {_names(returning)} from the banished pile."
         )
 
+    if card.type is CardType.COMPACT:
+        freed = _free_tokens(state, card.value)
+        return f"You play {card.name}, freeing {freed} token(s) of context."
+
+    if card.type is CardType.FREE_PLAY:
+        state.free_plays += card.value
+        return f"You play {card.name} - the next {card.value} card(s) this turn cost no tokens."
+
     if card.type is CardType.BLOCK:
-        amount = round((card.value + total(state.artifacts, "block_bonus")) * multiplier)
+        amount = block_amount(state, card, multiplier, bonus)
         state.player_block += amount
         return f"You play {card.name}, gaining {amount} block."
 
     if card.type is CardType.HEAL:
-        amount = round((card.value + total(state.artifacts, "heal_bonus")) * multiplier)
+        amount = round((card.value + total(state.artifacts, "heal_bonus") + bonus) * multiplier)
         healed = heal(player, amount)
         return f"You play {card.name}, healing {healed} HP."
 
@@ -704,6 +861,10 @@ def end_turn(
     state.player_block = 0
     _roll_next_intent(state, rng)
     state.turn += 1
+    state.plays_this_turn = 0
+    state.free_plays = sum(c.value for c in state.field if c and c.type is CardType.OPENER)
+    if state.token_limit is not None:
+        _free_tokens(state, token_regen(state))
     # Unplayed hand cards carry over to next turn; a fixed number of cards
     # is drawn on top, so holding cards back grows the hand (up to the limit).
     _draw(state, cards_per_turn(state), rng)
@@ -761,21 +922,29 @@ def auto_resolve_combat(
 ) -> tuple[bool, list[str]]:
     """Play out a full fight non-interactively: dump the hand into the first
     empty field slot each turn, then end the turn, until someone runs out of HP.
+    It never plays past the context window - no gambling on hallucinations.
     """
     state, log = start_combat(
-        deck, enemy, rng, player.artifacts, boss=boss, boss_phases=boss_phases
+        deck,
+        enemy,
+        rng,
+        player.artifacts,
+        boss=boss,
+        boss_phases=boss_phases,
+        character=player.character,
     )
 
     for _ in range(MAX_AUTO_TURNS):
         if state.enemy_hp <= 0 or player.hp <= 0:
             break
         for _ in range(MAX_AUTO_PLAYS_PER_TURN):
-            if not state.hand:
+            index = next((i for i, c in enumerate(state.hand) if not overflows(state, c)), None)
+            if index is None:
                 break
             empty_slot = next((i for i, c in enumerate(state.field) if c is None), None)
             if empty_slot is None:
                 break
-            log.append(play_card(state, 0, empty_slot, player, rng))
+            log.append(play_card(state, index, empty_slot, player, rng))
             if state.enemy_hp <= 0:
                 break
         if state.enemy_hp <= 0:

@@ -280,13 +280,20 @@ export function cardSound(type: CardType): SfxName {
       return type;
     // wiping the field and pulling the banished pile back sounds like both
     case "reboot":
+    case "compact":
       return "restore";
+    case "free_play":
+      return "draw";
     case "amplifier":
     case "armor":
     case "draw_bonus":
     case "damage_boost":
     case "turret":
     case "fortify":
+    case "chain":
+    case "token_regen":
+    case "safeguard":
+    case "opener":
       return "permanent";
   }
 }

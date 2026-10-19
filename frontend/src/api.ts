@@ -19,7 +19,14 @@ export type CardType =
   | "draw_bonus"
   | "damage_boost"
   | "turret"
-  | "fortify";
+  | "fortify"
+  // the Vibe-Coder's cards
+  | "compact"
+  | "free_play"
+  | "chain"
+  | "token_regen"
+  | "safeguard"
+  | "opener";
 
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
@@ -28,6 +35,10 @@ export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "damage_boost",
   "turret",
   "fortify",
+  "chain",
+  "token_regen",
+  "safeguard",
+  "opener",
 ];
 
 export type Rarity = "starter" | "common" | "uncommon" | "rare";
@@ -47,6 +58,21 @@ export interface Card {
   scale_value: number;
   // reworked once at a safehouse - its name carries a "+"
   upgraded: boolean;
+  // what it takes from a context window - only the Vibe-Coder has one
+  token_cost: number;
+}
+
+// Who a run is played as - see characters.py.
+export type Character = "chronos" | "vibe_coder";
+
+export interface CharacterView {
+  id: Character;
+  name: string;
+  title: string;
+  description: string;
+  hp: number;
+  // tokens per context window, null for characters without one
+  token_limit: number | null;
 }
 
 // A passive bonus for the rest of the run. Only the text is shown - the
@@ -58,6 +84,7 @@ export interface Artifact {
 }
 
 export interface PlayerState {
+  character: Character;
   hp: number;
   max_hp: number;
   attack: number;
@@ -89,6 +116,8 @@ export interface HandCardView extends Card {
   // what the card comes out with in each field slot (damage per hit, block,
   // healing) - null for occupied slots and cards without such a number
   preview: (number | null)[];
+  // playing it now would push past the context window - it may hallucinate
+  overflows: boolean;
 }
 
 // attack/defend for every enemy, the rest only for bosses
@@ -134,6 +163,11 @@ export interface PendingCombatView {
   draw_count: number;
   discard_count: number;
   banished_count: number;
+  // the character's context window - null (and 0s) for characters without one
+  token_limit: number | null;
+  tokens_used: number;
+  // used tokens freed at the end of the turn
+  token_regen: number;
 }
 
 export interface ShopCard {
@@ -209,10 +243,14 @@ export function listSettings(): Promise<string[]> {
   return request<string[]>("/settings");
 }
 
-export function createRun(setting: string, seed?: number): Promise<RunView> {
+export function listCharacters(): Promise<CharacterView[]> {
+  return request<CharacterView[]>("/characters");
+}
+
+export function createRun(setting: string, character: Character, seed?: number): Promise<RunView> {
   return request<RunView>("/runs", {
     method: "POST",
-    body: JSON.stringify({ seed: seed ?? null, setting }),
+    body: JSON.stringify({ seed: seed ?? null, setting, character }),
   });
 }
 
