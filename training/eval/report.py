@@ -12,7 +12,7 @@ import math
 from dataclasses import asdict, fields
 from pathlib import Path
 
-from agentic_rogue_like.agent.encounter_schema import EnemyBudget, EnemyProposal
+from agentic_rogue_like.agent.encounter_schema import EnemyBudget, EnemyProposal, MovesetProposal
 
 from .harness import CallResult
 from .metrics import Report, TierMetrics
@@ -36,7 +36,72 @@ _COLUMN_LABELS: dict[str, str] = {
     "avg_input_tokens": "Avg input tok",
     "avg_output_tokens": "Avg output tok",
     "cost_per_call_usd": "$/call",
+    "first_violation_threat": "1st try: threat",
+    "first_violation_invalid_moves": "1st try: bad moves",
+    "first_violation_attack": "1st try: attack",
+    "first_violation_hp": "1st try: hp",
+    "retry_fix_rate": "Fixed by retry",
+    "avg_moves": "Moves",
+    "uses_defend": "Defend",
+    "uses_barrage": "Barrage",
+    "uses_charge": "Charge",
+    "uses_purge": "Purge",
+    "unique_move_name_ratio": "Unique move names",
+    "unique_move_set_ratio": "Unique move sets",
+    "threat_position_mean": "Threat position",
+    "hp_outside_plain_range": "HP off plain range",
 }
+
+# The markdown report splits the columns into tables - one row of 30 columns
+# is unreadable. CSV keeps them all in one.
+_TABLES: tuple[tuple[str | None, tuple[str, ...]], ...] = (
+    (
+        None,
+        (
+            "tier",
+            "n",
+            "validity_rate",
+            "budget_compliance_first_attempt",
+            "budget_compliance_final",
+            "avg_attempts",
+            "unique_name_ratio",
+            "unique_attack_name_ratio",
+            "hp_stdev",
+            "attack_stdev",
+            "latency_p50_seconds",
+            "latency_p95_seconds",
+            "avg_input_tokens",
+            "avg_output_tokens",
+            "cost_per_call_usd",
+        ),
+    ),
+    (
+        "Why first attempts were rejected (share of valid calls)",
+        (
+            "tier",
+            "first_violation_threat",
+            "first_violation_invalid_moves",
+            "first_violation_attack",
+            "first_violation_hp",
+            "retry_fix_rate",
+        ),
+    ),
+    (
+        "Move sets (accepted enemies; share using each kind)",
+        (
+            "tier",
+            "avg_moves",
+            "uses_defend",
+            "uses_barrage",
+            "uses_charge",
+            "uses_purge",
+            "unique_move_name_ratio",
+            "unique_move_set_ratio",
+            "threat_position_mean",
+            "hp_outside_plain_range",
+        ),
+    ),
+)
 
 
 def _fmt(value: object) -> str:
@@ -54,13 +119,20 @@ def _rows(report: Report) -> list[TierMetrics]:
 
 
 def render_markdown(report: Report) -> str:
-    columns = [f.name for f in fields(TierMetrics)]
-    header = "| " + " | ".join(_COLUMN_LABELS[c] for c in columns) + " |"
-    separator = "| " + " | ".join("---" for _ in columns) + " |"
-    lines = [f"# Eval report: {report.label} ({report.model_name})", "", header, separator]
-    for row in _rows(report):
-        data = asdict(row)
-        lines.append("| " + " | ".join(_fmt(data[c]) for c in columns) + " |")
+    lines = [f"# Eval report: {report.label} ({report.model_name})"]
+    rows = [asdict(row) for row in _rows(report)]
+    for title, columns in _TABLES:
+        # A table whose every metric is empty (move sets in a plain run)
+        # is noise - leave it out.
+        if title is not None and all(row[c] is None for row in rows for c in columns[1:]):
+            continue
+        lines.append("")
+        if title is not None:
+            lines += [f"## {title}", ""]
+        lines.append("| " + " | ".join(_COLUMN_LABELS[c] for c in columns) + " |")
+        lines.append("| " + " | ".join("---" for _ in columns) + " |")
+        for data in rows:
+            lines.append("| " + " | ".join(_fmt(data[c]) for c in columns) + " |")
     cost_per_call = report.overall.cost_per_call_usd
     if cost_per_call is not None:
         lines.append("")
@@ -105,8 +177,13 @@ def _jsonable_to_result(data: dict) -> CallResult:
         boss=context_data["boss"],
         setting=context_data["setting"],
         budget=EnemyBudget(**context_data["budget"]),
+        # Reports from before move sets have neither key.
+        with_moves=context_data.get("with_moves", False),
     )
-    proposal = EnemyProposal(**data["proposal"]) if data["proposal"] is not None else None
+    proposal = None
+    if data["proposal"] is not None:
+        schema = MovesetProposal if "moves" in data["proposal"] else EnemyProposal
+        proposal = schema(**data["proposal"])
     return CallResult(
         context=context,
         status=data["status"],
@@ -115,6 +192,7 @@ def _jsonable_to_result(data: dict) -> CallResult:
         latency_seconds=data["latency_seconds"],
         proposal=proposal,
         error_message=data["error_message"],
+        first_violation_kind=data.get("first_violation_kind"),
     )
 
 

@@ -34,12 +34,16 @@ class EvalContext:
     boss: bool
     setting: str
     budget: EnemyBudget
+    # Ask for a move set (MovesetProposal) instead of the plain schema the
+    # fine-tuned models were trained on - see run_eval's --moves.
+    with_moves: bool = False
 
 
 def build_test_contexts(
     repeats: int = 5,
     settings: tuple[str, ...] = SETTING_PRESETS,
     tiers: tuple[str, ...] | None = None,
+    with_moves: bool = False,
 ) -> list[EvalContext]:
     """One EvalContext per (tier, setting), repeated `repeats` times.
 
@@ -56,6 +60,9 @@ def build_test_contexts(
     `tiers` restricts the run to some budget tiers (default: all four) - used to
     fill a gap in an existing report (results merge by label) without spending
     quota re-measuring tiers that are already covered.
+
+    `with_moves` asks for move sets. Bosses never get one (their move set is
+    fixed, see encounter_agent._with_moves), so their contexts stay plain.
     """
     contexts = []
     for tier, floor, elite, boss in _TIERS:
@@ -73,6 +80,7 @@ def build_test_contexts(
                         boss=boss,
                         setting=setting,
                         budget=budget,
+                        with_moves=with_moves and not boss,
                     )
                 )
     return contexts

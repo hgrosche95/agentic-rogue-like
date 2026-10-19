@@ -44,3 +44,9 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+# The eval/data_gen/common folders are imported as top-level packages, the way
+# `uv run python -m eval.run_eval` sees them from this directory.
+pythonpath = ["."]
+testpaths = ["tests"]

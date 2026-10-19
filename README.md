@@ -395,8 +395,10 @@ beim alten Schema ohne Moves: Das Ollama-Modell wurde genau auf diesen Prompt
 trainiert und kennt keine Movesets. Ebenso pinnen Datengenerierung und
 Eval-Harness unter `training/` das alte Schema (`with_moves: False`), damit
 die Zahlen in `training/RESULTS.md` vergleichbar bleiben. Echte
-Groq-Antworten mit Movesets sind noch nicht ausgewertet; die Tests laufen
-mit simulierten Modell-Antworten.
+Groq-Antworten mit Movesets sind noch nicht ausgewertet; der Eval-Harness
+kann es (`uv run python -m eval.run_eval --model groq --moves` in
+`training/`, siehe `training/README.md`), die Tests laufen mit simulierten
+Modell-Antworten.
 
 ## Artefakte
 
