@@ -17,12 +17,13 @@ from .models import Affix, Enemy, EnemyMove, MoveKind
 from .threat import threat
 
 # Shorthands for the move sets below.
-_ATTACK, _DEFEND, _BARRAGE, _CHARGE, _PURGE = (
+_ATTACK, _DEFEND, _BARRAGE, _CHARGE, _PURGE, _INFECT = (
     MoveKind.ATTACK,
     MoveKind.DEFEND,
     MoveKind.BARRAGE,
     MoveKind.CHARGE,
     MoveKind.PURGE,
+    MoveKind.INFECT,
 )
 
 
@@ -140,6 +141,19 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
                 _move(_ATTACK, "Dark Bolt", 2),
                 _move(_DEFEND, "Unholy Ward", 2, power=120),
                 _move(_CHARGE, "Ritual Chant", 1, power=180),
+            ],
+        ),
+        Enemy(
+            id="plague-doctor",
+            name="Plague Doctor",
+            hp=51,
+            attack=10,
+            attack_name="Bone Saw",
+            description="A beaked mask, a bone saw and a cure that is worse than the disease.",
+            moves=[
+                _move(_ATTACK, "Bone Saw", 3),
+                _move(_INFECT, "Miasma", 2, stacks=3),
+                _move(_DEFEND, "Beak Mask", 1),
             ],
         ),
     ],

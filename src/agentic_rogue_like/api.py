@@ -123,6 +123,9 @@ class CardView(BaseModel):
     hits: int
     # Scaling attacks: the bonus per permanent / graveyard / banished card.
     scale_value: int
+    # A status it puts on the enemy, and how much (stacks or turns).
+    applies: str | None
+    applies_amount: int
     upgraded: bool
     token_cost: int
 
@@ -138,6 +141,8 @@ class CardView(BaseModel):
             exhaust=card.exhaust,
             hits=max(card.hits, 1),
             scale_value=card.scale_value,
+            applies=None if card.applies is None else card.applies.value,
+            applies_amount=card.applies_amount,
             upgraded=card.upgraded,
             token_cost=card.token_cost,
         )
@@ -189,6 +194,9 @@ class PendingCombatView(BaseModel):
     enemy_affix: str | None
     enemy_affix_description: str | None
     enemy_enraged: bool
+    # Statuses on either side and their stacks / turns left (models.Status).
+    enemy_status: dict[str, int]
+    player_status: dict[str, int]
     hand: list[HandCardView]
     field: list[CardView | None]
     player_block: int
@@ -421,6 +429,8 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
                 None if combat.enemy.affix is None else AFFIX_DESCRIPTIONS[combat.enemy.affix]
             ),
             enemy_enraged=is_enraged(combat),
+            enemy_status={s.value: n for s, n in combat.enemy_status.items()},
+            player_status={s.value: n for s, n in combat.player_status.items()},
             hand=[
                 HandCardView(
                     hand_index=i,

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import random
 
-from .models import Card, CardType, Rarity, Scaling
+from .models import Card, CardType, Rarity, Scaling, Status
 
 
 def starter_deck() -> list[Card]:
@@ -208,6 +208,58 @@ REWARD_POOL: list[Card] = [
         token_cost=2,
         rarity=Rarity.RARE,
         description="Deal 2 (+ATK) damage, +4 per banished card.",
+    ),
+    # ---- statuses: Malware, Exposed, Throttled (combat.STATUS_DESCRIPTIONS)
+    Card(
+        id="trojan",
+        name="Trojan",
+        type=CardType.ATTACK,
+        value=3,
+        applies=Status.MALWARE,
+        applies_amount=3,
+        rarity=Rarity.COMMON,
+        description="Deal 3 (+ATK) damage. Infect it with 3 Malware.",
+    ),
+    Card(
+        id="port-scan",
+        name="Port Scan",
+        type=CardType.ATTACK,
+        value=1,
+        applies=Status.EXPOSED,
+        applies_amount=2,
+        rarity=Rarity.COMMON,
+        description="Deal 1 (+ATK) damage. Expose it for 2 turns: attacks deal 50% more.",
+    ),
+    Card(
+        id="packet-loss",
+        name="Packet Loss",
+        type=CardType.BLOCK,
+        value=5,
+        applies=Status.THROTTLED,
+        applies_amount=2,
+        rarity=Rarity.COMMON,
+        description="Gain 5 block. Throttle it for 2 turns: it deals 25% less.",
+    ),
+    Card(
+        id="worm",
+        name="Worm",
+        type=CardType.ATTACK,
+        value=2,
+        scaling=Scaling.MALWARE,
+        scale_value=2,
+        rarity=Rarity.UNCOMMON,
+        description="Deal 2 (+ATK) damage, +2 per Malware on the enemy.",
+    ),
+    Card(
+        id="ransomware",
+        name="Ransomware",
+        type=CardType.ATTACK,
+        value=0,
+        exhaust=True,
+        applies=Status.MALWARE,
+        applies_amount=6,
+        rarity=Rarity.RARE,
+        description="One-shot. Deal 0 (+ATK) damage. Infect it with 6 Malware.",
     ),
     # ---- defense / sustain
     Card(
@@ -514,6 +566,26 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Fork Bomb": {
         "value": 5,
         "description": "Discard 2 random cards. Hit twice for 5 (+ATK) damage.",
+    },
+    "Trojan": {
+        "applies_amount": 5,
+        "description": "Deal 3 (+ATK) damage. Infect it with 5 Malware.",
+    },
+    "Port Scan": {
+        "applies_amount": 3,
+        "description": "Deal 1 (+ATK) damage. Expose it for 3 turns: attacks deal 50% more.",
+    },
+    "Packet Loss": {
+        "value": 8,
+        "description": "Gain 8 block. Throttle it for 2 turns: it deals 25% less.",
+    },
+    "Worm": {
+        "scale_value": 3,
+        "description": "Deal 2 (+ATK) damage, +3 per Malware on the enemy.",
+    },
+    "Ransomware": {
+        "applies_amount": 9,
+        "description": "One-shot. Deal 0 (+ATK) damage. Infect it with 9 Malware.",
     },
     # ---- the Vibe-Coder's cards (characters.py). Where tokens are the
     # bottleneck, an upgrade may make a card cheaper instead of stronger.

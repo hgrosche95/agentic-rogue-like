@@ -1,4 +1,4 @@
-import type { CardType, EnemyIntentType } from "./api";
+import type { CardType, EnemyIntentType, Status } from "./api";
 
 // what a card's readout number counts, per card type
 const UNIT: Partial<Record<CardType, string>> = {
@@ -64,5 +64,18 @@ function describeKind(
         amount: range,
         title: `Destroys your rightmost permanent card, then hits for ${range}`,
       };
+    case "infect":
+      return {
+        label: "Infect",
+        amount: range,
+        title: `Hits for ${range} and leaves Malware on you - it costs HP every turn as it fades`,
+      };
   }
 }
+
+// What each status does, for the badges' tooltips - see combat.STATUS_DESCRIPTIONS.
+export const STATUS_TEXT: Record<Status, string> = {
+  malware: "Loses that much HP at the end of each turn, then one stack fades.",
+  exposed: "Attack cards deal 50% more to it. Turns left.",
+  throttled: "Deals 25% less. Turns left.",
+};

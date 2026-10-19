@@ -112,6 +112,18 @@ PERMANENT_CARD_TYPES = frozenset(
 )
 
 
+class Status(StrEnum):
+    """A lasting effect on one side of a fight, counted down by combat.py.
+
+    The enemy can carry all three (from the player's cards); the player only
+    Malware so far (from an enemy's infect move).
+    """
+
+    MALWARE = "malware"  # loses `stacks` HP at the end of each turn, then one stack fades
+    EXPOSED = "exposed"  # attack cards deal 50% more to it, for that many enemy turns
+    THROTTLED = "throttled"  # deals 25% less, for that many of its turns
+
+
 class Scaling(StrEnum):
     """What an attack or block card's `scale_value` bonus is counted per."""
 
@@ -120,6 +132,7 @@ class Scaling(StrEnum):
     BANISHED = "banished"  # cards in the banished pile
     PLAYED = "played"  # cards already played this turn
     EMPTY_SLOT = "empty_slot"  # empty field slots
+    MALWARE = "malware"  # Malware stacks on the enemy
 
 
 class Rarity(StrEnum):
@@ -144,6 +157,9 @@ class Card(BaseModel):
     draw: int = 0  # draw this many cards after the effect
     scaling: Scaling | None = None  # attacks and blocks only: +scale_value per ...
     scale_value: int = 0
+    # Action cards: a status put on the enemy when played (combat._afflict).
+    applies: Status | None = None
+    applies_amount: int = 0
     # Improved once at a rest site (cards.upgrade_card) - never twice.
     upgraded: bool = False
     # Tokens it takes from the context window - only characters with one
@@ -206,6 +222,7 @@ class MoveKind(StrEnum):
     BARRAGE = "barrage"  # several smaller hits, armor counts against each
     CHARGE = "charge"  # raises a little block; the next turn is a crushing overload
     PURGE = "purge"  # destroys the rightmost permanent card, then hits
+    INFECT = "infect"  # a light hit that leaves Malware on the player
 
 
 # Default power (percent of the enemy's attack stat) per move kind - the
@@ -217,8 +234,10 @@ DEFAULT_MOVE_POWER: dict[MoveKind, int] = {
     MoveKind.BARRAGE: 25,
     MoveKind.CHARGE: 140,
     MoveKind.PURGE: 50,
+    MoveKind.INFECT: 50,
 }
 DEFAULT_BARRAGE_HITS = 3
+DEFAULT_INFECT_STACKS = 3
 
 
 class EnemyMove(BaseModel):
@@ -238,11 +257,17 @@ class EnemyMove(BaseModel):
     power: int | None = Field(default=None, ge=10, le=300)
     # BARRAGE only.
     hits: int | None = Field(default=None, ge=2, le=4)
+    # INFECT only: Malware stacks it leaves on the player.
+    stacks: int | None = Field(default=None, ge=1, le=6)
 
     @model_validator(mode="after")
     def _fill_defaults(self) -> EnemyMove:
         if self.hits is not None and self.kind is not MoveKind.BARRAGE:
             raise ValueError("only a barrage has hits")
+        if self.stacks is not None and self.kind is not MoveKind.INFECT:
+            raise ValueError("only an infect move has stacks")
+        if self.kind is MoveKind.INFECT and self.stacks is None:
+            self.stacks = DEFAULT_INFECT_STACKS
         if self.power is None:
             self.power = DEFAULT_MOVE_POWER[self.kind]
         if self.kind is MoveKind.BARRAGE and self.hits is None:

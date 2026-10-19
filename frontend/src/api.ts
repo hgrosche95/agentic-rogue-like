@@ -56,6 +56,9 @@ export interface Card {
   hits: number;
   // scaling attacks: the bonus per permanent / graveyard / banished card
   scale_value: number;
+  // a status it puts on the enemy, and how much (stacks or turns)
+  applies: Status | null;
+  applies_amount: number;
   // reworked once at a safehouse - its name carries a "+"
   upgraded: boolean;
   // what it takes from a context window - only the Vibe-Coder has one
@@ -121,10 +124,13 @@ export interface HandCardView extends Card {
 }
 
 // attack/defend for every enemy, the rest only for bosses
-export type EnemyIntentType = "attack" | "defend" | "barrage" | "charge" | "overload" | "purge";
+export type EnemyIntentType = "attack" | "defend" | "barrage" | "charge" | "overload" | "purge" | "infect";
+
+// Lasting effects on either side of a fight - see models.Status.
+export type Status = "malware" | "exposed" | "throttled";
 
 // intents that hit the player
-export const ATTACKING_INTENTS: EnemyIntentType[] = ["attack", "barrage", "overload", "purge"];
+export const ATTACKING_INTENTS: EnemyIntentType[] = ["attack", "barrage", "overload", "purge", "infect"];
 
 export interface PendingCombatView {
   enemy_name: string;
@@ -159,6 +165,9 @@ export interface PendingCombatView {
   enemy_affix: "armored" | "regenerating" | "enraged" | "thorny" | null;
   enemy_affix_description: string | null;
   enemy_enraged: boolean;
+  // statuses on either side and their stacks / turns left
+  enemy_status: Partial<Record<Status, number>>;
+  player_status: Partial<Record<Status, number>>;
   hand: HandCardView[];
   field: (Card | null)[];
   player_block: number;

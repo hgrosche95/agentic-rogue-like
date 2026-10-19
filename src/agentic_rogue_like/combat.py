@@ -69,6 +69,7 @@ from .models import (
     MoveKind,
     PlayerState,
     Scaling,
+    Status,
 )
 
 HAND_SIZE = 5  # opening hand
@@ -114,6 +115,7 @@ class EnemyIntentType(StrEnum):
     CHARGE = "charge"  # raises block; the next intent is always OVERLOAD
     OVERLOAD = "overload"  # one crushing hit - never rolled, always follows a CHARGE
     PURGE = "purge"  # destroys the rightmost permanent, then hits
+    INFECT = "infect"  # a light hit that leaves Malware on the player
 
 
 # Intents that hit the player - everything else deals no damage.
@@ -123,8 +125,18 @@ ATTACKING_INTENTS = frozenset(
         EnemyIntentType.BARRAGE,
         EnemyIntentType.OVERLOAD,
         EnemyIntentType.PURGE,
+        EnemyIntentType.INFECT,
     }
 )
+
+# Statuses (models.Status).
+EXPOSED_FACTOR = 1.5  # attack cards against an exposed enemy
+THROTTLED_FACTOR = 0.75  # a throttled enemy's attack
+STATUS_DESCRIPTIONS = {
+    Status.MALWARE: "Loses that much HP at the end of each turn, then one stack fades.",
+    Status.EXPOSED: "Attack cards deal 50% more to it. Lasts that many of its turns.",
+    Status.THROTTLED: "Deals 25% less. Lasts that many of its turns.",
+}
 
 
 class CombatState(BaseModel):
@@ -160,6 +172,9 @@ class CombatState(BaseModel):
     draw_on_play: int = 0
     turn_draw_modifier: int = 0
     plays_this_turn: int = 0  # what Copilot (CHAIN) counts
+    # Statuses and their stacks / turns left (models.Status).
+    enemy_status: dict[Status, int] = Field(default_factory=dict)
+    player_status: dict[Status, int] = Field(default_factory=dict)
     # cards left this turn that cost no tokens (Tab-Tab-Tab, Pair Programming)
     free_plays: int = 0
 
@@ -234,10 +249,10 @@ def is_enraged(state: CombatState) -> bool:
 def enemy_attack(state: CombatState) -> int:
     """The enemy's attack stat after artifacts and rage - before the d6 roll and block."""
     rage = round(state.enemy.attack * ENRAGE_FACTOR) if is_enraged(state) else 0
-    return max(
-        0,
-        state.enemy.attack + state.enemy_strength + rage + total(state.artifacts, "enemy_attack"),
-    )
+    attack = state.enemy.attack + state.enemy_strength + rage
+    if Status.THROTTLED in state.enemy_status:
+        attack = round(attack * THROTTLED_FACTOR)
+    return max(0, attack + total(state.artifacts, "enemy_attack"))
 
 
 def current_move(state: CombatState) -> EnemyMove | None:
@@ -285,6 +300,9 @@ def intent_hits(state: CombatState) -> list[tuple[int, int]]:
         return [(hit + 1, hit + 6)]
     if intent is EnemyIntentType.PURGE:
         hit = round(base * _move_power(state, MoveKind.PURGE) / 100)
+        return [(hit + 1, hit + 6)]
+    if intent is EnemyIntentType.INFECT:
+        hit = round(base * _move_power(state, MoveKind.INFECT) / 100)
         return [(hit + 1, hit + 6)]
     return []
 
@@ -577,6 +595,8 @@ def play_card(
         multiplier = _amplifier_multiplier(state, slot_index)
         bonus = _chain_bonus(state, slot_index)
         line = cost_line + _apply_action_effect(state, card, multiplier, player, rng, bonus)
+        if card.applies is not None and state.enemy_hp > 0:
+            line += " " + _afflict(state, card.applies, card.applies_amount)
 
         if card.exhaust:
             state.banished_pile.append(card)
@@ -648,6 +668,8 @@ def attack_damage(
     base = card.value + player.attack + bonus + _scaling_bonus(state, card)
     boost = sum(c.value for c in state.field if c and c.type is CardType.DAMAGE_BOOST)
     base += boost * permanent_count(state)
+    if Status.EXPOSED in state.enemy_status:
+        multiplier *= EXPOSED_FACTOR
     return round(base * multiplier)
 
 
@@ -666,6 +688,7 @@ def _scaling_bonus(state: CombatState, card: Card) -> int:
         Scaling.BANISHED: len(state.banished_pile),
         Scaling.PLAYED: state.plays_this_turn,
         Scaling.EMPTY_SLOT: FIELD_SIZE - permanent_count(state),
+        Scaling.MALWARE: state.enemy_status.get(Status.MALWARE, 0),
     }[card.scaling]
     return card.scale_value * count
 
@@ -883,6 +906,9 @@ def end_turn(
                 return log
 
     log.extend(_affix_after_turn(state))
+    log.extend(_tick_statuses(state, player))
+    if state.enemy_hp <= 0 or player.hp <= 0:
+        return log
     state.player_block = 0
     _roll_next_intent(state, rng)
     state.turn += 1
@@ -908,6 +934,31 @@ def _affix_after_turn(state: CombatState) -> list[str]:
         state.enemy_hp = min(state.enemy.hp, before + round(state.enemy.attack * REGEN_FACTOR))
         return [f"{name} regenerates {state.enemy_hp - before} HP. {name} at {state.enemy_hp} HP."]
     return []
+
+
+def _afflict(state: CombatState, status: Status, amount: int) -> str:
+    """Put `amount` of `status` on the enemy (stacks or turns add up)."""
+    state.enemy_status[status] = state.enemy_status.get(status, 0) + amount
+    return f"{state.enemy.name} is {status.value} ({state.enemy_status[status]})."
+
+
+def _tick_statuses(state: CombatState, player: PlayerState) -> list[str]:
+    """End of the round: Malware bites on both sides, then every status
+    counts down one - Malware a stack, Exposed/Throttled a turn."""
+    log: list[str] = []
+    name = state.enemy.name
+    if stacks := state.enemy_status.get(Status.MALWARE, 0):
+        state.enemy_hp = max(state.enemy_hp - stacks, 0)
+        log.append(f"Malware eats {stacks} HP off {name}. {name} at {state.enemy_hp} HP.")
+    if stacks := state.player_status.get(Status.MALWARE, 0):
+        player.hp = max(player.hp - stacks, 0)
+        log.append(f"Malware eats {stacks} of your HP. You are at {player.hp} HP.")
+    for statuses in (state.enemy_status, state.player_status):
+        for status in list(statuses):
+            statuses[status] -= 1
+            if statuses[status] <= 0:
+                del statuses[status]
+    return log
 
 
 def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -> list[str]:
@@ -938,11 +989,21 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
         EnemyIntentType.BARRAGE: f"unleashes a {len(hits)}-hit barrage",
         EnemyIntentType.OVERLOAD: "releases an overload",
         EnemyIntentType.PURGE: "strikes" if own else f"strikes with {state.enemy.attack_name}",
+        EnemyIntentType.INFECT: "infects you"
+        if own
+        else f"infects you with {state.enemy.attack_name}",
     }[intent]
     rolled = " + ".join(str(h) for h in hits)
     log.append(
         f"{name} {uses}{move} ({rolled}). You take {taken} damage. You are at {player.hp} HP."
     )
+    if intent is EnemyIntentType.INFECT:
+        stacks = current_move(state).stacks if current_move(state) else 0
+        state.player_status[Status.MALWARE] = state.player_status.get(Status.MALWARE, 0) + stacks
+        log.append(
+            f"{stacks} Malware creeps into your systems "
+            f"({state.player_status[Status.MALWARE]} in total)."
+        )
     if thorns := total(state.artifacts, "thorns"):
         _, dealt = _damage_enemy(state, thorns)
         log.append(

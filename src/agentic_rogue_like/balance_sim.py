@@ -538,6 +538,7 @@ _POWER_RANGES = {
     MoveKind.BARRAGE: (15, 50),
     MoveKind.CHARGE: (100, 220),
     MoveKind.PURGE: (30, 90),
+    MoveKind.INFECT: (30, 80),
 }
 # Search grid for calibrate_threat; `scale` is solved for, not searched.
 _THREAT_GRID = {
@@ -563,6 +564,8 @@ def random_move_set(rng: random.Random) -> list[EnemyMove]:
         move.power = rng.randint(*_POWER_RANGES[move.kind])
         if move.kind is MoveKind.BARRAGE:
             move.hits = rng.randint(2, 4)
+        if move.kind is MoveKind.INFECT:
+            move.stacks = rng.randint(2, 5)
     rng.shuffle(moves)
     return moves
 

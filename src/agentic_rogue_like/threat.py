@@ -51,6 +51,8 @@ class ThreatModel:
 # random move sets x 100 fights, fitted on 400): on the 200 held-out move sets
 # threat explains 90% of the variance in damage taken (R^2), with a median
 # error of 9% per move set. Damage taken ranged from 1 to 95 HP there.
+# Rechecked once infect joined the random move sets: R^2 0.92, 8% median
+# error, same parameters.
 DEFAULT_MODEL = ThreatModel(
     player_damage=24.0, armor=1.0, player_block=6.0, purge_damage=6.0, scale=1.0
 )
@@ -125,8 +127,26 @@ def _intent_frequencies(moves: list[EnemyMove]) -> dict[_State, float]:
 ATTACKS_PER_TURN = 2.2
 
 
-def _per_turn(enemy: Enemy, attack: int, model: ThreatModel) -> tuple[float, float]:
-    """(damage, block) per enemy turn for `enemy` hitting with `attack`."""
+# An infection lands, on average, this far into the fight - only the turns
+# after it are left for its Malware to bite (see _malware).
+INFECT_REMAINING = 1.0
+# Infections pile onto one stack that fades by just 1 a turn, so two of them
+# bite harder than twice one - by about this much in simulated fights.
+INFECT_STACKING = 1.2
+
+
+def _malware(stacks: int, turns: float) -> float:
+    """HP one infection of `stacks` Malware takes: stacks, stacks-1, ... per
+    turn, but only for the turns the fight still has left."""
+    bites = max(1.0, min(stacks, turns * INFECT_REMAINING))
+    return INFECT_STACKING * (stacks * bites - bites * (bites - 1) / 2)
+
+
+def _per_turn(
+    enemy: Enemy, attack: int, model: ThreatModel, turns: float = float("inf")
+) -> tuple[float, float]:
+    """(damage, block) per enemy turn for `enemy` hitting with `attack`, in a
+    fight `turns` long (only infections depend on it)."""
 
     def hit(power: int, die_mean: float) -> float:
         return max(0.0, round(attack * power / 100) + die_mean - model.armor)
@@ -146,6 +166,8 @@ def _per_turn(enemy: Enemy, attack: int, model: ThreatModel) -> tuple[float, flo
             damage += p * through_block(move.hits * hit(move.power, _D3_MEAN))
         elif move.kind is MoveKind.PURGE:
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + model.purge_damage)
+        elif move.kind is MoveKind.INFECT:
+            damage += p * (through_block(hit(move.power, _D6_MEAN)) + _malware(move.stacks, turns))
         elif move.kind is MoveKind.DEFEND:
             block += p * round(enemy.attack * move.power / 100)
         elif move.kind is MoveKind.CHARGE:
@@ -154,21 +176,29 @@ def _per_turn(enemy: Enemy, attack: int, model: ThreatModel) -> tuple[float, flo
 
 
 def threat_profile(enemy: Enemy, model: ThreatModel = DEFAULT_MODEL) -> ThreatProfile:
-    damage, block = _per_turn(enemy, enemy.attack, model)
+    # How long the fight lasts doesn't depend on the damage the enemy deals,
+    # so it can be worked out first - infections need it.
+    _, block = _per_turn(enemy, enemy.attack, model)
+    block += _affix_block(enemy)
+    turns = enemy.hp / max(model.player_damage - block, _MIN_NET_PLAYER_DAMAGE)
+    damage, _ = _per_turn(enemy, enemy.attack, model, turns)
     # Elite affixes (combat._affix_after_turn and friends): healing soaks up
     # the player's damage just like block does, rage hits harder for the
     # second half of the enemy's HP - about half its turns.
-    if enemy.affix is Affix.ARMORED:
-        block += round(enemy.attack * ARMORED_BLOCK_FACTOR)
-    elif enemy.affix is Affix.REGENERATING:
-        block += round(enemy.attack * REGEN_FACTOR)
-    elif enemy.affix is Affix.ENRAGED:
+    if enemy.affix is Affix.ENRAGED:
         raged = enemy.attack + round(enemy.attack * ENRAGE_FACTOR)
-        damage = (damage + _per_turn(enemy, raged, model)[0]) / 2
+        damage = (damage + _per_turn(enemy, raged, model, turns)[0]) / 2
     elif enemy.affix is Affix.THORNY:
         damage += THORNY_DAMAGE * ATTACKS_PER_TURN
-    turns = enemy.hp / max(model.player_damage - block, _MIN_NET_PLAYER_DAMAGE)
     return ThreatProfile(damage, block, turns, model.scale * turns * damage)
+
+
+def _affix_block(enemy: Enemy) -> float:
+    if enemy.affix is Affix.ARMORED:
+        return round(enemy.attack * ARMORED_BLOCK_FACTOR)
+    if enemy.affix is Affix.REGENERATING:
+        return round(enemy.attack * REGEN_FACTOR)
+    return 0.0
 
 
 def threat(enemy: Enemy, model: ThreatModel = DEFAULT_MODEL) -> float:

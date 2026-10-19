@@ -70,6 +70,14 @@ export function IntentIcon({ intent }: { intent: EnemyIntentType }) {
           d="M10 1.5 12 7.2 18 6.5 13.6 10.6 16.6 16.5 10.8 13.6 7.6 18.5 7.3 12.5 1.8 10.6 7 8.3 5 3Z"
         />
       )}
+      {intent === "infect" && (
+        <>
+          <circle className="fill" cx="10" cy="10" r="2.6" />
+          <circle cx="10" cy="4.2" r="2.2" />
+          <circle cx="4.9" cy="13" r="2.2" />
+          <circle cx="15.1" cy="13" r="2.2" />
+        </>
+      )}
       {intent === "purge" && (
         <>
           <rect x="3.5" y="3.5" width="13" height="13" rx="2" />

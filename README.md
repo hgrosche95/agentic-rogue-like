@@ -510,6 +510,31 @@ Variante ohne Zusatz, die Run-Siegquote bleibt gleich (`balance-sim --pool`,
 mit `"affixes": false` als Vergleich). Im Kampf zeigt ein Badge den Zusatz,
 bei Enraged auch, sobald er wütet.
 
+## Statuseffekte
+
+Drei Status wirken über mehrere Züge (`models.Status`, Logik in `combat.py`):
+
+| Status | Wirkung |
+| --- | --- |
+| Malware | verliert am Ende jedes Zugs so viele HP, wie Stapel da sind; danach fällt ein Stapel weg |
+| Exposed | Angriffskarten machen 50 % mehr Schaden, für so viele Züge |
+| Throttled | macht 25 % weniger Schaden, für so viele Züge |
+
+Der Spieler verteilt sie mit fünf neuen Belohnungskarten: **Trojan** (Angriff
++ 3 Malware), **Port Scan** (Angriff + 2 Züge Exposed), **Packet Loss** (Block
++ 2 Züge Throttled), **Worm** (+2 Schaden pro Malware-Stapel) und
+**Ransomware** (1×, 6 Malware), alle mit Upgrade. Gegner können ihn mit dem
+neuen Move `infect` anstecken: ein leichter Treffer, der Malware hinterlässt.
+Der Pool hat dafür den Plague Doctor, der Encounter-Agent kennt den Move auch.
+
+`threat.py` bewertet eine Infektion mit dem Malware-Schaden, der in der
+restlichen Kampfdauer noch abtickt, mal einem Faktor dafür, dass sich
+Infektionen auf einen Stapel addieren, der als Ganzes nur um 1 pro Zug
+schrumpft. Beides ist am Simulator eingestellt (±15 %). Mit `infect` in den
+Zufalls-Movesets erklärt das Modell weiter 92 % der Streuung. Die
+Run-Siegquoten bleiben praktisch gleich (Chronos 10 %, Vibe-Coder 13 %).
+Im Kampf zeigen Badges die Status auf beiden Seiten.
+
 ## Karten-Upgrades
 
 Im Safehouse lässt sich eine Karte einmal verbessern: Sie bekommt ein „+“ am

@@ -1831,6 +1831,7 @@ button.is-primary:hover:not(:disabled),
 
 .block-badge,
 .armor-badge,
+.status-badge,
 .intent-badge,
 .incoming-badge,
 .artifact-chip {
@@ -1852,6 +1853,19 @@ button.is-primary:hover:not(:disabled),
 
 .armor-badge {
   --chip: #8fb8ff;
+}
+
+/* statuses (StatusBadges): Malware green, Exposed orange, Throttled grey-blue */
+.status-badge.is-malware {
+  --chip: #7ee08a;
+}
+
+.status-badge.is-exposed {
+  --chip: #ffad5c;
+}
+
+.status-badge.is-throttled {
+  --chip: #a9a3d9;
 }
 
 .intent-badge {
