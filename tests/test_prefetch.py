@@ -86,10 +86,15 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
             run = client.post(f"/runs/{run_id}/event-choice", json={"option_index": 0}).json()
         while run["pending_combat"] is not None:
             combat = run["pending_combat"]
-            if combat["hand"] and None in combat["field"]:
+            free = [
+                i
+                for i, c in enumerate(combat["field"])
+                if c is None and i not in combat["locked_slots"]
+            ]
+            if combat["hand"] and free:
                 run = client.post(
                     f"/runs/{run_id}/combat/play-card",
-                    json={"hand_index": 0, "slot_index": combat["field"].index(None)},
+                    json={"hand_index": 0, "slot_index": free[0]},
                 ).json()
             else:
                 excess = max(0, len(combat["hand"]) - combat["max_hand_size"])

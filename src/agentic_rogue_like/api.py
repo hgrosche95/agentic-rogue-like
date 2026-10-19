@@ -33,11 +33,13 @@ from pydantic import BaseModel, Field, field_validator
 from .cards import can_upgrade, upgrade_card
 from .characters import CHARACTERS
 from .combat import (
+    AFFIX_DESCRIPTIONS,
     FIELD_SIZE,
     action_preview,
     enemy_block_gain,
     incoming_damage,
     intent_hits,
+    is_enraged,
     max_hand_size,
     move_name,
     overflows,
@@ -121,6 +123,9 @@ class CardView(BaseModel):
     hits: int
     # Scaling attacks: the bonus per permanent / graveyard / banished card.
     scale_value: int
+    # A status it puts on the enemy, and how much (stacks or turns).
+    applies: str | None
+    applies_amount: int
     upgraded: bool
     token_cost: int
 
@@ -136,6 +141,8 @@ class CardView(BaseModel):
             exhaust=card.exhaust,
             hits=max(card.hits, 1),
             scale_value=card.scale_value,
+            applies=None if card.applies is None else card.applies.value,
+            applies_amount=card.applies_amount,
             upgraded=card.upgraded,
             token_cost=card.token_cost,
         )
@@ -182,6 +189,16 @@ class PendingCombatView(BaseModel):
     enemy_phase: int
     enemy_phases: int
     enemy_strength: int
+    # Elites: their affix (models.Affix) and what it does, else null. Whether
+    # an enraged elite is raging right now.
+    enemy_affix: str | None
+    enemy_affix_description: str | None
+    enemy_enraged: bool
+    # Statuses on either side and their stacks / turns left (models.Status).
+    enemy_status: dict[str, int]
+    player_status: dict[str, int]
+    # Field slots an enemy's lock move has shut for this turn.
+    locked_slots: list[int]
     hand: list[HandCardView]
     field: list[CardView | None]
     player_block: int
@@ -409,6 +426,14 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_phase=combat.phase,
             enemy_phases=combat.boss_phases,
             enemy_strength=combat.enemy_strength,
+            enemy_affix=None if combat.enemy.affix is None else combat.enemy.affix.value,
+            enemy_affix_description=(
+                None if combat.enemy.affix is None else AFFIX_DESCRIPTIONS[combat.enemy.affix]
+            ),
+            enemy_enraged=is_enraged(combat),
+            enemy_status={s.value: n for s, n in combat.enemy_status.items()},
+            player_status={s.value: n for s, n in combat.player_status.items()},
+            locked_slots=combat.locked_slots,
             hand=[
                 HandCardView(
                     hand_index=i,

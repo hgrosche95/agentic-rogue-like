@@ -13,15 +13,19 @@ from __future__ import annotations
 
 import random
 
-from .models import Enemy, EnemyMove, MoveKind
+from .models import Affix, Enemy, EnemyMove, MoveKind
+from .threat import threat
 
 # Shorthands for the move sets below.
-_ATTACK, _DEFEND, _BARRAGE, _CHARGE, _PURGE = (
+_ATTACK, _DEFEND, _BARRAGE, _CHARGE, _PURGE, _INFECT, _LOCK, _CORRUPT = (
     MoveKind.ATTACK,
     MoveKind.DEFEND,
     MoveKind.BARRAGE,
     MoveKind.CHARGE,
     MoveKind.PURGE,
+    MoveKind.INFECT,
+    MoveKind.LOCK,
+    MoveKind.CORRUPT,
 )
 
 
@@ -89,6 +93,18 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
                 _move(_DEFEND, "Shield Up", 1),
             ],
         ),
+        Enemy(
+            id="gremlin",
+            name="Gremlin",
+            hp=33,
+            attack=8,
+            attack_name="Wrench Whack",
+            description="A grinning little saboteur with a wrench and a love of moving parts.",
+            moves=[
+                _move(_ATTACK, "Wrench Whack", 3),
+                _move(_LOCK, "Jam the Gears", 2),
+            ],
+        ),
     ],
     "mid": [
         Enemy(
@@ -139,6 +155,32 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
                 _move(_ATTACK, "Dark Bolt", 2),
                 _move(_DEFEND, "Unholy Ward", 2, power=120),
                 _move(_CHARGE, "Ritual Chant", 1, power=180),
+            ],
+        ),
+        Enemy(
+            id="plague-doctor",
+            name="Plague Doctor",
+            hp=51,
+            attack=10,
+            attack_name="Bone Saw",
+            description="A beaked mask, a bone saw and a cure that is worse than the disease.",
+            moves=[
+                _move(_ATTACK, "Bone Saw", 3),
+                _move(_INFECT, "Miasma", 2, stacks=3),
+                _move(_DEFEND, "Beak Mask", 1),
+            ],
+        ),
+        Enemy(
+            id="corrupted-scribe",
+            name="Corrupted Scribe",
+            hp=56,
+            attack=10,
+            attack_name="Quill Stab",
+            description="Its ink writes back. Whatever it touches starts to read wrong.",
+            moves=[
+                _move(_ATTACK, "Quill Stab", 3),
+                _move(_CORRUPT, "Ink Blot", 2, stacks=2),
+                _move(_DEFEND, "Tome Shield", 1),
             ],
         ),
     ],
@@ -256,3 +298,13 @@ def escalate(enemy: Enemy, floor: int, num_floors: int, act: int = 1) -> Enemy:
     return enemy.model_copy(
         update={"hp": round(enemy.hp * factor), "attack": round(enemy.attack * factor)}
     )
+
+
+def with_affix(enemy: Enemy, rng: random.Random) -> Enemy:
+    """`enemy` with a random elite affix, its HP rescaled so its threat
+    (threat.py) stays what it was - the affix changes how the fight plays,
+    not how hard it is. Threat is proportional to HP, so one ratio does it."""
+    affix = rng.choice(list(Affix))
+    armed = enemy.model_copy(update={"affix": affix})
+    hp = max(1, round(enemy.hp * threat(enemy) / threat(armed)))
+    return armed.model_copy(update={"hp": hp})

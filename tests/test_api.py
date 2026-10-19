@@ -20,7 +20,14 @@ def _play_combat(run_id: str, run: dict) -> dict:
     turns = 0
     while run["pending_combat"] is not None:
         combat = run["pending_combat"]
-        empty_slot = next((i for i, c in enumerate(combat["field"]) if c is None), None)
+        empty_slot = next(
+            (
+                i
+                for i, c in enumerate(combat["field"])
+                if c is None and i not in combat["locked_slots"]
+            ),
+            None,
+        )
         # never past the Vibe-Coder's context window - always false for Dr. Chronos
         card = next((c for c in combat["hand"] if not c["overflows"]), None)
 

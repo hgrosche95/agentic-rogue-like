@@ -488,6 +488,74 @@ kein neuer Code.
 | Rate Limiter | Gegner treffen um 3 schwächer, aber −1 ATK |
 | Vampire Process | Jede gespielte Angriffskarte heilt 1 HP |
 
+## Elite-Zusätze
+
+Jeder Elite-Gegner bekommt einen zufälligen Zusatz (`models.Affix`), gewürfelt
+pro Raum aus dem Seed, damit er die übrigen Zufallszahlen des Runs nicht
+verschiebt:
+
+| Zusatz | Wirkung |
+| --- | --- |
+| Armored | baut nach jedem eigenen Zug Block auf (30 % des Angriffs) |
+| Regenerating | heilt nach jedem eigenen Zug (25 % des Angriffs) |
+| Enraged | +50 % Angriff ab halben HP |
+| Thorny | jede gespielte Angriffskarte kostet den Spieler 2 HP |
+
+Ein Zusatz ändert, *wie* der Kampf läuft, nicht wie schwer er ist:
+`enemies.with_affix` skaliert die HP so, dass die Bedrohung (`threat.py`
+bewertet jeden Zusatz mit) gleich bleibt. Ein Thorny-Gegner hat also deutlich
+weniger HP, belohnt aber Block- und Permanent-Karten statt Angriffs-Spam. Im
+Simulator verursacht jede Zusatz-Variante der Elites ±20 % des Schadens der
+Variante ohne Zusatz, die Run-Siegquote bleibt gleich (`balance-sim --pool`,
+mit `"affixes": false` als Vergleich). Im Kampf zeigt ein Badge den Zusatz,
+bei Enraged auch, sobald er wütet.
+
+## Statuseffekte
+
+Drei Status wirken über mehrere Züge (`models.Status`, Logik in `combat.py`):
+
+| Status | Wirkung |
+| --- | --- |
+| Malware | verliert am Ende jedes Zugs so viele HP, wie Stapel da sind; danach fällt ein Stapel weg |
+| Exposed | Angriffskarten machen 50 % mehr Schaden, für so viele Züge |
+| Throttled | macht 25 % weniger Schaden, für so viele Züge |
+
+Der Spieler verteilt sie mit fünf neuen Belohnungskarten: **Trojan** (Angriff
++ 3 Malware), **Port Scan** (Angriff + 2 Züge Exposed), **Packet Loss** (Block
++ 2 Züge Throttled), **Worm** (+2 Schaden pro Malware-Stapel) und
+**Ransomware** (1×, 6 Malware), alle mit Upgrade. Gegner können ihn mit dem
+neuen Move `infect` anstecken: ein leichter Treffer, der Malware hinterlässt.
+Der Pool hat dafür den Plague Doctor, der Encounter-Agent kennt den Move auch.
+
+`threat.py` bewertet eine Infektion mit dem Malware-Schaden, der in der
+restlichen Kampfdauer noch abtickt, mal einem Faktor dafür, dass sich
+Infektionen auf einen Stapel addieren, der als Ganzes nur um 1 pro Zug
+schrumpft. Beides ist am Simulator eingestellt (±15 %). Mit `infect` in den
+Zufalls-Movesets erklärt das Modell weiter 92 % der Streuung. Die
+Run-Siegquoten bleiben praktisch gleich (Chronos 10 %, Vibe-Coder 13 %).
+Im Kampf zeigen Badges die Status auf beiden Seiten.
+
+## Feld-Moves
+
+Zwei Gegner-Moves greifen in das Feld und das Deck ein, jeweils mit einem
+leichten Treffer (50 % des Angriffs):
+
+- **lock** sperrt einen zufälligen freien Feld-Slot für den nächsten Zug des
+  Spielers. Der Slot ist im Kampf gestreift und „Locked“ markiert, Karten
+  lassen sich dort nicht spielen (auch nicht von Bots oder per API).
+- **corrupt** mischt Glitch-Karten (1–3) ins Ziehdeck. Ein Glitch tut nichts,
+  kostet keine Tokens und verschwindet beim Ausspielen. Er kostet also nur
+  einen Zug-Platz in der Hand, und er gilt nur für diesen Kampf: Das Deck des
+  Runs sieht ihn nie.
+
+Im Pool tragen sie der Gremlin (early, „Jam the Gears“) und der Corrupted
+Scribe (mid, „Ink Blot“). Der Encounter-Agent kennt beide Moves. `threat.py`
+bewertet eine Sperre mit 2,75 HP und jeden Glitch mit 2,5 HP zusätzlich zum
+Treffer, beides am Simulator eingestellt (±20 %). Mit den neuen Moves in den
+Zufalls-Movesets erklärt das Modell weiter 92 % der Streuung, die
+Run-Siegquoten bleiben bei 10 % (Chronos) und 13 % (Vibe-Coder). Der
+Smart-Bot spielt Glitches sofort aus, wie es ein Mensch tun würde.
+
 ## Karten-Upgrades
 
 Im Safehouse lässt sich eine Karte einmal verbessern: Sie bekommt ein „+“ am

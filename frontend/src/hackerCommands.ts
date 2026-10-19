@@ -63,5 +63,7 @@ export function commandFor(card: Card, enemyName: string): string {
       return `explain --to rubber-duck`;
     case "opener":
       return `pair --driver copilot`;
+    case "glitch":
+      return `rm -f ./glitch.tmp`;
   }
 }

@@ -5,6 +5,7 @@ import {
   type HandCardView,
   type PendingCombatView,
   type PlayerState,
+  type Status,
 } from "../api";
 import { cardSound, hitsOf, sfx } from "../audio";
 import { flyCard } from "../cardFlight";
@@ -14,7 +15,7 @@ import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useCardDrag } from "../hooks/useCardDrag";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
-import { describeIntent, rangeText, unitOf } from "../readouts";
+import { describeIntent, rangeText, STATUS_TEXT, unitOf } from "../readouts";
 import { CardFace, type Readout } from "./CardFace";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
 
@@ -39,6 +40,19 @@ function TokenMeter({ combat }: { combat: PendingCombatView }) {
         {combat.tokens_used}/{limit}
       </span>
     </span>
+  );
+}
+
+// Malware, Exposed, Throttled on one side, with what's left of each.
+function StatusBadges({ statuses }: { statuses: Partial<Record<Status, number>> }) {
+  return (
+    <>
+      {(Object.entries(statuses) as [Status, number][]).map(([status, left]) => (
+        <span key={status} className={`status-badge is-${status}`} title={STATUS_TEXT[status]}>
+          {status} {left}
+        </span>
+      ))}
+    </>
   );
 }
 
@@ -308,6 +322,7 @@ export function CombatPanel({
               )}
               {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
               {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
+              <StatusBadges statuses={combat.player_status} />
               {combat.token_limit !== null && <TokenMeter combat={combat} />}
               <ArtifactBar artifacts={player.artifacts} compact />
             </div>
@@ -335,6 +350,15 @@ export function CombatPanel({
                   {intent.label} {intent.amount}
                 </span>
               )}
+              {combat.enemy_affix && !enemySlain && (
+                <span
+                  className={`phase-badge affix-badge${combat.enemy_enraged ? " is-enraged" : ""}`}
+                  title={combat.enemy_affix_description ?? undefined}
+                >
+                  {combat.enemy_affix}
+                  {combat.enemy_enraged && " · raging"}
+                </span>
+              )}
               {combat.boss && !enemySlain && (
                 <span
                   className={`phase-badge${combat.enemy_phase > 1 ? " is-enraged" : ""}`}
@@ -354,6 +378,7 @@ export function CombatPanel({
               {combat.enemy_block > 0 && (
                 <span className="block-badge enemy-block-badge">Block {combat.enemy_block}</span>
               )}
+              {!enemySlain && <StatusBadges statuses={combat.enemy_status} />}
               {enemySlain && <span className="intent-badge is-defeated">Defeated</span>}
             </div>
           </div>
@@ -375,6 +400,10 @@ export function CombatPanel({
               PERMANENT_CARD_TYPES.includes(pendingCard.type) ? (
                 <div key={slotIndex} className={`field-slot is-occupied is-landing type-${pendingCard.type}`}>
                   <CardFace card={pendingCard} onField />
+                </div>
+              ) : card === null && combat.locked_slots.includes(slotIndex) ? (
+                <div key={slotIndex} className="field-slot is-locked" title="Locked by the enemy for this turn">
+                  <span className="slot-lock">Locked</span>
                 </div>
               ) : card === null ? (
                 <button

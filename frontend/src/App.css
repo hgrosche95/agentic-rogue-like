@@ -1831,6 +1831,7 @@ button.is-primary:hover:not(:disabled),
 
 .block-badge,
 .armor-badge,
+.status-badge,
 .intent-badge,
 .incoming-badge,
 .artifact-chip {
@@ -1852,6 +1853,35 @@ button.is-primary:hover:not(:disabled),
 
 .armor-badge {
   --chip: #8fb8ff;
+}
+
+/* a field slot an enemy's lock shut for this turn */
+.field-slot.is-locked {
+  display: grid;
+  place-items: center;
+  background: repeating-linear-gradient(45deg, #2a1f55 0 6px, #1c1440 6px 12px);
+  border: 3px solid var(--danger);
+  cursor: not-allowed;
+}
+
+.slot-lock {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--danger);
+}
+
+/* statuses (StatusBadges): Malware green, Exposed orange, Throttled grey-blue */
+.status-badge.is-malware {
+  --chip: #7ee08a;
+}
+
+.status-badge.is-exposed {
+  --chip: #ffad5c;
+}
+
+.status-badge.is-throttled {
+  --chip: #a9a3d9;
 }
 
 .intent-badge {

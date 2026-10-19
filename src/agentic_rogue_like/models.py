@@ -94,6 +94,8 @@ class CardType(StrEnum):
     TOKEN_REGEN = "token_regen"  # frees `value` used tokens at the end of every turn
     SAFEGUARD = "safeguard"  # hallucinating cards fizzle instead of backfiring
     OPENER = "opener"  # the first `value` cards of every turn cost no tokens
+    # Junk an enemy's corrupt move shuffles in: does nothing, gone once played.
+    GLITCH = "glitch"
 
 
 PERMANENT_CARD_TYPES = frozenset(
@@ -112,6 +114,18 @@ PERMANENT_CARD_TYPES = frozenset(
 )
 
 
+class Status(StrEnum):
+    """A lasting effect on one side of a fight, counted down by combat.py.
+
+    The enemy can carry all three (from the player's cards); the player only
+    Malware so far (from an enemy's infect move).
+    """
+
+    MALWARE = "malware"  # loses `stacks` HP at the end of each turn, then one stack fades
+    EXPOSED = "exposed"  # attack cards deal 50% more to it, for that many enemy turns
+    THROTTLED = "throttled"  # deals 25% less, for that many of its turns
+
+
 class Scaling(StrEnum):
     """What an attack or block card's `scale_value` bonus is counted per."""
 
@@ -120,6 +134,7 @@ class Scaling(StrEnum):
     BANISHED = "banished"  # cards in the banished pile
     PLAYED = "played"  # cards already played this turn
     EMPTY_SLOT = "empty_slot"  # empty field slots
+    MALWARE = "malware"  # Malware stacks on the enemy
 
 
 class Rarity(StrEnum):
@@ -144,6 +159,9 @@ class Card(BaseModel):
     draw: int = 0  # draw this many cards after the effect
     scaling: Scaling | None = None  # attacks and blocks only: +scale_value per ...
     scale_value: int = 0
+    # Action cards: a status put on the enemy when played (combat._afflict).
+    applies: Status | None = None
+    applies_amount: int = 0
     # Improved once at a rest site (cards.upgrade_card) - never twice.
     upgraded: bool = False
     # Tokens it takes from the context window - only characters with one
@@ -206,6 +224,9 @@ class MoveKind(StrEnum):
     BARRAGE = "barrage"  # several smaller hits, armor counts against each
     CHARGE = "charge"  # raises a little block; the next turn is a crushing overload
     PURGE = "purge"  # destroys the rightmost permanent card, then hits
+    INFECT = "infect"  # a light hit that leaves Malware on the player
+    LOCK = "lock"  # a light hit that locks one of the player's empty field slots for a turn
+    CORRUPT = "corrupt"  # a light hit that shuffles Glitch cards into the player's draw pile
 
 
 # Default power (percent of the enemy's attack stat) per move kind - the
@@ -217,8 +238,13 @@ DEFAULT_MOVE_POWER: dict[MoveKind, int] = {
     MoveKind.BARRAGE: 25,
     MoveKind.CHARGE: 140,
     MoveKind.PURGE: 50,
+    MoveKind.INFECT: 50,
+    MoveKind.LOCK: 50,
+    MoveKind.CORRUPT: 50,
 }
 DEFAULT_BARRAGE_HITS = 3
+DEFAULT_INFECT_STACKS = 3
+DEFAULT_CORRUPT_GLITCHES = 2
 
 
 class EnemyMove(BaseModel):
@@ -238,11 +264,20 @@ class EnemyMove(BaseModel):
     power: int | None = Field(default=None, ge=10, le=300)
     # BARRAGE only.
     hits: int | None = Field(default=None, ge=2, le=4)
+    # INFECT: Malware stacks it leaves on the player. CORRUPT: Glitch cards
+    # it shuffles in.
+    stacks: int | None = Field(default=None, ge=1, le=6)
 
     @model_validator(mode="after")
     def _fill_defaults(self) -> EnemyMove:
         if self.hits is not None and self.kind is not MoveKind.BARRAGE:
             raise ValueError("only a barrage has hits")
+        if self.stacks is not None and self.kind not in (MoveKind.INFECT, MoveKind.CORRUPT):
+            raise ValueError("only infect and corrupt moves have stacks")
+        if self.kind is MoveKind.INFECT and self.stacks is None:
+            self.stacks = DEFAULT_INFECT_STACKS
+        if self.kind is MoveKind.CORRUPT and self.stacks is None:
+            self.stacks = DEFAULT_CORRUPT_GLITCHES
         if self.power is None:
             self.power = DEFAULT_MOVE_POWER[self.kind]
         if self.kind is MoveKind.BARRAGE and self.hits is None:
@@ -264,6 +299,15 @@ def default_moves() -> list[EnemyMove]:
 _ALWAYS_AVAILABLE = frozenset({MoveKind.ATTACK, MoveKind.BARRAGE})
 
 
+class Affix(StrEnum):
+    """An elite's extra trait (combat.py applies it, threat.py prices it)."""
+
+    ARMORED = "armored"  # raises block after every one of its turns
+    REGENERATING = "regenerating"  # heals after every one of its turns
+    ENRAGED = "enraged"  # hits harder once below half HP
+    THORNY = "thorny"  # every attack card played against it hurts the player
+
+
 class Enemy(BaseModel):
     id: str
     name: str
@@ -274,6 +318,8 @@ class Enemy(BaseModel):
     # Bosses ignore this and fight with their own phased move set (see
     # combat._roll_boss_intent).
     moves: list[EnemyMove] = Field(default_factory=default_moves, min_length=1, max_length=4)
+    # Elites only, rolled per room - see enemies.with_affix.
+    affix: Affix | None = None
 
     @field_validator("moves")
     @classmethod

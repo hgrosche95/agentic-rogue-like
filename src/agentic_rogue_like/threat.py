@@ -34,7 +34,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import Enemy, EnemyMove, MoveKind
+from .combat import ARMORED_BLOCK_FACTOR, ENRAGE_FACTOR, REGEN_FACTOR, THORNY_DAMAGE
+from .models import Affix, Enemy, EnemyMove, MoveKind
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,8 @@ class ThreatModel:
 # random move sets x 100 fights, fitted on 400): on the 200 held-out move sets
 # threat explains 90% of the variance in damage taken (R^2), with a median
 # error of 9% per move set. Damage taken ranged from 1 to 95 HP there.
+# Rechecked once infect joined the random move sets: R^2 0.92, 8% median
+# error, same parameters.
 DEFAULT_MODEL = ThreatModel(
     player_damage=24.0, armor=1.0, player_block=6.0, purge_damage=6.0, scale=1.0
 )
@@ -118,9 +121,42 @@ def _intent_frequencies(moves: list[EnemyMove]) -> dict[_State, float]:
     return dist
 
 
-def threat_profile(enemy: Enemy, model: ThreatModel = DEFAULT_MODEL) -> ThreatProfile:
+# Attack cards the player plays per turn, for pricing a thorny elite: the
+# value at which thorny elites, HP rescaled by with_affix, deal what their
+# plain selves do in simulated fights (tests/test_threat.py checks it).
+ATTACKS_PER_TURN = 2.2
+
+
+# An infection lands, on average, this far into the fight - only the turns
+# after it are left for its Malware to bite (see _malware).
+INFECT_REMAINING = 1.0
+# Infections pile onto one stack that fades by just 1 a turn, so two of them
+# bite harder than twice one - by about this much in simulated fights.
+INFECT_STACKING = 1.2
+
+
+# What the field moves cost the player beyond their light hit, in HP: a
+# locked slot for a turn, and one Glitch card in the draw pile. Set where
+# such enemies, at equal threat, deal what plain ones do in simulated fights.
+LOCK_DAMAGE = 2.75
+GLITCH_DAMAGE = 2.5
+
+
+def _malware(stacks: int, turns: float) -> float:
+    """HP one infection of `stacks` Malware takes: stacks, stacks-1, ... per
+    turn, but only for the turns the fight still has left."""
+    bites = max(1.0, min(stacks, turns * INFECT_REMAINING))
+    return INFECT_STACKING * (stacks * bites - bites * (bites - 1) / 2)
+
+
+def _per_turn(
+    enemy: Enemy, attack: int, model: ThreatModel, turns: float = float("inf")
+) -> tuple[float, float]:
+    """(damage, block) per enemy turn for `enemy` hitting with `attack`, in a
+    fight `turns` long (only infections depend on it)."""
+
     def hit(power: int, die_mean: float) -> float:
-        return max(0.0, round(enemy.attack * power / 100) + die_mean - model.armor)
+        return max(0.0, round(attack * power / 100) + die_mean - model.armor)
 
     def through_block(hits: float) -> float:
         return max(0.0, hits - model.player_block)
@@ -137,12 +173,43 @@ def threat_profile(enemy: Enemy, model: ThreatModel = DEFAULT_MODEL) -> ThreatPr
             damage += p * through_block(move.hits * hit(move.power, _D3_MEAN))
         elif move.kind is MoveKind.PURGE:
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + model.purge_damage)
+        elif move.kind is MoveKind.INFECT:
+            damage += p * (through_block(hit(move.power, _D6_MEAN)) + _malware(move.stacks, turns))
+        elif move.kind is MoveKind.LOCK:
+            damage += p * (through_block(hit(move.power, _D6_MEAN)) + LOCK_DAMAGE)
+        elif move.kind is MoveKind.CORRUPT:
+            damage += p * (through_block(hit(move.power, _D6_MEAN)) + GLITCH_DAMAGE * move.stacks)
         elif move.kind is MoveKind.DEFEND:
             block += p * round(enemy.attack * move.power / 100)
         elif move.kind is MoveKind.CHARGE:
             block += p * round(enemy.attack * _CHARGE_BLOCK_FACTOR)
+    return damage, block
+
+
+def threat_profile(enemy: Enemy, model: ThreatModel = DEFAULT_MODEL) -> ThreatProfile:
+    # How long the fight lasts doesn't depend on the damage the enemy deals,
+    # so it can be worked out first - infections need it.
+    _, block = _per_turn(enemy, enemy.attack, model)
+    block += _affix_block(enemy)
     turns = enemy.hp / max(model.player_damage - block, _MIN_NET_PLAYER_DAMAGE)
+    damage, _ = _per_turn(enemy, enemy.attack, model, turns)
+    # Elite affixes (combat._affix_after_turn and friends): healing soaks up
+    # the player's damage just like block does, rage hits harder for the
+    # second half of the enemy's HP - about half its turns.
+    if enemy.affix is Affix.ENRAGED:
+        raged = enemy.attack + round(enemy.attack * ENRAGE_FACTOR)
+        damage = (damage + _per_turn(enemy, raged, model, turns)[0]) / 2
+    elif enemy.affix is Affix.THORNY:
+        damage += THORNY_DAMAGE * ATTACKS_PER_TURN
     return ThreatProfile(damage, block, turns, model.scale * turns * damage)
+
+
+def _affix_block(enemy: Enemy) -> float:
+    if enemy.affix is Affix.ARMORED:
+        return round(enemy.attack * ARMORED_BLOCK_FACTOR)
+    if enemy.affix is Affix.REGENERATING:
+        return round(enemy.attack * REGEN_FACTOR)
+    return 0.0
 
 
 def threat(enemy: Enemy, model: ThreatModel = DEFAULT_MODEL) -> float:
