@@ -49,6 +49,8 @@ class CharacterProfile:
     token_regen: int = 0  # used tokens freed at the end of every turn
     draw_on_play: int = 0  # cards drawn after every card played
     turn_draw_modifier: int = 0  # added to the cards drawn at the end of the turn
+    # Program mode (combat.run_program): lines on top of the field's slots.
+    extra_program_lines: int = 0
 
 
 CHARACTERS: dict[Character, CharacterProfile] = {
@@ -81,6 +83,8 @@ CHARACTERS: dict[Character, CharacterProfile] = {
         token_regen=3,
         draw_on_play=1,
         turn_draw_modifier=-1,
+        # He draws after every card, so 5 lines fill up too often.
+        extra_program_lines=1,
     ),
 }
 

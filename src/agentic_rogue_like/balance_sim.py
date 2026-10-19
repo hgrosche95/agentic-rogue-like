@@ -88,6 +88,7 @@ from .combat import (
     incoming_damage,
     overflows,
     play_card,
+    program_preview,
     run_program,
     start_combat,
 )
@@ -311,6 +312,11 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
     for _ in range(MAX_AUTO_PLAYS_PER_TURN):
         if not state.hand or state.enemy_hp <= 0 or player.hp <= 0:
             return
+        # Program mode: plan with what the queued program will have done -
+        # the enemy's HP only drops once it runs.
+        ahead = program_preview(state, player)
+        if ahead.enemy_hp <= 0:
+            return
         played = False
         # 0. Flush Glitch cards first - free, and they only clog the hand.
         glitch = next((i for i, c in enumerate(state.hand) if c.type is CardType.GLITCH), None)
@@ -360,7 +366,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
             if card.type is CardType.FINAL_STRIKE and not overflows(state, card):
                 dmg = card.value * permanents
                 if permanents and (
-                    dmg >= state.enemy_hp + state.enemy_block or len(_empty_slots(state)) <= 1
+                    dmg >= ahead.enemy_hp + ahead.enemy_block or len(_empty_slots(state)) <= 1
                 ):
                     played = _play_action(state, idx, player, rng)
                     break

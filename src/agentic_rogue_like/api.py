@@ -34,6 +34,7 @@ from .cards import can_upgrade, upgrade_card
 from .characters import CHARACTERS
 from .combat import (
     AFFIX_DESCRIPTIONS,
+    ProgramPreview,
     action_preview,
     enemy_block_gain,
     incoming_damage,
@@ -44,6 +45,7 @@ from .combat import (
     move_queued,
     overflows,
     player_armor,
+    program_preview,
     token_regen,
 )
 from .engine import (
@@ -212,6 +214,8 @@ class PendingCombatView(BaseModel):
     program_mode: bool
     program: list[CardView | None]
     program_glitched: list[bool]
+    # Where the fight will stand once the program has run - null in a classic run.
+    program_preview: ProgramPreview | None
     player_block: int
     armor: int
     max_hand_size: int
@@ -472,6 +476,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             program_mode=combat.program_mode,
             program=[None if card is None else CardView.of(card) for card in combat.program],
             program_glitched=combat.program_glitched,
+            program_preview=(program_preview(combat, run.player) if combat.program_mode else None),
             player_block=combat.player_block,
             armor=player_armor(combat),
             max_hand_size=max_hand_size(combat),

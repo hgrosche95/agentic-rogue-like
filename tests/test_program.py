@@ -5,11 +5,12 @@ from fastapi.testclient import TestClient
 
 from agentic_rogue_like.api import app
 from agentic_rogue_like.artifacts import PROGRAM_ARTIFACT_POOL
-from agentic_rogue_like.balance_sim import _program_score, arrange_program
+from agentic_rogue_like.balance_sim import _program_score, arrange_program, smart_bot
 from agentic_rogue_like.cards import (
     CARD_UPGRADES,
     PROGRAM_REWARD_POOL,
     REWARD_POOL,
+    VIBE_CODER_REWARD_POOL,
     starter_deck,
     upgrade_card,
 )
@@ -20,15 +21,16 @@ from agentic_rogue_like.combat import (
     free_slots,
     move_queued,
     play_card,
+    program_preview,
     start_combat,
 )
 from agentic_rogue_like.engine import available_choices, move_to, new_run, resolve_node
-from agentic_rogue_like.models import Artifact, Card, Enemy, PlayerState, RunStatus
+from agentic_rogue_like.models import Artifact, Card, Character, Enemy, PlayerState, RunStatus
 from agentic_rogue_like.sessions import get_session
 
 
 def _card(name: str) -> Card:
-    pool = PROGRAM_REWARD_POOL + REWARD_POOL + starter_deck()
+    pool = PROGRAM_REWARD_POOL + REWARD_POOL + VIBE_CODER_REWARD_POOL + starter_deck()
     return next(c for c in pool if c.name == name).model_copy(deep=True)
 
 
@@ -193,6 +195,8 @@ def test_api_runs_a_program() -> None:
         f"/runs/{run_id}/combat/move-queued", json={"from_slot": 1, "to_slot": 3}
     )
     assert response.json()["pending_combat"]["program"][3]["name"] == "Exploit"
+    preview = response.json()["pending_combat"]["program_preview"]
+    assert preview["enemy_hp"] < get_session(run_id).combat.enemy_hp
     bad = client.post(f"/runs/{run_id}/combat/move-queued", json={"from_slot": 0, "to_slot": 2})
     assert bad.status_code == 400
 
@@ -262,3 +266,43 @@ def test_program_artifacts_are_only_offered_in_program_runs() -> None:
     names = {a.name for a in PROGRAM_ARTIFACT_POOL}
     assert not names & {a.name for a in artifact_pool(new_run(1))}
     assert names <= {a.name for a in artifact_pool(new_run(1, program_mode=True))}
+
+
+def test_the_preview_shows_what_the_program_will_do() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", "Firewall")
+    preview = program_preview(state, player)
+    assert (preview.enemy_hp, preview.player_block) == (95, 5)
+    assert state.enemy_hp == 100 and state.program[0] is not None  # nothing ran yet
+
+    classic, player = _fight(program_mode=False)
+    assert program_preview(classic, player).enemy_hp == 100
+
+
+def test_ship_it_counts_every_card_played_this_turn() -> None:
+    # Queued first, it still runs after two other cards were played.
+    assert _damage_dealt("Ship It", "Exploit", "Exploit") == 20
+
+
+def test_the_bot_stops_once_the_program_is_lethal() -> None:
+    state, player = _fight(hp=5)
+    state.hand = [_card("Exploit"), _card("Exploit")]
+    smart_bot(state, player, random.Random(1))
+    assert sum(c is not None for c in state.program) == 1
+    assert len(state.hand) == 1
+
+
+def test_the_vibe_coder_gets_a_sixth_line() -> None:
+    enemy = Enemy(id="e", name="Foe", hp=10, attack=1, attack_name="Hit")
+    lines = {
+        (character, mode): len(
+            start_combat(
+                starter_deck(), enemy, random.Random(1), character=character, program_mode=mode
+            )[0].program
+        )
+        for character in Character
+        for mode in (False, True)
+    }
+    assert lines[Character.VIBE_CODER, True] == 6
+    assert lines[Character.CHRONOS, True] == 5
+    assert lines[Character.VIBE_CODER, False] == 5

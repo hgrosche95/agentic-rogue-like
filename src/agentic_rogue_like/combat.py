@@ -556,7 +556,7 @@ def start_combat(
         program_mode=program_mode,
     )
     if program_mode:
-        lines = FIELD_SIZE + total(artifacts, "extra_lines")
+        lines = FIELD_SIZE + hero.extra_program_lines + total(artifacts, "extra_lines")
         state.program, state.program_glitched = [None] * lines, [False] * lines
     _roll_next_intent(state, rng)
     _draw(state, HAND_SIZE + total(artifacts, "opening_hand"), rng)
@@ -685,10 +685,10 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
     """Program mode, end of the turn: run the queued actions left to right.
 
     Every action resolves as if it had just been played in its line (the
-    amplifiers and Copilots to its left count, Copilot counting the actions
-    already run). Control flow steers the actions after it: fork runs the
-    next one twice, if_wounded does so only if the enemy is at half HP or
-    less by the time it runs, loop runs the last one again. Once the enemy
+    amplifiers and Copilots to its left count). Control flow steers the
+    actions after it: fork runs the next one twice, if_wounded does so only
+    if the enemy is at half HP or less by the time it runs, loop runs the
+    last one again. Once the enemy
     is down the rest is skipped - one-shots included, which are then kept
     for the next fight.
 
@@ -700,6 +700,10 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
     """
     log: list[str] = []
     forks, last, ran = 0, None, 0
+    # Copilot and Ship It count the cards played this turn - every queued
+    # one but themselves has been by the time the program runs - or the
+    # actions run so far, once forks and loops have run more than that.
+    played = state.plays_this_turn
     hot = total(state.artifacts, "hot_path") - 1
     pipeline = total(state.artifacts, "pipeline")
     predictor = total(state.artifacts, "wounded_bonus")
@@ -735,7 +739,7 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
             if last is None:
                 log.append(line + f"{run.name}: nothing has run yet to repeat.")
             for _ in range(repeats if last is not None else 0):
-                state.plays_this_turn = ran
+                state.plays_this_turn = max(played - 1, ran)
                 wounded = predictor if _wounded(state) else 0
                 log.append(
                     line + f"{run.name} -> " + _run_line(state, last, slot, player, rng, wounded)
@@ -749,7 +753,7 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
                 bonus += compiler * len(types - {run.type})
                 forks += tail_call
             for _ in range(1 + forks):
-                state.plays_this_turn = ran
+                state.plays_this_turn = max(played - 1, ran)
                 wounded = predictor if _wounded(state) else 0
                 if glitched:
                     log.append(line + _hallucinate(state, run, slot, player))
@@ -771,6 +775,39 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
         if line := _check_boss_phase(state):
             log.append(line.strip())
     return log
+
+
+class ProgramPreview(BaseModel):
+    """Where the fight stands once the queued program has run (program_preview)."""
+
+    enemy_hp: int
+    enemy_block: int
+    player_hp: int
+    player_block: int
+
+
+def program_preview(state: CombatState, player: PlayerState) -> ProgramPreview:
+    """What the queued program will have done by the time the enemy acts -
+    run on copies, so planning a program can see its outcome (the enemy's
+    HP and block, the player's HP and block) the way classic play sees each
+    card's at once. Without a program, where things stand now. Cards the
+    program would draw are left out: they don't change these numbers.
+    """
+    if not state.program_mode or all(c is None for c in state.program):
+        return ProgramPreview(
+            enemy_hp=state.enemy_hp,
+            enemy_block=state.enemy_block,
+            player_hp=player.hp,
+            player_block=state.player_block,
+        )
+    trial, me = state.model_copy(deep=True), player.model_copy(deep=True)
+    run_program(trial, me, random.Random(0))
+    return ProgramPreview(
+        enemy_hp=trial.enemy_hp,
+        enemy_block=trial.enemy_block,
+        player_hp=me.hp,
+        player_block=trial.player_block,
+    )
 
 
 def _wounded(state: CombatState) -> bool:
