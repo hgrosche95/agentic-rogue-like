@@ -15,7 +15,7 @@ from .agent.event_agent import event_for_room
 from .agent.narrator import narrate
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
 from .cards import START_CARD_WEIGHTS, can_upgrade, reward_card, roll_card_reward, upgrade_card
-from .characters import CHARACTERS
+from .characters import CHARACTERS, reward_pool
 from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
@@ -78,8 +78,13 @@ SHOP_SITUATION = "a traveling merchant offering strange wares for sale"
 
 
 def new_run(
-    seed: int, setting: str = DEFAULT_SETTING, character: Character = Character.CHRONOS
+    seed: int,
+    setting: str = DEFAULT_SETTING,
+    character: Character = Character.CHRONOS,
+    program_mode: bool = False,
 ) -> RunState:
+    """`program_mode`: the field runs as a program (combat.run_program) for
+    the whole run, and rewards offer control flow cards."""
     hero = CHARACTERS[character]
     player = PlayerState(
         character=character,
@@ -90,7 +95,14 @@ def new_run(
         deck=hero.deck(),
     )
     nodes = generate_map(seed)
-    run = RunState(seed=seed, player=player, nodes=nodes, current_node_id="0-0", setting=setting)
+    run = RunState(
+        seed=seed,
+        player=player,
+        nodes=nodes,
+        current_node_id="0-0",
+        setting=setting,
+        program_mode=program_mode,
+    )
     # Its own rng, so offering artifacts doesn't shift the run rng's sequence
     # (enemies, events, rewards) compared to a run without them.
     run.artifact_offer = roll_artifact_offer(
@@ -99,7 +111,7 @@ def new_run(
     # ... and so does the starting card pick: three uncommon/rare cards, one of
     # which (or none) joins the starter deck before the first room.
     run.card_reward = roll_card_reward(
-        random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS, pool=hero.reward_pool
+        random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS, pool=reward_pool(run)
     )
     return run
 
@@ -252,8 +264,7 @@ def upgradable_indices(run: RunState) -> list[int]:
 
 def apply_event_choice(run: RunState, option: EventOption, rng: random.Random) -> None:
     """Second half of resolving an EVENT node: apply the chosen option's effect."""
-    pool = CHARACTERS[run.player.character].reward_pool
-    outcome = apply_option(option, run.player, pool, rng)
+    outcome = apply_option(option, run.player, reward_pool(run), rng)
     run.history.append(f"> {option.label}: {outcome}")
 
 
@@ -297,7 +308,7 @@ def _finish_combat(
     run.card_reward = roll_card_reward(
         rng,
         elite=node.type is not NodeType.COMBAT,
-        pool=CHARACTERS[run.player.character].reward_pool,
+        pool=reward_pool(run),
     )
     if node.type is NodeType.BOSS:
         advance_act(run)
@@ -383,6 +394,7 @@ def start_combat_node(
         boss=node.type is NodeType.BOSS,
         boss_phases=boss_phases(run.act),
         character=run.player.character,
+        program_mode=run.program_mode,
     )
     run.history.extend(log)
     return state
@@ -450,6 +462,7 @@ def resolve_node(
             rng,
             boss=node.type is NodeType.BOSS,
             boss_phases=boss_phases(run.act),
+            program_mode=run.program_mode,
         )
         run.history.extend(log)
         _finish_combat(run, node, enemy.name, victory, rng)

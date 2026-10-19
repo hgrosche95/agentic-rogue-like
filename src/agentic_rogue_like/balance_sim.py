@@ -35,6 +35,13 @@ with the starter deck only, `"artifacts": false` without artifacts.
 uses whenever the encounter agent is off) instead of random enemies inside
 the budgets - so a change to the pool shows up in the numbers.
 
+`balance-sim --program` plays every run in program mode (combat.run_program:
+actions queue up on the field and run left to right at the end of the turn,
+control flow cards join the rewards). `--order` sets how the bot arranges a
+program: as played, the best of every arrangement (tried out on a copy of
+the fight), or at random - the gap between best and random is what the
+order of a program is worth.
+
 `balance-sim --calibrate-threat` instead fits threat.py's model: it fights
 a few hundred random move sets and searches for the parameters whose
 threat() best predicts the damage those fights dealt (see calibrate_threat).
@@ -43,6 +50,8 @@ threat() best predicts the damage those fights dealt (see calibrate_threat).
 from __future__ import annotations
 
 import argparse
+import copy
+import itertools
 import json
 import random
 import statistics
@@ -53,7 +62,14 @@ from pathlib import Path
 from .agent.budgets import _BUDGETS
 from .agent.encounter_schema import EnemyBudget
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
-from .cards import START_CARD_WEIGHTS, can_upgrade, reward_card, roll_card_reward, upgrade_card
+from .cards import (
+    PROGRAM_REWARD_POOL,
+    START_CARD_WEIGHTS,
+    can_upgrade,
+    reward_card,
+    roll_card_reward,
+    upgrade_card,
+)
 from .characters import CHARACTERS
 from .combat import (
     ATTACKING_INTENTS,
@@ -62,8 +78,10 @@ from .combat import (
     CombatState,
     end_turn,
     free_slots,
+    incoming_damage,
     overflows,
     play_card,
+    run_program,
     start_combat,
 )
 from .enemies import ENEMY_POOL, escalate, pick_enemy, tier_floor, with_affix
@@ -113,6 +131,9 @@ class SimConfig:
     # Let bots upgrade a card at rest sites (see rest_choice) instead of
     # always healing.
     rest_upgrades: bool = True
+    # Program mode (combat.run_program) for every fight, control flow cards
+    # in the rewards.
+    program: bool = False
 
     def __post_init__(self) -> None:
         hero = CHARACTERS[self.character]
@@ -128,6 +149,11 @@ class SimConfig:
             attack=self.player_attack,
             deck=self.deck_factory(),
         )
+
+    def reward_pool(self) -> list[Card]:
+        """Mirrors characters.reward_pool."""
+        pool = CHARACTERS[self.character].reward_pool
+        return pool + PROGRAM_REWARD_POOL if self.program else pool
 
 
 def load_variant(path: Path, character: Character = Character.CHRONOS) -> SimConfig:
@@ -148,6 +174,7 @@ def load_variant(path: Path, character: Character = Character.CHRONOS) -> SimCon
     base.rest_upgrades = raw.get("rest_upgrades", base.rest_upgrades)
     base.affixes = raw.get("affixes", base.affixes)
     base.adaptive = raw.get("adaptive", base.adaptive)
+    base.program = raw.get("program", base.program)
 
     card_overrides: dict[str, dict] = raw.get("cards", {})
     extra: list[dict] = raw.get("extra_cards", [])
@@ -203,25 +230,31 @@ def naive_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
     for _ in range(MAX_AUTO_PLAYS_PER_TURN):
         if state.enemy_hp <= 0 or player.hp <= 0:
             return
-        idx = next((i for i, c in enumerate(state.hand) if not overflows(state, c)), None)
-        slot = next(iter(free_slots(state)), None)
-        if idx is None or slot is None:
+        play = next(
+            (
+                (i, slots[0])
+                for i, c in enumerate(state.hand)
+                if not overflows(state, c) and (slots := free_slots(state, c))
+            ),
+            None,
+        )
+        if play is None:
             return
-        play_card(state, idx, slot, player, rng)
+        play_card(state, *play, player, rng)
 
 
-def _empty_slots(state: CombatState) -> list[int]:
-    return free_slots(state)
+def _empty_slots(state: CombatState, card: Card | None = None) -> list[int]:
+    return free_slots(state, card)
 
 
 # Permanents that boost the action cards to their right.
 _LEFT_BOOSTS = (CardType.AMPLIFIER, CardType.CHAIN)
 
 
-def _best_action_slot(state: CombatState) -> int | None:
-    """Free slot with the most Amplifiers/Copilots to its left."""
+def _best_action_slot(state: CombatState, card: Card | None = None) -> int | None:
+    """Free slot for `card` with the most Amplifiers/Copilots to its left."""
     best, best_score = None, -1
-    for i in _empty_slots(state):
+    for i in _empty_slots(state, card):
         amps = sum(1 for j, c in enumerate(state.field) if c and c.type in _LEFT_BOOSTS and j < i)
         if amps > best_score:
             best, best_score = i, amps
@@ -248,6 +281,15 @@ def _hold_back(state: CombatState, card: Card) -> bool:
     return card.scaling is Scaling.PLAYED and state.plays_this_turn < SHIP_IT_MIN_PLAYS
 
 
+def _play_action(state: CombatState, idx: int, player: PlayerState, rng: random.Random) -> bool:
+    """Play hand card `idx` into its best slot - False if it has none (a full program)."""
+    slot = _best_action_slot(state, state.hand[idx])
+    if slot is None:
+        return False
+    play_card(state, idx, slot, player, rng)
+    return True
+
+
 def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> None:
     """A reasonable human-ish policy: flush glitches, set up permanents, block only against an
     attack intent, heal only when hurt, fire Final Strike when it kills or the
@@ -266,10 +308,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         # /compact as soon as it frees its full value - it costs nothing.
         for idx, card in enumerate(state.hand):
             if card.type is CardType.COMPACT and state.tokens_used >= card.value:
-                slot = _best_action_slot(state)
-                if slot is not None:
-                    play_card(state, idx, slot, player, rng)
-                    played = True
+                played = _play_action(state, idx, player, rng)
                 break
         if played:
             continue
@@ -286,10 +325,6 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         if played:
             continue
 
-        slot = _best_action_slot(state)
-        if slot is None:
-            return  # can't happen with _permanent_slot keeping one slot free
-
         permanents = sum(1 for c in state.field if c is not None)
         # card flow first - it only makes the rest of the turn better
         order: list[CardType] = [CardType.DRAW, CardType.FREE_PLAY]
@@ -297,6 +332,12 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
             order.append(CardType.RETRIEVE)
         if state.banished_pile:
             order.append(CardType.RESTORE)
+        if state.program_mode and any(
+            c is not None and c.type in _PROGRAM_TARGETS for c in [*state.hand, *state.program]
+        ):
+            # Control flow only steers - worth a line once there is
+            # something for it to steer; arrange_program puts it in place.
+            order += [CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED]
         order.append(CardType.ATTACK)
         if state.enemy_intent in ATTACKING_INTENTS:
             order.append(CardType.BLOCK)
@@ -308,8 +349,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
                 if permanents and (
                     dmg >= state.enemy_hp + state.enemy_block or len(_empty_slots(state)) <= 1
                 ):
-                    play_card(state, idx, slot, player, rng)
-                    played = True
+                    played = _play_action(state, idx, player, rng)
                     break
         if played:
             continue
@@ -323,8 +363,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
                     if c.type not in (CardType.RESTORE, CardType.REBOOT)
                 )
                 if back >= 2 and back > permanents:
-                    play_card(state, idx, slot, player, rng)
-                    played = True
+                    played = _play_action(state, idx, player, rng)
                     break
         if played:
             continue
@@ -333,13 +372,15 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
                 (
                     i
                     for i, c in enumerate(state.hand)
-                    if c.type is wanted and not overflows(state, c) and not _hold_back(state, c)
+                    if c.type is wanted
+                    and not overflows(state, c)
+                    and not _hold_back(state, c)
+                    and _best_action_slot(state, c) is not None
                 ),
                 None,
             )
             if idx is not None:
-                play_card(state, idx, slot, player, rng)
-                played = True
+                played = _play_action(state, idx, player, rng)
                 break
         if not played:
             # Unplayed cards stay in hand, but the hand is capped at the
@@ -352,16 +393,101 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
                 (
                     i
                     for i, c in enumerate(state.hand)
-                    if c.type is not CardType.FINAL_STRIKE and not c.exhaust
+                    if c.type is not CardType.FINAL_STRIKE
+                    and not c.exhaust
+                    and _best_action_slot(state, c) is not None
                 ),
                 None,
             )
             if idx is None:
                 return
-            play_card(state, idx, slot, player, rng)
+            _play_action(state, idx, player, rng)
 
 
 BOTS: dict[str, Bot] = {"smart": smart_bot, "naive": naive_bot}
+
+# --------------------------------------------------------------------------- program order
+
+# What control flow is worth steering.
+_PROGRAM_TARGETS = (CardType.ATTACK, CardType.FINAL_STRIKE, CardType.BLOCK, CardType.HEAL)
+ORDERS = ("played", "best", "random")
+
+
+def _program_lines(state: CombatState) -> list[int]:
+    """The lines a queued action can be moved to: every one not locked."""
+    return [i for i in range(len(state.program)) if i not in state.locked_slots]
+
+
+def _program_score(state: CombatState, player: PlayerState, rng: random.Random) -> float:
+    """What running the queued program right now is worth, tried on copies:
+    the damage it deals (a kill above all), the incoming damage it blocks
+    and the HP it heals or costs."""
+    trial, me = copy.deepcopy(state), player.model_copy(deep=True)
+    trial_rng = random.Random()
+    trial_rng.setstate(rng.getstate())
+    incoming_before = incoming_damage(trial)[1]
+    enemy_before = trial.enemy_hp + trial.enemy_block
+    run_program(trial, me, trial_rng)
+    dealt = enemy_before - trial.enemy_hp - trial.enemy_block
+    blocked = incoming_before - incoming_damage(trial)[1]
+    return 1000 * (trial.enemy_hp <= 0) + dealt + 1.2 * blocked + (me.hp - player.hp)
+
+
+def arrange_program(
+    state: CombatState, player: PlayerState, rng: random.Random, order: str
+) -> None:
+    """Rearrange the queued program: keep it as played, try every arrangement
+    and keep the best, or shuffle it."""
+    if order == "played" or not state.program_mode:
+        return
+    lines = _program_lines(state)
+    queued = [(state.program[i], state.program_glitched[i]) for i in lines]
+    cards = [q for q in queued if q[0] is not None]
+    if len(cards) < 2:
+        return
+    empty = (None, False)
+    if order == "random":
+        arrangement = cards + [empty] * (len(lines) - len(cards))
+        rng.shuffle(arrangement)
+        arrangements = [arrangement]
+    else:
+        # Empty lines don't matter where they sit, beyond the boosts to the
+        # left of each card - so every placement of the cards on the lines.
+        # Copies of one card swapping places change nothing, so they're
+        # tried once.
+        arrangements, seen = [], set()
+        for positions in itertools.permutations(range(len(lines)), len(cards)):
+            arrangement = [empty] * len(lines)
+            for pos, entry in zip(positions, cards, strict=True):
+                arrangement[pos] = entry
+            key = tuple((c.name, g) if c else None for c, g in arrangement)
+            if key not in seen:
+                seen.add(key)
+                arrangements.append(arrangement)
+
+    def place(arrangement) -> None:
+        for line, (card, glitched) in zip(lines, arrangement, strict=True):
+            state.program[line], state.program_glitched[line] = card, glitched
+
+    if len(arrangements) > 1:
+        best = max(arrangements, key=lambda a: (place(a), _program_score(state, player, rng))[1])
+        place(best)
+    else:
+        place(arrangements[0])
+
+
+def with_order(bot: Bot, order: str) -> Bot:
+    """`bot`, arranging its program by `order` after it played its turn."""
+    if order == "played":
+        return bot
+
+    def ordered(state: CombatState, player: PlayerState, rng: random.Random) -> None:
+        bot(state, player, rng)
+        if state.enemy_hp > 0 and player.hp > 0:
+            arrange_program(state, player, rng, order)
+
+    return ordered
+
 
 _RARITY_RANK = {Rarity.RARE: 3, Rarity.UNCOMMON: 2, Rarity.COMMON: 1, Rarity.STARTER: 0}
 
@@ -443,7 +569,13 @@ class FightResult:
 
 
 def fight(
-    player: PlayerState, enemy: Enemy, tier: str, bot: Bot, rng: random.Random, act: int = 1
+    player: PlayerState,
+    enemy: Enemy,
+    tier: str,
+    bot: Bot,
+    rng: random.Random,
+    act: int = 1,
+    program: bool = False,
 ) -> FightResult:
     hp_before = player.hp
     state, _ = start_combat(
@@ -454,6 +586,7 @@ def fight(
         boss=tier == "boss",
         boss_phases=boss_phases(act),
         character=player.character,
+        program_mode=program,
     )
     turns = 0
     while turns < MAX_AUTO_TURNS and state.enemy_hp > 0 and player.hp > 0:
@@ -480,7 +613,7 @@ def fresh_fights(cfg: SimConfig, bot: Bot, n: int, seed: int) -> dict[str, list[
             if tier == "elite" and cfg.affixes:
                 base = with_affix(base, rng)
             enemy = escalate(base, _TIER_FLOOR[tier], NUM_FLOORS)
-            results[tier].append(fight(player, enemy, tier, bot, rng))
+            results[tier].append(fight(player, enemy, tier, bot, rng, program=cfg.program))
     return results
 
 
@@ -502,7 +635,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
     act = 1
     nodes = generate_map(seed)
     player = cfg.new_player()
-    pool = CHARACTERS[cfg.character].reward_pool
+    pool = cfg.reward_pool()
     node = nodes["0-0"]
     fights: list[FightResult] = []
     steps = 0
@@ -537,7 +670,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
             if node.type is NodeType.ELITE and cfg.affixes:
                 base = with_affix(base, rng, style)
             enemy = escalate(base, node.floor, NUM_FLOORS, act)
-            result = fight(player, enemy, tier, bot, rng, act)
+            result = fight(player, enemy, tier, bot, rng, act, cfg.program)
             fights.append(result)
             if not result.won:
                 return RunResult(False, node.floor, fights, act)
@@ -815,6 +948,17 @@ def main(argv: list[str] | None = None) -> None:
         help="Gegner aus dem statischen Pool (enemies.py) statt zufällig in den Budgets",
     )
     parser.add_argument(
+        "--program",
+        action="store_true",
+        help="alle Runs im Programm-Modus (Aktionen laufen am Zugende links nach rechts)",
+    )
+    parser.add_argument(
+        "--order",
+        choices=ORDERS,
+        default="best",
+        help="Programm-Modus: Reihenfolge wie gespielt, die beste aller oder zufällig",
+    )
+    parser.add_argument(
         "--calibrate-threat",
         action="store_true",
         help="statt des Reports die Parameter von threat.py fitten",
@@ -842,8 +986,10 @@ def main(argv: list[str] | None = None) -> None:
     cfgs = [base, *(load_variant(p, character) for p in args.compare)]
     for cfg in cfgs:
         cfg.pool = args.pool
-    bot = BOTS[args.bot]
-    print(f"Bot: {args.bot}, {args.fights} Kämpfe/Stufe, {args.runs} Runs, Seed {args.seed}")
+        cfg.program = cfg.program or args.program
+    bot = with_order(BOTS[args.bot], args.order)
+    order = f", Programm-Reihenfolge {args.order}" if any(c.program for c in cfgs) else ""
+    print(f"Bot: {args.bot}{order}, {args.fights} Kämpfe/Stufe, {args.runs} Runs, Seed {args.seed}")
     reports = [build_report(c, bot, args.fights, args.runs, args.seed, args.bot) for c in cfgs]
     print_reports(reports, cfgs)
 

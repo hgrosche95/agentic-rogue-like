@@ -464,6 +464,39 @@ VIBE_CODER_REWARD_POOL: list[Card] = [
     ),
 ]
 
+# Control flow, offered only in program-mode runs (RunState.program_mode):
+# they do nothing themselves but steer the queued actions to their right
+# when the program runs at the end of the turn (combat.run_program) - which
+# is what makes the order of a program matter. Reusable: none of them puts
+# a card into the hand on its own, so no loop can run away.
+PROGRAM_REWARD_POOL: list[Card] = [
+    Card(
+        id="if-wounded",
+        name="If Wounded",
+        type=CardType.IF_WOUNDED,
+        value=1,
+        rarity=Rarity.COMMON,
+        description="Control flow. If the enemy is at half HP or less, the next action runs twice.",
+    ),
+    Card(
+        id="loop",
+        name="Loop",
+        type=CardType.LOOP,
+        value=1,
+        rarity=Rarity.UNCOMMON,
+        description="Control flow. Runs the last action to its left once more.",
+    ),
+    Card(
+        id="fork",
+        name="Fork",
+        type=CardType.FORK,
+        value=1,
+        token_cost=2,
+        rarity=Rarity.RARE,
+        description="Control flow. The next action to its right runs twice.",
+    ),
+]
+
 _RARITY_WEIGHTS: dict[bool, dict[Rarity, int]] = {
     False: {Rarity.COMMON: 60, Rarity.UNCOMMON: 32, Rarity.RARE: 8},
     True: {Rarity.COMMON: 30, Rarity.UNCOMMON: 45, Rarity.RARE: 25},  # elite
@@ -633,6 +666,22 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Pair Programming": {
         "token_cost": 1,
         "description": "Permanent. The first card you play each turn costs no tokens.",
+    },
+    # ---- control flow (program mode)
+    "If Wounded": {
+        "draw": 1,
+        "description": (
+            "Control flow. If the enemy is at half HP or less, the next action runs twice. "
+            "Draw 1 card."
+        ),
+    },
+    "Loop": {
+        "value": 2,
+        "description": "Control flow. Runs the last action to its left twice more.",
+    },
+    "Fork": {
+        "draw": 1,
+        "description": "Control flow. The next action to its right runs twice. Draw 1 card.",
     },
 }
 

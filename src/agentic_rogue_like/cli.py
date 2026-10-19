@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import random
 
 from dotenv import load_dotenv
@@ -111,11 +112,18 @@ def _choose_next_node(run: RunState, choices: list[str]) -> str:
 
 def main() -> None:
     load_dotenv()
+    parser = argparse.ArgumentParser(description="Play a run in the terminal.")
+    parser.add_argument(
+        "--program",
+        action="store_true",
+        help="run the field as a program: actions queue up and run left to right",
+    )
+    args = parser.parse_args()
 
     seed = random.randint(0, 1_000_000)
     print(f"agentic-rogue-like - seed {seed}\n")
 
-    run = new_run(seed)
+    run = new_run(seed, program_mode=args.program)
     rng = random.Random(seed)
     last_printed = 0
 

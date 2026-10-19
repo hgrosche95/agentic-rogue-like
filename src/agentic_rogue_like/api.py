@@ -42,6 +42,7 @@ from .combat import (
     is_enraged,
     max_hand_size,
     move_name,
+    move_queued,
     overflows,
     player_armor,
     token_regen,
@@ -206,6 +207,12 @@ class PendingCombatView(BaseModel):
     locked_slots: list[int]
     hand: list[HandCardView]
     field: list[CardView | None]
+    # Program mode (RunState.program_mode): the actions queued per line, run
+    # left to right at the end of the turn, and which of them will
+    # hallucinate. All null / false in a classic run.
+    program_mode: bool
+    program: list[CardView | None]
+    program_glitched: list[bool]
     player_block: int
     armor: int
     max_hand_size: int
@@ -330,6 +337,8 @@ class NewRunRequest(BaseModel):
     seed: int | None = None
     setting: str = SETTING_PRESETS[0]
     character: Character = Character.CHRONOS
+    # Run the field as a program (combat.run_program) instead of classic play.
+    program_mode: bool = False
 
     @field_validator("setting")
     @classmethod
@@ -357,6 +366,11 @@ class EventChoiceRequest(BaseModel):
 class PlayCardRequest(BaseModel):
     hand_index: int
     slot_index: int
+
+
+class MoveQueuedRequest(BaseModel):
+    from_slot: int
+    to_slot: int
 
 
 class EndTurnRequest(BaseModel):
@@ -455,6 +469,9 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
                 for i, card in enumerate(combat.hand)
             ],
             field=[None if card is None else CardView.of(card) for card in combat.field],
+            program_mode=combat.program_mode,
+            program=[None if card is None else CardView.of(card) for card in combat.program],
+            program_glitched=combat.program_glitched,
             player_block=combat.player_block,
             armor=player_armor(combat),
             max_hand_size=max_hand_size(combat),
@@ -536,7 +553,12 @@ def list_characters() -> list[CharacterView]:
 @app.post("/runs")
 def create_run(request: NewRunRequest) -> RunView:
     seed = request.seed if request.seed is not None else random.randint(0, 1_000_000)
-    run = new_run(seed, setting=request.setting, character=request.character)
+    run = new_run(
+        seed,
+        setting=request.setting,
+        character=request.character,
+        program_mode=request.program_mode,
+    )
     run_id = create_session(run, random.Random(seed))
     session = get_session(run_id)
     session.prefetch.warm(run)
@@ -605,6 +627,19 @@ def play_card_endpoint(run_id: str, request: PlayCardRequest) -> RunView:
     if session.run.player.hp <= 0 or session.combat.enemy_hp <= 0:
         _finish_fight(session)
 
+    return _run_view(run_id, session)
+
+
+@app.post("/runs/{run_id}/combat/move-queued")
+def move_queued_endpoint(run_id: str, request: MoveQueuedRequest) -> RunView:
+    """Program mode: move a queued action to another line (combat.move_queued)."""
+    session = _get_session_or_404(run_id)
+    if session.combat is None:
+        raise HTTPException(status_code=409, detail="no combat in progress")
+    try:
+        move_queued(session.combat, request.from_slot, request.to_slot)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _run_view(run_id, session)
 
 

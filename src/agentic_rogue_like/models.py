@@ -96,6 +96,11 @@ class CardType(StrEnum):
     OPENER = "opener"  # the first `value` cards of every turn cost no tokens
     # Junk an enemy's corrupt move shuffles in: does nothing, gone once played.
     GLITCH = "glitch"
+    # Control flow - program mode only (combat.run_program): they steer the
+    # action cards around them instead of doing anything themselves.
+    FORK = "fork"  # the next action to its right runs twice
+    LOOP = "loop"  # runs the last action to its left once more
+    IF_WOUNDED = "if_wounded"  # the next action runs twice if the enemy is at half HP by then
 
 
 PERMANENT_CARD_TYPES = frozenset(
@@ -366,6 +371,9 @@ class RunState(BaseModel):
     seed: int
     # Which map of the run the player is on - beating an act's boss opens
     # the next one (see engine.advance_act), beating the last one wins.
+    # Program mode (combat.run_program): action cards are queued on the field
+    # and run left to right when the turn ends, instead of on the spot.
+    program_mode: bool = False
     act: int = 1
     floor: int = 0
     status: RunStatus = RunStatus.ONGOING

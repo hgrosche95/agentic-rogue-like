@@ -615,6 +615,51 @@ schwerer: Im Simulator bleibt die Run-Siegquote mit und ohne Anpassung gleich
 antwortender Gegner eröffnet den Kampf mit einer Zeile der AGI, und auf der
 Karte zeigt das Panel „AGI analysis“, was sie bisher gelesen hat.
 
+## Programm-Modus (Prototyp)
+
+Ein zweiter Spielmodus pro Run (`new_run(..., program_mode=True)`, in der API
+`"program_mode": true` beim Anlegen, im Terminal `--program`): Das Feld wird
+zum Programm. Angriffe, Block, Heilung und Final Strike wirken nicht sofort,
+sondern werden in eine der 5 Zeilen eingereiht und laufen am Zugende von
+links nach rechts (`combat.run_program`), direkt vor dem Zug des Gegners.
+Kartenfluss (Ziehen, Retrieve, Free Play, …) wirkt weiter sofort, und
+Permanente liegen *unter* den Zeilen: Ein Overclock in Zeile 1 verstärkt jede
+Anweisung rechts davon, eine Zeile kann Permanent und Anweisung zugleich
+tragen. Bis zum Zugende lassen sich eingereihte Karten umsortieren
+(`combat.move_queued`, `POST /runs/{id}/combat/move-queued`).
+
+Drei Kontrollfluss-Karten gibt es nur in Programm-Runs als Belohnung
+(`cards.PROGRAM_REWARD_POOL`):
+
+| Karte | Seltenheit | Wirkung | Upgrade |
+| --- | --- | --- | --- |
+| If Wounded | häufig | nächste Aktion läuft doppelt, wenn der Gegner *in dem Moment* auf ≤ 50 % HP ist | + 1 Karte ziehen |
+| Loop | ungewöhnlich | wiederholt die letzte Aktion links davon | zweimal |
+| Fork | selten | nächste Aktion rechts läuft doppelt | + 1 Karte ziehen |
+
+Ein „if attack“ gibt es bewusst nicht: Der Intent des Gegners steht beim
+Einreihen schon fest, die Bedingung wäre keine Entscheidung. If Wounded
+dagegen hängt davon ab, was vorher im Programm lief, also von der
+Reihenfolge. Stirbt der Gegner mitten im Programm, wandert der Rest
+ungenutzt auf den Ablagestapel (Einmal-Karten bleiben erhalten).
+
+Ob die Reihenfolge wirklich zählt, misst `balance-sim --program --order
+{played,best,random}`: Der Smart-Bot spielt seine Karten, dann bleibt das
+Programm wie gespielt, wird zufällig gemischt oder auf die beste aller
+Anordnungen gebracht (jede auf einer Kopie des Kampfes ausprobiert). Mit
+`--pool`, 400 Runs:
+
+| Run-Siegquote | Classic | wie gespielt | zufällig | beste Reihenfolge |
+| --- | --- | --- | --- | --- |
+| Chronos | 8 % | 8 % | 5 % | 14 % |
+| Vibe-Coder | 10 % | 4 % | 3 % | 6 % |
+
+Beste gegen zufällige Reihenfolge ist bei Chronos fast das Dreifache, die
+Reihenfolge ist also eine echte Entscheidung. Der Vibe-Coder ist im
+Programm-Modus noch schwächer als in Classic: Seine Karten leben vom Jetzt
+(Ship It zählt die schon gespielten Karten), das braucht eigenes Balancing.
+Das Frontend kennt den Modus noch nicht.
+
 ## Karten-Upgrades
 
 Im Safehouse lässt sich eine Karte einmal verbessern: Sie bekommt ein „+“ am

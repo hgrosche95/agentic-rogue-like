@@ -21,8 +21,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .artifacts import ARTIFACT_POOL, VIBE_CODER_ARTIFACT_POOL
-from .cards import REWARD_POOL, VIBE_CODER_REWARD_POOL, starter_deck, vibe_coder_starter_deck
-from .models import Artifact, Card, Character
+from .cards import (
+    PROGRAM_REWARD_POOL,
+    REWARD_POOL,
+    VIBE_CODER_REWARD_POOL,
+    starter_deck,
+    vibe_coder_starter_deck,
+)
+from .models import Artifact, Card, Character, RunState
 
 
 @dataclass(frozen=True)
@@ -81,3 +87,10 @@ CHARACTERS: dict[Character, CharacterProfile] = {
 
 def profile(character: Character) -> CharacterProfile:
     return CHARACTERS[character]
+
+
+def reward_pool(run: RunState) -> list[Card]:
+    """What the run's card rewards, starting pick, shops and events offer: the
+    character's pool, plus the control flow cards in a program-mode run."""
+    pool = CHARACTERS[run.player.character].reward_pool
+    return pool + PROGRAM_REWARD_POOL if run.program_mode else pool

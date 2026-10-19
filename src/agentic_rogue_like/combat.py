@@ -140,6 +140,18 @@ _LIGHT_HIT_KINDS = {
     EnemyIntentType.CORRUPT: MoveKind.CORRUPT,
 }
 
+# Control flow cards (program mode, see run_program).
+CONTROL_FLOW_TYPES = frozenset({CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED})
+# What program mode queues: the cards that act on the fight, and the control
+# flow steering them. Card flow (draw, retrieve, free plays, ...) still
+# resolves on the spot - at the end of the turn it would come too late.
+QUEUED_TYPES = CONTROL_FLOW_TYPES | {
+    CardType.ATTACK,
+    CardType.BLOCK,
+    CardType.HEAL,
+    CardType.FINAL_STRIKE,
+}
+
 # Statuses (models.Status).
 EXPOSED_FACTOR = 1.5  # attack cards against an exposed enemy
 THROTTLED_FACTOR = 0.75  # a throttled enemy's attack
@@ -188,6 +200,12 @@ class CombatState(BaseModel):
     player_status: dict[Status, int] = Field(default_factory=dict)
     # Field slots an enemy's lock move has shut for the player's current turn.
     locked_slots: list[int] = Field(default_factory=list)
+    # Program mode: action cards wait in `program` (by slot) and run left to
+    # right at the end of the turn (run_program); whether each one was played
+    # past the context window, and so will hallucinate, is rolled on queueing.
+    program_mode: bool = False
+    program: list[Card | None] = Field(default_factory=lambda: [None] * FIELD_SIZE)
+    program_glitched: list[bool] = Field(default_factory=lambda: [False] * FIELD_SIZE)
     # cards left this turn that cost no tokens (Tab-Tab-Tab, Pair Programming)
     free_plays: int = 0
 
@@ -497,6 +515,7 @@ def start_combat(
     boss: bool = False,
     boss_phases: int = 2,
     character: Character = Character.CHRONOS,
+    program_mode: bool = False,
 ) -> tuple[CombatState, list[str]]:
     """Shuffle a *copy* of `deck` into the draw pile and draw an opening hand.
 
@@ -532,6 +551,7 @@ def start_combat(
         draw_on_play=hero.draw_on_play,
         turn_draw_modifier=hero.turn_draw_modifier,
         free_plays=total(artifacts, "opening_free_plays"),
+        program_mode=program_mode,
     )
     _roll_next_intent(state, rng)
     _draw(state, HAND_SIZE + total(artifacts, "opening_hand"), rng)
@@ -583,7 +603,7 @@ def play_card(
         raise ValueError(f"hand_index {hand_index} is out of range")
     if not 0 <= slot_index < FIELD_SIZE:
         raise ValueError(f"slot_index {slot_index} is out of range")
-    if state.field[slot_index] is not None:
+    if slot_taken(state, slot_index, state.hand[hand_index]):
         raise ValueError(f"slot {slot_index} is occupied")
     if slot_index in state.locked_slots:
         raise ValueError(f"slot {slot_index} is locked this turn")
@@ -599,7 +619,12 @@ def play_card(
     # throw away the very cards it is about to draw.
     cost_line = _pay_discard_cost(state, card, rng)
 
-    if hallucinates:
+    if queues(state, card):
+        # Paid for now, run at the end of the turn (run_program).
+        state.program[slot_index] = card
+        state.program_glitched[slot_index] = hallucinates
+        line = cost_line + f"You queue {card.name} in line {slot_index + 1}."
+    elif hallucinates:
         line = cost_line + _hallucinate(state, card, slot_index, player)
         (state.banished_pile if card.exhaust else state.discard_pile).append(card)
     elif card.type in PERMANENT_CARD_TYPES:
@@ -632,6 +657,102 @@ def play_card(
     if state.token_limit is not None:
         line += f" Context: {state.tokens_used}/{state.token_limit} tokens."
     return line + _check_boss_phase(state)
+
+
+def move_queued(state: CombatState, from_slot: int, to_slot: int) -> None:
+    """Program mode: move a queued action to another line - swapping with
+    whatever action waits there. A locked line takes nothing."""
+    if not state.program_mode:
+        raise ValueError("only a program can be rearranged")
+    for slot in (from_slot, to_slot):
+        if not 0 <= slot < FIELD_SIZE:
+            raise ValueError(f"slot {slot} is out of range")
+    if state.program[from_slot] is None:
+        raise ValueError(f"no queued card in line {from_slot}")
+    if to_slot in state.locked_slots:
+        raise ValueError(f"line {to_slot} is locked this turn")
+    p, g = state.program, state.program_glitched
+    p[from_slot], p[to_slot] = p[to_slot], p[from_slot]
+    g[from_slot], g[to_slot] = g[to_slot], g[from_slot]
+
+
+def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> list[str]:
+    """Program mode, end of the turn: run the queued actions left to right.
+
+    Every action resolves as if it had just been played in its line (the
+    amplifiers and Copilots to its left count, Copilot counting the actions
+    already run). Control flow steers the actions after it: fork runs the
+    next one twice, if_wounded does so only if the enemy is at half HP or
+    less by the time it runs, loop runs the last one again. Once the enemy is down the rest is
+    skipped - one-shots included, which are then kept for the next fight.
+    """
+    log: list[str] = []
+    forks, last, ran = 0, None, 0
+    for slot in range(FIELD_SIZE):
+        card = state.program[slot]
+        if card is None:
+            continue
+        glitched = state.program_glitched[slot]
+        state.program[slot], state.program_glitched[slot] = None, False
+        if state.enemy_hp <= 0 or player.hp <= 0:
+            state.discard_pile.append(card)  # never ran, so never used up
+            continue
+        line = f"[{slot + 1}] "
+        if card.type is CardType.FORK:
+            forks += card.value
+            log.append(line + f"{card.name}: the next action runs {1 + forks} times.")
+        elif card.type is CardType.IF_WOUNDED:
+            wounded = state.enemy_hp * 2 <= state.enemy.hp
+            forks += card.value if wounded else 0
+            state_line = "at half HP or less" if wounded else "still above half HP"
+            log.append(line + f"{card.name}: the enemy is {state_line}.")
+        elif card.type is CardType.LOOP:
+            if last is None:
+                log.append(line + f"{card.name}: nothing has run yet to repeat.")
+            else:
+                for _ in range(card.value):
+                    state.plays_this_turn = ran
+                    log.append(
+                        line + f"{card.name} -> " + _run_line(state, last, slot, player, rng)
+                    )
+                    ran += 1
+                    if state.enemy_hp <= 0:
+                        break
+        else:
+            for _ in range(1 + forks):
+                state.plays_this_turn = ran
+                if glitched:
+                    log.append(line + _hallucinate(state, card, slot, player))
+                else:
+                    log.append(line + _run_line(state, card, slot, player, rng))
+                ran += 1
+                if state.enemy_hp <= 0:
+                    break
+            forks = 0
+            last = None if glitched else card
+        if card.type in CONTROL_FLOW_TYPES and card.draw:
+            log.append(line + f"You draw {_draw(state, card.draw, rng)} card(s).")
+        if card.exhaust and card.type not in CONTROL_FLOW_TYPES:
+            state.banished_pile.append(card)
+        else:
+            state.discard_pile.append(card)
+        if line := _check_boss_phase(state):
+            log.append(line.strip())
+    return log
+
+
+def _run_line(
+    state: CombatState, card: Card, slot: int, player: PlayerState, rng: random.Random
+) -> str:
+    """One action card's effect, as if played into `slot` right now."""
+    multiplier = _amplifier_multiplier(state, slot)
+    bonus = _chain_bonus(state, slot)
+    line = _apply_action_effect(state, card, multiplier, player, rng, bonus)
+    if card.applies is not None and state.enemy_hp > 0:
+        line += " " + _afflict(state, card.applies, card.applies_amount)
+    if card.draw:
+        line += f" You draw {_draw(state, card.draw, rng)} card(s)."
+    return line
 
 
 def _hallucinate(state: CombatState, card: Card, slot_index: int, player: PlayerState) -> str:
@@ -673,9 +794,28 @@ def _pay_discard_cost(state: CombatState, card: Card, rng: random.Random) -> str
     return f"You discard {names}. "
 
 
-def free_slots(state: CombatState) -> list[int]:
-    """Slots a card can be played into right now - empty and not locked."""
-    return [i for i, c in enumerate(state.field) if c is None and i not in state.locked_slots]
+def queues(state: CombatState, card: Card) -> bool:
+    """Whether playing `card` queues it into the program (program mode)."""
+    return state.program_mode and card.type in QUEUED_TYPES
+
+
+def slot_taken(state: CombatState, slot_index: int, card: Card | None = None) -> bool:
+    """Whether `card` can't go into the slot: a queued action needs a free
+    program line, everything else a slot without a permanent. A program line
+    sits on top of the field - a permanent and a queued action can share a slot."""
+    if card is not None and queues(state, card):
+        return state.program[slot_index] is not None
+    return state.field[slot_index] is not None
+
+
+def free_slots(state: CombatState, card: Card | None = None) -> list[int]:
+    """Slots `card` (any card but a queued action, if None) can be played
+    into right now - free and not locked."""
+    return [
+        i
+        for i in range(FIELD_SIZE)
+        if not slot_taken(state, i, card) and i not in state.locked_slots
+    ]
 
 
 def permanent_count(state: CombatState) -> int:
@@ -726,7 +866,7 @@ def action_preview(
     Reads the same helpers _apply_action_effect uses, so the preview is what
     the play will actually do.
     """
-    if state.field[slot_index] is not None or slot_index in state.locked_slots:
+    if slot_taken(state, slot_index, card) or slot_index in state.locked_slots:
         return None
     multiplier = _amplifier_multiplier(state, slot_index)
     bonus = _chain_bonus(state, slot_index)
@@ -823,6 +963,10 @@ def _apply_action_effect(
     if card.type is CardType.GLITCH:
         return f"You flush a {card.name} out of your hand."
 
+    if card.type in CONTROL_FLOW_TYPES:
+        # Only run_program gives these meaning; played on the spot they idle.
+        return f"You play {card.name} - with no program running, it does nothing."
+
     if card.type is CardType.BLOCK:
         amount = block_amount(state, card, multiplier, bonus)
         state.player_block += amount
@@ -869,6 +1013,10 @@ def end_turn(
         log.append(line)
     # A lock only lasts the player turn it was cast for.
     state.locked_slots = []
+    if state.program_mode:
+        log.extend(run_program(state, player, rng))
+        if state.enemy_hp <= 0 or player.hp <= 0:
+            return log
 
     # Permanents that act on their own resolve before the enemy does, so a
     # Daemon can finish a fight and a Mainframe's block is up in time.
@@ -1073,6 +1221,7 @@ def auto_resolve_combat(
     rng: random.Random,
     boss: bool = False,
     boss_phases: int = 2,
+    program_mode: bool = False,
 ) -> tuple[bool, list[str]]:
     """Play out a full fight non-interactively: dump the hand into the first
     empty field slot each turn, then end the turn, until someone runs out of HP.
@@ -1086,19 +1235,24 @@ def auto_resolve_combat(
         boss=boss,
         boss_phases=boss_phases,
         character=player.character,
+        program_mode=program_mode,
     )
 
     for _ in range(MAX_AUTO_TURNS):
         if state.enemy_hp <= 0 or player.hp <= 0:
             break
         for _ in range(MAX_AUTO_PLAYS_PER_TURN):
-            index = next((i for i, c in enumerate(state.hand) if not overflows(state, c)), None)
-            if index is None:
+            play = next(
+                (
+                    (i, slots[0])
+                    for i, c in enumerate(state.hand)
+                    if not overflows(state, c) and (slots := free_slots(state, c))
+                ),
+                None,
+            )
+            if play is None:
                 break
-            empty_slot = next(iter(free_slots(state)), None)
-            if empty_slot is None:
-                break
-            log.append(play_card(state, index, empty_slot, player, rng))
+            log.append(play_card(state, *play, player, rng))
             # A thorny elite or a hallucination can take the player down mid-turn.
             if state.enemy_hp <= 0 or player.hp <= 0:
                 break
