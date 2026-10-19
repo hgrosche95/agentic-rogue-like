@@ -92,6 +92,13 @@ class Prefetch:
                 if situation not in self.flavors:
                     self.flavors[situation] = _executor.submit(narrate, run.setting, situation)
 
+    def cancel_all(self) -> None:
+        """Drop everything still queued, e.g. when the run's session is evicted."""
+        for future in [*self.enemies.values(), *self.flavors.values()]:
+            future.cancel()
+        self.enemies.clear()
+        self.flavors.clear()
+
     def take_enemy(self, node_id: str) -> Callable[[], Enemy] | None:
         """The prefetched enemy for `node_id` as a blocking getter, or None if none was started."""
         future = self.enemies.pop(node_id, None)

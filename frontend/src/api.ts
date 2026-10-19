@@ -54,6 +54,10 @@ export interface Card {
   exhaust: boolean;
   // attacks only: the damage is dealt this many times
   hits: number;
+  // scaling attacks: the bonus per permanent / graveyard / banished card
+  scale_value: number;
+  // reworked once at a safehouse - its name carries a "+"
+  upgraded: boolean;
   // what it takes from a context window - only the Vibe-Coder has one
   token_cost: number;
 }
@@ -124,6 +128,8 @@ export const ATTACKING_INTENTS: EnemyIntentType[] = ["attack", "barrage", "overl
 
 export interface PendingCombatView {
   enemy_name: string;
+  // one line of flavor text, may be empty
+  enemy_description: string;
   enemy_attack_name: string;
   // the base attack stat - what the enemy's look is built from
   enemy_attack: number;
@@ -131,6 +137,8 @@ export interface PendingCombatView {
   enemy_max_hp: number;
   enemy_block: number;
   enemy_intent: EnemyIntentType;
+  // the move's own name if its move set gave it one, else null
+  enemy_intent_name: string | null;
   enemy_intent_value: number;
   // one hit's range and the number of hits, and what of all of them gets
   // through block and armor if the turn ended now (both 0 while the enemy
@@ -175,6 +183,20 @@ export interface ShopArtifact {
 }
 
 // What a black market room sells, until the player leaves it.
+// A safehouse: heal, upgrade a card, or remove one - one of the three.
+export interface RestUpgrade {
+  deck_index: number;
+  card: Card;
+  upgraded: Card;
+}
+
+export interface RestView {
+  heal_amount: number;
+  upgrades: RestUpgrade[];
+  can_remove: boolean;
+  min_deck_size: number;
+}
+
 export interface ShopView {
   cards: ShopCard[];
   artifacts: ShopArtifact[];
@@ -201,6 +223,7 @@ export interface RunView {
   card_reward: Card[] | null;
   artifact_offer: Artifact[] | null;
   shop: ShopView | null;
+  rest: RestView | null;
   nodes: Record<string, MapNode>;
 }
 
@@ -287,6 +310,24 @@ export function removeShopCard(runId: string, index: number): Promise<RunView> {
 
 export function leaveShop(runId: string): Promise<RunView> {
   return request<RunView>(`/runs/${runId}/shop/leave`, { method: "POST" });
+}
+
+export function restHeal(runId: string): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/rest/heal`, { method: "POST" });
+}
+
+export function restUpgrade(runId: string, index: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/rest/upgrade`, {
+    method: "POST",
+    body: JSON.stringify({ index }),
+  });
+}
+
+export function restRemove(runId: string, index: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/rest/remove`, {
+    method: "POST",
+    body: JSON.stringify({ index }),
+  });
 }
 
 export function playCard(runId: string, handIndex: number, slotIndex: number): Promise<RunView> {

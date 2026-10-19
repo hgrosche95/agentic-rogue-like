@@ -61,6 +61,16 @@ def _play_full_run(seed: int, character: str = "chronos") -> dict:
         if run["shop"] is not None:
             run = client.post(f"/runs/{run_id}/shop/leave").json()
 
+        if run["rest"] is not None:
+            # Alternate the three choices, so full runs exercise all of them.
+            if steps % 3 == 0 and run["rest"]["upgrades"]:
+                index = run["rest"]["upgrades"][0]["deck_index"]
+                run = client.post(f"/runs/{run_id}/rest/upgrade", json={"index": index}).json()
+            elif steps % 3 == 1 and run["rest"]["can_remove"]:
+                run = client.post(f"/runs/{run_id}/rest/remove", json={"index": 0}).json()
+            else:
+                run = client.post(f"/runs/{run_id}/rest/heal").json()
+
         if run["status"] != "ongoing":
             break
 
@@ -176,6 +186,27 @@ def test_end_turn_requires_discarding_down_to_the_hand_limit() -> None:
         f"/runs/{run_id}/combat/end-turn", json={"discard_indices": list(range(excess))}
     ).json()
     assert any("you discard" in line for line in run["history"][-3:])
+
+
+def test_combat_view_names_the_telegraphed_move() -> None:
+    from agentic_rogue_like.combat import EnemyIntentType
+    from agentic_rogue_like.models import EnemyMove, MoveKind
+    from agentic_rogue_like.sessions import get_session
+
+    run_id = client.post("/runs", json={"seed": 3}).json()["run_id"]
+    run = _resolve(run_id).json()
+    # The static pool's moves are named.
+    assert run["pending_combat"]["enemy_intent_name"] is not None
+
+    combat = get_session(run_id).combat
+    combat.enemy = combat.enemy.model_copy(
+        update={"moves": [EnemyMove(kind=MoveKind.BARRAGE, name="Bristle Volley", hits=2)]}
+    )
+    combat.enemy_move, combat.enemy_intent = 0, EnemyIntentType.BARRAGE
+
+    view = client.get(f"/runs/{run_id}").json()["pending_combat"]
+    assert view["enemy_intent_name"] == "Bristle Volley"
+    assert view["enemy_intent_hits"] == 2
 
 
 def test_characters_are_listed() -> None:

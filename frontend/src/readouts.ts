@@ -18,8 +18,21 @@ export function rangeText(min: number, max: number): string {
 }
 
 // What an intent is called, its number, and what it means - for the marker
-// over the enemy's head and the badge in its HUD.
+// over the enemy's head and the badge in its HUD. A move with its own name
+// (from the enemy's move set) is called by it; the tooltip still says what
+// kind of move it is.
 export function describeIntent(
+  intent: EnemyIntentType,
+  min: number,
+  max: number,
+  hits: number,
+  name: string | null = null,
+): { label: string; amount: string; title: string } {
+  const plain = describeKind(intent, min, max, hits);
+  return name ? { ...plain, label: name, title: `${name}: ${plain.title}` } : plain;
+}
+
+function describeKind(
   intent: EnemyIntentType,
   min: number,
   max: number,

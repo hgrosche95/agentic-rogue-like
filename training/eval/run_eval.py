@@ -3,12 +3,19 @@
     uv run python -m eval.run_eval --model groq --repeats 15
     uv run python -m eval.run_eval --model ollama --settings presets --repeats 15
     uv run python -m eval.run_eval --model ollama --settings heldout --repeats 38
+    uv run python -m eval.run_eval --model groq --moves --repeats 15
 
 --settings presets is what the Groq baseline was measured on. For the
 fine-tuned model those settings all sit in the training split, so "presets"
 scores prompts it saw verbatim; "heldout" (the test-split settings it never
 trained on) is the honest generalization number. Each combination gets its
 own report label so the two never get mixed.
+
+--moves asks for move sets (MovesetProposal, held to the threat budget)
+instead of the plain schema - what the game itself asks Groq for. Bosses
+stay plain either way. Its reports get a "-moves" label so they never merge
+into a plain one. The fine-tuned model was never trained on move sets, so
+`--model ollama --moves` measures how far constrained decoding alone gets.
 """
 
 from __future__ import annotations
@@ -39,10 +46,12 @@ GROQ_MODEL_NAME = "openai/gpt-oss-20b"
 _ROOT_ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
 
 
-def _default_label(model: str, settings: str) -> str:
+def _default_label(model: str, settings: str, moves: bool = False) -> str:
     if model == "groq":
-        return "groq-baseline" if settings == "presets" else "groq-heldout"
-    return "finetuned-seen" if settings == "presets" else "finetuned-heldout"
+        label = "groq-baseline" if settings == "presets" else "groq-heldout"
+    else:
+        label = "finetuned-seen" if settings == "presets" else "finetuned-heldout"
+    return f"{label}-moves" if moves else label
 
 
 def _warm_up_ollama(model_name: str) -> None:
@@ -83,9 +92,14 @@ def main() -> None:
         action="store_true",
         help="schema-constrained decoding via Ollama's `format` parameter",
     )
+    parser.add_argument(
+        "--moves",
+        action="store_true",
+        help="ask for move sets (MovesetProposal) instead of the plain schema",
+    )
     args = parser.parse_args()
 
-    label = args.label or _default_label(args.model, args.settings)
+    label = args.label or _default_label(args.model, args.settings, args.moves)
     model_name = GROQ_MODEL_NAME if args.model == "groq" else args.ollama_model
     model_factory = None
     if args.model == "ollama":
@@ -106,6 +120,7 @@ def main() -> None:
         repeats=args.repeats,
         settings=settings,
         tiers=tuple(args.tiers) if args.tiers else None,
+        with_moves=args.moves,
     )
     print(f"Running {len(contexts)} calls against {model_name} ({label})...", file=sys.stderr)
 

@@ -83,3 +83,41 @@ training/
       den laufenden Ollama-Server verifiziert.
 - [x] Ergebnisse im Haupt-README dokumentiert — siehe dort Status
       "Encounter-Agent-Destillation" und den Abschnitt "Entwicklung".
+- [ ] **Movesets evaluieren** — der Harness kann jetzt auch das neue Schema
+      messen, mit dem das Spiel Groq nach Gegnern mit eigenem Moveset fragt
+      (`MovesetProposal`, geprüft gegen das Bedrohungs-Budget, siehe
+      Haupt-README *Gegner-Movesets*). Noch nicht gegen Groq gelaufen — siehe
+      unten.
+
+## Movesets evaluieren
+
+```bash
+uv run python -m eval.run_eval --model groq --moves --repeats 15
+```
+
+`--moves` fragt für early/mid/elite nach Movesets, Bosse bleiben beim
+alten Schema (ihr Moveset ist fest). Der Report bekommt das Label
+`groq-baseline-moves` und mischt sich nie in einen Report ohne Moves. Neben
+den bekannten Spalten zeigt er zwei weitere Tabellen:
+
+- **Warum der erste Versuch abgelehnt wurde** — Anteil der Aufrufe, deren
+  erster Vorschlag an Bedrohung, einem unspielbaren Moveset, Angriff oder HP
+  scheiterte, und wie viele davon der Retry mit Rückmeldung repariert hat.
+- **Movesets** — Moves pro Gegner, Anteil der Gegner mit Block/Salve/
+  Aufladen/Säuberung, eindeutige Move-Namen und Kombinationen von Move-Arten
+  (niedrig heißt: jeder Gegner baut das gleiche Gerüst, nur mit neuen Namen),
+  wo im Bedrohungs-Bereich die Gegner landen (0 = Untergrenze, 1 = Obergrenze)
+  und wie viele überhaupt HP außerhalb der alten HP-Spanne wählen, also den
+  Tausch "stärkere Moves gegen weniger HP" nutzen.
+
+`--model ollama --moves` geht auch, misst aber nur, wie weit
+schema-beschränktes Decoding allein kommt: Das fein-getunte Modell hat nie
+ein Moveset gesehen.
+
+**Korrigiert:** "Budget OK (1st try)" war bisher immer 100 %. Der Harness las
+den Zustand nach der ersten Generierung, aber vor ihrer Prüfung. Jetzt wird
+der Zustand nach der Prüfung gelesen. Die Zahlen in `RESULTS.md` stützen sich
+nicht auf diese Spalte.
+
+`tests/` spielt den kompletten Ablauf (Graph, Harness, Kennzahlen, Report)
+mit einem geskripteten Modell durch, ohne Netzwerk; die CI führt sie aus.

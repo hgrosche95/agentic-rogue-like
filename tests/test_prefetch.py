@@ -101,6 +101,8 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
             run = client.post(f"/runs/{run_id}/card-reward", json={"card_index": None}).json()
         if run["shop"] is not None:
             run = client.post(f"/runs/{run_id}/shop/leave").json()
+        if run["rest"] is not None:
+            run = client.post(f"/runs/{run_id}/rest/heal").json()
         if run["status"] == "ongoing":
             next_node_id = run["available_choices"][0]["id"]
             run = client.post(f"/runs/{run_id}/choose-node", json={"node_id": next_node_id}).json()

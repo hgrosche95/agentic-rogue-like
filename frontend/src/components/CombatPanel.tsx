@@ -251,6 +251,7 @@ export function CombatPanel({
     combat.enemy_intent_min,
     combat.enemy_intent_max,
     combat.enemy_intent_hits,
+    combat.enemy_intent_name,
   );
 
   return (
@@ -276,6 +277,7 @@ export function CombatPanel({
             intentMin: combat.enemy_intent_min,
             intentMax: combat.enemy_intent_max,
             intentHits: combat.enemy_intent_hits,
+            intentName: combat.enemy_intent_name,
           }}
           exchange={exchange}
           log={log}
@@ -317,6 +319,11 @@ export function CombatPanel({
             <span className="hud-name">
               {combat.enemy_name} <small>{combat.boss ? "Core AI" : "AI construct"} · {era}</small>
             </span>
+            {combat.enemy_description && (
+              <p className="hud-flavor" title={combat.enemy_description}>
+                {combat.enemy_description}
+              </p>
+            )}
             <HpBar hp={shownEnemyHp} max={combat.enemy_max_hp} side="enemy" />
             <div className="hud-meta">
               {!enemySlain && (

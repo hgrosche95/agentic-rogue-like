@@ -108,4 +108,7 @@ def to_encounter_state(context: DataContext) -> encounter_agent.EncounterState:
         "attempt": 0,
         "last_error": None,
         "proposal": None,
+        # The fine-tuning data is the plain schema - move sets would need
+        # their own dataset and training run.
+        "with_moves": False,
     }

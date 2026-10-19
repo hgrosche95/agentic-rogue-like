@@ -30,16 +30,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
+from .cards import can_upgrade, upgrade_card
 from .characters import CHARACTERS
 from .combat import (
     FIELD_SIZE,
-    EnemyIntentType,
     action_preview,
-    enemy_attack,
     enemy_block_gain,
     incoming_damage,
     intent_hits,
     max_hand_size,
+    move_name,
     overflows,
     player_armor,
     token_regen,
@@ -54,9 +54,13 @@ from .engine import (
     finalize_combat,
     move_to,
     new_run,
+    open_rest,
     open_shop,
     play_combat_card,
     resolve_node,
+    rest_heal,
+    rest_remove,
+    rest_upgrade,
     start_combat_node,
     start_event,
 )
@@ -69,6 +73,7 @@ from .models import (
     MapNode,
     NodeType,
     PlayerState,
+    RestSite,
     RunStatus,
     Shop,
 )
@@ -114,6 +119,9 @@ class CardView(BaseModel):
     rarity: str
     exhaust: bool
     hits: int
+    # Scaling attacks: the bonus per permanent / graveyard / banished card.
+    scale_value: int
+    upgraded: bool
     token_cost: int
 
     @classmethod
@@ -127,6 +135,8 @@ class CardView(BaseModel):
             rarity=card.rarity.value,
             exhaust=card.exhaust,
             hits=max(card.hits, 1),
+            scale_value=card.scale_value,
+            upgraded=card.upgraded,
             token_cost=card.token_cost,
         )
 
@@ -144,6 +154,8 @@ class HandCardView(CardView):
 
 class PendingCombatView(BaseModel):
     enemy_name: str
+    # One line of flavor - the encounter agent's, or the static pool's.
+    enemy_description: str
     enemy_attack_name: str
     # The enemy's base attack stat - what its look is built from.
     enemy_attack: int
@@ -151,6 +163,9 @@ class PendingCombatView(BaseModel):
     enemy_max_hp: int
     enemy_block: int
     enemy_intent: str
+    # The move's own name if its move set gave it one (e.g. "Tusk Charge"),
+    # else null - the UI then calls it by its kind.
+    enemy_intent_name: str | None
     enemy_intent_value: int
     # The range of one hit of the telegraphed attack (the roll on top of
     # the attack stat), how many hits it has, and what of all of them would
@@ -229,6 +244,36 @@ class ShopView(BaseModel):
         )
 
 
+class RestUpgradeView(BaseModel):
+    deck_index: int
+    # The card as it is and as it would be - so the choice shows the change.
+    card: CardView
+    upgraded: CardView
+
+
+class RestView(BaseModel):
+    heal_amount: int
+    upgrades: list[RestUpgradeView]
+    # Removing a card is free here, down to min_deck_size.
+    can_remove: bool
+    min_deck_size: int
+
+    @classmethod
+    def of(cls, rest: RestSite, deck: list[Card]) -> RestView:
+        return cls(
+            heal_amount=rest.heal_amount,
+            upgrades=[
+                RestUpgradeView(
+                    deck_index=i, card=CardView.of(card), upgraded=CardView.of(upgrade_card(card))
+                )
+                for i, card in enumerate(deck)
+                if can_upgrade(card)
+            ],
+            can_remove=len(deck) > MIN_DECK_SIZE,
+            min_deck_size=MIN_DECK_SIZE,
+        )
+
+
 class RunView(BaseModel):
     run_id: str
     status: RunStatus
@@ -248,6 +293,8 @@ class RunView(BaseModel):
     artifact_offer: list[Artifact] | None
     # The shop being browsed, until the player leaves it.
     shop: ShopView | None
+    # The rest site's choice, until the player makes it.
+    rest: RestView | None
     # Every node in the run, not just the current/reachable ones - the
     # frontend draws the whole dungeon graph, not just the next step.
     nodes: dict[str, MapNode]
@@ -318,6 +365,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         and session.combat is None
         and run.card_reward is None
         and run.shop is None
+        and run.rest is None
     )
 
     pending_event = None
@@ -336,22 +384,21 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         hits = intent_hits(combat)
         if hits:
             hit_min, hit_max = hits[0]
-            intent_value = (
-                enemy_attack(combat)
-                if combat.enemy_intent is EnemyIntentType.ATTACK
-                else hit_min - 1
-            )
+            # The hit before its roll.
+            intent_value = hit_min - 1
         else:
             hit_min = hit_max = intent_value = enemy_block_gain(combat)
         incoming_min, incoming_max = incoming_damage(combat)
         pending_combat = PendingCombatView(
             enemy_name=combat.enemy.name,
+            enemy_description=combat.enemy.description,
             enemy_attack_name=combat.enemy.attack_name,
             enemy_attack=combat.enemy.attack,
             enemy_hp=combat.enemy_hp,
             enemy_max_hp=combat.enemy.hp,
             enemy_block=combat.enemy_block,
             enemy_intent=combat.enemy_intent.value,
+            enemy_intent_name=move_name(combat),
             enemy_intent_value=intent_value,
             enemy_intent_min=hit_min,
             enemy_intent_max=hit_max,
@@ -408,6 +455,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         ),
         artifact_offer=run.artifact_offer,
         shop=None if run.shop is None else ShopView.of(run.shop),
+        rest=None if run.rest is None else RestView.of(run.rest, run.player.deck),
         nodes=run.nodes,
     )
 
@@ -491,6 +539,8 @@ def resolve_current_node(run_id: str) -> RunView:
         )
     elif node.type is NodeType.SHOP:
         open_shop(run, narrator=prefetch.narrator)
+    elif node.type is NodeType.REST:
+        open_rest(run, narrator=prefetch.narrator)
     else:
         resolve_node(run, session.rng, narrator=prefetch.narrator)
 
@@ -607,6 +657,34 @@ def leave_shop_endpoint(run_id: str) -> RunView:
     return _shop_action(run_id, leave_shop)
 
 
+def _rest_action(run_id: str, action) -> RunView:
+    session = _get_session_or_404(run_id)
+    if session.run.rest is None:
+        raise HTTPException(status_code=409, detail="no rest site open")
+    try:
+        action(session.run)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _run_view(run_id, session)
+
+
+@app.post("/runs/{run_id}/rest/heal")
+def rest_heal_endpoint(run_id: str) -> RunView:
+    return _rest_action(run_id, rest_heal)
+
+
+@app.post("/runs/{run_id}/rest/upgrade")
+def rest_upgrade_endpoint(run_id: str, request: ShopBuyRequest) -> RunView:
+    """`index` is the card's position in the deck (RunView.player.deck)."""
+    return _rest_action(run_id, lambda run: rest_upgrade(run, request.index))
+
+
+@app.post("/runs/{run_id}/rest/remove")
+def rest_remove_endpoint(run_id: str, request: ShopBuyRequest) -> RunView:
+    """`index` is the card's position in the deck (RunView.player.deck)."""
+    return _rest_action(run_id, lambda run: rest_remove(run, request.index))
+
+
 @app.post("/runs/{run_id}/choose-node")
 def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
     session = _get_session_or_404(run_id)
@@ -619,6 +697,7 @@ def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
         or session.combat is not None
         or run.card_reward is not None
         or run.shop is not None
+        or run.rest is not None
     ):
         raise HTTPException(status_code=409, detail="current node is not resolved yet")
     if request.node_id not in available_choices(run):

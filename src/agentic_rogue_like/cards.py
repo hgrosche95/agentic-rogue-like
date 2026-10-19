@@ -448,3 +448,134 @@ def roll_card_reward(
         if options:
             offer.append(rng.choice(options))
     return offer
+
+
+# What a rest site upgrade changes, per card name: the improved fields and
+# the description that goes with them. Written out per card instead of a
+# formula, so every upgrade reads as a deliberate change - roughly +40% on
+# the card's main number, one more of what it does, or (Vibe-Coder) a token
+# less. Cards without an
+# entry can't be upgraded: Prefetch (a second extra draw every turn runs
+# away with the draw rule) and System Restore (nothing to scale).
+CARD_UPGRADES: dict[str, dict[str, object]] = {
+    # ---- starter deck
+    "Exploit": {"value": 8, "description": "Deal 8 (+ATK) damage."},
+    "Firewall": {"value": 8, "description": "Gain 8 block until your next turn."},
+    "Overclock": {
+        "value": 40,
+        "description": "Permanent. Action cards played to its right are 40% more effective.",
+    },
+    "Encryption": {"value": 2, "description": "Permanent. Reduce incoming damage by 2."},
+    "Kernel Panic": {
+        "value": 7,
+        "description": (
+            "Destroy all permanent cards on the field. Deal 7 damage to "
+            "the enemy for each one destroyed."
+        ),
+    },
+    # ---- reward pool
+    "Brute Force": {"value": 15, "description": "Discard 1 random card. Deal 15 (+ATK) damage."},
+    "DDoS": {"hits": 4, "description": "Hit 4 times for 0 (+ATK) damage."},
+    "Zero-Day": {"value": 22, "description": "One-shot. Deal 22 (+ATK) damage."},
+    "Botnet": {
+        "scale_value": 4,
+        "description": "Deal 1 (+ATK) damage, +4 per permanent card on the field.",
+    },
+    "Stack Overflow": {
+        "scale_value": 3,
+        "description": "Deal 1 (+ATK) damage, +3 per card in your graveyard.",
+    },
+    "Payload": {"scale_value": 5, "description": "Deal 2 (+ATK) damage, +5 per banished card."},
+    "Honeypot": {"value": 11, "description": "Discard 1 random card. Gain 11 block."},
+    "Sandbox": {"value": 21, "description": "One-shot. Gain 21 block."},
+    "Backup": {"value": 14, "description": "One-shot. Heal 14 HP."},
+    "Phishing": {"value": 3, "description": "One-shot. Draw 3 cards."},
+    "Memory Dump": {"value": 5, "description": "One-shot. Discard your hand, then draw 5 cards."},
+    "Rollback": {
+        "value": 3,
+        "description": "One-shot. Return the last 3 cards from your graveyard to your hand.",
+    },
+    "Undelete": {
+        "value": 2,
+        "description": "One-shot. Return the last 2 banished cards (not Undeletes) to your hand.",
+    },
+    "Load Balancer": {
+        "value": 2,
+        "description": "Permanent. Attacks deal +2 damage per permanent card on the field.",
+    },
+    "Daemon": {
+        "value": 6,
+        "description": "Permanent. Deal 6 damage to the enemy at the end of each turn.",
+    },
+    "Mainframe": {
+        "value": 2,
+        "description": "Permanent. At the end of each turn gain 2 block per permanent card.",
+    },
+    "Fork Bomb": {
+        "value": 5,
+        "description": "Discard 2 random cards. Hit twice for 5 (+ATK) damage.",
+    },
+    # ---- the Vibe-Coder's cards (characters.py). Where tokens are the
+    # bottleneck, an upgrade may make a card cheaper instead of stronger.
+    "Prompt": {"value": 7, "description": "Deal 7 (+ATK) damage."},
+    "Make It Safe": {"value": 7, "description": "Gain 7 block until your next turn."},
+    "Copilot": {
+        "value": 2,
+        "description": (
+            "Permanent. Action cards played to its right get +2 for every card "
+            "you already played this turn."
+        ),
+    },
+    "Energy Drink": {
+        "value": 2,
+        "description": "Permanent. Frees 2 tokens at the end of each turn.",
+    },
+    "/compact": {"value": 6, "description": "One-shot. Costs no tokens. Frees 6 used tokens."},
+    "YOLO Deploy": {"value": 19, "description": "Discard 1 random card. Deal 19 (+ATK) damage."},
+    "Copy-Paste": {
+        "value": 2,
+        "description": (
+            "One-shot. Costs no tokens. Return the last 2 cards from your graveyard to your hand."
+        ),
+    },
+    "Vibe Check": {
+        "scale_value": 3,
+        "description": "Gain 1 block, +3 per empty slot on the field.",
+    },
+    "Tab-Tab-Tab": {
+        "value": 2,
+        "description": (
+            "One-shot. Costs no tokens. The next 2 cards you play this turn are free too."
+        ),
+    },
+    "Rubber Duck": {
+        "token_cost": 0,
+        "description": (
+            "Permanent. Costs no tokens. Cards that hallucinate fizzle instead of backfiring."
+        ),
+    },
+    "Ship It": {
+        "scale_value": 7,
+        "description": "Deal 0 (+ATK) damage, +7 per card you already played this turn.",
+    },
+    "Pair Programming": {
+        "token_cost": 1,
+        "description": "Permanent. The first card you play each turn costs no tokens.",
+    },
+}
+
+
+def can_upgrade(card: Card) -> bool:
+    return not card.upgraded and card.name in CARD_UPGRADES
+
+
+def upgrade_card(card: Card) -> Card:
+    """The upgraded copy of `card` - same id, a "+" on its name.
+
+    Raises ValueError for a card that is already upgraded or has no upgrade.
+    """
+    if not can_upgrade(card):
+        raise ValueError(f"{card.name} can't be upgraded")
+    return card.model_copy(
+        update={**CARD_UPGRADES[card.name], "name": f"{card.name}+", "upgraded": True}
+    )

@@ -102,6 +102,11 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 - [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
       drei wählen, danach alle 3 Schritte auf der Map ein weiteres
       (`/runs/{id}/artifact`). 20 Stück in `artifacts.py`, siehe *Artefakte* unten.
+- [x] **Rastplatz mit Wahl** — ein Safehouse heilt nicht mehr automatisch,
+      man wählt eins von dreien: heilen (15 HP, mit Artefakten mehr), eine
+      Karte dauerhaft verbessern oder eine Karte kostenlos aus dem Deck
+      entfernen (`/runs/{id}/rest/heal`, `/rest/upgrade`, `/rest/remove`).
+      Siehe *Karten-Upgrades* unten.
 - [x] **Schwarzmarkt** — jeder Shop-Raum bietet eine zufällige Auswahl
       aus 4 Karten (nach Seltenheit gewichtet, wie eine Kartenbelohnung) und
       2 Artefakten, die man noch nicht hat, gegen Credits (Gold): Karten
@@ -149,7 +154,9 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       prozedural mit der Web Audio API erzeugt (siehe *Audio* unten).
 - [ ] **Encounter-Agent** — ein LangGraph-Agent, der Gegner über constrained
       Tool-Calls generiert und gegen ein Etagen-Budget validiert, mit
-      Retry-Schleife bei Budget-Verstoß. Für Gegner voll eingeklinkt: die
+      Retry-Schleife bei Budget-Verstoß. Normale Gegner bekommen dabei ein
+      eigenes Moveset, das über ihre Bedrohung gegen das Budget geprüft wird
+      (siehe *Gegner-Movesets*). Für Gegner voll eingeklinkt: die
       Engine ruft ihn über `ENCOUNTER_AGENT_ENABLED=1` live an und fällt bei
       jedem Fehler (API nicht erreichbar, Budget nach 3 Versuchen nie
       getroffen, ...) auf den statischen Pool zurück — in einem echten Lauf
@@ -194,7 +201,8 @@ src/agentic_rogue_like/
 ├── engine.py       Der deterministische Kern-Loop, den CLI und API beide treiben
 ├── agent/          LangGraph-Encounter-Agent, Tool-Schema, Etagen-Budgets, Narrator, Ollama-Anbindung
 ├── prefetch.py     Erzeugt LLM-Inhalte erreichbarer Räume im Hintergrund
-├── balance_sim.py  Bot-Simulation für das Balancing (uv run balance-sim)
+├── threat.py       Bedrohung eines Gegners aus HP, Angriff und Moveset (Kosten fürs Budget)
+├── balance_sim.py  Bot-Simulation für das Balancing (uv run balance-sim), fittet auch threat.py
 ├── cli.py          Terminal-Frontend (input()/print()-Loop)
 ├── api.py          FastAPI-HTTP-Frontend fürs Web-UI (uvicorn agentic_rogue_like.api:app)
 └── sessions.py      Hält Run-Zustand zwischen HTTP-Requests am Leben
@@ -269,6 +277,13 @@ Die API erlaubt standardmäßig nur `http://localhost:5173` per CORS
 und in Produktion ohne Rebuild). Das Frontend liest seinerseits die
 API-Adresse aus `VITE_API_BASE_URL` zur Build-Zeit.
 
+Runs leben nur im Speicher der API (`sessions.py`). Ein Run, zu dem
+`SESSION_TTL_SECONDS` lang (Standard: 2 h) kein Request kam, wird verworfen,
+und mehr als `MAX_SESSIONS` (Standard: 500) gleichzeitige Runs verdrängen den
+am längsten unbenutzten — sonst wüchse der Speicher eines lange laufenden
+Containers mit jedem jemals gestarteten Run. Noch laufende Prefetch-Aufrufe
+eines verworfenen Runs werden abgebrochen.
+
 ### Audio
 
 Alle Klänge entstehen zur Laufzeit mit der Web Audio API
@@ -300,6 +315,10 @@ Für neue Karten oder Anpassungen eine Variante als JSON anlegen (nur was sich
 uv run balance-sim --compare balance/gegner-staerker.json
 uv run balance-sim --compare balance/beispiel-neue-karte.json --bot naive
 ```
+
+Mit `--pool` kämpft der Bot gegen den statischen Gegnerpool aus
+`enemies.py` statt gegen Zufallsgegner innerhalb der Budgets: das, was das
+Spiel ohne Encounter-Agent tatsächlich vorsetzt.
 
 Aktueller Stand (Smart-Bot, 2000 Runs über beide Akte): Spieler 45 HP /
 Angriff 2, Exploit macht 5 (+2), Starthand 5, danach 3 Karten pro Runde,
@@ -335,6 +354,107 @@ nicht mitgewachsen.
 Die Bots wählen Karten stur nach Seltenheit bzw. zufällig; wer gezielt
 auf eine Strategie baut, sollte deutlich öfter gewinnen.
 
+## Gegner-Movesets
+
+Jeder Gegner hat ein Moveset (`Enemy.moves`, `models.EnemyMove`): eine
+Liste aus bis zu 4 Moves, jeder mit Art, Gewicht (wie oft er gewürfelt wird),
+optionalem eigenem Namen und einer Stärke in Prozent seines Angriffswerts.
+Die Absicht für den nächsten Zug wird gewichtet daraus gewürfelt und wie
+gewohnt einen Zug vorher angezeigt.
+
+| Art | Wirkung | Standard-Stärke |
+| --- | --- | --- |
+| `attack` | ein Treffer (+W6) | 100 % |
+| `defend` | Block | 100 % |
+| `barrage` | 2–4 Treffer (+W3 je Treffer), Rüstung zählt pro Treffer | 25 %, 3 Treffer |
+| `charge` | etwas Block, im nächsten Zug garantiert eine Überladung (+W6) | 140 % (der Überladung) |
+| `purge` | zerstört die rechteste permanente Karte, dann ein Treffer (+W6) | 50 % |
+
+Weil die Stärke relativ zum Angriffswert ist, skalieren `enemies.escalate`
+und die Phasen-Stärke eines Bosses jeden Move automatisch mit. Regeln wie
+beim Boss: auf ein Aufladen folgt immer die Überladung, auf eine Überladung
+nie direkt ein Aufladen, und eine Säuberung wird nur gewürfelt, wenn eine
+permanente Karte auf dem Feld liegt. Deshalb braucht jedes Moveset einen
+`attack`- oder `barrage`-Move, der immer verfügbar ist. Das prüft das
+Modell schon beim Anlegen.
+
+Das Standard-Moveset ist genau das alte Verhalten (Angriff, in 30 % der
+Züge Block) und zieht dieselben Zufallszahlen. Der statische Gegnerpool
+(`enemies.py`, was ohne Agent gespielt wird) nutzt es nicht mehr: Er hat
+11 Gegner (4 early, 4 mid, 3 elite) mit eigenem, benanntem Moveset, z. B.
+Rattenschwarm mit Salve, Wildschwein mit Aufladen, Rostmonster mit
+Säuberung, Gargoyle mit Salve und starkem Block. Für jeden wurden die HP so
+gewählt, dass seine Bedrohung der des alten Gegners seiner Stufe entspricht;
+dieselbe Prüfung wie für Agenten-Gegner hält den Pool im Budget. Mit
+`balance-sim --pool` (2000 Runs) bleibt die Schwierigkeit fast gleich:
+Siegquote mid 88 % → 90 %, elite 81 % → 78 %, Boss 56 % → 52 %, Run 10 % → 9 %.
+Bosse ignorieren ihr
+Moveset und kämpfen weiter mit ihren Phasen (`combat._roll_boss_intent`).
+Der Encounter-Agent erfindet für normale Gegner und Elites ein eigenes
+Moveset mit 2–4 benannten Moves (siehe *Movesets vom Agenten* unten).
+
+Jeder Gegner hat außerdem eine Zeile Flavor-Text (`Enemy.description`,
+vom Encounter-Agent oder aus dem statischen Pool). Sie steht im Kampf unter
+seinem Namen und als zweite Zeile im Kampf-Log.
+
+### Bedrohung: was ein Moveset kostet
+
+`threat.py` rechnet einen Gegner in eine Zahl um: wie viel HP er dem
+Spieler im Schnitt abnimmt, bevor er stirbt, aus HP, Angriffswert und
+Moveset, ohne Simulation. Pro Gegnerzug, gewichtet nach Häufigkeit der Moves:
+
+- **Schaden** = was von den Treffern durchkommt: jeder Treffer minus Rüstung
+  (deshalb zahlt eine Salve für ihre vielen kleinen Treffer), der ganze Zug
+  minus Block des Spielers; dazu ein Aufschlag pro Säuberung
+- **Block** = was der Gegner an Block aufbaut
+- **Züge** = HP / (Spieler-Schaden − Block)
+- **Bedrohung** = Züge × Schaden
+
+Die Parameter sind nicht geschätzt, sondern gefittet:
+`uv run balance-sim --calibrate-threat` simuliert 600 zufällige Movesets mit
+je 100 Kämpfen und sucht die Werte, deren Bedrohung den tatsächlichen Schaden
+am besten vorhersagt. Auf 200 zurückgehaltenen Movesets erklärt sie 90 % der
+Streuung (R²), bei einem Median-Fehler von 9 % pro Moveset. Ein Test hält
+fünf sehr verschiedene Gegnertypen (Standard, Tank, Salve, Aufladen,
+Säuberung) auf derselben Bedrohung und prüft, dass sie im Simulator ähnlich
+viel Schaden machen (±30 %).
+
+`EnemyBudget.threat_range()` (`agent/encounter_schema.py`) übersetzt die HP-/Angriffs-Budgets jeder Stufe
+in einen Bedrohungs-Bereich (early ~4–9, mid ~9–18, elite ~16–25). Ein Gegner
+mit beliebigem Moveset passt in sein Budget, wenn seine Bedrohung darin
+liegt: Wer härter zuschlägt, zahlt mit HP, und umgekehrt. Bosse sind
+ausgenommen, sie kämpfen mit ihrem eigenen Moveset.
+
+### Movesets vom Agenten
+
+Über Groq antwortet der Encounter-Agent mit einem `MovesetProposal`
+(`agent/encounter_schema.py`): Name, Beschreibung, HP, Angriff und 2–4 Moves,
+jeder mit Art, Name, Gewicht, Stärke und (bei Salven) Trefferzahl. Die Felder
+sind im JSON-Schema beschrieben und begrenzt, damit das Modell weiß, was eine
+Stärke von 140 bedeutet. Geprüft wird dann:
+
+- **Angriff** bleibt eine harte Grenze der Stufe.
+- **Bedrohung** muss im Bereich der Stufe liegen. Das ersetzt die feste
+  HP-Spanne: Eine Salve mit 4 Treffern bekommt weniger HP, ein Tank mit
+  starkem Block darf mehr haben.
+- **HP** nur noch als lockere Plausibilitätsgrenze (50–150 % der HP-Spanne).
+- **Spielbarkeit**: z. B. braucht jedes Moveset einen Angriff oder eine Salve.
+
+Liegt die Bedrohung daneben, bekommt der Agent im nächsten Versuch eine
+konkrete Rückmeldung, etwa *„threat 23.8 outside budget [8.7, 17.5] – too
+dangerous for this floor. Change hp to about 44, or make the moves weaker“*.
+Weil die Bedrohung proportional zu den HP ist, ist der HP-Vorschlag exakt.
+
+Bosse (eigenes Moveset mit Phasen) und das fein-getunte Ollama-Modell bleiben
+beim alten Schema ohne Moves: Das Ollama-Modell wurde genau auf diesen Prompt
+trainiert und kennt keine Movesets. Ebenso pinnen Datengenerierung und
+Eval-Harness unter `training/` das alte Schema (`with_moves: False`), damit
+die Zahlen in `training/RESULTS.md` vergleichbar bleiben. Echte
+Groq-Antworten mit Movesets sind noch nicht ausgewertet; der Eval-Harness
+kann es (`uv run python -m eval.run_eval --model groq --moves` in
+`training/`, siehe `training/README.md`), die Tests laufen mit simulierten
+Modell-Antworten.
+
 ## Artefakte
 
 Artefakte wirken passiv für den Rest des Runs. Zu Beginn wählt man eins aus
@@ -368,6 +488,23 @@ kein neuer Code.
 | Rate Limiter | Gegner treffen um 3 schwächer, aber −1 ATK |
 | Vampire Process | Jede gespielte Angriffskarte heilt 1 HP |
 
+## Karten-Upgrades
+
+Im Safehouse lässt sich eine Karte einmal verbessern: Sie bekommt ein „+“ am
+Namen und einen stärkeren Wert, z. B. Exploit 5 → 8 Schaden, Firewall 5 → 8
+Block, Overclock 25 % → 40 %, Encryption 1 → 2 Rüstung, Daemon 4 → 6
+Schaden, DDoS 3 → 4 Treffer. Die Upgrades stehen pro Karte ausgeschrieben in
+`cards.CARD_UPGRADES` (grob +40 % auf die Hauptzahl oder ein Effekt mehr),
+nicht als Formel, damit jedes eine bewusste Entscheidung ist. Prefetch und
+System Restore haben keins: ein zweiter Zusatz-Zug pro Runde würde die
+Ziehregel aushebeln, und System Restore hat nichts zu skalieren.
+
+Heilen, Verbessern und Entfernen sind eine echte Abwägung, kein Gratis-Bonus:
+In `balance-sim` heilt der Smart-Bot unter 65 % HP und verbessert sonst eine
+Karte. Die Run-Siegquote bleibt dabei gleich (9 %, mit und ohne Upgrades),
+die Kämpfe werden aber etwas kürzer. Mit `"rest_upgrades": false` in einer
+Variante heilt der Bot wieder immer.
+
 ## Karten
 
 Nach jedem gewonnenen Kampf (außer dem letzten Boss) gibt es drei Karten zur Auswahl
@@ -390,10 +527,16 @@ Endlos-Kombos möglich.
 ## Deployment
 
 Jeder Push auf `master` löst `.github/workflows/deploy.yml` aus: baut das
-Backend-Image (`Dockerfile`, `uv`) direkt in der Azure Container Registry,
+Backend-Image (`Dockerfile`, `uv`) und legt es öffentlich in der GitHub Container Registry (ghcr.io) ab,
 aktualisiert die Azure Container App darauf, baut danach das Frontend gegen
 die frisch deployte API-URL und published es nach Azure Static Web Apps.
 Login läuft über OIDC/Federated Credentials — kein Passwort oder
 Registry-Secret im Repo. Zwei Deploys laufen nie gleichzeitig
-(`concurrency`): ein neuer Push wartet, bis der laufende fertig ist. Es gibt aktuell kein separates CI-Test-Gate vor dem
-Deploy; `pytest` läuft nur manuell/lokal.
+(`concurrency`): ein neuer Push wartet, bis der laufende fertig ist.
+
+Vor dem Deploy läuft `.github/workflows/ci.yml` als erster Job: `ruff check`
+und `pytest` fürs Backend, `oxlint` und `tsc -b && vite build` fürs Frontend.
+Schlägt etwas fehl, wird nichts deployt. Derselbe Workflow läuft auch auf
+jedem Pull Request und jedem Push auf andere Branches als `master`. Geprüft
+werden mit ruff nur `src/` und `tests/` — die Render-Skripte unter
+`tools/trailer/` werden nicht ausgeliefert.

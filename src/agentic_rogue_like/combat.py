@@ -16,16 +16,20 @@ permanent at once, cash them in for damage, get the field back. Destroyed
 permanents go to the banished pile - gone for the rest of the fight, unlike
 discarded action cards which can be reshuffled back in.
 
-The enemy telegraphs its next move a turn ahead (an "intent": either attack
-for its attack stat, or brace for the same amount of block) so playing a
-card is an informed choice, not a guess.
+The enemy telegraphs its next move a turn ahead (an "intent") so playing a
+card is an informed choice, not a guess. Which moves it can roll, how often
+and how hard they hit comes from its move set (`Enemy.moves`, see
+models.EnemyMove): attack, brace for block, a multi-hit barrage, a charge-up
+that telegraphs a crushing overload blow on the following turn, or a purge
+that destroys the rightmost permanent on the field. Every move's strength is
+a percentage of the enemy's attack stat. The default move set is the one
+every enemy had before move sets existed: attack, or brace 30% of the time.
 
-Bosses fight with a bigger move set (see _roll_boss_intent): a three-hit
-barrage, a charge-up that telegraphs a crushing overload blow on the
-following turn, and - once they drop to half HP and enter phase 2, gaining
-strength and block - a purge that destroys the rightmost permanent on the
-field. Later acts' bosses have a third phase at a quarter HP: stronger
-again, no more bracing, and a four-hit barrage.
+Bosses ignore their move set and fight with their own (see
+_roll_boss_intent): all of the moves above, the purge only once they drop to
+half HP and enter phase 2, gaining strength and block. Later acts' bosses
+have a third phase at a quarter HP: stronger again, no more bracing, and a
+four-hit barrage.
 
 Characters with a context window (the Vibe-Coder, see characters.py) pay
 every card's token_cost out of it, and part of it frees up again at the end
@@ -52,12 +56,16 @@ from pydantic import BaseModel, Field
 from .artifacts import every_nth_turn, heal, total
 from .characters import profile
 from .models import (
+    DEFAULT_BARRAGE_HITS,
+    DEFAULT_MOVE_POWER,
     PERMANENT_CARD_TYPES,
     Artifact,
     Card,
     CardType,
     Character,
     Enemy,
+    EnemyMove,
+    MoveKind,
     PlayerState,
     Scaling,
 )
@@ -70,18 +78,15 @@ MAX_AUTO_TURNS = 50
 # Bots stop playing after this many cards in one turn - a backstop so a
 # card combo nobody foresaw can never hang the simulator or the tests.
 MAX_AUTO_PLAYS_PER_TURN = 30
-ENEMY_DEFEND_CHANCE = 0.3
 # Chance that a card played past the context window backfires.
 HALLUCINATION_CHANCE = 0.5
 # Copilot (CHAIN) counts at most this many cards played before it in a turn.
 CHAIN_MAX_PLAYS = 3
 
-# Boss moves, all scaled off its attack stat (plus phase-2 strength).
-BARRAGE_HITS = 3
-BARRAGE_FACTOR = 0.25  # damage per barrage hit, before its d3
-OVERLOAD_FACTOR = 1.4  # the charged blow, before its d6
+# Move strength scales off the attack stat (plus a boss's phase strength).
+# How hard each kind hits by default is models.DEFAULT_MOVE_POWER; a move in
+# an enemy's move set can override it.
 CHARGE_BLOCK_FACTOR = 0.25  # block raised while charging
-PURGE_FACTOR = 0.5  # the purge's hit, before its d6
 # HP percentage at or below which a boss enters each phase past the first.
 PHASE_HP_PERCENT = {2: 50, 3: 25}
 PHASE_STRENGTH_FACTOR = 0.15  # attack gained on entering a phase
@@ -89,13 +94,13 @@ PHASE_BLOCK_FACTOR = 0.25  # block gained on entering a phase
 
 
 class EnemyIntentType(StrEnum):
+    # Same values as models.MoveKind - every move is an intent.
     ATTACK = "attack"
     DEFEND = "defend"
-    # boss-only
-    BARRAGE = "barrage"  # BARRAGE_HITS smaller hits
+    BARRAGE = "barrage"  # several smaller hits
     CHARGE = "charge"  # raises block; the next intent is always OVERLOAD
-    OVERLOAD = "overload"  # one crushing hit
-    PURGE = "purge"  # phase 2: destroys the rightmost permanent, then hits
+    OVERLOAD = "overload"  # one crushing hit - never rolled, always follows a CHARGE
+    PURGE = "purge"  # destroys the rightmost permanent, then hits
 
 
 # Intents that hit the player - everything else deals no damage.
@@ -114,6 +119,9 @@ class CombatState(BaseModel):
     enemy_hp: int
     enemy_block: int = 0
     enemy_intent: EnemyIntentType = EnemyIntentType.ATTACK
+    # Index into enemy.moves of the move behind the intent - for an OVERLOAD
+    # the CHARGE it follows. None for bosses, which roll their own moves.
+    enemy_move: int | None = None
     draw_pile: list[Card]
     hand: list[Card]
     discard_pile: list[Card]
@@ -213,12 +221,30 @@ def enemy_attack(state: CombatState) -> int:
     )
 
 
+def current_move(state: CombatState) -> EnemyMove | None:
+    """The move-set entry behind the telegraphed intent (None for bosses)."""
+    return None if state.enemy_move is None else state.enemy.moves[state.enemy_move]
+
+
+def _move_power(state: CombatState, kind: MoveKind) -> int:
+    """Percent of the attack stat the current intent works with."""
+    move = current_move(state)
+    return DEFAULT_MOVE_POWER[kind] if move is None else move.power
+
+
+def move_name(state: CombatState) -> str | None:
+    """The current move's own name, if its move set gave it one."""
+    move = current_move(state)
+    return None if move is None else move.name
+
+
 def enemy_block_gain(state: CombatState) -> int:
     """Block the enemy raises with its current intent (0 if it isn't raising any)."""
+    base = state.enemy.attack + state.enemy_strength
     if state.enemy_intent is EnemyIntentType.DEFEND:
-        return state.enemy.attack + state.enemy_strength
+        return round(base * _move_power(state, MoveKind.DEFEND) / 100)
     if state.enemy_intent is EnemyIntentType.CHARGE:
-        return round((state.enemy.attack + state.enemy_strength) * CHARGE_BLOCK_FACTOR)
+        return round(base * CHARGE_BLOCK_FACTOR)
     return 0
 
 
@@ -229,21 +255,26 @@ def intent_hits(state: CombatState) -> list[tuple[int, int]]:
     base = enemy_attack(state)
     intent = state.enemy_intent
     if intent is EnemyIntentType.ATTACK:
-        return [(base + 1, base + 6)]
+        hit = round(base * _move_power(state, MoveKind.ATTACK) / 100)
+        return [(hit + 1, hit + 6)]
     if intent is EnemyIntentType.BARRAGE:
-        hit = round(base * BARRAGE_FACTOR)
+        hit = round(base * _move_power(state, MoveKind.BARRAGE) / 100)
         return [(hit + 1, hit + 3)] * barrage_hits(state)
     if intent is EnemyIntentType.OVERLOAD:
-        hit = round(base * OVERLOAD_FACTOR)
+        # The power of the CHARGE it follows.
+        hit = round(base * _move_power(state, MoveKind.CHARGE) / 100)
         return [(hit + 1, hit + 6)]
     if intent is EnemyIntentType.PURGE:
-        hit = round(base * PURGE_FACTOR)
+        hit = round(base * _move_power(state, MoveKind.PURGE) / 100)
         return [(hit + 1, hit + 6)]
     return []
 
 
 def barrage_hits(state: CombatState) -> int:
-    return BARRAGE_HITS + (1 if state.phase >= 3 else 0)
+    move = current_move(state)
+    if move is not None:
+        return move.hits
+    return DEFAULT_BARRAGE_HITS + (1 if state.phase >= 3 else 0)
 
 
 def _damage_taken(hits: list[int], block: int, armor: int) -> int:
@@ -260,7 +291,7 @@ def _damage_taken(hits: list[int], block: int, armor: int) -> int:
 
 def player_armor(state: CombatState) -> int:
     """Flat reduction of the enemy's hit: armor cards on the field plus artifacts."""
-    armor = sum(1 for c in state.field if c is not None and c.type is CardType.ARMOR)
+    armor = sum(c.value for c in state.field if c is not None and c.type is CardType.ARMOR)
     return armor + total(state.artifacts, "armor")
 
 
@@ -319,8 +350,24 @@ def _discard_excess(state: CombatState, discard: list[int] | None) -> str:
     return f"Your hand is too full - you discard {_names(discarded)}."
 
 
-def _roll_enemy_intent(rng: random.Random) -> EnemyIntentType:
-    return EnemyIntentType.DEFEND if rng.random() < ENEMY_DEFEND_CHANCE else EnemyIntentType.ATTACK
+def _roll_enemy_move(state: CombatState, rng: random.Random) -> int:
+    """Index of the move a regular enemy does next, weighted by the move set.
+
+    Same rules as a boss's: a charge is always followed by its overload (the
+    caller handles that), never straight by another charge, and a purge is
+    only rolled while there is a permanent on the field to destroy.
+    models.Enemy guarantees an attack or barrage, so something is always left.
+    """
+    previous = state.enemy_intent
+    options = [
+        i
+        for i, move in enumerate(state.enemy.moves)
+        if not (move.kind is MoveKind.PURGE and not permanent_count(state))
+        and not (move.kind is MoveKind.CHARGE and previous is EnemyIntentType.OVERLOAD)
+    ]
+    # A single option still draws, so the rng stays in step either way.
+    weights = [state.enemy.moves[i].weight for i in options]
+    return rng.choices(options, weights=weights)[0]
 
 
 def _roll_boss_intent(state: CombatState, rng: random.Random) -> EnemyIntentType:
@@ -348,8 +395,17 @@ def _roll_boss_intent(state: CombatState, rng: random.Random) -> EnemyIntentType
     return rng.choices(list(weights), weights=list(weights.values()))[0]
 
 
-def _next_intent(state: CombatState, rng: random.Random) -> EnemyIntentType:
-    return _roll_boss_intent(state, rng) if state.boss else _roll_enemy_intent(rng)
+def _roll_next_intent(state: CombatState, rng: random.Random) -> None:
+    """Set the enemy's next intent (and the move behind it)."""
+    if state.boss:
+        state.enemy_intent = _roll_boss_intent(state, rng)
+        return
+    if state.enemy_intent is EnemyIntentType.CHARGE:
+        # enemy_move stays on the CHARGE: its power is the overload's.
+        state.enemy_intent = EnemyIntentType.OVERLOAD
+        return
+    state.enemy_move = _roll_enemy_move(state, rng)
+    state.enemy_intent = EnemyIntentType(state.enemy.moves[state.enemy_move].kind.value)
 
 
 def _check_boss_phase(state: CombatState) -> str:
@@ -427,9 +483,11 @@ def start_combat(
         turn_draw_modifier=hero.turn_draw_modifier,
         free_plays=total(artifacts, "opening_free_plays"),
     )
-    state.enemy_intent = _next_intent(state, rng)
+    _roll_next_intent(state, rng)
     _draw(state, HAND_SIZE + total(artifacts, "opening_hand"), rng)
     log = [f"A {enemy.name} appears! ({enemy.hp} HP)"]
+    if enemy.description:
+        log.append(enemy.description)
     if boss:
         later = " and again at a quarter" if boss_phases >= 3 else ""
         log.append(
@@ -443,12 +501,13 @@ def start_combat(
 
 
 def _amplifier_multiplier(state: CombatState, slot_index: int) -> float:
-    boosts = sum(
-        1
+    """1 + every amplifier's percent to the left of `slot_index` (25 each, 40 upgraded)."""
+    boost = sum(
+        c.value
         for i, c in enumerate(state.field)
         if c is not None and c.type is CardType.AMPLIFIER and i < slot_index
     )
-    return 1 + 0.25 * boosts
+    return 1 + boost / 100
 
 
 def _chain_bonus(state: CombatState, slot_index: int) -> int:
@@ -761,28 +820,32 @@ def end_turn(
     if state.enemy_intent is EnemyIntentType.DEFEND:
         gained = enemy_block_gain(state)
         state.enemy_block += gained
-        log.append(f"{state.enemy.name} braces itself, gaining {gained} block.")
-    elif state.boss and state.enemy_intent is not EnemyIntentType.ATTACK:
-        log.extend(_boss_move(state, player, rng))
+        how = f"uses {name}, gaining" if (name := move_name(state)) else "braces itself, gaining"
+        log.append(f"{state.enemy.name} {how} {gained} block.")
+    elif state.enemy_intent is not EnemyIntentType.ATTACK:
+        log.extend(_special_move(state, player, rng))
         if state.enemy_hp <= 0:
             return log
     else:
         armor = player_armor(state)
         reduction = state.player_block + armor
-        raw_damage = enemy_attack(state) + rng.randint(1, 6)
+        # The d6 on top of the move's hit.
+        low, high = intent_hits(state)[0]
+        raw_damage = low - 1 + rng.randint(1, high - low + 1)
         blocked = min(raw_damage, reduction)
         taken = raw_damage - blocked
         player.hp = max(player.hp - taken, 0)
+        attack_name = move_name(state) or state.enemy.attack_name
 
         if blocked > 0:
             armor_note = f" (includes {armor} armor)" if armor else ""
             log.append(
-                f"{state.enemy.name} uses {state.enemy.attack_name}. You block "
+                f"{state.enemy.name} uses {attack_name}. You block "
                 f"{blocked}{armor_note} and take {taken} damage. You are at {player.hp} HP."
             )
         else:
             log.append(
-                f"{state.enemy.name} uses {state.enemy.attack_name} for {taken} damage. "
+                f"{state.enemy.name} uses {attack_name} for {taken} damage. "
                 f"You are at {player.hp} HP."
             )
 
@@ -796,7 +859,7 @@ def end_turn(
                 return log
 
     state.player_block = 0
-    state.enemy_intent = _next_intent(state, rng)
+    _roll_next_intent(state, rng)
     state.turn += 1
     state.plays_this_turn = 0
     state.free_plays = sum(c.value for c in state.field if c and c.type is CardType.OPENER)
@@ -808,14 +871,16 @@ def end_turn(
     return log
 
 
-def _boss_move(state: CombatState, player: PlayerState, rng: random.Random) -> list[str]:
-    """Resolve a boss-only intent (everything but a plain attack or brace)."""
+def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -> list[str]:
+    """Resolve everything but a plain attack or brace."""
     name = state.enemy.name
     intent = state.enemy_intent
+    # A named move announces itself; an OVERLOAD shares its CHARGE's name.
+    uses = f"uses {own}: " if (own := move_name(state)) else ""
     if intent is EnemyIntentType.CHARGE:
         gained = enemy_block_gain(state)
         state.enemy_block += gained
-        return [f"{name} charges up, gaining {gained} block - an overload is coming!"]
+        return [f"{name} {uses}charges up, gaining {gained} block - an overload is coming!"]
 
     log: list[str] = []
     if intent is EnemyIntentType.PURGE:
@@ -833,10 +898,12 @@ def _boss_move(state: CombatState, player: PlayerState, rng: random.Random) -> l
     move = {
         EnemyIntentType.BARRAGE: f"unleashes a {len(hits)}-hit barrage",
         EnemyIntentType.OVERLOAD: "releases an overload",
-        EnemyIntentType.PURGE: f"strikes with {state.enemy.attack_name}",
+        EnemyIntentType.PURGE: "strikes" if own else f"strikes with {state.enemy.attack_name}",
     }[intent]
     rolled = " + ".join(str(h) for h in hits)
-    log.append(f"{name} {move} ({rolled}). You take {taken} damage. You are at {player.hp} HP.")
+    log.append(
+        f"{name} {uses}{move} ({rolled}). You take {taken} damage. You are at {player.hp} HP."
+    )
     if thorns := total(state.artifacts, "thorns"):
         _, dealt = _damage_enemy(state, thorns)
         log.append(

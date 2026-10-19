@@ -30,6 +30,14 @@ starter deck from characters.py) - `--character` sets it for every run
 that doesn't name one.
 `"rewards": false` plays runs without the after-fight card reward, i.e.
 with the starter deck only, `"artifacts": false` without artifacts.
+
+`balance-sim --pool` fights the static enemy pool (enemies.py, what the game
+uses whenever the encounter agent is off) instead of random enemies inside
+the budgets - so a change to the pool shows up in the numbers.
+
+`balance-sim --calibrate-threat` instead fits threat.py's model: it fights
+a few hundred random move sets and searches for the parameters whose
+threat() best predicts the damage those fights dealt (see calibrate_threat).
 """
 
 from __future__ import annotations
@@ -45,7 +53,7 @@ from pathlib import Path
 from .agent.budgets import _BUDGETS
 from .agent.encounter_schema import EnemyBudget
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
-from .cards import START_CARD_WEIGHTS, reward_card, roll_card_reward
+from .cards import START_CARD_WEIGHTS, can_upgrade, reward_card, roll_card_reward, upgrade_card
 from .characters import CHARACTERS
 from .combat import (
     ATTACKING_INTENTS,
@@ -57,7 +65,7 @@ from .combat import (
     play_card,
     start_combat,
 )
-from .enemies import escalate, tier_floor
+from .enemies import ENEMY_POOL, escalate, pick_enemy, tier_floor
 from .engine import ACT_HEAL_PERCENT, NUM_ACTS, boss_phases
 from .events import random_event
 from .map_gen import NUM_FLOORS, generate_map
@@ -67,11 +75,14 @@ from .models import (
     CardType,
     Character,
     Enemy,
+    EnemyMove,
+    MoveKind,
     NodeType,
     PlayerState,
     Rarity,
     Scaling,
 )
+from .threat import DEFAULT_MODEL, ThreatModel, threat
 
 TIERS = ("early", "mid", "elite", "boss")
 REST_HEAL = 15  # mirrors engine.resolve_node's REST branch
@@ -91,6 +102,11 @@ class SimConfig:
     deck_factory: Callable[[], list[Card]] | None = None
     rewards: bool = True
     artifacts: bool = True
+    # Fight enemies.py's static pool instead of random enemies in the budgets.
+    pool: bool = False
+    # Let bots upgrade a card at rest sites (see rest_choice) instead of
+    # always healing.
+    rest_upgrades: bool = True
 
     def __post_init__(self) -> None:
         hero = CHARACTERS[self.character]
@@ -123,6 +139,7 @@ def load_variant(path: Path, character: Character = Character.CHRONOS) -> SimCon
     base.player_attack = player.get("attack", base.player_attack)
     base.rewards = raw.get("rewards", base.rewards)
     base.artifacts = raw.get("artifacts", base.artifacts)
+    base.rest_upgrades = raw.get("rest_upgrades", base.rest_upgrades)
 
     card_overrides: dict[str, dict] = raw.get("cards", {})
     extra: list[dict] = raw.get("extra_cards", [])
@@ -343,6 +360,35 @@ def pick_reward(offer: list[Card], bot_name: str, rng: random.Random) -> int:
     return rng.choice([i for i, c in enumerate(offer) if _RARITY_RANK[c.rarity] == best])
 
 
+# Below this share of max HP the smart bot heals at a rest site; above it, it
+# upgrades a card instead.
+REST_HEAL_BELOW = 0.65
+# Which cards the smart bot upgrades first: what it plays most and what
+# scales hardest. Everything else upgradable comes after, in deck order.
+_UPGRADE_PRIORITY = ("Exploit", "Kernel Panic", "Overclock", "Firewall", "Encryption")
+
+
+def rest_choice(player: PlayerState, heal_amount: int, bot_name: str) -> int | None:
+    """Deck index to upgrade at a rest site, or None to heal.
+
+    Naive always heals - the old rest site. Smart heals when hurt, else
+    upgrades by _UPGRADE_PRIORITY.
+    """
+    if bot_name == "naive" or player.hp < player.max_hp * REST_HEAL_BELOW:
+        return None
+    upgradable = [i for i, c in enumerate(player.deck) if can_upgrade(c)]
+    if not upgradable:
+        return None
+
+    def rank(i: int) -> int:
+        name = player.deck[i].name
+        return (
+            _UPGRADE_PRIORITY.index(name) if name in _UPGRADE_PRIORITY else len(_UPGRADE_PRIORITY)
+        )
+
+    return min(upgradable, key=rank)
+
+
 # --------------------------------------------------------------------------- simulation
 
 
@@ -384,9 +430,12 @@ def fresh_fights(cfg: SimConfig, bot: Bot, n: int, seed: int) -> dict[str, list[
         rng = random.Random(f"{seed}-{tier}")
         for _ in range(n):
             player = cfg.new_player()
-            enemy = escalate(
-                random_enemy(cfg.budgets[tier], tier, rng), _TIER_FLOOR[tier], NUM_FLOORS
+            base = (
+                rng.choice(ENEMY_POOL[tier]).model_copy(deep=True)
+                if cfg.pool
+                else random_enemy(cfg.budgets[tier], tier, rng)
             )
+            enemy = escalate(base, _TIER_FLOOR[tier], NUM_FLOORS)
             results[tier].append(fight(player, enemy, tier, bot, rng))
     return results
 
@@ -428,9 +477,18 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 gain_artifact(player, rng.choice(offer))
         if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
             tier = tier_for(node.floor, node.type, act)
-            enemy = escalate(
-                random_enemy(cfg.budgets[tier], tier, rng), node.floor, NUM_FLOORS, act
-            )
+            if cfg.pool:
+                base = pick_enemy(
+                    floor=node.floor,
+                    num_floors=NUM_FLOORS,
+                    elite=node.type is NodeType.ELITE,
+                    boss=node.type is NodeType.BOSS,
+                    rng=rng,
+                    act=act,
+                )
+            else:
+                base = random_enemy(cfg.budgets[tier], tier, rng)
+            enemy = escalate(base, node.floor, NUM_FLOORS, act)
             result = fight(player, enemy, tier, bot, rng, act)
             fights.append(result)
             if not result.won:
@@ -449,13 +507,147 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 node = nodes["0-0"]
                 heal(player, player.max_hp * ACT_HEAL_PERCENT // 100)
         elif node.type is NodeType.REST:
-            heal(player, REST_HEAL + total(player.artifacts, "rest_heal"))
+            amount = REST_HEAL + total(player.artifacts, "rest_heal")
+            index = rest_choice(player, amount, bot_name) if cfg.rest_upgrades else None
+            if index is None:
+                heal(player, amount)
+            else:
+                player.deck[index] = upgrade_card(player.deck[index])
         elif node.type is NodeType.EVENT:
             rng.choice(random_event(rng).options).effect(player, rng)
             if player.hp <= 0:
                 return RunResult(False, node.floor, fights, act)
         node = nodes[rng.choice(node.connections)]
         steps += 1
+
+
+# --------------------------------------------------------------------------- threat calibration
+
+# Power ranges random move sets are drawn from - wider than anything sensible,
+# so the fit also covers the odd move sets an LLM might come up with.
+_POWER_RANGES = {
+    MoveKind.ATTACK: (60, 150),
+    MoveKind.DEFEND: (50, 150),
+    MoveKind.BARRAGE: (15, 50),
+    MoveKind.CHARGE: (100, 220),
+    MoveKind.PURGE: (30, 90),
+}
+# Search grid for calibrate_threat; `scale` is solved for, not searched.
+_THREAT_GRID = {
+    "player_damage": (16.0, 20.0, 24.0, 28.0, 32.0, 40.0, 50.0),
+    "armor": (0.0, 0.5, 1.0, 1.5),
+    "player_block": (4.0, 5.0, 6.0, 7.0, 8.0),
+    "purge_damage": (0.0, 3.0, 6.0, 9.0),
+}
+# Calibration fights give the player this much HP, so a fight's damage is
+# never cut short by the player dying - what is measured is the enemy's
+# full damage output.
+_CALIBRATION_HP = 1000
+
+
+def random_move_set(rng: random.Random) -> list[EnemyMove]:
+    """1-4 random moves with random weights and powers, at least one attack or barrage."""
+    always = EnemyMove(kind=rng.choice([MoveKind.ATTACK, MoveKind.BARRAGE]))
+    moves = [always] + [
+        EnemyMove(kind=rng.choice(list(MoveKind))) for _ in range(rng.randint(0, 3))
+    ]
+    for move in moves:
+        move.weight = rng.randint(1, 5)
+        move.power = rng.randint(*_POWER_RANGES[move.kind])
+        if move.kind is MoveKind.BARRAGE:
+            move.hits = rng.randint(2, 4)
+    rng.shuffle(moves)
+    return moves
+
+
+def mean_damage_taken(enemy: Enemy, bot: Bot, fights: int, seed: int | str) -> float:
+    """Average HP a fresh starter player loses to `enemy` - with HP to spare,
+    so the enemy's full output counts."""
+    rng = random.Random(seed)
+    cfg = SimConfig(player_hp=_CALIBRATION_HP)
+    return statistics.mean(
+        fight(cfg.new_player(), enemy, "mid", bot, rng).hp_lost for _ in range(fights)
+    )
+
+
+def threat_samples(bot: Bot, enemies: int, fights: int, seed: int) -> list[tuple[Enemy, float]]:
+    """Random enemies (one in seven with the default move set) and the damage they dealt."""
+    rng = random.Random(f"{seed}-threat")
+    samples = []
+    for i in range(enemies):
+        moves = {} if rng.random() < 1 / 7 else {"moves": random_move_set(rng)}
+        enemy = Enemy(
+            id=f"calib-{i}",
+            name="calib",
+            hp=rng.randint(30, 110),
+            attack=rng.randint(6, 15),
+            attack_name="Hit",
+            **moves,
+        )
+        samples.append((enemy, mean_damage_taken(enemy, bot, fights, f"{seed}-{i}")))
+    return samples
+
+
+@dataclass
+class ThreatFit:
+    model: ThreatModel
+    r2: float  # share of the variance in damage taken that threat explains
+    median_error: float  # typical relative error of a single prediction
+
+
+def evaluate_threat(model: ThreatModel, samples: list[tuple[Enemy, float]]) -> ThreatFit:
+    predicted = [threat(e, model) for e, _ in samples]
+    actual = [y for _, y in samples]
+    mean = statistics.mean(actual)
+    residual = sum((p - y) ** 2 for p, y in zip(predicted, actual, strict=True))
+    spread = sum((y - mean) ** 2 for y in actual)
+    errors = [abs(p - y) / max(y, 1.0) for p, y in zip(predicted, actual, strict=True)]
+    return ThreatFit(model, 1 - residual / spread, statistics.median(errors))
+
+
+def calibrate_threat(samples: list[tuple[Enemy, float]]) -> ThreatFit:
+    """Grid-search ThreatModel on `samples`; for each grid point the scale is
+    the least-squares fit, so threat comes out in HP actually taken."""
+    best: ThreatFit | None = None
+    actual = [y for _, y in samples]
+    for player_damage in _THREAT_GRID["player_damage"]:
+        for armor in _THREAT_GRID["armor"]:
+            for player_block in _THREAT_GRID["player_block"]:
+                for purge_damage in _THREAT_GRID["purge_damage"]:
+                    raw = ThreatModel(player_damage, armor, player_block, purge_damage)
+                    xs = [threat(e, raw) for e, _ in samples]
+                    xx = sum(x * x for x in xs)
+                    scale = sum(x * y for x, y in zip(xs, actual, strict=True)) / xx if xx else 1.0
+                    fit = evaluate_threat(
+                        ThreatModel(player_damage, armor, player_block, purge_damage, scale),
+                        samples,
+                    )
+                    if best is None or fit.r2 > best.r2:
+                        best = fit
+    assert best is not None
+    return best
+
+
+def print_threat_calibration(bot: Bot, enemies: int, fights: int, seed: int) -> None:
+    samples = threat_samples(bot, enemies, fights, seed)
+    # Fit on two thirds, judge on the rest - a fit is only as good as its
+    # predictions for move sets it has not seen.
+    cut = len(samples) * 2 // 3
+    fit = calibrate_threat(samples[:cut])
+    held_out = evaluate_threat(fit.model, samples[cut:])
+    current = evaluate_threat(DEFAULT_MODEL, samples[cut:])
+    m = fit.model
+    print(f"\n{enemies} zufällige Movesets x {fights} Kämpfe, Fit auf {cut}, Test auf dem Rest")
+    print(
+        f"Gefittet: player_damage={m.player_damage} armor={m.armor} "
+        f"player_block={m.player_block} purge_damage={m.purge_damage} scale={m.scale:.3f}"
+    )
+    print(f"  Fit-Daten:  R² {fit.r2:.3f}, Median-Fehler {fit.median_error:.1%}")
+    print(f"  Test-Daten: R² {held_out.r2:.3f}, Median-Fehler {held_out.median_error:.1%}")
+    print(
+        f"Aktuelles DEFAULT_MODEL auf den Test-Daten: R² {current.r2:.3f}, "
+        f"Median-Fehler {current.median_error:.1%}"
+    )
 
 
 # --------------------------------------------------------------------------- report
@@ -563,12 +755,28 @@ def main(argv: list[str] | None = None) -> None:
     )
     parser.add_argument("--no-artifacts", action="store_true", help="Runs ohne Artefakte")
     parser.add_argument(
+        "--pool",
+        action="store_true",
+        help="Gegner aus dem statischen Pool (enemies.py) statt zufällig in den Budgets",
+    )
+    parser.add_argument(
+        "--calibrate-threat",
+        action="store_true",
+        help="statt des Reports die Parameter von threat.py fitten",
+    )
+    parser.add_argument("--threat-enemies", type=int, default=600, help="Movesets fürs Fitten")
+    parser.add_argument("--threat-fights", type=int, default=100, help="Kämpfe pro Moveset")
+    parser.add_argument(
         "--character",
         choices=[c.value for c in Character],
         default=Character.CHRONOS.value,
         help='Charakter für alle Varianten ohne eigenes "character"',
     )
     args = parser.parse_args(argv)
+
+    if args.calibrate_threat:
+        print_threat_calibration(BOTS[args.bot], args.threat_enemies, args.threat_fights, args.seed)
+        return
 
     character = Character(args.character)
     base = load_variant(args.variant, character) if args.variant else SimConfig(character=character)
@@ -577,6 +785,8 @@ def main(argv: list[str] | None = None) -> None:
     if args.no_artifacts:
         base.artifacts = False
     cfgs = [base, *(load_variant(p, character) for p in args.compare)]
+    for cfg in cfgs:
+        cfg.pool = args.pool
     bot = BOTS[args.bot]
     print(f"Bot: {args.bot}, {args.fights} Kämpfe/Stufe, {args.runs} Runs, Seed {args.seed}")
     reports = [build_report(c, bot, args.fights, args.runs, args.seed, args.bot) for c in cfgs]

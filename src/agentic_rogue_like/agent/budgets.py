@@ -28,7 +28,7 @@ _BUDGETS: dict[str, EnemyBudget] = {
     "early": EnemyBudget(min_hp=32, max_hp=40, min_attack=7, max_attack=10),
     "mid": EnemyBudget(min_hp=48, max_hp=60, min_attack=9, max_attack=12),
     "elite": EnemyBudget(min_hp=64, max_hp=76, min_attack=11, max_attack=13),
-    "boss": EnemyBudget(min_hp=90, max_hp=105, min_attack=12, max_attack=14),
+    "boss": EnemyBudget(min_hp=90, max_hp=105, min_attack=12, max_attack=14, boss=True),
 }
 
 

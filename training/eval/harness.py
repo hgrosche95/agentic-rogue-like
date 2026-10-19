@@ -17,7 +17,7 @@ from typing import Any
 from unittest.mock import patch
 
 from agentic_rogue_like.agent import encounter_agent
-from agentic_rogue_like.agent.encounter_schema import EnemyProposal
+from agentic_rogue_like.agent.encounter_schema import EnemyProposal, MovesetProposal
 
 from common.groq_backoff import RateLimitTooLong, call_with_backoff
 
@@ -33,8 +33,22 @@ class CallResult:
     attempts_used: int
     first_attempt_violation: bool | None
     latency_seconds: float
-    proposal: EnemyProposal | None
+    proposal: EnemyProposal | None  # a MovesetProposal for move set contexts
     error_message: str | None
+    # Why the first attempt was rejected (see violation_kind), None if it
+    # wasn't - tells "can't keep to the threat budget" apart from "can't
+    # build a playable move set" before retries paper over either.
+    first_violation_kind: str | None = None
+
+
+def violation_kind(message: str | None) -> str | None:
+    """Coarse category of a validate_proposal() message, for counting."""
+    if message is None:
+        return None
+    for kind in ("invalid move set", "threat", "allowed range", "attack", "hp"):
+        if message.startswith(kind):
+            return {"allowed range": "hp", "invalid move set": "invalid_moves"}.get(kind, kind)
+    return "other"
 
 
 @dataclass
@@ -52,6 +66,10 @@ def _initial_state(context: EvalContext) -> encounter_agent.EncounterState:
         "attempt": 0,
         "last_error": None,
         "proposal": None,
+        # Pinned either way rather than left to the env-dependent default:
+        # plain contexts must stay the task RESULTS.md measured, whatever
+        # model source is configured.
+        "with_moves": context.with_moves,
     }
 
 
@@ -78,14 +96,18 @@ def _run_one(context: EvalContext) -> CallResult:
 
     final_state = states[-1]
     ok = final_state["last_error"] is None
+    # states[0] is the input, states[1] after the first generate, states[2]
+    # after its validation.
+    first_error = states[2]["last_error"] if len(states) > 2 else None
     return CallResult(
         context=context,
         status="ok" if ok else "budget_exhausted",
         attempts_used=final_state["attempt"],
-        first_attempt_violation=states[1]["last_error"] is not None,
+        first_attempt_violation=first_error is not None,
         latency_seconds=latency,
         proposal=final_state["proposal"] if ok else None,
         error_message=None if ok else final_state["last_error"],
+        first_violation_kind=violation_kind(first_error),
     )
 
 
@@ -129,7 +151,7 @@ def measure_cost_samples(
     """One probe call per distinct (tier, setting) - token usage doesn't vary
     meaningfully across repeats of the same context, so repeating it would
     only burn calls without sharpening the estimate."""
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str]] = set()  # a run never mixes plain and move set contexts
     samples: list[CostSample] = []
     factory = model_factory or encounter_agent._model
     for context in contexts:
@@ -138,7 +160,8 @@ def measure_cost_samples(
             continue
         seen.add(key)
 
-        model = factory().with_structured_output(EnemyProposal, include_raw=True)
+        schema = MovesetProposal if context.with_moves else EnemyProposal
+        model = factory().with_structured_output(schema, include_raw=True)
         prompt = encounter_agent._build_prompt(_initial_state(context))
         try:
             result, _latency = call_with_backoff(lambda m=model, p=prompt: m.invoke(p))

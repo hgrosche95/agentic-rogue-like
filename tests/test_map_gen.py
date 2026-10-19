@@ -62,3 +62,27 @@ def test_later_acts_have_more_elites_and_fewer_camps() -> None:
 
     assert count(2, NodeType.ELITE) > count(1, NodeType.ELITE)
     assert count(2, NodeType.REST) < count(1, NodeType.REST)
+
+
+def test_same_seed_draws_the_same_map_in_every_process() -> None:
+    # Set iteration order of strings is salted per process (PYTHONHASHSEED),
+    # so this only catches a regression when run in fresh interpreters.
+    import os
+    import subprocess
+    import sys
+
+    code = (
+        "from agentic_rogue_like.map_gen import generate_map;"
+        "print(sorted((k, v.connections) for k, v in generate_map(5).items()))"
+    )
+    outputs = {
+        subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, "PYTHONHASHSEED": str(salt)},
+        ).stdout
+        for salt in range(4)
+    }
+    assert len(outputs) == 1
