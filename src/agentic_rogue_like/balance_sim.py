@@ -65,7 +65,7 @@ from .combat import (
     play_card,
     start_combat,
 )
-from .enemies import ENEMY_POOL, escalate, pick_enemy, tier_floor
+from .enemies import ENEMY_POOL, escalate, pick_enemy, tier_floor, with_affix
 from .engine import ACT_HEAL_PERCENT, NUM_ACTS, boss_phases
 from .events import random_event
 from .map_gen import NUM_FLOORS, generate_map
@@ -104,6 +104,8 @@ class SimConfig:
     artifacts: bool = True
     # Fight enemies.py's static pool instead of random enemies in the budgets.
     pool: bool = False
+    # Elites get a random affix, as in the game (enemies.with_affix).
+    affixes: bool = True
     # Let bots upgrade a card at rest sites (see rest_choice) instead of
     # always healing.
     rest_upgrades: bool = True
@@ -140,6 +142,7 @@ def load_variant(path: Path, character: Character = Character.CHRONOS) -> SimCon
     base.rewards = raw.get("rewards", base.rewards)
     base.artifacts = raw.get("artifacts", base.artifacts)
     base.rest_upgrades = raw.get("rest_upgrades", base.rest_upgrades)
+    base.affixes = raw.get("affixes", base.affixes)
 
     card_overrides: dict[str, dict] = raw.get("cards", {})
     extra: list[dict] = raw.get("extra_cards", [])
@@ -435,6 +438,8 @@ def fresh_fights(cfg: SimConfig, bot: Bot, n: int, seed: int) -> dict[str, list[
                 if cfg.pool
                 else random_enemy(cfg.budgets[tier], tier, rng)
             )
+            if tier == "elite" and cfg.affixes:
+                base = with_affix(base, rng)
             enemy = escalate(base, _TIER_FLOOR[tier], NUM_FLOORS)
             results[tier].append(fight(player, enemy, tier, bot, rng))
     return results
@@ -488,6 +493,8 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 )
             else:
                 base = random_enemy(cfg.budgets[tier], tier, rng)
+            if node.type is NodeType.ELITE and cfg.affixes:
+                base = with_affix(base, rng)
             enemy = escalate(base, node.floor, NUM_FLOORS, act)
             result = fight(player, enemy, tier, bot, rng, act)
             fights.append(result)

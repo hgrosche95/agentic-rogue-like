@@ -59,6 +59,7 @@ from .models import (
     DEFAULT_BARRAGE_HITS,
     DEFAULT_MOVE_POWER,
     PERMANENT_CARD_TYPES,
+    Affix,
     Artifact,
     Card,
     CardType,
@@ -87,6 +88,18 @@ CHAIN_MAX_PLAYS = 3
 # How hard each kind hits by default is models.DEFAULT_MOVE_POWER; a move in
 # an enemy's move set can override it.
 CHARGE_BLOCK_FACTOR = 0.25  # block raised while charging
+
+# Elite affixes (models.Affix), scaled off the attack stat where they scale.
+ARMORED_BLOCK_FACTOR = 0.3  # block raised after each of its turns
+REGEN_FACTOR = 0.25  # HP healed after each of its turns
+ENRAGE_FACTOR = 0.5  # extra attack once at or below half HP
+THORNY_DAMAGE = 2  # HP every attack card played against it costs the player
+AFFIX_DESCRIPTIONS = {
+    Affix.ARMORED: "Raises block after every one of its turns.",
+    Affix.REGENERATING: "Heals after every one of its turns.",
+    Affix.ENRAGED: "Hits 50% harder once below half HP.",
+    Affix.THORNY: f"Every attack card you play against it costs you {THORNY_DAMAGE} HP.",
+}
 # HP percentage at or below which a boss enters each phase past the first.
 PHASE_HP_PERCENT = {2: 50, 3: 25}
 PHASE_STRENGTH_FACTOR = 0.15  # attack gained on entering a phase
@@ -214,10 +227,16 @@ def max_hand_size(state: CombatState) -> int:
     return MAX_HAND_SIZE + total(state.artifacts, "max_hand")
 
 
+def is_enraged(state: CombatState) -> bool:
+    return state.enemy.affix is Affix.ENRAGED and state.enemy_hp * 2 <= state.enemy.hp
+
+
 def enemy_attack(state: CombatState) -> int:
-    """The enemy's attack stat after artifacts - before the d6 roll and block."""
+    """The enemy's attack stat after artifacts and rage - before the d6 roll and block."""
+    rage = round(state.enemy.attack * ENRAGE_FACTOR) if is_enraged(state) else 0
     return max(
-        0, state.enemy.attack + state.enemy_strength + total(state.artifacts, "enemy_attack")
+        0,
+        state.enemy.attack + state.enemy_strength + rage + total(state.artifacts, "enemy_attack"),
     )
 
 
@@ -488,6 +507,8 @@ def start_combat(
     log = [f"A {enemy.name} appears! ({enemy.hp} HP)"]
     if enemy.description:
         log.append(enemy.description)
+    if enemy.affix is not None:
+        log.append(f"It is {enemy.affix.value}: {AFFIX_DESCRIPTIONS[enemy.affix]}")
     if boss:
         later = " and again at a quarter" if boss_phases >= 3 else ""
         log.append(
@@ -695,6 +716,9 @@ def _apply_action_effect(
         leech = ""
         if healed := heal(player, total(state.artifacts, "lifesteal")):
             leech = f" You leech {healed} HP."
+        if state.enemy.affix is Affix.THORNY:
+            player.hp = max(player.hp - THORNY_DAMAGE, 0)
+            leech += f" Its thorns cost you {THORNY_DAMAGE} HP."
         if absorbed > 0:
             return (
                 f"You play {card.name}, dealing {what} - {state.enemy.name}'s "
@@ -858,6 +882,7 @@ def end_turn(
             if state.enemy_hp <= 0:
                 return log
 
+    log.extend(_affix_after_turn(state))
     state.player_block = 0
     _roll_next_intent(state, rng)
     state.turn += 1
@@ -869,6 +894,20 @@ def end_turn(
     # is drawn on top, so holding cards back grows the hand (up to the limit).
     _draw(state, cards_per_turn(state), rng)
     return log
+
+
+def _affix_after_turn(state: CombatState) -> list[str]:
+    """What an elite's affix does once it has acted."""
+    name, affix = state.enemy.name, state.enemy.affix
+    if affix is Affix.ARMORED:
+        gained = round(state.enemy.attack * ARMORED_BLOCK_FACTOR)
+        state.enemy_block += gained
+        return [f"{name}'s plating raises {gained} block."]
+    if affix is Affix.REGENERATING and state.enemy_hp < state.enemy.hp:
+        before = state.enemy_hp
+        state.enemy_hp = min(state.enemy.hp, before + round(state.enemy.attack * REGEN_FACTOR))
+        return [f"{name} regenerates {state.enemy_hp - before} HP. {name} at {state.enemy_hp} HP."]
+    return []
 
 
 def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -> list[str]:
@@ -945,9 +984,10 @@ def auto_resolve_combat(
             if empty_slot is None:
                 break
             log.append(play_card(state, index, empty_slot, player, rng))
-            if state.enemy_hp <= 0:
+            # A thorny elite or a hallucination can take the player down mid-turn.
+            if state.enemy_hp <= 0 or player.hp <= 0:
                 break
-        if state.enemy_hp <= 0:
+        if state.enemy_hp <= 0 or player.hp <= 0:
             break
         log.extend(end_turn(state, player, rng))
 

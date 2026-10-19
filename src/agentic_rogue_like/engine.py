@@ -20,7 +20,7 @@ from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
-from .enemies import escalate
+from .enemies import escalate, with_affix
 from .events import EventOption, GameEvent, random_event
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
@@ -314,6 +314,14 @@ def choose_card_reward(run: RunState, index: int | None) -> None:
     run.card_reward = None
 
 
+def _affixed(run: RunState, node: MapNode, enemy: Enemy) -> Enemy:
+    """An elite gets a random affix (enemies.with_affix). Rolled from its own
+    rng, seeded per room, so it never shifts the run rng's other draws."""
+    if node.type is not NodeType.ELITE:
+        return enemy
+    return with_affix(enemy, random.Random(f"{run.seed}-affix-{run.act}-{node.id}"))
+
+
 def start_combat_node(
     run: RunState,
     rng: random.Random,
@@ -331,16 +339,20 @@ def start_combat_node(
     run.floor = node.floor
 
     enemy = escalate(
-        enemy_for_node(
-            enemy_id=f"agent-{rng.getrandbits(32):08x}",
-            floor=node.floor,
-            num_floors=NUM_FLOORS,
-            elite=node.type is NodeType.ELITE,
-            boss=node.type is NodeType.BOSS,
-            rng=rng,
-            setting=run.setting,
-            prefetched=prefetched_enemy,
-            act=run.act,
+        _affixed(
+            run,
+            node,
+            enemy_for_node(
+                enemy_id=f"agent-{rng.getrandbits(32):08x}",
+                floor=node.floor,
+                num_floors=NUM_FLOORS,
+                elite=node.type is NodeType.ELITE,
+                boss=node.type is NodeType.BOSS,
+                rng=rng,
+                setting=run.setting,
+                prefetched=prefetched_enemy,
+                act=run.act,
+            ),
         ),
         node.floor,
         NUM_FLOORS,
@@ -414,15 +426,19 @@ def resolve_node(
 
     if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
         enemy = escalate(
-            enemy_for_node(
-                enemy_id=f"agent-{rng.getrandbits(32):08x}",
-                floor=node.floor,
-                num_floors=NUM_FLOORS,
-                elite=node.type is NodeType.ELITE,
-                boss=node.type is NodeType.BOSS,
-                rng=rng,
-                setting=run.setting,
-                act=run.act,
+            _affixed(
+                run,
+                node,
+                enemy_for_node(
+                    enemy_id=f"agent-{rng.getrandbits(32):08x}",
+                    floor=node.floor,
+                    num_floors=NUM_FLOORS,
+                    elite=node.type is NodeType.ELITE,
+                    boss=node.type is NodeType.BOSS,
+                    rng=rng,
+                    setting=run.setting,
+                    act=run.act,
+                ),
             ),
             node.floor,
             NUM_FLOORS,

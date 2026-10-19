@@ -33,11 +33,13 @@ from pydantic import BaseModel, Field, field_validator
 from .cards import can_upgrade, upgrade_card
 from .characters import CHARACTERS
 from .combat import (
+    AFFIX_DESCRIPTIONS,
     FIELD_SIZE,
     action_preview,
     enemy_block_gain,
     incoming_damage,
     intent_hits,
+    is_enraged,
     max_hand_size,
     move_name,
     overflows,
@@ -182,6 +184,11 @@ class PendingCombatView(BaseModel):
     enemy_phase: int
     enemy_phases: int
     enemy_strength: int
+    # Elites: their affix (models.Affix) and what it does, else null. Whether
+    # an enraged elite is raging right now.
+    enemy_affix: str | None
+    enemy_affix_description: str | None
+    enemy_enraged: bool
     hand: list[HandCardView]
     field: list[CardView | None]
     player_block: int
@@ -409,6 +416,11 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_phase=combat.phase,
             enemy_phases=combat.boss_phases,
             enemy_strength=combat.enemy_strength,
+            enemy_affix=None if combat.enemy.affix is None else combat.enemy.affix.value,
+            enemy_affix_description=(
+                None if combat.enemy.affix is None else AFFIX_DESCRIPTIONS[combat.enemy.affix]
+            ),
+            enemy_enraged=is_enraged(combat),
             hand=[
                 HandCardView(
                     hand_index=i,

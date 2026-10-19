@@ -488,6 +488,28 @@ kein neuer Code.
 | Rate Limiter | Gegner treffen um 3 schwächer, aber −1 ATK |
 | Vampire Process | Jede gespielte Angriffskarte heilt 1 HP |
 
+## Elite-Zusätze
+
+Jeder Elite-Gegner bekommt einen zufälligen Zusatz (`models.Affix`), gewürfelt
+pro Raum aus dem Seed, damit er die übrigen Zufallszahlen des Runs nicht
+verschiebt:
+
+| Zusatz | Wirkung |
+| --- | --- |
+| Armored | baut nach jedem eigenen Zug Block auf (30 % des Angriffs) |
+| Regenerating | heilt nach jedem eigenen Zug (25 % des Angriffs) |
+| Enraged | +50 % Angriff ab halben HP |
+| Thorny | jede gespielte Angriffskarte kostet den Spieler 2 HP |
+
+Ein Zusatz ändert, *wie* der Kampf läuft, nicht wie schwer er ist:
+`enemies.with_affix` skaliert die HP so, dass die Bedrohung (`threat.py`
+bewertet jeden Zusatz mit) gleich bleibt. Ein Thorny-Gegner hat also deutlich
+weniger HP, belohnt aber Block- und Permanent-Karten statt Angriffs-Spam. Im
+Simulator verursacht jede Zusatz-Variante der Elites ±20 % des Schadens der
+Variante ohne Zusatz, die Run-Siegquote bleibt gleich (`balance-sim --pool`,
+mit `"affixes": false` als Vergleich). Im Kampf zeigt ein Badge den Zusatz,
+bei Enraged auch, sobald er wütet.
+
 ## Karten-Upgrades
 
 Im Safehouse lässt sich eine Karte einmal verbessern: Sie bekommt ein „+“ am

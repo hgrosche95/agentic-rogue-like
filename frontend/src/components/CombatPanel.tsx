@@ -335,6 +335,15 @@ export function CombatPanel({
                   {intent.label} {intent.amount}
                 </span>
               )}
+              {combat.enemy_affix && !enemySlain && (
+                <span
+                  className={`phase-badge affix-badge${combat.enemy_enraged ? " is-enraged" : ""}`}
+                  title={combat.enemy_affix_description ?? undefined}
+                >
+                  {combat.enemy_affix}
+                  {combat.enemy_enraged && " · raging"}
+                </span>
+              )}
               {combat.boss && !enemySlain && (
                 <span
                   className={`phase-badge${combat.enemy_phase > 1 ? " is-enraged" : ""}`}

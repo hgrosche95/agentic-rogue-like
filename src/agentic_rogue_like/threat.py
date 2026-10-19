@@ -34,7 +34,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .models import Enemy, EnemyMove, MoveKind
+from .combat import ARMORED_BLOCK_FACTOR, ENRAGE_FACTOR, REGEN_FACTOR, THORNY_DAMAGE
+from .models import Affix, Enemy, EnemyMove, MoveKind
 
 
 @dataclass(frozen=True)
@@ -118,9 +119,17 @@ def _intent_frequencies(moves: list[EnemyMove]) -> dict[_State, float]:
     return dist
 
 
-def threat_profile(enemy: Enemy, model: ThreatModel = DEFAULT_MODEL) -> ThreatProfile:
+# Attack cards the player plays per turn, for pricing a thorny elite: the
+# value at which thorny elites, HP rescaled by with_affix, deal what their
+# plain selves do in simulated fights (tests/test_threat.py checks it).
+ATTACKS_PER_TURN = 2.2
+
+
+def _per_turn(enemy: Enemy, attack: int, model: ThreatModel) -> tuple[float, float]:
+    """(damage, block) per enemy turn for `enemy` hitting with `attack`."""
+
     def hit(power: int, die_mean: float) -> float:
-        return max(0.0, round(enemy.attack * power / 100) + die_mean - model.armor)
+        return max(0.0, round(attack * power / 100) + die_mean - model.armor)
 
     def through_block(hits: float) -> float:
         return max(0.0, hits - model.player_block)
@@ -141,6 +150,23 @@ def threat_profile(enemy: Enemy, model: ThreatModel = DEFAULT_MODEL) -> ThreatPr
             block += p * round(enemy.attack * move.power / 100)
         elif move.kind is MoveKind.CHARGE:
             block += p * round(enemy.attack * _CHARGE_BLOCK_FACTOR)
+    return damage, block
+
+
+def threat_profile(enemy: Enemy, model: ThreatModel = DEFAULT_MODEL) -> ThreatProfile:
+    damage, block = _per_turn(enemy, enemy.attack, model)
+    # Elite affixes (combat._affix_after_turn and friends): healing soaks up
+    # the player's damage just like block does, rage hits harder for the
+    # second half of the enemy's HP - about half its turns.
+    if enemy.affix is Affix.ARMORED:
+        block += round(enemy.attack * ARMORED_BLOCK_FACTOR)
+    elif enemy.affix is Affix.REGENERATING:
+        block += round(enemy.attack * REGEN_FACTOR)
+    elif enemy.affix is Affix.ENRAGED:
+        raged = enemy.attack + round(enemy.attack * ENRAGE_FACTOR)
+        damage = (damage + _per_turn(enemy, raged, model)[0]) / 2
+    elif enemy.affix is Affix.THORNY:
+        damage += THORNY_DAMAGE * ATTACKS_PER_TURN
     turns = enemy.hp / max(model.player_damage - block, _MIN_NET_PLAYER_DAMAGE)
     return ThreatProfile(damage, block, turns, model.scale * turns * damage)
 

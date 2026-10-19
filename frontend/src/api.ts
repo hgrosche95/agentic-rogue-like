@@ -155,6 +155,10 @@ export interface PendingCombatView {
   enemy_phase: number;
   enemy_phases: number;
   enemy_strength: number;
+  // elites: their affix and what it does, else null; whether rage is on
+  enemy_affix: "armored" | "regenerating" | "enraged" | "thorny" | null;
+  enemy_affix_description: string | null;
+  enemy_enraged: boolean;
   hand: HandCardView[];
   field: (Card | null)[];
   player_block: number;

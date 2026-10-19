@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import random
 
-from .models import Enemy, EnemyMove, MoveKind
+from .models import Affix, Enemy, EnemyMove, MoveKind
+from .threat import threat
 
 # Shorthands for the move sets below.
 _ATTACK, _DEFEND, _BARRAGE, _CHARGE, _PURGE = (
@@ -256,3 +257,13 @@ def escalate(enemy: Enemy, floor: int, num_floors: int, act: int = 1) -> Enemy:
     return enemy.model_copy(
         update={"hp": round(enemy.hp * factor), "attack": round(enemy.attack * factor)}
     )
+
+
+def with_affix(enemy: Enemy, rng: random.Random) -> Enemy:
+    """`enemy` with a random elite affix, its HP rescaled so its threat
+    (threat.py) stays what it was - the affix changes how the fight plays,
+    not how hard it is. Threat is proportional to HP, so one ratio does it."""
+    affix = rng.choice(list(Affix))
+    armed = enemy.model_copy(update={"affix": affix})
+    hp = max(1, round(enemy.hp * threat(enemy) / threat(armed)))
+    return armed.model_copy(update={"hp": hp})

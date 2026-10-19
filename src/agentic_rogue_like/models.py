@@ -264,6 +264,15 @@ def default_moves() -> list[EnemyMove]:
 _ALWAYS_AVAILABLE = frozenset({MoveKind.ATTACK, MoveKind.BARRAGE})
 
 
+class Affix(StrEnum):
+    """An elite's extra trait (combat.py applies it, threat.py prices it)."""
+
+    ARMORED = "armored"  # raises block after every one of its turns
+    REGENERATING = "regenerating"  # heals after every one of its turns
+    ENRAGED = "enraged"  # hits harder once below half HP
+    THORNY = "thorny"  # every attack card played against it hurts the player
+
+
 class Enemy(BaseModel):
     id: str
     name: str
@@ -274,6 +283,8 @@ class Enemy(BaseModel):
     # Bosses ignore this and fight with their own phased move set (see
     # combat._roll_boss_intent).
     moves: list[EnemyMove] = Field(default_factory=default_moves, min_length=1, max_length=4)
+    # Elites only, rolled per room - see enemies.with_affix.
+    affix: Affix | None = None
 
     @field_validator("moves")
     @classmethod
