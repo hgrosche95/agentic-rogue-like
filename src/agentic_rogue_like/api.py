@@ -82,6 +82,7 @@ from .models import (
 )
 from .sessions import RunSession, create_session, get_session
 from .shop import MIN_DECK_SIZE, buy_artifact, buy_card, leave_shop, remove_card
+from .style import play_style, style_counts
 
 app = FastAPI(title="agentic-rogue-like")
 
@@ -316,6 +317,10 @@ class RunView(BaseModel):
     shop: ShopView | None
     # The rest site's choice, until the player makes it.
     rest: RestView | None
+    # What the AGI has read from the cards the player chose (style.py): the
+    # style it answers once one dominates (else null), and the counts behind it.
+    play_style: str | None
+    style_counts: dict[str, int]
     # Every node in the run, not just the current/reachable ones - the
     # frontend draws the whole dungeon graph, not just the next step.
     nodes: dict[str, MapNode]
@@ -485,6 +490,8 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         artifact_offer=run.artifact_offer,
         shop=None if run.shop is None else ShopView.of(run.shop),
         rest=None if run.rest is None else RestView.of(run.rest, run.player.deck),
+        play_style=(style.value if (style := play_style(run.player.deck)) else None),
+        style_counts={s.value: n for s, n in style_counts(run.player.deck).items()},
         nodes=run.nodes,
     )
 

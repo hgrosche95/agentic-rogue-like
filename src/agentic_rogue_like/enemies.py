@@ -14,6 +14,7 @@ from __future__ import annotations
 import random
 
 from .models import Affix, Enemy, EnemyMove, MoveKind
+from .style import COUNTER_AFFIX, COUNTER_WEIGHT, PlayStyle, answers
 from .threat import threat
 
 # Shorthands for the move sets below.
@@ -262,8 +263,16 @@ def tier_floor(floor: int, num_floors: int, act: int = 1) -> int:
 
 
 def pick_enemy(
-    floor: int, num_floors: int, elite: bool, boss: bool, rng: random.Random, act: int = 1
+    floor: int,
+    num_floors: int,
+    elite: bool,
+    boss: bool,
+    rng: random.Random,
+    act: int = 1,
+    style: PlayStyle | None = None,
 ) -> Enemy:
+    """A tier's enemy - with a `style`, the ones answering it COUNTER_WEIGHT
+    times as likely (bosses excepted: their moves are fixed)."""
     floor = tier_floor(floor, num_floors, act)
     if boss:
         pool = ENEMY_POOL["boss2" if act >= 2 else "boss"]
@@ -273,7 +282,11 @@ def pick_enemy(
         pool = ENEMY_POOL["early"]
     else:
         pool = ENEMY_POOL["mid"]
-    return rng.choice(pool).model_copy(deep=True)
+    weights = [COUNTER_WEIGHT if answers(e, style) else 1 for e in pool]
+    if boss or max(weights) == 1:
+        # Same draw as before styles existed, so seeded runs stay put.
+        return rng.choice(pool).model_copy(deep=True)
+    return rng.choices(pool, weights=weights)[0].model_copy(deep=True)
 
 
 # Enemies get +10% HP and attack (and with it block - a defending enemy
@@ -300,11 +313,17 @@ def escalate(enemy: Enemy, floor: int, num_floors: int, act: int = 1) -> Enemy:
     )
 
 
-def with_affix(enemy: Enemy, rng: random.Random) -> Enemy:
+def with_affix(enemy: Enemy, rng: random.Random, style: PlayStyle | None = None) -> Enemy:
     """`enemy` with a random elite affix, its HP rescaled so its threat
     (threat.py) stays what it was - the affix changes how the fight plays,
-    not how hard it is. Threat is proportional to HP, so one ratio does it."""
-    affix = rng.choice(list(Affix))
+    not how hard it is. Threat is proportional to HP, so one ratio does it.
+    With a `style`, the affix answering it is COUNTER_WEIGHT times as likely."""
+    counter = None if style is None else COUNTER_AFFIX[style]
+    if counter is None:
+        affix = rng.choice(list(Affix))
+    else:
+        weights = [COUNTER_WEIGHT if a is counter else 1 for a in Affix]
+        affix = rng.choices(list(Affix), weights=weights)[0]
     armed = enemy.model_copy(update={"affix": affix})
     hp = max(1, round(enemy.hp * threat(enemy) / threat(armed)))
     return armed.model_copy(update={"hp": hp})

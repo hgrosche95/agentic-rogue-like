@@ -35,6 +35,7 @@ from .engine import REST_SITUATION, SHOP_SITUATION
 from .events import EVENT_POOL, GameEvent
 from .map_gen import NUM_FLOORS
 from .models import Enemy, NodeType, RunState, RunStatus
+from .style import agent_hint, play_style
 
 _COMBAT_TYPES = (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS)
 
@@ -92,6 +93,11 @@ class Prefetch:
                     elite=node.type is NodeType.ELITE,
                     boss=node.type is NodeType.BOSS,
                     setting=run.setting,
+                    # The deck is as it will be on entering: warm() runs after
+                    # every reward, on the step onto the map.
+                    counter_hint=agent_hint(
+                        None if node.type is NodeType.BOSS else play_style(run.player.deck)
+                    ),
                 )
             if node.type is NodeType.EVENT and event_agent_enabled() and node.id not in self.events:
                 self.events[node.id] = _executor.submit(generate_valid_event, run.setting)

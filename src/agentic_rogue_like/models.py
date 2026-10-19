@@ -320,6 +320,9 @@ class Enemy(BaseModel):
     moves: list[EnemyMove] = Field(default_factory=default_moves, min_length=1, max_length=4)
     # Elites only, rolled per room - see enemies.with_affix.
     affix: Affix | None = None
+    # Set when the AGI picked it to answer the player's style (style.py) -
+    # opens the fight's log.
+    taunt: str = ""
 
     @field_validator("moves")
     @classmethod

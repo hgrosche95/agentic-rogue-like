@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 from ..enemies import pick_enemy, tier_floor
 from ..models import DEFAULT_SETTING, Enemy
+from ..style import PlayStyle, agent_hint
 from .budgets import budget_for
 from .encounter_schema import (
     BudgetViolation,
@@ -54,6 +55,8 @@ class EncounterState(TypedDict):
     # Ask for a move set? Unset means _with_moves()' default; the training
     # pipeline pins it to False so its prompts and evals stay comparable.
     with_moves: NotRequired[bool]
+    # A sentence steering the move set against the player's style (style.agent_hint).
+    counter_hint: NotRequired[str | None]
 
 
 def _model() -> Any:
@@ -139,6 +142,7 @@ def _moveset_prompt(state: EncounterState) -> str:
         f"defensive ones allow more - hp must stay between {low_hp} and {high_hp}. "
         f"attack_name is its signature attack. "
         f"Keep the description under 150 characters and every name under 40 characters."
+        + (f" {hint}" if (hint := state.get("counter_hint")) else "")
     )
 
 
@@ -206,11 +210,19 @@ def generate_balanced_enemy(
     elite: bool,
     boss: bool,
     setting: str = DEFAULT_SETTING,
+    counter_hint: str | None = None,
 ) -> Enemy:
     budget = budget_for(floor=floor, num_floors=num_floors, elite=elite, boss=boss)
     app = build_graph()
     result: EncounterState = app.invoke(
-        {"budget": budget, "setting": setting, "attempt": 0, "last_error": None, "proposal": None}
+        {
+            "budget": budget,
+            "setting": setting,
+            "attempt": 0,
+            "last_error": None,
+            "proposal": None,
+            "counter_hint": counter_hint,
+        }
     )
 
     if result["last_error"] is not None:
@@ -239,6 +251,7 @@ def enemy_for_node(
     setting: str = DEFAULT_SETTING,
     prefetched: Callable[[], Enemy] | None = None,
     act: int = 1,
+    style: PlayStyle | None = None,
 ) -> Enemy:
     """Agent-generated enemy, degrading to the static pool if the agent can't deliver.
 
@@ -260,10 +273,19 @@ def enemy_for_node(
 
     `act` > 1 only shifts which tier is picked (see enemies.tier_floor) -
     the extra strength of later acts is enemies.escalate()'s job.
+
+    `style` is the player's play style (style.py): the agent is asked for a
+    move set that answers it, the static pool weights its answers up.
     """
     if os.environ.get("ENCOUNTER_AGENT_ENABLED") != "1":
         return pick_enemy(
-            floor=floor, num_floors=num_floors, elite=elite, boss=boss, rng=rng, act=act
+            floor=floor,
+            num_floors=num_floors,
+            elite=elite,
+            boss=boss,
+            rng=rng,
+            act=act,
+            style=style,
         )
 
     try:
@@ -276,9 +298,16 @@ def enemy_for_node(
             elite=elite,
             boss=boss,
             setting=setting,
+            counter_hint=agent_hint(style),
         )
     except Exception:
         logger.warning("encounter agent failed, using static pool", exc_info=True)
         return pick_enemy(
-            floor=floor, num_floors=num_floors, elite=elite, boss=boss, rng=rng, act=act
+            floor=floor,
+            num_floors=num_floors,
+            elite=elite,
+            boss=boss,
+            rng=rng,
+            act=act,
+            style=style,
         )

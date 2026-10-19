@@ -197,6 +197,7 @@ src/agentic_rogue_like/
 ├── artifacts.py    Artefakt-Pool und -Angebote (passive Run-Boni)
 ├── shop.py         Schwarzmarkt: zufälliges Angebot aus Karten und Artefakten, Preise, Kaufen
 ├── events.py       Events aus festen Effekt-Bausteinen: Regeln, Bewertung, fester Pool
+├── style.py        Spielstil aus dem Deck lesen, und womit die AGI darauf antwortet
 ├── enemies.py      Statischer Gegner-Pool (Fallback für den Encounter-Agent)
 ├── engine.py       Der deterministische Kern-Loop, den CLI und API beide treiben
 ├── agent/          LangGraph-Encounter-Agent, Tool-Schema, Etagen-Budgets, Narrator, Ollama-Anbindung
@@ -587,6 +588,32 @@ wieder (10,9 % Run-Siegquote gegen 10,6 % beim Weitergehen). Für den
 Vibe-Coder noch nicht ganz (10,4 % gegen 11,8 %), vermutlich weil
 zusätzliche Karten sein Deck verwässern. Weil der Simulator keine Shops kennt,
 bewerten Bots Gold dabei mit 0.
+
+## Die AGI passt sich an
+
+Die AGI liest aus den Karten, die der Spieler *selbst* gewählt hat
+(Belohnungen, Shop, Events, nie das Startdeck), welchen Stil er spielt
+(`style.py`): Permanente, Friedhof, Einmal-Karten, Malware, und nur für Karten
+ohne speziellen Stil reine Angriffe oder Block. Ein Stil zählt ab 3 Karten,
+und wenn er vor allen anderen liegt. Dann antwortet sie darauf:
+
+| Stil | Antwort (Moves) | Antwort (Elite-Zusatz) |
+| --- | --- | --- |
+| Permanente | purge, lock | – |
+| Friedhof | corrupt | – |
+| Einmal-Karten | starker Block (≥120 %) | Armored |
+| Angriffe | starker Block (≥120 %) | Thorny |
+| Block | infect (Malware ignoriert Block) | Enraged |
+| Malware | – | Regenerating |
+
+Gegner aus dem Pool und Elite-Zusätze, die antworten, sind 3× so
+wahrscheinlich (nie erzwungen, Bosse ausgenommen). Der Encounter-Agent
+bekommt einen Satz im Prompt, der ihm sagt, worauf sein Moveset zielen soll.
+Weil jeder Gegner seine Bedrohung behält, macht das Kämpfe anders, nicht
+schwerer: Im Simulator bleibt die Run-Siegquote mit und ohne Anpassung gleich
+(Chronos 11 %, Vibe-Coder 10 %; Vergleich mit `"adaptive": false`). Ein
+antwortender Gegner eröffnet den Kampf mit einer Zeile der AGI, und auf der
+Karte zeigt das Panel „AGI analysis“, was sie bisher gelesen hat.
 
 ## Karten-Upgrades
 

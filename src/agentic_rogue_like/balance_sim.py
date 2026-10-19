@@ -83,6 +83,7 @@ from .models import (
     Rarity,
     Scaling,
 )
+from .style import play_style
 from .threat import DEFAULT_MODEL, ThreatModel, threat
 
 TIERS = ("early", "mid", "elite", "boss")
@@ -107,6 +108,8 @@ class SimConfig:
     pool: bool = False
     # Elites get a random affix, as in the game (enemies.with_affix).
     affixes: bool = True
+    # The AGI answers the bot's play style, as in the game (style.py).
+    adaptive: bool = True
     # Let bots upgrade a card at rest sites (see rest_choice) instead of
     # always healing.
     rest_upgrades: bool = True
@@ -144,6 +147,7 @@ def load_variant(path: Path, character: Character = Character.CHRONOS) -> SimCon
     base.artifacts = raw.get("artifacts", base.artifacts)
     base.rest_upgrades = raw.get("rest_upgrades", base.rest_upgrades)
     base.affixes = raw.get("affixes", base.affixes)
+    base.adaptive = raw.get("adaptive", base.adaptive)
 
     card_overrides: dict[str, dict] = raw.get("cards", {})
     extra: list[dict] = raw.get("extra_cards", [])
@@ -517,6 +521,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 gain_artifact(player, rng.choice(offer))
         if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
             tier = tier_for(node.floor, node.type, act)
+            style = play_style(player.deck) if cfg.adaptive else None
             if cfg.pool:
                 base = pick_enemy(
                     floor=node.floor,
@@ -525,11 +530,12 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                     boss=node.type is NodeType.BOSS,
                     rng=rng,
                     act=act,
+                    style=style,
                 )
             else:
                 base = random_enemy(cfg.budgets[tier], tier, rng)
             if node.type is NodeType.ELITE and cfg.affixes:
-                base = with_affix(base, rng)
+                base = with_affix(base, rng, style)
             enemy = escalate(base, node.floor, NUM_FLOORS, act)
             result = fight(player, enemy, tier, bot, rng, act)
             fights.append(result)

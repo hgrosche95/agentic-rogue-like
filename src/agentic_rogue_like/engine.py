@@ -37,6 +37,7 @@ from .models import (
     RunStatus,
 )
 from .shop import MIN_DECK_SIZE, leave_shop, roll_shop
+from .style import answers, play_style, taunt
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
 # Index into the offered cards, or None to skip the reward.
@@ -321,12 +322,40 @@ def choose_card_reward(run: RunState, index: int | None) -> None:
     run.card_reward = None
 
 
-def _affixed(run: RunState, node: MapNode, enemy: Enemy) -> Enemy:
-    """An elite gets a random affix (enemies.with_affix). Rolled from its own
-    rng, seeded per room, so it never shifts the run rng's other draws."""
-    if node.type is not NodeType.ELITE:
-        return enemy
-    return with_affix(enemy, random.Random(f"{run.seed}-affix-{run.act}-{node.id}"))
+def _room_enemy(
+    run: RunState,
+    node: MapNode,
+    rng: random.Random,
+    prefetched: Callable[[], Enemy] | None = None,
+) -> Enemy:
+    """The enemy of a combat room, ready to fight: picked (agent or pool),
+    affixed if elite, escalated for the timeline.
+
+    Once the player's deck shows a clear style (style.play_style), the AGI
+    prefers enemies and affixes that answer it - and an enemy that does opens
+    its fight with a taunt. An elite's affix comes from its own rng, seeded
+    per room, so it never shifts the run rng's other draws.
+    """
+    boss = node.type is NodeType.BOSS
+    style = None if boss else play_style(run.player.deck)
+    enemy = enemy_for_node(
+        enemy_id=f"agent-{rng.getrandbits(32):08x}",
+        floor=node.floor,
+        num_floors=NUM_FLOORS,
+        elite=node.type is NodeType.ELITE,
+        boss=boss,
+        rng=rng,
+        setting=run.setting,
+        prefetched=prefetched,
+        act=run.act,
+        style=style,
+    )
+    if node.type is NodeType.ELITE:
+        affix_rng = random.Random(f"{run.seed}-affix-{run.act}-{node.id}")
+        enemy = with_affix(enemy, affix_rng, style)
+    if style is not None and answers(enemy, style):
+        enemy = enemy.model_copy(update={"taunt": taunt(style)})
+    return escalate(enemy, node.floor, NUM_FLOORS, run.act)
 
 
 def start_combat_node(
@@ -345,26 +374,7 @@ def start_combat_node(
     node.visited = True
     run.floor = node.floor
 
-    enemy = escalate(
-        _affixed(
-            run,
-            node,
-            enemy_for_node(
-                enemy_id=f"agent-{rng.getrandbits(32):08x}",
-                floor=node.floor,
-                num_floors=NUM_FLOORS,
-                elite=node.type is NodeType.ELITE,
-                boss=node.type is NodeType.BOSS,
-                rng=rng,
-                setting=run.setting,
-                prefetched=prefetched_enemy,
-                act=run.act,
-            ),
-        ),
-        node.floor,
-        NUM_FLOORS,
-        run.act,
-    )
+    enemy = _room_enemy(run, node, rng, prefetched_enemy)
     state, log = _start_combat(
         run.player.deck,
         enemy,
@@ -432,25 +442,7 @@ def resolve_node(
     run.floor = node.floor
 
     if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
-        enemy = escalate(
-            _affixed(
-                run,
-                node,
-                enemy_for_node(
-                    enemy_id=f"agent-{rng.getrandbits(32):08x}",
-                    floor=node.floor,
-                    num_floors=NUM_FLOORS,
-                    elite=node.type is NodeType.ELITE,
-                    boss=node.type is NodeType.BOSS,
-                    rng=rng,
-                    setting=run.setting,
-                    act=run.act,
-                ),
-            ),
-            node.floor,
-            NUM_FLOORS,
-            run.act,
-        )
+        enemy = _room_enemy(run, node, rng)
         victory, log = auto_resolve_combat(
             run.player.deck,
             enemy,
