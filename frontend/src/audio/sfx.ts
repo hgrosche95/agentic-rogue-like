@@ -284,6 +284,10 @@ export function cardSound(type: CardType): SfxName {
       return "restore";
     case "free_play":
     case "glitch":
+    // control flow only steers - it sounds like shuffling the stack
+    case "fork":
+    case "loop":
+    case "if_wounded":
       return "draw";
     case "amplifier":
     case "armor":

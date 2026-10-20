@@ -663,7 +663,17 @@ Anordnungen gebracht (jede auf einer Kopie des Kampfes ausprobiert). Mit
 Wer die Reihenfolge ignoriert, steht etwas schlechter als in Classic, wer sie
 durchdenkt, gleich gut oder besser – bei beiden Charakteren. „Beste
 Reihenfolge“ ist eine Obergrenze (der Bot probiert jeden Zug alles durch),
-ein Spieler landet dazwischen. Das Frontend kennt den Modus noch nicht.
+ein Spieler landet dazwischen.
+
+Im Frontend wählt man den Modus beim Start („Classic“ / „Program“). Im Kampf
+stehen die Programmzeilen über dem Feld: Angriffe, Block und Heilung landen
+dort, Permanente darunter. Ein Klick auf eine eingereihte Karte hebt sie auf,
+ein Klick auf eine andere Zeile legt sie dort ab (eine belegte tauscht). Über
+den Zeilen steht, was das Programm bewirken wird (Gegner-HP und -Block, eigener
+Block), und „Incoming“ rechnet den eingereihten Block schon ein. Die
+Hot-Path-Zeile ist gold markiert, und ihre Vorschau zeigt den verbesserten
+Wert. „Run program“ lässt die Zeilen nacheinander aufleuchten, bevor der Gegner
+zieht.
 
 ### Programm-Artefakte
 
