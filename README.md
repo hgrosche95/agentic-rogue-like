@@ -704,9 +704,35 @@ Treffer, und das Programm läuft diesen Zug von rechts nach links. Fork und
 Loop steuern dann die Zeilen links von sich – eine Anordnung, die sonst gut
 ist, verschenkt dann ihre Kontrollfluss-Karten. Der Bosskampf wird so zur
 Prüfung, ob man die Reihenfolge wirklich im Griff hat. Refactor trifft so hart
-wie ein normaler Angriff, das Umdrehen kommt obendrauf: Gegen Bosse gewinnt
-Chronos in Einzelkämpfen wie gespielt 70 % statt 73 %, mit bester
-Reihenfolge 76 % statt 78 %.
+wie ein normaler Angriff, das Umdrehen kommt obendrauf: In denselben 800
+Bosskämpfen gewinnt man mit bester Reihenfolge genauso oft wie ohne Refactor
+(Chronos 77 %, Vibe-Coder 76 %), wie gespielt seltener (Chronos 70 statt
+76 %). Ein schwächerer Treffer würde Bosse leichter machen (bei halber Stärke
+86 %).
+
+### Vibe-Coder: Pipe und Batch
+
+Zwei eigene Kontrollfluss-Karten bekommt nur der Vibe-Coder in Programm-Runs
+(`cards.VIBE_CODER_PROGRAM_POOL`), damit die Reihenfolge auch für ihn zählt:
+**Pipe** gibt der nächsten Aktion +2 für jede Aktion, die schon gelaufen ist
+(gehört nach hinten), **Batch** gibt beim Laufen 1 Token für jede Aktion
+zurück, die danach noch läuft (gehört nach vorn). In gleichen Runs ändern sie
+seine Siegquote nicht (8,0 % mit, 8,2 % ohne) – sie machen das Programm
+vielfältiger, nicht ihn stärker.
+
+### Stand
+
+1000 Runs pro Zeile, `--pool`, mit Interrupt, Refactor, Pipe/Batch und der
+AGI, die Kontrollfluss-Decks mit mehr Interrupts beantwortet:
+
+| Run-Siegquote | wie gespielt | zufällig | beste Reihenfolge | Classic |
+| --- | --- | --- | --- | --- |
+| Chronos | 4 % | 4 % | 12 % | 10 % |
+| Vibe-Coder | 3 % | 3 % | 8 % | 10 % |
+
+Wer die Reihenfolge ignoriert, spielt inzwischen so schlecht wie mit einer
+zufälligen. Der Vibe-Coder liegt auch gut gespielt unter Classic; Refactor
+kostet ihn davon einen Prozentpunkt (in gleichen Runs 7,6 % mit, 8,6 % ohne).
 
 ### Programm-Artefakte
 
