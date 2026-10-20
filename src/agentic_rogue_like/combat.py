@@ -153,7 +153,9 @@ _LIGHT_HIT_KINDS = {
 BOSS_REFACTOR_WEIGHT = 2
 
 # Control flow cards (program mode, see run_program).
-CONTROL_FLOW_TYPES = frozenset({CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED})
+CONTROL_FLOW_TYPES = frozenset(
+    {CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED, CardType.PIPE, CardType.BATCH}
+)
 # What program mode queues: the cards that act on the fight, and the control
 # flow steering them. Card flow (draw, retrieve, free plays, ...) still
 # resolves on the spot - at the end of the turn it would come too late.
@@ -729,12 +731,13 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
     compiler = total(state.artifacts, "compiler_bonus")
     types: set[CardType] = set()  # what ran so far
     after_flow = False
+    piped = 0  # Pipe's bonus for the next action
     # A refactoring boss runs it right to left: control flow then steers the
     # actions run after it, now the ones to its left.
-    order = range(len(state.program))
+    order = list(range(len(state.program)))
     if state.enemy_intent is EnemyIntentType.REFACTOR:
-        order = reversed(order)
-    for slot in order:
+        order.reverse()
+    for step, slot in enumerate(order):
         card = state.program[slot]
         if card is None:
             continue
@@ -763,6 +766,18 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
             forks += run.value if _wounded(state) else 0
             state_line = "at half HP or less" if _wounded(state) else "still above half HP"
             log.append(line + f"{run.name}: the enemy is {state_line}.")
+        elif run.type is CardType.PIPE:
+            piped += run.value * ran
+            log.append(line + f"{run.name}: the next action gets +{piped} ({ran} ran before).")
+        elif run.type is CardType.BATCH:
+            # the actions still to run after it - an interrupt's cut ones don't
+            ahead = [state.program[s] for s in order[step + 1 :] if state.program[s]]
+            if cut_after is not None:
+                ahead = ahead[: max(0, cut_after - lines_run)]
+            actions = sum(1 for c in ahead if c.type not in CONTROL_FLOW_TYPES)
+            freed = min(state.tokens_used, run.value * actions)
+            state.tokens_used -= freed
+            log.append(line + f"{run.name} batches {actions} action(s): {freed} token(s) free up.")
         elif run.type is CardType.LOOP:
             repeats = run.value + (tail_call if slot == last_line else 0)
             if last is None:
@@ -777,7 +792,8 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
                 if state.enemy_hp <= 0:
                     break
         else:
-            bonus = pipeline if after_flow else 0
+            bonus = (pipeline if after_flow else 0) + piped
+            piped = 0
             if slot == last_line:
                 bonus += compiler * len(types - {run.type})
                 forks += tail_call

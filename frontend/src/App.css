@@ -2310,7 +2310,9 @@ button.is-primary:hover:not(:disabled),
 /* control flow (program mode) */
 .type-fork,
 .type-loop,
-.type-if_wounded {
+.type-if_wounded,
+.type-pipe,
+.type-batch {
   --card: #7cf5c4;
 }
 
@@ -3586,9 +3588,13 @@ body > .card-drag.type-final_strike {
 .program-lines .type-fork,
 .program-lines .type-loop,
 .program-lines .type-if_wounded,
+.program-lines .type-pipe,
+.program-lines .type-batch,
 body > .card-drag.type-fork,
 body > .card-drag.type-loop,
-body > .card-drag.type-if_wounded {
+body > .card-drag.type-if_wounded,
+body > .card-drag.type-pipe,
+body > .card-drag.type-batch {
   --card: #7cf5c4;
 }
 

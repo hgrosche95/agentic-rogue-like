@@ -288,6 +288,8 @@ export function cardSound(type: CardType): SfxName {
     case "fork":
     case "loop":
     case "if_wounded":
+    case "pipe":
+    case "batch":
       return "draw";
     case "amplifier":
     case "armor":

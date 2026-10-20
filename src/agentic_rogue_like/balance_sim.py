@@ -70,14 +70,13 @@ from .artifacts import (
     total,
 )
 from .cards import (
-    PROGRAM_REWARD_POOL,
     START_CARD_WEIGHTS,
     can_upgrade,
     reward_card,
     roll_card_reward,
     upgrade_card,
 )
-from .characters import CHARACTERS
+from .characters import CHARACTERS, character_reward_pool
 from .combat import (
     ATTACKING_INTENTS,
     MAX_AUTO_PLAYS_PER_TURN,
@@ -162,8 +161,7 @@ class SimConfig:
 
     def reward_pool(self) -> list[Card]:
         """Mirrors characters.reward_pool."""
-        pool = CHARACTERS[self.character].reward_pool
-        return pool + PROGRAM_REWARD_POOL if self.program else pool
+        return character_reward_pool(self.character, self.program)
 
     def artifact_pool(self) -> list[Artifact]:
         """Mirrors characters.artifact_pool."""
@@ -358,6 +356,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
             # Control flow only steers - worth a line once there is
             # something for it to steer; arrange_program puts it in place.
             order += [CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED]
+            order += [CardType.PIPE, CardType.BATCH]
         order.append(CardType.ATTACK)
         if state.enemy_intent in ATTACKING_INTENTS:
             order.append(CardType.BLOCK)
@@ -450,7 +449,8 @@ def _program_score(state: CombatState, player: PlayerState, rng: random.Random) 
     run_program(trial, me, trial_rng)
     dealt = enemy_before - trial.enemy_hp - trial.enemy_block
     blocked = incoming_before - incoming_damage(trial)[1]
-    return 1000 * (trial.enemy_hp <= 0) + dealt + 1.2 * blocked + (me.hp - player.hp)
+    freed = state.tokens_used - trial.tokens_used  # Batch: tokens for next turn
+    return 1000 * (trial.enemy_hp <= 0) + dealt + 1.2 * blocked + (me.hp - player.hp) + 2 * freed
 
 
 def arrange_program(

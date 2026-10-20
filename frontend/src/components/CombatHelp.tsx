@@ -17,7 +17,7 @@ const PROGRAM_RULES: [string, string][] = [
   ["Move", "Drag a queued card onto another line - or click it, then the line. An occupied line swaps."],
   [
     "Control flow",
-    "Fork: the next action runs twice. Loop: the last action to its left runs again. If Wounded: the next action runs twice if the enemy is at half HP or less by then.",
+    "Fork: the next action runs twice. Loop: the last action to its left runs again. If Wounded: the next action runs twice if the enemy is at half HP or less by then. Vibe-Coder only - Pipe: the next action gets a bonus for every action that already ran. Batch: frees tokens for every action still to run.",
   ],
   [
     "Interrupt",

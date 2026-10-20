@@ -10,6 +10,7 @@ from agentic_rogue_like.cards import (
     CARD_UPGRADES,
     PROGRAM_REWARD_POOL,
     REWARD_POOL,
+    VIBE_CODER_PROGRAM_POOL,
     VIBE_CODER_REWARD_POOL,
     starter_deck,
     upgrade_card,
@@ -44,7 +45,13 @@ from agentic_rogue_like.threat import threat
 
 
 def _card(name: str) -> Card:
-    pool = PROGRAM_REWARD_POOL + REWARD_POOL + VIBE_CODER_REWARD_POOL + starter_deck()
+    pool = (
+        PROGRAM_REWARD_POOL
+        + VIBE_CODER_PROGRAM_POOL
+        + REWARD_POOL
+        + VIBE_CODER_REWARD_POOL
+        + starter_deck()
+    )
     return next(c for c in pool if c.name == name).model_copy(deep=True)
 
 
@@ -420,3 +427,31 @@ def test_only_bosses_against_a_program_refactor() -> None:
 
     assert EnemyIntentType.REFACTOR in intents(True)
     assert EnemyIntentType.REFACTOR not in intents(False)
+
+
+# ---- the Vibe-Coder's control flow
+
+
+def test_pipe_pays_for_the_actions_before_it() -> None:
+    assert _damage_dealt("Exploit", "Exploit", "Pipe", "Exploit") == 5 + 5 + (5 + 4)
+    assert _damage_dealt("Pipe", "Exploit", "Exploit", "Exploit") == 15
+
+
+def test_batch_frees_tokens_for_the_actions_after_it() -> None:
+    state, player = _fight()
+    state.token_limit, state.tokens_used = 10, 0
+    _queue(state, player, "Batch", "Exploit", "Exploit")
+    used = state.tokens_used
+    end_turn(state, player, random.Random(2))
+    # 2 freed by Batch, before the turn's own regen (none in this fight)
+    assert state.tokens_used == used - 2
+
+
+def test_only_the_vibe_coder_gets_pipe_and_batch() -> None:
+    names = {c.name for c in VIBE_CODER_PROGRAM_POOL}
+    vibe = new_run(1, character=Character.VIBE_CODER, program_mode=True)
+    assert names <= {c.name for c in reward_pool(vibe)}
+    assert not names & {c.name for c in reward_pool(new_run(1, program_mode=True))}
+    vibe_classic = new_run(1, character=Character.VIBE_CODER)
+    assert not names & {c.name for c in reward_pool(vibe_classic)}
+    assert all(c.name in CARD_UPGRADES for c in VIBE_CODER_PROGRAM_POOL)

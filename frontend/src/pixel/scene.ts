@@ -62,6 +62,8 @@ const EV: Record<ArenaEvent, number> = {
   fork: 5,
   loop: 5,
   if_wounded: 5,
+  pipe: 5,
+  batch: 5,
   enemy_attack: 20,
   enemy_attack_blocked: 21,
   enemy_brace: 22,

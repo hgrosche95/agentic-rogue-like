@@ -109,6 +109,9 @@ class CardType(StrEnum):
     FORK = "fork"  # the next action to its right runs twice
     LOOP = "loop"  # runs the last action to its left once more
     IF_WOUNDED = "if_wounded"  # the next action runs twice if the enemy is at half HP by then
+    # the Vibe-Coder's control flow
+    PIPE = "pipe"  # the next action +value per action already run
+    BATCH = "batch"  # frees `value` used tokens per action still to run after it
 
 
 PERMANENT_CARD_TYPES = frozenset(

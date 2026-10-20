@@ -32,7 +32,10 @@ export type CardType =
   // control flow - program mode only
   | "fork"
   | "loop"
-  | "if_wounded";
+  | "if_wounded"
+  // the Vibe-Coder's control flow
+  | "pipe"
+  | "batch";
 
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
@@ -49,7 +52,7 @@ export const PERMANENT_CARD_TYPES: readonly CardType[] = [
 
 // Program mode: what queues into the program instead of resolving on the
 // spot (combat.QUEUED_TYPES), and the control flow among it.
-export const CONTROL_FLOW_TYPES: readonly CardType[] = ["fork", "loop", "if_wounded"];
+export const CONTROL_FLOW_TYPES: readonly CardType[] = ["fork", "loop", "if_wounded", "pipe", "batch"];
 export const QUEUED_TYPES: readonly CardType[] = [
   "attack",
   "block",
