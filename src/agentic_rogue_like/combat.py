@@ -121,6 +121,7 @@ class EnemyIntentType(StrEnum):
     LOCK = "lock"  # a light hit that locks an empty field slot for the player's next turn
     CORRUPT = "corrupt"  # a light hit that shuffles Glitch cards into the draw pile
     INTERRUPT = "interrupt"  # a light hit; the program is cut off after a few lines
+    REFACTOR = "refactor"  # bosses: a light hit; the program runs right to left
 
 
 # Intents that hit the player - everything else deals no damage.
@@ -134,6 +135,7 @@ ATTACKING_INTENTS = frozenset(
         EnemyIntentType.LOCK,
         EnemyIntentType.CORRUPT,
         EnemyIntentType.INTERRUPT,
+        EnemyIntentType.REFACTOR,
     }
 )
 
@@ -143,7 +145,12 @@ _LIGHT_HIT_KINDS = {
     EnemyIntentType.LOCK: MoveKind.LOCK,
     EnemyIntentType.CORRUPT: MoveKind.CORRUPT,
     EnemyIntentType.INTERRUPT: MoveKind.INTERRUPT,
+    EnemyIntentType.REFACTOR: MoveKind.REFACTOR,
 }
+
+# How often a boss refactors a program, against its other moves' weights
+# (attack 4, barrage 2, charge 2, brace 3).
+BOSS_REFACTOR_WEIGHT = 2
 
 # Control flow cards (program mode, see run_program).
 CONTROL_FLOW_TYPES = frozenset({CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED})
@@ -448,7 +455,8 @@ def _roll_boss_intent(state: CombatState, rng: random.Random) -> EnemyIntentType
     """A boss's next move: a charge is always followed by its overload, an
     overload never straight by another charge, purges only come from phase 2
     on while there is a permanent on the field to destroy, and in phase 3 it
-    stops bracing."""
+    stops bracing. Against a program it refactors now and then - never
+    twice in a row."""
     previous = state.enemy_intent
     if previous is EnemyIntentType.CHARGE:
         return EnemyIntentType.OVERLOAD
@@ -466,6 +474,8 @@ def _roll_boss_intent(state: CombatState, rng: random.Random) -> EnemyIntentType
         del weights[EnemyIntentType.DEFEND]
     if previous is EnemyIntentType.OVERLOAD:
         del weights[EnemyIntentType.CHARGE]
+    if state.program_mode and previous is not EnemyIntentType.REFACTOR:
+        weights[EnemyIntentType.REFACTOR] = BOSS_REFACTOR_WEIGHT
     return rng.choices(list(weights), weights=list(weights.values()))[0]
 
 
@@ -719,7 +729,12 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
     compiler = total(state.artifacts, "compiler_bonus")
     types: set[CardType] = set()  # what ran so far
     after_flow = False
-    for slot in range(len(state.program)):
+    # A refactoring boss runs it right to left: control flow then steers the
+    # actions run after it, now the ones to its left.
+    order = range(len(state.program))
+    if state.enemy_intent is EnemyIntentType.REFACTOR:
+        order = reversed(order)
+    for slot in order:
         card = state.program[slot]
         if card is None:
             continue
@@ -1291,6 +1306,7 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
         EnemyIntentType.LOCK: "jams your field" if own else "strikes",
         EnemyIntentType.CORRUPT: "corrupts your code" if own else "strikes",
         EnemyIntentType.INTERRUPT: "strikes",
+        EnemyIntentType.REFACTOR: "strikes",
     }[intent]
     rolled = " + ".join(str(h) for h in hits)
     log.append(

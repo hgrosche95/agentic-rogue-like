@@ -224,8 +224,11 @@ export function CombatPanel({
   const queuedLines = combat.program.flatMap((card, line) => (card ? [line] : []));
   // an interrupting enemy lets only the first few queued lines run
   const cutAfter = combat.enemy_interrupt_after;
-  const cutLines = cutAfter === null ? [] : queuedLines.slice(cutAfter);
-  const runningLines = cutAfter === null ? queuedLines : queuedLines.slice(0, cutAfter);
+  // a refactoring boss runs the program right to left
+  const reversed = programMode && combat.enemy_intent === "refactor" && !enemySlain;
+  const runOrder = reversed ? [...queuedLines].reverse() : queuedLines;
+  const runningLines = cutAfter === null ? runOrder : runOrder.slice(0, cutAfter);
+  const cutLines = cutAfter === null ? [] : runOrder.slice(cutAfter);
   const hotLine = (player.artifacts.find((a) => a.hot_path > 0)?.hot_path ?? 0) - 1;
   // The card just played, shown as already gone from the hand (and, for a
   // permanent card, as lying in its slot) until the server answers, so the
@@ -612,7 +615,7 @@ export function CombatPanel({
         <div className="field-zone">
           <div className="zone-head">
             <span className="zone-label zone-title">
-              {programMode ? "Program · runs left to right" : "Execution stack"}
+              {programMode ? `Program · runs ${reversed ? "right to left" : "left to right"}` : "Execution stack"}
               <HelpButton
                 onClick={() => {
                   sfx.play("click");

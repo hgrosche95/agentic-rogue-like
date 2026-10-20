@@ -243,11 +243,15 @@ class MoveKind(StrEnum):
     # Program mode only: a light hit, and the player's program is cut off
     # after `stacks` lines when it runs this turn (combat.run_program).
     INTERRUPT = "interrupt"
+    # Program mode, bosses only (combat._roll_boss_intent): a light hit, and
+    # the player's program runs right to left this turn.
+    REFACTOR = "refactor"
 
 
 # Moves only the game hands out - enemies get them in program runs
-# (enemies.with_interrupt); move sets from the pool or the agent never have them.
-PROGRAM_ONLY_MOVES = frozenset({MoveKind.INTERRUPT})
+# (enemies.with_interrupt, the boss move set); move sets from the pool or
+# the agent never have them.
+PROGRAM_ONLY_MOVES = frozenset({MoveKind.INTERRUPT, MoveKind.REFACTOR})
 
 
 # Default power (percent of the enemy's attack stat) per move kind - the
@@ -263,6 +267,7 @@ DEFAULT_MOVE_POWER: dict[MoveKind, int] = {
     MoveKind.LOCK: 50,
     MoveKind.CORRUPT: 50,
     MoveKind.INTERRUPT: 50,
+    MoveKind.REFACTOR: 100,
 }
 DEFAULT_BARRAGE_HITS = 3
 DEFAULT_INFECT_STACKS = 3

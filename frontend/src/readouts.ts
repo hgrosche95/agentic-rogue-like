@@ -88,6 +88,12 @@ function describeKind(
         amount: range,
         title: `Hits for ${range} and cuts your program off after a few lines - what is queued after them doesn't run`,
       };
+    case "refactor":
+      return {
+        label: "Refactor",
+        amount: range,
+        title: `Hits for ${range} and runs your program right to left this turn - control flow steers the lines to its left`,
+      };
   }
 }
 

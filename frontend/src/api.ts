@@ -156,7 +156,9 @@ export type EnemyIntentType =
   | "lock"
   | "corrupt"
   // program mode: cuts the program off after a few lines
-  | "interrupt";
+  | "interrupt"
+  // program mode, bosses: the program runs right to left
+  | "refactor";
 
 // How the player plays, read from their chosen cards - see style.py.
 export type PlayStyle = "permanents" | "graveyard" | "one_shot" | "aggro" | "turtle" | "malware";
@@ -174,6 +176,7 @@ export const ATTACKING_INTENTS: EnemyIntentType[] = [
   "lock",
   "corrupt",
   "interrupt",
+  "refactor",
 ];
 
 export interface PendingCombatView {

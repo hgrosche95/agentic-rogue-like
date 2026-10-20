@@ -17,6 +17,7 @@ from agentic_rogue_like.cards import (
 from agentic_rogue_like.characters import artifact_pool, reward_pool
 from agentic_rogue_like.combat import (
     EnemyIntentType,
+    _roll_boss_intent,
     action_preview,
     end_turn,
     free_slots,
@@ -391,3 +392,31 @@ def test_only_program_runs_meet_interrupts() -> None:
         enemy = _room_enemy(run, node, random.Random(1))
         has = any(m.kind is MoveKind.INTERRUPT for m in enemy.moves)
         assert has is program_mode
+
+
+# ---- refactor (bosses)
+
+
+def test_a_refactor_runs_the_program_right_to_left() -> None:
+    state, player = _fight()
+    state.boss = True
+    state.enemy_intent = EnemyIntentType.REFACTOR
+    _queue(state, player, "Exploit", "Fork")  # left to right the Fork comes too late
+    assert program_preview(state, player).enemy_hp == 90
+    end_turn(state, player, random.Random(2))
+    assert state.enemy_hp == 90
+
+
+def test_only_bosses_against_a_program_refactor() -> None:
+    def intents(program_mode: bool) -> set[EnemyIntentType]:
+        state, _ = _fight(program_mode=program_mode)
+        state.boss = True
+        rng = random.Random(5)
+        seen = set()
+        for _ in range(300):
+            state.enemy_intent = _roll_boss_intent(state, rng)
+            seen.add(state.enemy_intent)
+        return seen
+
+    assert EnemyIntentType.REFACTOR in intents(True)
+    assert EnemyIntentType.REFACTOR not in intents(False)

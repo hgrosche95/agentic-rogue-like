@@ -23,6 +23,10 @@ const PROGRAM_RULES: [string, string][] = [
     "Interrupt",
     "An enemy announcing an Interrupt lets only your first lines run - the cut ones are greyed out and go to the graveyard unused. Put what matters first.",
   ],
+  [
+    "Refactor",
+    "A boss announcing a Refactor runs your program right to left this turn - Fork and Loop then steer the lines to their left.",
+  ],
   ["Hot Path", "With the Hot Path artifact, the card in its gold line runs as its upgraded version."],
 ];
 

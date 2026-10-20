@@ -695,6 +695,18 @@ Reihenfolge ignoriert: wie gespielt Chronos 7 → 6 %, Vibe-Coder 8 → 5 %
 (er reiht mehr Zeilen ein, also schneidet ein Interrupt mehr ab), zufällig
 5 → 4 % und 6 → 3 %.
 
+### Refactor (Bosse)
+
+Gegen ein Programm hat jeder Boss einen weiteren Move, „Refactor“
+(`combat._roll_boss_intent`, nie zweimal hintereinander): einen leichten
+Treffer, und das Programm läuft diesen Zug von rechts nach links. Fork und
+Loop steuern dann die Zeilen links von sich – eine Anordnung, die sonst gut
+ist, verschenkt dann ihre Kontrollfluss-Karten. Der Bosskampf wird so zur
+Prüfung, ob man die Reihenfolge wirklich im Griff hat. Refactor trifft so hart
+wie ein normaler Angriff, das Umdrehen kommt obendrauf: Gegen Bosse gewinnt
+Chronos in Einzelkämpfen wie gespielt 70 % statt 73 %, mit bester
+Reihenfolge 76 % statt 78 %.
+
 ### Programm-Artefakte
 
 Sechs Artefakte gibt es nur in Programm-Runs (`artifacts.PROGRAM_ARTIFACT_POOL`,
