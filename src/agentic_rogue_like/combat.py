@@ -949,6 +949,9 @@ def action_preview(
     """
     if slot_taken(state, slot_index, card) or slot_index in state.locked_slots:
         return None
+    hot = total(state.artifacts, "hot_path") - 1
+    if queues(state, card) and slot_index == hot and can_upgrade(card):
+        card = upgrade_card(card)  # Hot Path runs it upgraded
     multiplier = _amplifier_multiplier(state, slot_index)
     bonus = _chain_bonus(state, slot_index)
     if card.type is CardType.ATTACK:

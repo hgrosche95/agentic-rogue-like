@@ -17,6 +17,7 @@ from agentic_rogue_like.cards import (
 from agentic_rogue_like.characters import artifact_pool, reward_pool
 from agentic_rogue_like.combat import (
     EnemyIntentType,
+    action_preview,
     end_turn,
     free_slots,
     move_queued,
@@ -306,3 +307,24 @@ def test_the_vibe_coder_gets_a_sixth_line() -> None:
     assert lines[Character.VIBE_CODER, True] == 6
     assert lines[Character.CHRONOS, True] == 5
     assert lines[Character.VIBE_CODER, False] == 5
+
+
+def test_previews_count_hot_path_and_the_queued_block() -> None:
+    state, player = _fight(artifact="Hot Path")
+    exploit = _card("Exploit")
+    assert action_preview(state, exploit, player, 0) == 5
+    assert action_preview(state, exploit, player, 1) == 8
+
+    client = TestClient(app)
+    run_id = client.post("/runs", json={"seed": 3, "program_mode": True}).json()["run_id"]
+    run = get_session(run_id).run
+    run.artifact_offer = run.card_reward = None
+    client.post(f"/runs/{run_id}/resolve")
+    combat = get_session(run_id).combat
+    combat.enemy_intent = EnemyIntentType.ATTACK
+    combat.hand = [_card("Firewall")]
+    before = client.get(f"/runs/{run_id}").json()["pending_combat"]["incoming_max"]
+    after = client.post(
+        f"/runs/{run_id}/combat/play-card", json={"hand_index": 0, "slot_index": 0}
+    ).json()["pending_combat"]["incoming_max"]
+    assert after == max(0, before - 5)

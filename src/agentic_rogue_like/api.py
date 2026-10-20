@@ -431,7 +431,16 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             intent_value = hit_min - 1
         else:
             hit_min = hit_max = intent_value = enemy_block_gain(combat)
-        incoming_min, incoming_max = incoming_damage(combat)
+        # Program mode: the incoming hit lands after the program has run -
+        # through the block it raises, or not at all if it kills.
+        preview = program_preview(combat, run.player) if combat.program_mode else None
+        if preview is not None and preview.enemy_hp <= 0:
+            incoming_min = incoming_max = 0
+        elif preview is not None:
+            after = combat.model_copy(update={"player_block": preview.player_block})
+            incoming_min, incoming_max = incoming_damage(after)
+        else:
+            incoming_min, incoming_max = incoming_damage(combat)
         pending_combat = PendingCombatView(
             enemy_name=combat.enemy.name,
             enemy_description=combat.enemy.description,
@@ -476,7 +485,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             program_mode=combat.program_mode,
             program=[None if card is None else CardView.of(card) for card in combat.program],
             program_glitched=combat.program_glitched,
-            program_preview=(program_preview(combat, run.player) if combat.program_mode else None),
+            program_preview=preview,
             player_block=combat.player_block,
             armor=player_armor(combat),
             max_hand_size=max_hand_size(combat),
