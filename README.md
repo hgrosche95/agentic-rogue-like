@@ -689,6 +689,12 @@ kalibriert in Programm-Kämpfen gegen den Pool mit und ohne Interrupt), und
 `with_interrupt` passt die HP so an, dass die Bedrohung gleich bleibt.
 Agenten-Movesets dürfen ihn nicht enthalten; das Spiel fügt ihn selbst hinzu.
 
+Im ganzen Run (1000 Runs, `--pool`) ändert Interrupt bei bester Reihenfolge
+nichts (Chronos 13 → 12 %, Vibe-Coder 10 → 10 %), bestraft aber, wer die
+Reihenfolge ignoriert: wie gespielt Chronos 7 → 6 %, Vibe-Coder 8 → 5 %
+(er reiht mehr Zeilen ein, also schneidet ein Interrupt mehr ab), zufällig
+5 → 4 % und 6 → 3 %.
+
 ### Programm-Artefakte
 
 Sechs Artefakte gibt es nur in Programm-Runs (`artifacts.PROGRAM_ARTIFACT_POOL`,
