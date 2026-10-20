@@ -3369,21 +3369,91 @@ body > .card-flight {
   outline-offset: -8px;
 }
 
-/* ---------- program mode: the lines above the field ---------- */
-.program-lines {
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-  border-bottom: 3px dashed #5a4ab8;
+/* ---------- program mode: one row of lines, each an action over a socket ---------- */
+.program-line {
+  display: flex;
+  flex: 0 1 92px;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
 }
 
-/* the permanents below the program: a lower rack, so the lines read first */
-.field.is-under-program .field-slot {
-  flex-basis: 76px;
+.program-line .field-slot {
+  box-sizing: border-box;
+  flex: none;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 92 / 128;
 }
 
-.field.is-under-program .field-slot.is-empty:not(.is-targetable) {
-  border-style: dotted;
-  opacity: 0.7;
+/* the socket a permanent sits in, under its line */
+.line-socket {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 5px;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.line-socket.is-empty {
+  justify-content: center;
+  border: 3px dotted var(--line-strong);
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.line-socket.is-empty.is-targetable {
+  border: 3px solid var(--accent);
+  color: var(--accent);
+  background: #0a2a3a;
+  cursor: pointer;
+}
+
+.line-socket.is-empty.is-targetable:hover,
+.line-socket.is-empty.is-drop-target {
+  color: #fff;
+  border-color: #fff;
+  background: #138fb0;
+}
+
+.line-socket.is-installed {
+  background: var(--bg-deep);
+  border: 3px solid var(--card, var(--line-strong));
+  box-shadow: inset 0 -3px 0 var(--bevel-lo);
+}
+
+.line-socket.is-installed span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.line-socket .card-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--card);
+}
+
+.line-socket.is-landing {
+  animation: slot-landing 0.2s steps(2, jump-start) 0.5s both;
+}
+
+.line-socket.is-locked {
+  border: 3px solid var(--danger);
+  background: repeating-linear-gradient(45deg, #2a1f55 0 6px, #1c1440 6px 12px);
+}
+
+/* an extra line (Extra Line, the Vibe-Coder's 6th) has no socket */
+.line-socket.is-none {
+  border: 0;
 }
 
 .line-label {
@@ -3493,9 +3563,6 @@ button.field-slot.is-queued:disabled {
   }
   .line-tag {
     display: none;
-  }
-  .field.is-under-program .field-slot {
-    flex-basis: 56px;
   }
 }
 

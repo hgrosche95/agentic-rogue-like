@@ -666,8 +666,9 @@ Reihenfolge“ ist eine Obergrenze (der Bot probiert jeden Zug alles durch),
 ein Spieler landet dazwischen.
 
 Im Frontend wählt man den Modus beim Start („Classic“ / „Program“). Im Kampf
-stehen die Programmzeilen über dem Feld: Angriffe, Block und Heilung landen
-dort, Permanente darunter. Ein Klick auf eine eingereihte Karte hebt sie auf,
+ist das Feld eine Reihe von Zeilen: Angriffe, Block und Heilung landen oben
+in der Zeile, ein Permanent im Sockel darunter (ein Overclock dort verstärkt
+die Zeilen rechts davon). Ein Klick auf eine eingereihte Karte hebt sie auf,
 ein Klick auf eine andere Zeile legt sie dort ab (eine belegte tauscht). Über
 den Zeilen steht, was das Programm bewirken wird (Gegner-HP und -Block, eigener
 Block), und „Incoming“ rechnet den eingereihten Block schon ein. Die

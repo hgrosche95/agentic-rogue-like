@@ -18,7 +18,7 @@ import { useCardDrag } from "../hooks/useCardDrag";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { describeIntent, rangeText, STATUS_TEXT, unitOf } from "../readouts";
-import { CardFace, type Readout } from "./CardFace";
+import { CardFace, CardTypeIcon, type Readout } from "./CardFace";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
 
 // The Vibe-Coder's context window: one pip per token, lit while used; past
@@ -363,6 +363,107 @@ export function CombatPanel({
     combat.enemy_intent_name,
   );
 
+  // Program mode: a line's action (top) - queued, landing, empty or locked.
+  function renderAction(card: Card | null, line: number) {
+    const hot = line === hotLine;
+    const tags = `${hot ? " is-hot" : ""}${running === line ? " is-running" : ""}`;
+    if (card === null && pendingCard && pending?.slotIndex === line && queues(pendingCard)) {
+      return (
+        <div className={`field-slot is-occupied is-queued is-landing type-${pendingCard.type}${tags}`}>
+          <CardFace card={pendingCard} onField />
+        </div>
+      );
+    }
+    if (card === null && combat.locked_slots.includes(line)) {
+      return (
+        <div className="field-slot is-locked" title="Locked by the enemy for this turn">
+          <span className="slot-lock">Locked</span>
+        </div>
+      );
+    }
+    if (card !== null) {
+      const glitched = combat.program_glitched[line];
+      return (
+        <button
+          className={`field-slot is-occupied is-queued type-${card.type}${tags}${movingLine === line ? " is-moving" : ""}${movingLine !== null && movingLine !== line ? " is-swap-target" : ""}${glitched ? " is-glitched" : ""}`}
+          disabled={busy || discarding !== null}
+          title={
+            glitched
+              ? "Played past the context window - it will hallucinate when it runs"
+              : movingLine === null
+                ? "Click to move it to another line"
+                : undefined
+          }
+          onClick={() => pickLine(line)}
+        >
+          <span className="line-tag">
+            {line + 1}
+            {hot && " · HOT"}
+          </span>
+          <CardFace card={card} onField />
+        </button>
+      );
+    }
+    const aimedHere = aimedCard !== undefined && queues(aimedCard);
+    return (
+      <button
+        data-slot-index={aimedHere ? line : undefined}
+        className={`field-slot is-empty${aimedHere || movingLine !== null ? " is-targetable" : ""}${aimedHere && drag.hoverSlot === line ? " is-drop-target" : ""}${tags}`}
+        disabled={busy || discarding !== null || (movingLine === null && (selectedHandIndex === null || !aimedHere))}
+        onClick={(event) => (movingLine !== null ? pickLine(line) : playIntoSlot(line, event.currentTarget))}
+        onPointerEnter={() => setPointedSlot(line)}
+        onPointerLeave={() => setPointedSlot((s) => (s === line ? null : s))}
+      >
+        {aimedHere ? (
+          <SlotPreview index={line} card={aimedCard} low={aimedLow?.value} />
+        ) : (
+          <LineLabel index={line} hot={hot} />
+        )}
+      </button>
+    );
+  }
+
+  // Program mode: the socket under a line, where a permanent sits - an
+  // Overclock there boosts the lines to its right, as on the classic field.
+  // Card flow, which still resolves on the spot, is played here too.
+  function renderSocket(line: number) {
+    if (line >= combat.field.length) {
+      return <div className="line-socket is-none" title="No field slot under this line" />;
+    }
+    const installed = combat.field[line];
+    const landing =
+      installed === null && pendingCard && pending?.slotIndex === line && !queues(pendingCard)
+        ? pendingCard
+        : null;
+    const shown = installed ?? (landing && PERMANENT_CARD_TYPES.includes(landing.type) ? landing : null);
+    if (shown) {
+      return (
+        <div
+          className={`line-socket is-installed type-${shown.type}${landing ? " is-landing" : ""}`}
+          title={`${shown.name}: ${shown.description}`}
+        >
+          <CardTypeIcon type={shown.type} />
+          <span>{shown.name}</span>
+        </div>
+      );
+    }
+    if (combat.locked_slots.includes(line)) {
+      return <div className="line-socket is-locked" title="Locked by the enemy for this turn" />;
+    }
+    const aims = aimedCard !== undefined && !queues(aimedCard);
+    return (
+      <button
+        data-slot-index={aims ? line : undefined}
+        className={`line-socket is-empty${aims ? " is-targetable" : ""}${aims && drag.hoverSlot === line ? " is-drop-target" : ""}`}
+        disabled={busy || selectedHandIndex === null || discarding !== null || !aims}
+        title={aims ? undefined : "Permanents go here"}
+        onClick={(event) => playIntoSlot(line, event.currentTarget)}
+      >
+        {aims && (PERMANENT_CARD_TYPES.includes(aimedCard.type) ? "install" : "run")}
+      </button>
+    );
+  }
+
   return (
     <div className="combat-panel">
       {/* the HUD plates sit in the scene's top corners, clear of the monitor */}
@@ -490,73 +591,18 @@ export function CombatPanel({
               Hand {combat.hand.length}/{combat.max_hand_size}
             </span>
           </div>
-          {programMode && (
-            <div className="field program-lines" style={{ "--lines": combat.program.length } as CSSProperties}>
-              {combat.program.map((card, line) => {
-                const hot = line === hotLine;
-                const tags = `${hot ? " is-hot" : ""}${running === line ? " is-running" : ""}`;
-                if (card === null && pendingCard && pending?.slotIndex === line && queues(pendingCard)) {
-                  return (
-                    <div key={line} className={`field-slot is-occupied is-queued is-landing type-${pendingCard.type}${tags}`}>
-                      <CardFace card={pendingCard} onField />
-                    </div>
-                  );
-                }
-                if (card === null && combat.locked_slots.includes(line)) {
-                  return (
-                    <div key={line} className="field-slot is-locked" title="Locked by the enemy for this turn">
-                      <span className="slot-lock">Locked</span>
-                    </div>
-                  );
-                }
-                if (card !== null) {
-                  const glitched = combat.program_glitched[line];
-                  return (
-                    <button
-                      key={line}
-                      className={`field-slot is-occupied is-queued type-${card.type}${tags}${movingLine === line ? " is-moving" : ""}${movingLine !== null && movingLine !== line ? " is-swap-target" : ""}${glitched ? " is-glitched" : ""}`}
-                      disabled={busy || discarding !== null}
-                      title={
-                        glitched
-                          ? "Played past the context window - it will hallucinate when it runs"
-                          : movingLine === null
-                            ? "Click to move it to another line"
-                            : undefined
-                      }
-                      onClick={() => pickLine(line)}
-                    >
-                      <span className="line-tag">
-                        {line + 1}
-                        {hot && " · HOT"}
-                      </span>
-                      <CardFace card={card} onField />
-                    </button>
-                  );
-                }
-                const aimedHere = aimedCard !== undefined && queues(aimedCard);
-                return (
-                  <button
-                    key={line}
-                    data-slot-index={aimedHere ? line : undefined}
-                    className={`field-slot is-empty${aimedHere || movingLine !== null ? " is-targetable" : ""}${aimedHere && drag.hoverSlot === line ? " is-drop-target" : ""}${tags}`}
-                    disabled={busy || discarding !== null || (movingLine === null && (selectedHandIndex === null || !aimedHere))}
-                    onClick={(event) => (movingLine !== null ? pickLine(line) : playIntoSlot(line, event.currentTarget))}
-                    onPointerEnter={() => setPointedSlot(line)}
-                    onPointerLeave={() => setPointedSlot((s) => (s === line ? null : s))}
-                  >
-                    {aimedHere ? (
-                      <SlotPreview index={line} card={aimedCard} low={aimedLow?.value} />
-                    ) : (
-                      <LineLabel index={line} hot={hot} />
-                    )}
-                  </button>
-                );
-              })}
+          {programMode ? (
+            <div className="field program-lines">
+              {combat.program.map((card, line) => (
+                <div key={line} className={`program-line${line === hotLine ? " is-hot" : ""}`}>
+                  {renderAction(card, line)}
+                  {renderSocket(line)}
+                </div>
+              ))}
             </div>
-          )}
-          <div className={`field${programMode ? " is-under-program" : ""}`}>
+          ) : (
+          <div className="field">
             {combat.field.map((card, slotIndex) => {
-              const fieldAims = aimedCard !== undefined && !queues(aimedCard);
               return card === null && pendingCard && pending?.slotIndex === slotIndex &&
                 PERMANENT_CARD_TYPES.includes(pendingCard.type) ? (
                 <div key={slotIndex} className={`field-slot is-occupied is-landing type-${pendingCard.type}`}>
@@ -569,18 +615,14 @@ export function CombatPanel({
               ) : card === null ? (
                 <button
                   key={slotIndex}
-                  data-slot-index={!programMode || fieldAims ? slotIndex : undefined}
-                  className={`field-slot is-empty${fieldAims ? " is-targetable" : ""}${fieldAims && drag.hoverSlot === slotIndex ? " is-drop-target" : ""}`}
-                  disabled={busy || selectedHandIndex === null || discarding !== null || !fieldAims}
+                  data-slot-index={slotIndex}
+                  className={`field-slot is-empty${aimedCard ? " is-targetable" : ""}${drag.hoverSlot === slotIndex ? " is-drop-target" : ""}`}
+                  disabled={busy || selectedHandIndex === null || discarding !== null}
                   onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
                   onPointerEnter={() => setPointedSlot(slotIndex)}
                   onPointerLeave={() => setPointedSlot((s) => (s === slotIndex ? null : s))}
                 >
-                  {fieldAims || !programMode ? (
-                    <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} />
-                  ) : (
-                    <span className="slot-no">{String(slotIndex + 1).padStart(2, "0")}</span>
-                  )}
+                  <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} />
                 </button>
               ) : (
                 <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
@@ -589,6 +631,7 @@ export function CombatPanel({
               );
             })}
           </div>
+          )}
         </div>
       </div>
 
@@ -653,9 +696,13 @@ export function CombatPanel({
             : movingLine !== null
             ? `Moving line ${movingLine + 1}: click another line - an occupied one swaps.`
             : programMode && selectedHandIndex === null
-            ? "Attacks, blocks and heals queue into the program lines; permanents go below. Click a queued card to move it."
+            ? "Attacks, blocks and heals queue into the lines; permanents go into the socket under a line and boost the lines to its right. Click a queued card to move it."
             : programMode && aimedCard && queues(aimedCard)
             ? "Choose a program line - it runs at the end of the turn, left to right."
+            : programMode && aimedCard && PERMANENT_CARD_TYPES.includes(aimedCard.type)
+            ? "Choose a socket under a line - it boosts the lines to its right."
+            : programMode && aimedCard
+            ? "Choose a socket - this card runs right away, not in the program."
             : selectedHandIndex === null
             ? "Drag a card onto an empty slot of the stack - or click it, then click a slot."
             : "Choose an empty slot to run the selected card."}
