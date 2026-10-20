@@ -220,6 +220,10 @@ export function CombatPanel({
   const programMode = combat.program_mode;
   const queues = (card: Card) => programMode && QUEUED_TYPES.includes(card.type);
   const queuedLines = combat.program.flatMap((card, line) => (card ? [line] : []));
+  // an interrupting enemy lets only the first few queued lines run
+  const cutAfter = combat.enemy_interrupt_after;
+  const cutLines = cutAfter === null ? [] : queuedLines.slice(cutAfter);
+  const runningLines = cutAfter === null ? queuedLines : queuedLines.slice(0, cutAfter);
   const hotLine = (player.artifacts.find((a) => a.hot_path > 0)?.hot_path ?? 0) - 1;
   // The card just played, shown as already gone from the hand (and, for a
   // permanent card, as lying in its slot) until the server answers, so the
@@ -269,13 +273,13 @@ export function CombatPanel({
       setDiscarding(null);
     };
     setMovingLine(null);
-    if (queuedLines.length === 0) {
+    if (runningLines.length === 0) {
       finish();
       return;
     }
     // Run the program: each queued line lights up in turn, then the server
     // works the turn out and the HP bars move as usual.
-    queuedLines.forEach((line, step) => {
+    runningLines.forEach((line, step) => {
       window.setTimeout(() => {
         const card = combat.program[line];
         setRunning(line);
@@ -287,7 +291,7 @@ export function CombatPanel({
     window.setTimeout(() => {
       setRunning(null);
       finish();
-    }, queuedLines.length * PROGRAM_STEP_MS);
+    }, runningLines.length * PROGRAM_STEP_MS);
   }
 
   // Program mode: pick a queued card up, then put it on another line - an
@@ -348,6 +352,18 @@ export function CombatPanel({
     enabled: !busy && discarding === null,
     onDrop: (handIndex, slotIndex, slot, from) => playIntoSlot(slotIndex, slot, handIndex, from),
   });
+  // Program mode: drag a queued card onto another line to move it there.
+  const lineDrag = useCardDrag({
+    enabled: !busy && discarding === null,
+    onDrop: (fromLine, toLine) => {
+      setMovingLine(null);
+      if (fromLine !== toLine) {
+        sfx.play("select");
+        onMoveQueued?.(fromLine, toLine);
+      }
+    },
+  });
+  const draggingLine = lineDrag.dragging;
 
   // the card being aimed (selected or dragged) and the slot it is aimed at
   const aimedIndex = discarding === null ? (drag.dragging ?? selectedHandIndex) : null;
@@ -366,7 +382,7 @@ export function CombatPanel({
   // Program mode: a line's action (top) - queued, landing, empty or locked.
   function renderAction(card: Card | null, line: number) {
     const hot = line === hotLine;
-    const tags = `${hot ? " is-hot" : ""}${running === line ? " is-running" : ""}`;
+    const tags = `${hot ? " is-hot" : ""}${running === line ? " is-running" : ""}${cutLines.includes(line) ? " is-cut" : ""}`;
     if (card === null && pendingCard && pending?.slotIndex === line && queues(pendingCard)) {
       return (
         <div className={`field-slot is-occupied is-queued is-landing type-${pendingCard.type}${tags}`}>
@@ -383,21 +399,26 @@ export function CombatPanel({
     }
     if (card !== null) {
       const glitched = combat.program_glitched[line];
+      const dropHere = draggingLine !== null && draggingLine !== line;
       return (
         <button
-          className={`field-slot is-occupied is-queued type-${card.type}${tags}${movingLine === line ? " is-moving" : ""}${movingLine !== null && movingLine !== line ? " is-swap-target" : ""}${glitched ? " is-glitched" : ""}`}
+          data-slot-index={dropHere ? line : undefined}
+          className={`field-slot is-occupied is-queued type-${card.type}${tags}${movingLine === line ? " is-moving" : ""}${(movingLine !== null && movingLine !== line) || dropHere ? " is-swap-target" : ""}${dropHere && lineDrag.hoverSlot === line ? " is-drop-target" : ""}${draggingLine === line ? " is-dragged" : ""}${glitched ? " is-glitched" : ""}`}
           disabled={busy || discarding !== null}
           title={
             glitched
               ? "Played past the context window - it will hallucinate when it runs"
               : movingLine === null
-                ? "Click to move it to another line"
+                ? "Drag it - or click it, then a line - to move it"
                 : undefined
           }
-          onClick={() => pickLine(line)}
+          onPointerDown={(event) => lineDrag.onPointerDown(event, line)}
+          onClick={() => {
+            if (!lineDrag.consumeClick()) pickLine(line);
+          }}
         >
           <span className="line-tag">
-            {line + 1}
+            {cutLines.includes(line) ? "cut" : line + 1}
             {hot && " · HOT"}
           </span>
           <CardFace card={card} onField />
@@ -405,10 +426,12 @@ export function CombatPanel({
       );
     }
     const aimedHere = aimedCard !== undefined && queues(aimedCard);
+    const dropHere = aimedHere || draggingLine !== null;
+    const hovered = aimedHere ? drag.hoverSlot : lineDrag.hoverSlot;
     return (
       <button
-        data-slot-index={aimedHere ? line : undefined}
-        className={`field-slot is-empty${aimedHere || movingLine !== null ? " is-targetable" : ""}${aimedHere && drag.hoverSlot === line ? " is-drop-target" : ""}${tags}`}
+        data-slot-index={dropHere ? line : undefined}
+        className={`field-slot is-empty${dropHere || movingLine !== null ? " is-targetable" : ""}${dropHere && hovered === line ? " is-drop-target" : ""}${tags}`}
         disabled={busy || discarding !== null || (movingLine === null && (selectedHandIndex === null || !aimedHere))}
         onClick={(event) => (movingLine !== null ? pickLine(line) : playIntoSlot(line, event.currentTarget))}
         onPointerEnter={() => setPointedSlot(line)}
@@ -587,6 +610,14 @@ export function CombatPanel({
           <div className="zone-head">
             <span className="zone-label">{programMode ? "Program · runs left to right" : "Execution stack"}</span>
             {programMode && <ProgramOutput combat={combat} playerHp={player.hp} />}
+            {programMode && cutAfter !== null && !enemySlain && (
+              <span
+                className="interrupt-note"
+                title="The enemy cuts your program off: queued lines after these don't run this turn"
+              >
+                Interrupt after {cutAfter} line{cutAfter === 1 ? "" : "s"}
+              </span>
+            )}
             <span className="zone-label">
               Hand {combat.hand.length}/{combat.max_hand_size}
             </span>
@@ -696,7 +727,7 @@ export function CombatPanel({
             : movingLine !== null
             ? `Moving line ${movingLine + 1}: click another line - an occupied one swaps.`
             : programMode && selectedHandIndex === null
-            ? "Attacks, blocks and heals queue into the lines; permanents go into the socket under a line and boost the lines to its right. Click a queued card to move it."
+            ? "Attacks, blocks and heals queue into the lines; permanents go into the socket under a line and boost the lines to its right. Drag a queued card to move it."
             : programMode && aimedCard && queues(aimedCard)
             ? "Choose a program line - it runs at the end of the turn, left to right."
             : programMode && aimedCard && PERMANENT_CARD_TYPES.includes(aimedCard.type)

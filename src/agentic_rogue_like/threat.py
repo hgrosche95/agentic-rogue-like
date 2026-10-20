@@ -140,6 +140,11 @@ INFECT_STACKING = 1.2
 # such enemies, at equal threat, deal what plain ones do in simulated fights.
 LOCK_DAMAGE = 2.75
 GLITCH_DAMAGE = 2.5
+# What an interrupt (program mode) costs beyond its light hit: the lines it
+# cuts off. Set the same way, in program-mode fights with the best order
+# (pool enemies with and without enemies.with_interrupt: 20.2 HP plain,
+# 20.4-20.5 armed at 4-4.5, within the noise).
+INTERRUPT_DAMAGE = 4.5
 
 
 def _malware(stacks: int, turns: float) -> float:
@@ -177,6 +182,8 @@ def _per_turn(
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + _malware(move.stacks, turns))
         elif move.kind is MoveKind.LOCK:
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + LOCK_DAMAGE)
+        elif move.kind is MoveKind.INTERRUPT:
+            damage += p * (through_block(hit(move.power, _D6_MEAN)) + INTERRUPT_DAMAGE)
         elif move.kind is MoveKind.CORRUPT:
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + GLITCH_DAMAGE * move.stacks)
         elif move.kind is MoveKind.DEFEND:

@@ -92,12 +92,13 @@ from .combat import (
     run_program,
     start_combat,
 )
-from .enemies import ENEMY_POOL, escalate, pick_enemy, tier_floor, with_affix
+from .enemies import ENEMY_POOL, escalate, pick_enemy, tier_floor, with_affix, with_interrupt
 from .engine import ACT_HEAL_PERCENT, NUM_ACTS, boss_phases
 from .events import GameEvent, apply_option, option_value, random_event
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
     PERMANENT_CARD_TYPES,
+    PROGRAM_ONLY_MOVES,
     Artifact,
     Card,
     CardType,
@@ -631,6 +632,8 @@ def fresh_fights(cfg: SimConfig, bot: Bot, n: int, seed: int) -> dict[str, list[
             )
             if tier == "elite" and cfg.affixes:
                 base = with_affix(base, rng)
+            if cfg.program and tier != "boss":
+                base = with_interrupt(base)
             enemy = escalate(base, _TIER_FLOOR[tier], NUM_FLOORS)
             results[tier].append(fight(player, enemy, tier, bot, rng, program=cfg.program))
     return results
@@ -686,6 +689,8 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 base = random_enemy(cfg.budgets[tier], tier, rng)
             if node.type is NodeType.ELITE and cfg.affixes:
                 base = with_affix(base, rng, style)
+            if cfg.program and node.type is not NodeType.BOSS:
+                base = with_interrupt(base)
             enemy = escalate(base, node.floor, NUM_FLOORS, act)
             result = fight(player, enemy, tier, bot, rng, act, cfg.program)
             fights.append(result)
@@ -750,7 +755,8 @@ def random_move_set(rng: random.Random) -> list[EnemyMove]:
     """1-4 random moves with random weights and powers, at least one attack or barrage."""
     always = EnemyMove(kind=rng.choice([MoveKind.ATTACK, MoveKind.BARRAGE]))
     moves = [always] + [
-        EnemyMove(kind=rng.choice(list(MoveKind))) for _ in range(rng.randint(0, 3))
+        EnemyMove(kind=rng.choice([k for k in MoveKind if k not in PROGRAM_ONLY_MOVES]))
+        for _ in range(rng.randint(0, 3))
     ]
     for move in moves:
         move.weight = rng.randint(1, 5)

@@ -20,7 +20,7 @@ from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
-from .enemies import escalate, with_affix
+from .enemies import escalate, with_affix, with_interrupt
 from .events import EventOption, GameEvent, apply_option
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
@@ -365,6 +365,8 @@ def _room_enemy(
     if node.type is NodeType.ELITE:
         affix_rng = random.Random(f"{run.seed}-affix-{run.act}-{node.id}")
         enemy = with_affix(enemy, affix_rng, style)
+    if run.program_mode and not boss:
+        enemy = with_interrupt(enemy)
     if style is not None and answers(enemy, style):
         enemy = enemy.model_copy(update={"taunt": taunt(style)})
     return escalate(enemy, node.floor, NUM_FLOORS, run.act)

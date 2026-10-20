@@ -668,13 +668,32 @@ ein Spieler landet dazwischen.
 Im Frontend wählt man den Modus beim Start („Classic“ / „Program“). Im Kampf
 ist das Feld eine Reihe von Zeilen: Angriffe, Block und Heilung landen oben
 in der Zeile, ein Permanent im Sockel darunter (ein Overclock dort verstärkt
-die Zeilen rechts davon). Ein Klick auf eine eingereihte Karte hebt sie auf,
-ein Klick auf eine andere Zeile legt sie dort ab (eine belegte tauscht). Über
+die Zeilen rechts davon). Eingereihte Karten zieht man auf eine andere Zeile
+(oder klickt sie an und dann die Zeile); eine belegte Zeile tauscht. Über
 den Zeilen steht, was das Programm bewirken wird (Gegner-HP und -Block, eigener
 Block), und „Incoming“ rechnet den eingereihten Block schon ein. Die
 Hot-Path-Zeile ist gold markiert, und ihre Vorschau zeigt den verbesserten
 Wert. „Run program“ lässt die Zeilen nacheinander aufleuchten, bevor der Gegner
 zieht.
+
+### Interrupt
+
+In Programm-Runs bekommen alle Gegner außer Bossen einen weiteren Move
+(`enemies.with_interrupt`, etwa jeder vierte Zug): einen leichten Treffer,
+und das Programm dieses Zuges läuft nur bis zur 2. eingereihten Zeile – der
+Rest wandert ungenutzt auf den Ablagestapel. Weil der Gegner das ankündigt,
+ist das eine Frage der Reihenfolge: Was zählt, gehört nach vorn. Im
+Frontend sind die abgeschnittenen Zeilen ausgegraut. Bewertet wird
+Interrupt wie die anderen Feld-Moves (`threat.INTERRUPT_DAMAGE` = 4,5 HP,
+kalibriert in Programm-Kämpfen gegen den Pool mit und ohne Interrupt), und
+`with_interrupt` passt die HP so an, dass die Bedrohung gleich bleibt.
+Agenten-Movesets dürfen ihn nicht enthalten; das Spiel fügt ihn selbst hinzu.
+
+Im ganzen Run (1000 Runs, `--pool`) ändert Interrupt bei bester Reihenfolge
+nichts (Chronos 13 → 12 %, Vibe-Coder 10 → 10 %), bestraft aber, wer die
+Reihenfolge ignoriert: wie gespielt Chronos 7 → 6 %, Vibe-Coder 8 → 5 %
+(er reiht mehr Zeilen ein, also schneidet ein Interrupt mehr ab), zufällig
+5 → 4 % und 6 → 3 %.
 
 ### Programm-Artefakte
 

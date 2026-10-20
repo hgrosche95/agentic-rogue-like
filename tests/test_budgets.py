@@ -2,7 +2,7 @@ import pytest
 
 from agentic_rogue_like.agent.budgets import _BUDGETS, budget_for
 from agentic_rogue_like.enemies import ENEMY_POOL, escalate, tier_floor
-from agentic_rogue_like.models import Enemy, MoveKind, default_moves
+from agentic_rogue_like.models import PROGRAM_ONLY_MOVES, Enemy, MoveKind, default_moves
 from agentic_rogue_like.threat import threat
 
 
@@ -53,8 +53,8 @@ def test_every_regular_pool_enemy_has_its_own_named_move_set() -> None:
         assert enemy.moves != default_moves(), f"{enemy.id} still has the default move set"
         assert all(m.name for m in enemy.moves), f"{enemy.id} has an unnamed move"
         assert enemy.description, f"{enemy.id} has no description"
-    # Between them, the pool shows off every kind of move.
-    assert {m.kind for e in regular for m in e.moves} == set(MoveKind)
+    # Between them, the pool shows off every kind of move the pool may have.
+    assert {m.kind for e in regular for m in e.moves} == set(MoveKind) - PROGRAM_ONLY_MOVES
 
 
 def test_escalate_strengthens_only_second_half_enemies() -> None:

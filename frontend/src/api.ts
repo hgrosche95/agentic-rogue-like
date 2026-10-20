@@ -154,7 +154,9 @@ export type EnemyIntentType =
   | "purge"
   | "infect"
   | "lock"
-  | "corrupt";
+  | "corrupt"
+  // program mode: cuts the program off after a few lines
+  | "interrupt";
 
 // How the player plays, read from their chosen cards - see style.py.
 export type PlayStyle = "permanents" | "graveyard" | "one_shot" | "aggro" | "turtle" | "malware";
@@ -171,6 +173,7 @@ export const ATTACKING_INTENTS: EnemyIntentType[] = [
   "infect",
   "lock",
   "corrupt",
+  "interrupt",
 ];
 
 export interface PendingCombatView {
@@ -184,6 +187,8 @@ export interface PendingCombatView {
   enemy_max_hp: number;
   enemy_block: number;
   enemy_intent: EnemyIntentType;
+  // program mode: an interrupt lets this many queued lines run, else null
+  enemy_interrupt_after: number | null;
   // the move's own name if its move set gave it one, else null
   enemy_intent_name: string | null;
   enemy_intent_value: number;

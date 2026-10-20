@@ -82,6 +82,12 @@ function describeKind(
         amount: range,
         title: `Hits for ${range} and shuffles useless Glitch cards into your draw pile`,
       };
+    case "interrupt":
+      return {
+        label: "Interrupt",
+        amount: range,
+        title: `Hits for ${range} and cuts your program off after a few lines - what is queued after them doesn't run`,
+      };
   }
 }
 

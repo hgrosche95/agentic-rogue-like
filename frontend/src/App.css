@@ -3567,20 +3567,68 @@ button.field-slot.is-queued:disabled {
 }
 
 /* queued cards keep their type color (installed permanents go grey) */
-.program-lines .type-attack {
+.program-lines .type-attack,
+body > .card-drag.type-attack {
   --card: #ff9a3d;
 }
-.program-lines .type-block {
+.program-lines .type-block,
+body > .card-drag.type-block {
   --card: #3fd6e8;
 }
-.program-lines .type-heal {
+.program-lines .type-heal,
+body > .card-drag.type-heal {
   --card: #3ee08a;
 }
-.program-lines .type-final_strike {
+.program-lines .type-final_strike,
+body > .card-drag.type-final_strike {
   --card: #ff4f8b;
 }
 .program-lines .type-fork,
 .program-lines .type-loop,
-.program-lines .type-if_wounded {
+.program-lines .type-if_wounded,
+body > .card-drag.type-fork,
+body > .card-drag.type-loop,
+body > .card-drag.type-if_wounded {
   --card: #7cf5c4;
+}
+
+/* program lines an interrupt will cut off: they won't run this turn */
+.field-slot.is-queued.is-cut {
+  filter: grayscale(0.8) brightness(0.6);
+  outline: 3px dashed var(--danger);
+  outline-offset: -3px;
+}
+
+.field-slot.is-cut .line-tag {
+  color: var(--danger);
+  text-transform: uppercase;
+}
+
+.interrupt-note {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--danger);
+}
+
+/* a queued card being dragged to another line stays behind as a ghost */
+.field-slot.is-queued.is-dragged {
+  opacity: 0.3;
+}
+
+.field-slot.is-queued.is-drop-target {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+  transform: translateY(-4px);
+}
+
+/* queued cards can be picked up and dragged, on touch too */
+button.field-slot.is-queued {
+  touch-action: none;
+}
+
+/* a dragged queued card: the card rules make field slots relative, and they
+   outrank the plain .card-drag rule */
+body > .field-slot.card-drag {
+  position: fixed;
 }
