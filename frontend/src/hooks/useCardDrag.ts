@@ -7,7 +7,9 @@ const DRAG_THRESHOLD_PX = 8;
 // Dragging a hand card onto a field slot. Pointer events rather than HTML5
 // drag and drop, so it works with touch too and the card itself follows the
 // pointer: a copy of it is lifted out of the hand, and dropping it over an
-// empty slot (any element with data-slot-index) plays it there.
+// empty slot (any element with data-slot-index) plays it there. Program mode
+// reuses it to drag a queued card from one line to another - the "hand
+// index" is then the line it comes from.
 export function useCardDrag({
   enabled,
   onDrop,

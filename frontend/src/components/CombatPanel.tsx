@@ -352,6 +352,18 @@ export function CombatPanel({
     enabled: !busy && discarding === null,
     onDrop: (handIndex, slotIndex, slot, from) => playIntoSlot(slotIndex, slot, handIndex, from),
   });
+  // Program mode: drag a queued card onto another line to move it there.
+  const lineDrag = useCardDrag({
+    enabled: !busy && discarding === null,
+    onDrop: (fromLine, toLine) => {
+      setMovingLine(null);
+      if (fromLine !== toLine) {
+        sfx.play("select");
+        onMoveQueued?.(fromLine, toLine);
+      }
+    },
+  });
+  const draggingLine = lineDrag.dragging;
 
   // the card being aimed (selected or dragged) and the slot it is aimed at
   const aimedIndex = discarding === null ? (drag.dragging ?? selectedHandIndex) : null;
@@ -387,18 +399,23 @@ export function CombatPanel({
     }
     if (card !== null) {
       const glitched = combat.program_glitched[line];
+      const dropHere = draggingLine !== null && draggingLine !== line;
       return (
         <button
-          className={`field-slot is-occupied is-queued type-${card.type}${tags}${movingLine === line ? " is-moving" : ""}${movingLine !== null && movingLine !== line ? " is-swap-target" : ""}${glitched ? " is-glitched" : ""}`}
+          data-slot-index={dropHere ? line : undefined}
+          className={`field-slot is-occupied is-queued type-${card.type}${tags}${movingLine === line ? " is-moving" : ""}${(movingLine !== null && movingLine !== line) || dropHere ? " is-swap-target" : ""}${dropHere && lineDrag.hoverSlot === line ? " is-drop-target" : ""}${draggingLine === line ? " is-dragged" : ""}${glitched ? " is-glitched" : ""}`}
           disabled={busy || discarding !== null}
           title={
             glitched
               ? "Played past the context window - it will hallucinate when it runs"
               : movingLine === null
-                ? "Click to move it to another line"
+                ? "Drag it - or click it, then a line - to move it"
                 : undefined
           }
-          onClick={() => pickLine(line)}
+          onPointerDown={(event) => lineDrag.onPointerDown(event, line)}
+          onClick={() => {
+            if (!lineDrag.consumeClick()) pickLine(line);
+          }}
         >
           <span className="line-tag">
             {cutLines.includes(line) ? "cut" : line + 1}
@@ -409,10 +426,12 @@ export function CombatPanel({
       );
     }
     const aimedHere = aimedCard !== undefined && queues(aimedCard);
+    const dropHere = aimedHere || draggingLine !== null;
+    const hovered = aimedHere ? drag.hoverSlot : lineDrag.hoverSlot;
     return (
       <button
-        data-slot-index={aimedHere ? line : undefined}
-        className={`field-slot is-empty${aimedHere || movingLine !== null ? " is-targetable" : ""}${aimedHere && drag.hoverSlot === line ? " is-drop-target" : ""}${tags}`}
+        data-slot-index={dropHere ? line : undefined}
+        className={`field-slot is-empty${dropHere || movingLine !== null ? " is-targetable" : ""}${dropHere && hovered === line ? " is-drop-target" : ""}${tags}`}
         disabled={busy || discarding !== null || (movingLine === null && (selectedHandIndex === null || !aimedHere))}
         onClick={(event) => (movingLine !== null ? pickLine(line) : playIntoSlot(line, event.currentTarget))}
         onPointerEnter={() => setPointedSlot(line)}
@@ -708,7 +727,7 @@ export function CombatPanel({
             : movingLine !== null
             ? `Moving line ${movingLine + 1}: click another line - an occupied one swaps.`
             : programMode && selectedHandIndex === null
-            ? "Attacks, blocks and heals queue into the lines; permanents go into the socket under a line and boost the lines to its right. Click a queued card to move it."
+            ? "Attacks, blocks and heals queue into the lines; permanents go into the socket under a line and boost the lines to its right. Drag a queued card to move it."
             : programMode && aimedCard && queues(aimedCard)
             ? "Choose a program line - it runs at the end of the turn, left to right."
             : programMode && aimedCard && PERMANENT_CARD_TYPES.includes(aimedCard.type)

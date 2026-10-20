@@ -668,8 +668,8 @@ ein Spieler landet dazwischen.
 Im Frontend wählt man den Modus beim Start („Classic“ / „Program“). Im Kampf
 ist das Feld eine Reihe von Zeilen: Angriffe, Block und Heilung landen oben
 in der Zeile, ein Permanent im Sockel darunter (ein Overclock dort verstärkt
-die Zeilen rechts davon). Ein Klick auf eine eingereihte Karte hebt sie auf,
-ein Klick auf eine andere Zeile legt sie dort ab (eine belegte tauscht). Über
+die Zeilen rechts davon). Eingereihte Karten zieht man auf eine andere Zeile
+(oder klickt sie an und dann die Zeile); eine belegte Zeile tauscht. Über
 den Zeilen steht, was das Programm bewirken wird (Gegner-HP und -Block, eigener
 Block), und „Incoming“ rechnet den eingereihten Block schon ein. Die
 Hot-Path-Zeile ist gold markiert, und ihre Vorschau zeigt den verbesserten
