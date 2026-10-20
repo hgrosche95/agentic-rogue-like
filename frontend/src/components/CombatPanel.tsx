@@ -19,6 +19,7 @@ import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { describeIntent, rangeText, STATUS_TEXT, unitOf } from "../readouts";
 import { CardFace, CardTypeIcon, type Readout } from "./CardFace";
+import { CombatHelp, HelpButton } from "./CombatHelp";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
 
 // The Vibe-Coder's context window: one pip per token, lit while used; past
@@ -213,6 +214,7 @@ export function CombatPanel({
   // the turn goes to the server - and the queued card picked up to move,
   // which, like the discard picks, belongs to the table it was picked on.
   const [running, setRunning] = useState<number | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [moveChoice, setMoveChoice] = useState<{ on: PendingCombatView; line: number } | null>(null);
   const movingLine = moveChoice?.on === combat ? moveChoice.line : null;
   const setMovingLine = (line: number | null) => setMoveChoice(line === null ? null : { on: combat, line });
@@ -222,8 +224,11 @@ export function CombatPanel({
   const queuedLines = combat.program.flatMap((card, line) => (card ? [line] : []));
   // an interrupting enemy lets only the first few queued lines run
   const cutAfter = combat.enemy_interrupt_after;
-  const cutLines = cutAfter === null ? [] : queuedLines.slice(cutAfter);
-  const runningLines = cutAfter === null ? queuedLines : queuedLines.slice(0, cutAfter);
+  // a refactoring boss runs the program right to left
+  const reversed = programMode && combat.enemy_intent === "refactor" && !enemySlain;
+  const runOrder = reversed ? [...queuedLines].reverse() : queuedLines;
+  const runningLines = cutAfter === null ? runOrder : runOrder.slice(0, cutAfter);
+  const cutLines = cutAfter === null ? [] : runOrder.slice(cutAfter);
   const hotLine = (player.artifacts.find((a) => a.hot_path > 0)?.hot_path ?? 0) - 1;
   // The card just played, shown as already gone from the hand (and, for a
   // permanent card, as lying in its slot) until the server answers, so the
@@ -489,6 +494,7 @@ export function CombatPanel({
 
   return (
     <div className="combat-panel">
+      {helpOpen && <CombatHelp programMode={programMode} onClose={() => setHelpOpen(false)} />}
       {/* the HUD plates sit in the scene's top corners, clear of the monitor */}
       <div className="arena-wrap">
         <CombatArena
@@ -608,7 +614,15 @@ export function CombatPanel({
       <div className="combat-row">
         <div className="field-zone">
           <div className="zone-head">
-            <span className="zone-label">{programMode ? "Program · runs left to right" : "Execution stack"}</span>
+            <span className="zone-label zone-title">
+              {programMode ? `Program · runs ${reversed ? "right to left" : "left to right"}` : "Execution stack"}
+              <HelpButton
+                onClick={() => {
+                  sfx.play("click");
+                  setHelpOpen(true);
+                }}
+              />
+            </span>
             {programMode && <ProgramOutput combat={combat} playerHp={player.hp} />}
             {programMode && cutAfter !== null && !enemySlain && (
               <span

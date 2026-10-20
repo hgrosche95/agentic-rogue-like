@@ -497,6 +497,29 @@ PROGRAM_REWARD_POOL: list[Card] = [
     ),
 ]
 
+# The Vibe-Coder's control flow, on top of PROGRAM_REWARD_POOL in his
+# program-mode runs (CharacterProfile.program_reward_pool): they make the
+# order of his program count for what he is about - cards already played,
+# and tokens. Pipe wants to run late, Batch early.
+VIBE_CODER_PROGRAM_POOL: list[Card] = [
+    Card(
+        id="batch",
+        name="Batch",
+        type=CardType.BATCH,
+        value=1,
+        rarity=Rarity.COMMON,
+        description="Control flow. When it runs, frees 1 used token for every action still to run.",
+    ),
+    Card(
+        id="pipe",
+        name="Pipe",
+        type=CardType.PIPE,
+        value=2,
+        rarity=Rarity.UNCOMMON,
+        description="Control flow. The next action gets +2 for every action that already ran.",
+    ),
+]
+
 _RARITY_WEIGHTS: dict[bool, dict[Rarity, int]] = {
     False: {Rarity.COMMON: 60, Rarity.UNCOMMON: 32, Rarity.RARE: 8},
     True: {Rarity.COMMON: 30, Rarity.UNCOMMON: 45, Rarity.RARE: 25},  # elite
@@ -678,6 +701,17 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Loop": {
         "value": 2,
         "description": "Control flow. Runs the last action to its left twice more.",
+    },
+    "Batch": {
+        "token_cost": 0,
+        "description": (
+            "Control flow. Costs no tokens. When it runs, frees 1 used token for every "
+            "action still to run."
+        ),
+    },
+    "Pipe": {
+        "value": 3,
+        "description": "Control flow. The next action gets +3 for every action that already ran.",
     },
     "Fork": {
         "draw": 1,

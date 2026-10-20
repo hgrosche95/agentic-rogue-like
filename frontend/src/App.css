@@ -2310,7 +2310,9 @@ button.is-primary:hover:not(:disabled),
 /* control flow (program mode) */
 .type-fork,
 .type-loop,
-.type-if_wounded {
+.type-if_wounded,
+.type-pipe,
+.type-batch {
   --card: #7cf5c4;
 }
 
@@ -3586,9 +3588,13 @@ body > .card-drag.type-final_strike {
 .program-lines .type-fork,
 .program-lines .type-loop,
 .program-lines .type-if_wounded,
+.program-lines .type-pipe,
+.program-lines .type-batch,
 body > .card-drag.type-fork,
 body > .card-drag.type-loop,
-body > .card-drag.type-if_wounded {
+body > .card-drag.type-if_wounded,
+body > .card-drag.type-pipe,
+body > .card-drag.type-batch {
   --card: #7cf5c4;
 }
 
@@ -3631,4 +3637,68 @@ button.field-slot.is-queued {
    outrank the plain .card-drag rule */
 body > .field-slot.card-drag {
   position: fixed;
+}
+
+/* ---------- the "i" by the stack, and the help it opens ---------- */
+.zone-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.help-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  font-family: var(--font-head);
+  font-size: 12px;
+  line-height: 1;
+  text-transform: none;
+  color: var(--px-ink);
+  background: var(--accent);
+  border: 2px solid var(--px-ink);
+  box-shadow: 2px 2px 0 var(--px-ink);
+}
+
+.help-btn:hover {
+  background: #fff;
+}
+
+.combat-help .panel-head .icon-btn {
+  margin-left: auto;
+}
+
+.help-rules {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.help-rules > div {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.help-rules dt {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.help-rules dd {
+  margin: 0;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+@media (max-width: 600px) {
+  .help-rules > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
 }

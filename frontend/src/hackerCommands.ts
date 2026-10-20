@@ -69,6 +69,10 @@ export function commandFor(card: Card, enemyName: string): string {
       return `fork() && fork()`;
     case "loop":
       return `while true; do !!; done`;
+    case "pipe":
+      return `cat ./queue | xargs`;
+    case "batch":
+      return `parallel --jobs ${card.value} ./run`;
     case "if_wounded":
       return `[ $${slug(enemyName) || "target"}_hp -le 50 ] &&`;
   }

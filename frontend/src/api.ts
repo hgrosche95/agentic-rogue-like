@@ -32,7 +32,10 @@ export type CardType =
   // control flow - program mode only
   | "fork"
   | "loop"
-  | "if_wounded";
+  | "if_wounded"
+  // the Vibe-Coder's control flow
+  | "pipe"
+  | "batch";
 
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
@@ -49,7 +52,7 @@ export const PERMANENT_CARD_TYPES: readonly CardType[] = [
 
 // Program mode: what queues into the program instead of resolving on the
 // spot (combat.QUEUED_TYPES), and the control flow among it.
-export const CONTROL_FLOW_TYPES: readonly CardType[] = ["fork", "loop", "if_wounded"];
+export const CONTROL_FLOW_TYPES: readonly CardType[] = ["fork", "loop", "if_wounded", "pipe", "batch"];
 export const QUEUED_TYPES: readonly CardType[] = [
   "attack",
   "block",
@@ -156,10 +159,12 @@ export type EnemyIntentType =
   | "lock"
   | "corrupt"
   // program mode: cuts the program off after a few lines
-  | "interrupt";
+  | "interrupt"
+  // program mode, bosses: the program runs right to left
+  | "refactor";
 
 // How the player plays, read from their chosen cards - see style.py.
-export type PlayStyle = "permanents" | "graveyard" | "one_shot" | "aggro" | "turtle" | "malware";
+export type PlayStyle = "permanents" | "graveyard" | "one_shot" | "aggro" | "turtle" | "malware" | "program";
 
 // Lasting effects on either side of a fight - see models.Status.
 export type Status = "malware" | "exposed" | "throttled";
@@ -174,6 +179,7 @@ export const ATTACKING_INTENTS: EnemyIntentType[] = [
   "lock",
   "corrupt",
   "interrupt",
+  "refactor",
 ];
 
 export interface PendingCombatView {

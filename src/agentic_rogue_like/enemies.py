@@ -329,18 +329,22 @@ def with_affix(enemy: Enemy, rng: random.Random, style: PlayStyle | None = None)
     return armed.model_copy(update={"hp": hp})
 
 
-# An interrupt comes up this share of an enemy's turns (by move weight).
+# An interrupt comes up this share of an enemy's turns (by move weight) -
+# the second share once the AGI answers a program-heavy deck.
 INTERRUPT_SHARE = 0.25
+COUNTER_INTERRUPT_SHARE = 0.4
 
 
-def with_interrupt(enemy: Enemy) -> Enemy:
+def with_interrupt(enemy: Enemy, style: PlayStyle | None = None) -> Enemy:
     """Program mode: `enemy` with an interrupt move - now and then it cuts the
     player's program off after a couple of lines, so what runs first matters.
-    Like with_affix, its HP is rescaled to keep its threat (threat.py)."""
+    Against a deck leaning on control flow (style PROGRAM) it interrupts more
+    often. Like with_affix, its HP is rescaled to keep its threat (threat.py)."""
     if any(m.kind is MoveKind.INTERRUPT for m in enemy.moves):
         return enemy
+    share = COUNTER_INTERRUPT_SHARE if style is PlayStyle.PROGRAM else INTERRUPT_SHARE
     total = sum(m.weight for m in enemy.moves)
-    weight = max(1, round(total * INTERRUPT_SHARE / (1 - INTERRUPT_SHARE)))
+    weight = max(1, round(total * share / (1 - share)))
     move = EnemyMove(kind=MoveKind.INTERRUPT, name="Interrupt", weight=min(weight, 10))
     armed = enemy.model_copy(update={"moves": [*enemy.moves, move]})
     hp = max(1, round(enemy.hp * threat(enemy) / threat(armed)))

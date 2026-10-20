@@ -18,12 +18,13 @@ Dr. Chronos's curve (both ~9% run win rate with the smart bot).
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .artifacts import ARTIFACT_POOL, PROGRAM_ARTIFACT_POOL, VIBE_CODER_ARTIFACT_POOL
 from .cards import (
     PROGRAM_REWARD_POOL,
     REWARD_POOL,
+    VIBE_CODER_PROGRAM_POOL,
     VIBE_CODER_REWARD_POOL,
     starter_deck,
     vibe_coder_starter_deck,
@@ -49,8 +50,10 @@ class CharacterProfile:
     token_regen: int = 0  # used tokens freed at the end of every turn
     draw_on_play: int = 0  # cards drawn after every card played
     turn_draw_modifier: int = 0  # added to the cards drawn at the end of the turn
-    # Program mode (combat.run_program): lines on top of the field's slots.
+    # Program mode (combat.run_program): lines on top of the field's slots,
+    # and his own cards on top of PROGRAM_REWARD_POOL.
     extra_program_lines: int = 0
+    program_reward_pool: list[Card] = field(default_factory=list)
 
 
 CHARACTERS: dict[Character, CharacterProfile] = {
@@ -85,6 +88,7 @@ CHARACTERS: dict[Character, CharacterProfile] = {
         turn_draw_modifier=-1,
         # He draws after every card, so 5 lines fill up too often.
         extra_program_lines=1,
+        program_reward_pool=VIBE_CODER_PROGRAM_POOL,
     ),
 }
 
@@ -96,8 +100,15 @@ def profile(character: Character) -> CharacterProfile:
 def reward_pool(run: RunState) -> list[Card]:
     """What the run's card rewards, starting pick, shops and events offer: the
     character's pool, plus the control flow cards in a program-mode run."""
-    pool = CHARACTERS[run.player.character].reward_pool
-    return pool + PROGRAM_REWARD_POOL if run.program_mode else pool
+    return character_reward_pool(run.player.character, run.program_mode)
+
+
+def character_reward_pool(character: Character, program_mode: bool) -> list[Card]:
+    """reward_pool for a character, outside a run (the balance simulator)."""
+    hero = CHARACTERS[character]
+    if not program_mode:
+        return hero.reward_pool
+    return hero.reward_pool + PROGRAM_REWARD_POOL + hero.program_reward_pool
 
 
 def artifact_pool(run: RunState) -> list[Artifact]:

@@ -57,6 +57,7 @@ from .artifacts import every_nth_turn, heal, total
 from .cards import can_upgrade, upgrade_card
 from .characters import profile
 from .models import (
+    CONTROL_FLOW_TYPES,
     DEFAULT_BARRAGE_HITS,
     DEFAULT_INTERRUPT_AFTER,
     DEFAULT_MOVE_POWER,
@@ -121,6 +122,7 @@ class EnemyIntentType(StrEnum):
     LOCK = "lock"  # a light hit that locks an empty field slot for the player's next turn
     CORRUPT = "corrupt"  # a light hit that shuffles Glitch cards into the draw pile
     INTERRUPT = "interrupt"  # a light hit; the program is cut off after a few lines
+    REFACTOR = "refactor"  # bosses: a light hit; the program runs right to left
 
 
 # Intents that hit the player - everything else deals no damage.
@@ -134,6 +136,7 @@ ATTACKING_INTENTS = frozenset(
         EnemyIntentType.LOCK,
         EnemyIntentType.CORRUPT,
         EnemyIntentType.INTERRUPT,
+        EnemyIntentType.REFACTOR,
     }
 )
 
@@ -143,10 +146,13 @@ _LIGHT_HIT_KINDS = {
     EnemyIntentType.LOCK: MoveKind.LOCK,
     EnemyIntentType.CORRUPT: MoveKind.CORRUPT,
     EnemyIntentType.INTERRUPT: MoveKind.INTERRUPT,
+    EnemyIntentType.REFACTOR: MoveKind.REFACTOR,
 }
 
-# Control flow cards (program mode, see run_program).
-CONTROL_FLOW_TYPES = frozenset({CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED})
+# How often a boss refactors a program, against its other moves' weights
+# (attack 4, barrage 2, charge 2, brace 3).
+BOSS_REFACTOR_WEIGHT = 2
+
 # What program mode queues: the cards that act on the fight, and the control
 # flow steering them. Card flow (draw, retrieve, free plays, ...) still
 # resolves on the spot - at the end of the turn it would come too late.
@@ -448,7 +454,8 @@ def _roll_boss_intent(state: CombatState, rng: random.Random) -> EnemyIntentType
     """A boss's next move: a charge is always followed by its overload, an
     overload never straight by another charge, purges only come from phase 2
     on while there is a permanent on the field to destroy, and in phase 3 it
-    stops bracing."""
+    stops bracing. Against a program it refactors now and then - never
+    twice in a row."""
     previous = state.enemy_intent
     if previous is EnemyIntentType.CHARGE:
         return EnemyIntentType.OVERLOAD
@@ -466,6 +473,8 @@ def _roll_boss_intent(state: CombatState, rng: random.Random) -> EnemyIntentType
         del weights[EnemyIntentType.DEFEND]
     if previous is EnemyIntentType.OVERLOAD:
         del weights[EnemyIntentType.CHARGE]
+    if state.program_mode and previous is not EnemyIntentType.REFACTOR:
+        weights[EnemyIntentType.REFACTOR] = BOSS_REFACTOR_WEIGHT
     return rng.choices(list(weights), weights=list(weights.values()))[0]
 
 
@@ -719,7 +728,13 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
     compiler = total(state.artifacts, "compiler_bonus")
     types: set[CardType] = set()  # what ran so far
     after_flow = False
-    for slot in range(len(state.program)):
+    piped = 0  # Pipe's bonus for the next action
+    # A refactoring boss runs it right to left: control flow then steers the
+    # actions run after it, now the ones to its left.
+    order = list(range(len(state.program)))
+    if state.enemy_intent is EnemyIntentType.REFACTOR:
+        order.reverse()
+    for step, slot in enumerate(order):
         card = state.program[slot]
         if card is None:
             continue
@@ -748,6 +763,18 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
             forks += run.value if _wounded(state) else 0
             state_line = "at half HP or less" if _wounded(state) else "still above half HP"
             log.append(line + f"{run.name}: the enemy is {state_line}.")
+        elif run.type is CardType.PIPE:
+            piped += run.value * ran
+            log.append(line + f"{run.name}: the next action gets +{piped} ({ran} ran before).")
+        elif run.type is CardType.BATCH:
+            # the actions still to run after it - an interrupt's cut ones don't
+            ahead = [state.program[s] for s in order[step + 1 :] if state.program[s]]
+            if cut_after is not None:
+                ahead = ahead[: max(0, cut_after - lines_run)]
+            actions = sum(1 for c in ahead if c.type not in CONTROL_FLOW_TYPES)
+            freed = min(state.tokens_used, run.value * actions)
+            state.tokens_used -= freed
+            log.append(line + f"{run.name} batches {actions} action(s): {freed} token(s) free up.")
         elif run.type is CardType.LOOP:
             repeats = run.value + (tail_call if slot == last_line else 0)
             if last is None:
@@ -762,7 +789,8 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
                 if state.enemy_hp <= 0:
                     break
         else:
-            bonus = pipeline if after_flow else 0
+            bonus = (pipeline if after_flow else 0) + piped
+            piped = 0
             if slot == last_line:
                 bonus += compiler * len(types - {run.type})
                 forks += tail_call
@@ -1291,6 +1319,7 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
         EnemyIntentType.LOCK: "jams your field" if own else "strikes",
         EnemyIntentType.CORRUPT: "corrupts your code" if own else "strikes",
         EnemyIntentType.INTERRUPT: "strikes",
+        EnemyIntentType.REFACTOR: "strikes",
     }[intent]
     rolled = " + ".join(str(h) for h in hits)
     log.append(

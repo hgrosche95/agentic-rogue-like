@@ -7,6 +7,7 @@ const LABEL: Record<PlayStyle, string> = {
   aggro: "Attacks",
   turtle: "Blocking",
   malware: "Malware",
+  program: "Control flow",
 };
 
 // What the AGI has read from the cards the player chose (style.py): once one

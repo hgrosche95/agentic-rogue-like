@@ -10,6 +10,7 @@ from agentic_rogue_like.cards import (
     CARD_UPGRADES,
     PROGRAM_REWARD_POOL,
     REWARD_POOL,
+    VIBE_CODER_PROGRAM_POOL,
     VIBE_CODER_REWARD_POOL,
     starter_deck,
     upgrade_card,
@@ -17,6 +18,7 @@ from agentic_rogue_like.cards import (
 from agentic_rogue_like.characters import artifact_pool, reward_pool
 from agentic_rogue_like.combat import (
     EnemyIntentType,
+    _roll_boss_intent,
     action_preview,
     end_turn,
     free_slots,
@@ -39,11 +41,18 @@ from agentic_rogue_like.models import (
     RunStatus,
 )
 from agentic_rogue_like.sessions import get_session
+from agentic_rogue_like.style import PlayStyle, agent_hint, answers, play_style
 from agentic_rogue_like.threat import threat
 
 
 def _card(name: str) -> Card:
-    pool = PROGRAM_REWARD_POOL + REWARD_POOL + VIBE_CODER_REWARD_POOL + starter_deck()
+    pool = (
+        PROGRAM_REWARD_POOL
+        + VIBE_CODER_PROGRAM_POOL
+        + REWARD_POOL
+        + VIBE_CODER_REWARD_POOL
+        + starter_deck()
+    )
     return next(c for c in pool if c.name == name).model_copy(deep=True)
 
 
@@ -391,3 +400,81 @@ def test_only_program_runs_meet_interrupts() -> None:
         enemy = _room_enemy(run, node, random.Random(1))
         has = any(m.kind is MoveKind.INTERRUPT for m in enemy.moves)
         assert has is program_mode
+
+
+# ---- refactor (bosses)
+
+
+def test_a_refactor_runs_the_program_right_to_left() -> None:
+    state, player = _fight()
+    state.boss = True
+    state.enemy_intent = EnemyIntentType.REFACTOR
+    _queue(state, player, "Exploit", "Fork")  # left to right the Fork comes too late
+    assert program_preview(state, player).enemy_hp == 90
+    end_turn(state, player, random.Random(2))
+    assert state.enemy_hp == 90
+
+
+def test_only_bosses_against_a_program_refactor() -> None:
+    def intents(program_mode: bool) -> set[EnemyIntentType]:
+        state, _ = _fight(program_mode=program_mode)
+        state.boss = True
+        rng = random.Random(5)
+        seen = set()
+        for _ in range(300):
+            state.enemy_intent = _roll_boss_intent(state, rng)
+            seen.add(state.enemy_intent)
+        return seen
+
+    assert EnemyIntentType.REFACTOR in intents(True)
+    assert EnemyIntentType.REFACTOR not in intents(False)
+
+
+# ---- the Vibe-Coder's control flow
+
+
+def test_pipe_pays_for_the_actions_before_it() -> None:
+    assert _damage_dealt("Exploit", "Exploit", "Pipe", "Exploit") == 5 + 5 + (5 + 4)
+    assert _damage_dealt("Pipe", "Exploit", "Exploit", "Exploit") == 15
+
+
+def test_batch_frees_tokens_for_the_actions_after_it() -> None:
+    state, player = _fight()
+    state.token_limit, state.tokens_used = 10, 0
+    _queue(state, player, "Batch", "Exploit", "Exploit")
+    used = state.tokens_used
+    end_turn(state, player, random.Random(2))
+    # 2 freed by Batch, before the turn's own regen (none in this fight)
+    assert state.tokens_used == used - 2
+
+
+def test_only_the_vibe_coder_gets_pipe_and_batch() -> None:
+    names = {c.name for c in VIBE_CODER_PROGRAM_POOL}
+    vibe = new_run(1, character=Character.VIBE_CODER, program_mode=True)
+    assert names <= {c.name for c in reward_pool(vibe)}
+    assert not names & {c.name for c in reward_pool(new_run(1, program_mode=True))}
+    vibe_classic = new_run(1, character=Character.VIBE_CODER)
+    assert not names & {c.name for c in reward_pool(vibe_classic)}
+    assert all(c.name in CARD_UPGRADES for c in VIBE_CODER_PROGRAM_POOL)
+
+
+# ---- the AGI reads a program
+
+
+def test_control_flow_is_a_style_the_agi_answers_with_interrupts() -> None:
+    deck = starter_deck() + [_card(n) for n in ("Fork", "Loop", "If Wounded", "Pipe")]
+    for i, card in enumerate(deck):
+        card.id = f"c{i}"
+    assert play_style(deck) is PlayStyle.PROGRAM
+    assert agent_hint(PlayStyle.PROGRAM) is None  # the game answers it itself
+
+    enemy = ENEMY_POOL["mid"][0]
+
+    def share(armed) -> float:
+        interrupt = next(m for m in armed.moves if m.kind is MoveKind.INTERRUPT)
+        return interrupt.weight / sum(m.weight for m in armed.moves)
+
+    plain, answered = with_interrupt(enemy), with_interrupt(enemy, PlayStyle.PROGRAM)
+    assert share(answered) > share(plain)
+    assert abs(threat(answered) - threat(enemy)) / threat(enemy) < 0.05
+    assert answers(answered, PlayStyle.PROGRAM)
