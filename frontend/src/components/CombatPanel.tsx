@@ -19,6 +19,7 @@ import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { describeIntent, rangeText, STATUS_TEXT, unitOf } from "../readouts";
 import { CardFace, CardTypeIcon, type Readout } from "./CardFace";
+import { CombatHelp, HelpButton } from "./CombatHelp";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
 
 // The Vibe-Coder's context window: one pip per token, lit while used; past
@@ -213,6 +214,7 @@ export function CombatPanel({
   // the turn goes to the server - and the queued card picked up to move,
   // which, like the discard picks, belongs to the table it was picked on.
   const [running, setRunning] = useState<number | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [moveChoice, setMoveChoice] = useState<{ on: PendingCombatView; line: number } | null>(null);
   const movingLine = moveChoice?.on === combat ? moveChoice.line : null;
   const setMovingLine = (line: number | null) => setMoveChoice(line === null ? null : { on: combat, line });
@@ -489,6 +491,7 @@ export function CombatPanel({
 
   return (
     <div className="combat-panel">
+      {helpOpen && <CombatHelp programMode={programMode} onClose={() => setHelpOpen(false)} />}
       {/* the HUD plates sit in the scene's top corners, clear of the monitor */}
       <div className="arena-wrap">
         <CombatArena
@@ -608,7 +611,15 @@ export function CombatPanel({
       <div className="combat-row">
         <div className="field-zone">
           <div className="zone-head">
-            <span className="zone-label">{programMode ? "Program · runs left to right" : "Execution stack"}</span>
+            <span className="zone-label zone-title">
+              {programMode ? "Program · runs left to right" : "Execution stack"}
+              <HelpButton
+                onClick={() => {
+                  sfx.play("click");
+                  setHelpOpen(true);
+                }}
+              />
+            </span>
             {programMode && <ProgramOutput combat={combat} playerHp={player.hp} />}
             {programMode && cutAfter !== null && !enemySlain && (
               <span
