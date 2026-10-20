@@ -25,9 +25,21 @@ from agentic_rogue_like.combat import (
     program_preview,
     start_combat,
 )
-from agentic_rogue_like.engine import available_choices, move_to, new_run, resolve_node
-from agentic_rogue_like.models import Artifact, Card, Character, Enemy, PlayerState, RunStatus
+from agentic_rogue_like.enemies import ENEMY_POOL, with_interrupt
+from agentic_rogue_like.engine import _room_enemy, available_choices, move_to, new_run, resolve_node
+from agentic_rogue_like.models import (
+    Artifact,
+    Card,
+    Character,
+    Enemy,
+    EnemyMove,
+    MoveKind,
+    NodeType,
+    PlayerState,
+    RunStatus,
+)
 from agentic_rogue_like.sessions import get_session
+from agentic_rogue_like.threat import threat
 
 
 def _card(name: str) -> Card:
@@ -328,3 +340,54 @@ def test_previews_count_hot_path_and_the_queued_block() -> None:
         f"/runs/{run_id}/combat/play-card", json={"hand_index": 0, "slot_index": 0}
     ).json()["pending_combat"]["incoming_max"]
     assert after == max(0, before - 5)
+
+
+# ---- interrupt
+
+
+def _interrupting(hp: int = 100):
+    state, player = _fight(hp)
+    state.enemy = state.enemy.model_copy(
+        update={"moves": [*state.enemy.moves, EnemyMove(kind=MoveKind.INTERRUPT, stacks=2)]}
+    )
+    state.enemy_move = len(state.enemy.moves) - 1
+    state.enemy_intent = EnemyIntentType.INTERRUPT
+    return state, player
+
+
+def test_an_interrupt_cuts_the_program_after_its_lines() -> None:
+    state, player = _interrupting()
+    _queue(state, player, "Exploit", "Fork", "Zero-Day", "Exploit")
+    # Exploit and Fork run, then the cut - the Fork has nothing left to fork
+    assert program_preview(state, player).enemy_hp == 95
+    log = end_turn(state, player, random.Random(2))
+    assert state.enemy_hp == 95
+    assert any("interrupts your program after 2 line(s)" in line for line in log)
+    # what was cut never ran: back to the graveyard, the one-shot not used up
+    assert {"Zero-Day", "Exploit"} <= {c.name for c in state.discard_pile}
+    assert not state.banished_pile
+
+
+def test_order_decides_what_survives_an_interrupt() -> None:
+    state, player = _interrupting()
+    _queue(state, player, "Fork", "Zero-Day", "Exploit", "Exploit")
+    end_turn(state, player, random.Random(2))
+    assert state.enemy_hp == 100 - 2 * 16
+
+
+def test_with_interrupt_keeps_the_threat() -> None:
+    enemy = ENEMY_POOL["mid"][0]
+    armed = with_interrupt(enemy)
+    assert any(m.kind is MoveKind.INTERRUPT for m in armed.moves)
+    assert abs(threat(armed) - threat(enemy)) / threat(enemy) < 0.05
+    assert with_interrupt(armed) == armed
+
+
+def test_only_program_runs_meet_interrupts() -> None:
+    for program_mode in (False, True):
+        run = new_run(2, program_mode=program_mode)
+        node = run.nodes[available_choices(run)[0]]
+        node = node.model_copy(update={"type": NodeType.COMBAT})
+        enemy = _room_enemy(run, node, random.Random(1))
+        has = any(m.kind is MoveKind.INTERRUPT for m in enemy.moves)
+        assert has is program_mode

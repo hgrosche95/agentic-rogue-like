@@ -327,3 +327,21 @@ def with_affix(enemy: Enemy, rng: random.Random, style: PlayStyle | None = None)
     armed = enemy.model_copy(update={"affix": affix})
     hp = max(1, round(enemy.hp * threat(enemy) / threat(armed)))
     return armed.model_copy(update={"hp": hp})
+
+
+# An interrupt comes up this share of an enemy's turns (by move weight).
+INTERRUPT_SHARE = 0.25
+
+
+def with_interrupt(enemy: Enemy) -> Enemy:
+    """Program mode: `enemy` with an interrupt move - now and then it cuts the
+    player's program off after a couple of lines, so what runs first matters.
+    Like with_affix, its HP is rescaled to keep its threat (threat.py)."""
+    if any(m.kind is MoveKind.INTERRUPT for m in enemy.moves):
+        return enemy
+    total = sum(m.weight for m in enemy.moves)
+    weight = max(1, round(total * INTERRUPT_SHARE / (1 - INTERRUPT_SHARE)))
+    move = EnemyMove(kind=MoveKind.INTERRUPT, name="Interrupt", weight=min(weight, 10))
+    armed = enemy.model_copy(update={"moves": [*enemy.moves, move]})
+    hp = max(1, round(enemy.hp * threat(enemy) / threat(armed)))
+    return armed.model_copy(update={"hp": hp})

@@ -240,6 +240,14 @@ class MoveKind(StrEnum):
     INFECT = "infect"  # a light hit that leaves Malware on the player
     LOCK = "lock"  # a light hit that locks one of the player's empty field slots for a turn
     CORRUPT = "corrupt"  # a light hit that shuffles Glitch cards into the player's draw pile
+    # Program mode only: a light hit, and the player's program is cut off
+    # after `stacks` lines when it runs this turn (combat.run_program).
+    INTERRUPT = "interrupt"
+
+
+# Moves only the game hands out - enemies get them in program runs
+# (enemies.with_interrupt); move sets from the pool or the agent never have them.
+PROGRAM_ONLY_MOVES = frozenset({MoveKind.INTERRUPT})
 
 
 # Default power (percent of the enemy's attack stat) per move kind - the
@@ -254,10 +262,12 @@ DEFAULT_MOVE_POWER: dict[MoveKind, int] = {
     MoveKind.INFECT: 50,
     MoveKind.LOCK: 50,
     MoveKind.CORRUPT: 50,
+    MoveKind.INTERRUPT: 50,
 }
 DEFAULT_BARRAGE_HITS = 3
 DEFAULT_INFECT_STACKS = 3
 DEFAULT_CORRUPT_GLITCHES = 2
+DEFAULT_INTERRUPT_AFTER = 2
 
 
 class EnemyMove(BaseModel):
@@ -278,19 +288,25 @@ class EnemyMove(BaseModel):
     # BARRAGE only.
     hits: int | None = Field(default=None, ge=2, le=4)
     # INFECT: Malware stacks it leaves on the player. CORRUPT: Glitch cards
-    # it shuffles in.
+    # it shuffles in. INTERRUPT: program lines that still run before it cuts in.
     stacks: int | None = Field(default=None, ge=1, le=6)
 
     @model_validator(mode="after")
     def _fill_defaults(self) -> EnemyMove:
         if self.hits is not None and self.kind is not MoveKind.BARRAGE:
             raise ValueError("only a barrage has hits")
-        if self.stacks is not None and self.kind not in (MoveKind.INFECT, MoveKind.CORRUPT):
-            raise ValueError("only infect and corrupt moves have stacks")
+        if self.stacks is not None and self.kind not in (
+            MoveKind.INFECT,
+            MoveKind.CORRUPT,
+            MoveKind.INTERRUPT,
+        ):
+            raise ValueError("only infect, corrupt and interrupt moves have stacks")
         if self.kind is MoveKind.INFECT and self.stacks is None:
             self.stacks = DEFAULT_INFECT_STACKS
         if self.kind is MoveKind.CORRUPT and self.stacks is None:
             self.stacks = DEFAULT_CORRUPT_GLITCHES
+        if self.kind is MoveKind.INTERRUPT and self.stacks is None:
+            self.stacks = DEFAULT_INTERRUPT_AFTER
         if self.power is None:
             self.power = DEFAULT_MOVE_POWER[self.kind]
         if self.kind is MoveKind.BARRAGE and self.hits is None:

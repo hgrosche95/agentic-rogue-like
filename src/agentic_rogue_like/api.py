@@ -39,6 +39,7 @@ from .combat import (
     enemy_block_gain,
     incoming_damage,
     intent_hits,
+    interrupt_after,
     is_enraged,
     max_hand_size,
     move_name,
@@ -181,6 +182,8 @@ class PendingCombatView(BaseModel):
     # else null - the UI then calls it by its kind.
     enemy_intent_name: str | None
     enemy_intent_value: int
+    # Program mode: an interrupt lets this many queued lines run, else null.
+    enemy_interrupt_after: int | None
     # The range of one hit of the telegraphed attack (the roll on top of
     # the attack stat), how many hits it has, and what of all of them would
     # get through block and armor if the turn ended now. For intents that
@@ -451,6 +454,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_block=combat.enemy_block,
             enemy_intent=combat.enemy_intent.value,
             enemy_intent_name=move_name(combat),
+            enemy_interrupt_after=interrupt_after(combat),
             enemy_intent_value=intent_value,
             enemy_intent_min=hit_min,
             enemy_intent_max=hit_max,

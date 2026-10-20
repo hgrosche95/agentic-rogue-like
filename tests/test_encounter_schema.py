@@ -164,3 +164,12 @@ def test_a_plain_proposal_inside_the_old_ranges_is_inside_the_threat_range() -> 
         ),
         MID,
     )
+
+
+def test_an_interrupt_is_not_the_agents_to_give() -> None:
+    moves = [
+        MoveProposal(kind=MoveKind.ATTACK, name="Gore", weight=3, power=100),
+        MoveProposal(kind=MoveKind.INTERRUPT, name="Jam", weight=1, power=50),
+    ]
+    with pytest.raises(BudgetViolation, match="interrupt is added by the game"):
+        validate_proposal(_moveset(hp=40, moves=moves), MID)

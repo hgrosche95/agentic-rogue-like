@@ -3584,3 +3584,22 @@ button.field-slot.is-queued:disabled {
 .program-lines .type-if_wounded {
   --card: #7cf5c4;
 }
+
+/* program lines an interrupt will cut off: they won't run this turn */
+.field-slot.is-queued.is-cut {
+  filter: grayscale(0.8) brightness(0.6);
+  outline: 3px dashed var(--danger);
+  outline-offset: -3px;
+}
+
+.field-slot.is-cut .line-tag {
+  color: var(--danger);
+  text-transform: uppercase;
+}
+
+.interrupt-note {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--danger);
+}

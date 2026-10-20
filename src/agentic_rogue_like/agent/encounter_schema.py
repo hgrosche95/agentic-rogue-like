@@ -22,7 +22,7 @@ import math
 
 from pydantic import BaseModel, Field, ValidationError, ValidationInfo, field_validator
 
-from ..models import Enemy, EnemyMove, MoveKind
+from ..models import PROGRAM_ONLY_MOVES, Enemy, EnemyMove, MoveKind
 from ..threat import threat
 
 # How far a move set's HP may stray from the budget's HP range, as fractions
@@ -141,6 +141,11 @@ def proposal_moves(proposal: EnemyProposal) -> list[EnemyMove] | None:
     """
     if not isinstance(proposal, MovesetProposal):
         return None
+    if kinds := {m.kind for m in proposal.moves} & PROGRAM_ONLY_MOVES:
+        raise BudgetViolation(
+            f"invalid move set: {', '.join(sorted(k.value for k in kinds))} is added by the "
+            "game, not part of a move set"
+        )
     try:
         moves = [EnemyMove(**move.model_dump()) for move in proposal.moves]
         # Enemy owns the move-set-wide rules (see models.Enemy).

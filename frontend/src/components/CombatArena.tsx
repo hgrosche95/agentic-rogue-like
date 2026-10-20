@@ -85,6 +85,10 @@ export function IntentIcon({ intent }: { intent: EnemyIntentType }) {
         </>
       )}
       {intent === "corrupt" && <path d="M2.5 6h4l2 4h3l2-4h4M2.5 14h4l2-4M11.5 10l2 4h4" />}
+      {intent === "interrupt" && (
+        // a line of code, slashed through
+        <path d="M2.5 10h5M12.5 10h5M7 16.5 13 3.5" />
+      )}
       {intent === "purge" && (
         <>
           <rect x="3.5" y="3.5" width="13" height="13" rx="2" />

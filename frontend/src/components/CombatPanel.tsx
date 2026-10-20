@@ -220,6 +220,10 @@ export function CombatPanel({
   const programMode = combat.program_mode;
   const queues = (card: Card) => programMode && QUEUED_TYPES.includes(card.type);
   const queuedLines = combat.program.flatMap((card, line) => (card ? [line] : []));
+  // an interrupting enemy lets only the first few queued lines run
+  const cutAfter = combat.enemy_interrupt_after;
+  const cutLines = cutAfter === null ? [] : queuedLines.slice(cutAfter);
+  const runningLines = cutAfter === null ? queuedLines : queuedLines.slice(0, cutAfter);
   const hotLine = (player.artifacts.find((a) => a.hot_path > 0)?.hot_path ?? 0) - 1;
   // The card just played, shown as already gone from the hand (and, for a
   // permanent card, as lying in its slot) until the server answers, so the
@@ -269,13 +273,13 @@ export function CombatPanel({
       setDiscarding(null);
     };
     setMovingLine(null);
-    if (queuedLines.length === 0) {
+    if (runningLines.length === 0) {
       finish();
       return;
     }
     // Run the program: each queued line lights up in turn, then the server
     // works the turn out and the HP bars move as usual.
-    queuedLines.forEach((line, step) => {
+    runningLines.forEach((line, step) => {
       window.setTimeout(() => {
         const card = combat.program[line];
         setRunning(line);
@@ -287,7 +291,7 @@ export function CombatPanel({
     window.setTimeout(() => {
       setRunning(null);
       finish();
-    }, queuedLines.length * PROGRAM_STEP_MS);
+    }, runningLines.length * PROGRAM_STEP_MS);
   }
 
   // Program mode: pick a queued card up, then put it on another line - an
@@ -366,7 +370,7 @@ export function CombatPanel({
   // Program mode: a line's action (top) - queued, landing, empty or locked.
   function renderAction(card: Card | null, line: number) {
     const hot = line === hotLine;
-    const tags = `${hot ? " is-hot" : ""}${running === line ? " is-running" : ""}`;
+    const tags = `${hot ? " is-hot" : ""}${running === line ? " is-running" : ""}${cutLines.includes(line) ? " is-cut" : ""}`;
     if (card === null && pendingCard && pending?.slotIndex === line && queues(pendingCard)) {
       return (
         <div className={`field-slot is-occupied is-queued is-landing type-${pendingCard.type}${tags}`}>
@@ -397,7 +401,7 @@ export function CombatPanel({
           onClick={() => pickLine(line)}
         >
           <span className="line-tag">
-            {line + 1}
+            {cutLines.includes(line) ? "cut" : line + 1}
             {hot && " · HOT"}
           </span>
           <CardFace card={card} onField />
@@ -587,6 +591,14 @@ export function CombatPanel({
           <div className="zone-head">
             <span className="zone-label">{programMode ? "Program · runs left to right" : "Execution stack"}</span>
             {programMode && <ProgramOutput combat={combat} playerHp={player.hp} />}
+            {programMode && cutAfter !== null && !enemySlain && (
+              <span
+                className="interrupt-note"
+                title="The enemy cuts your program off: queued lines after these don't run this turn"
+              >
+                Interrupt after {cutAfter} line{cutAfter === 1 ? "" : "s"}
+              </span>
+            )}
             <span className="zone-label">
               Hand {combat.hand.length}/{combat.max_hand_size}
             </span>

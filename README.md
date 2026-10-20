@@ -676,6 +676,19 @@ Hot-Path-Zeile ist gold markiert, und ihre Vorschau zeigt den verbesserten
 Wert. „Run program“ lässt die Zeilen nacheinander aufleuchten, bevor der Gegner
 zieht.
 
+### Interrupt
+
+In Programm-Runs bekommen alle Gegner außer Bossen einen weiteren Move
+(`enemies.with_interrupt`, etwa jeder vierte Zug): einen leichten Treffer,
+und das Programm dieses Zuges läuft nur bis zur 2. eingereihten Zeile – der
+Rest wandert ungenutzt auf den Ablagestapel. Weil der Gegner das ankündigt,
+ist das eine Frage der Reihenfolge: Was zählt, gehört nach vorn. Im
+Frontend sind die abgeschnittenen Zeilen ausgegraut. Bewertet wird
+Interrupt wie die anderen Feld-Moves (`threat.INTERRUPT_DAMAGE` = 4,5 HP,
+kalibriert in Programm-Kämpfen gegen den Pool mit und ohne Interrupt), und
+`with_interrupt` passt die HP so an, dass die Bedrohung gleich bleibt.
+Agenten-Movesets dürfen ihn nicht enthalten; das Spiel fügt ihn selbst hinzu.
+
 ### Programm-Artefakte
 
 Sechs Artefakte gibt es nur in Programm-Runs (`artifacts.PROGRAM_ARTIFACT_POOL`,

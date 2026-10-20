@@ -58,6 +58,7 @@ from .cards import can_upgrade, upgrade_card
 from .characters import profile
 from .models import (
     DEFAULT_BARRAGE_HITS,
+    DEFAULT_INTERRUPT_AFTER,
     DEFAULT_MOVE_POWER,
     PERMANENT_CARD_TYPES,
     Affix,
@@ -119,6 +120,7 @@ class EnemyIntentType(StrEnum):
     INFECT = "infect"  # a light hit that leaves Malware on the player
     LOCK = "lock"  # a light hit that locks an empty field slot for the player's next turn
     CORRUPT = "corrupt"  # a light hit that shuffles Glitch cards into the draw pile
+    INTERRUPT = "interrupt"  # a light hit; the program is cut off after a few lines
 
 
 # Intents that hit the player - everything else deals no damage.
@@ -131,14 +133,16 @@ ATTACKING_INTENTS = frozenset(
         EnemyIntentType.INFECT,
         EnemyIntentType.LOCK,
         EnemyIntentType.CORRUPT,
+        EnemyIntentType.INTERRUPT,
     }
 )
 
-# The light hit every field move (infect, lock, corrupt) comes with.
+# The light hit every field move (infect, lock, corrupt, interrupt) comes with.
 _LIGHT_HIT_KINDS = {
     EnemyIntentType.INFECT: MoveKind.INFECT,
     EnemyIntentType.LOCK: MoveKind.LOCK,
     EnemyIntentType.CORRUPT: MoveKind.CORRUPT,
+    EnemyIntentType.INTERRUPT: MoveKind.INTERRUPT,
 }
 
 # Control flow cards (program mode, see run_program).
@@ -700,6 +704,9 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
     """
     log: list[str] = []
     forks, last, ran = 0, None, 0
+    # An interrupting enemy lets only its first few lines run.
+    cut_after = interrupt_after(state)
+    lines_run = 0
     # Copilot and Ship It count the cards played this turn - every queued
     # one but themselves has been by the time the program runs - or the
     # actions run so far, once forks and loops have run more than that.
@@ -721,6 +728,13 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
         if state.enemy_hp <= 0 or player.hp <= 0:
             state.discard_pile.append(card)  # never ran, so never used up
             continue
+        if cut_after is not None and lines_run >= cut_after:
+            if lines_run == cut_after:
+                log.append(f"{state.enemy.name} interrupts your program after {cut_after} line(s)!")
+                lines_run += 1  # announced once
+            state.discard_pile.append(card)
+            continue
+        lines_run += 1
         line = f"[{slot + 1}] "
         # Hot Path: the card runs as its upgrade, the deck keeps the original.
         run = card
@@ -808,6 +822,15 @@ def program_preview(state: CombatState, player: PlayerState) -> ProgramPreview:
         player_hp=me.hp,
         player_block=trial.player_block,
     )
+
+
+def interrupt_after(state: CombatState) -> int | None:
+    """How many queued lines run before an interrupting enemy cuts the
+    program off - None unless its intent is an interrupt."""
+    if state.enemy_intent is not EnemyIntentType.INTERRUPT:
+        return None
+    move = current_move(state)
+    return DEFAULT_INTERRUPT_AFTER if move is None else move.stacks
 
 
 def _wounded(state: CombatState) -> bool:
@@ -1267,6 +1290,7 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
         else f"infects you with {state.enemy.attack_name}",
         EnemyIntentType.LOCK: "jams your field" if own else "strikes",
         EnemyIntentType.CORRUPT: "corrupts your code" if own else "strikes",
+        EnemyIntentType.INTERRUPT: "strikes",
     }[intent]
     rolled = " + ".join(str(h) for h in hits)
     log.append(
