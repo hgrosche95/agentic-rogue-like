@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 import "./App.css";
+import "@fontsource/orbitron/500.css";
+import "@fontsource/orbitron/700.css";
+import "@fontsource/rajdhani/500.css";
+import "@fontsource/rajdhani/600.css";
+import "@fontsource/rajdhani/700.css";
+import "./neon.css";
 import {
   buyShopArtifact,
   removeShopCard,
