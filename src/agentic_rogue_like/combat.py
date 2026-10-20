@@ -57,6 +57,7 @@ from .artifacts import every_nth_turn, heal, total
 from .cards import can_upgrade, upgrade_card
 from .characters import profile
 from .models import (
+    CONTROL_FLOW_TYPES,
     DEFAULT_BARRAGE_HITS,
     DEFAULT_INTERRUPT_AFTER,
     DEFAULT_MOVE_POWER,
@@ -152,10 +153,6 @@ _LIGHT_HIT_KINDS = {
 # (attack 4, barrage 2, charge 2, brace 3).
 BOSS_REFACTOR_WEIGHT = 2
 
-# Control flow cards (program mode, see run_program).
-CONTROL_FLOW_TYPES = frozenset(
-    {CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED, CardType.PIPE, CardType.BATCH}
-)
 # What program mode queues: the cards that act on the fight, and the control
 # flow steering them. Card flow (draw, retrieve, free plays, ...) still
 # resolves on the spot - at the end of the turn it would come too late.

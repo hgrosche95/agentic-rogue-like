@@ -14,6 +14,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 from .models import (
+    CONTROL_FLOW_TYPES,
     PERMANENT_CARD_TYPES,
     Affix,
     Card,
@@ -32,6 +33,7 @@ class PlayStyle(StrEnum):
     AGGRO = "aggro"  # piles on attacks
     TURTLE = "turtle"  # blocks, armor and heals
     MALWARE = "malware"  # statuses, above all Malware
+    PROGRAM = "program"  # control flow (program mode)
 
 
 # A style needs this many chosen cards, and more than any other style, to count.
@@ -49,6 +51,7 @@ LABELS = {
     PlayStyle.AGGRO: "raw attacks",
     PlayStyle.TURTLE: "blocking",
     PlayStyle.MALWARE: "malware",
+    PlayStyle.PROGRAM: "control flow",
 }
 
 # What answers each style: moves that hit where it hurts, and an elite affix.
@@ -59,6 +62,9 @@ COUNTER_MOVES: dict[PlayStyle, frozenset[MoveKind]] = {
     PlayStyle.AGGRO: frozenset({MoveKind.DEFEND}),  # ...or the attack pile
     PlayStyle.TURTLE: frozenset({MoveKind.INFECT}),  # Malware ignores block
     PlayStyle.MALWARE: frozenset(),
+    # The game's own interrupts answer a program (see answers) - no move the
+    # pool or the agent could give.
+    PlayStyle.PROGRAM: frozenset(),
 }
 COUNTER_AFFIX: dict[PlayStyle, Affix | None] = {
     PlayStyle.PERMANENTS: None,
@@ -67,6 +73,7 @@ COUNTER_AFFIX: dict[PlayStyle, Affix | None] = {
     PlayStyle.AGGRO: Affix.THORNY,
     PlayStyle.TURTLE: Affix.ENRAGED,  # punishes a long, stalled fight
     PlayStyle.MALWARE: Affix.REGENERATING,  # heals off what Malware takes
+    PlayStyle.PROGRAM: None,
 }
 
 
@@ -82,6 +89,8 @@ def card_styles(card: Card) -> set[PlayStyle]:
         styles.add(PlayStyle.ONE_SHOT)
     if card.applies is not None or card.scaling is Scaling.MALWARE:
         styles.add(PlayStyle.MALWARE)
+    if card.type in CONTROL_FLOW_TYPES:
+        styles.add(PlayStyle.PROGRAM)
     # Plain attacks and plain defence only - a Trojan is a malware card that
     # happens to hit, not an aggro one, or every specific style would tie.
     if not styles and card.type is CardType.ATTACK:
@@ -114,6 +123,10 @@ def answers(enemy: Enemy, style: PlayStyle | None) -> bool:
     """Whether the enemy's moves or affix pressure `style`."""
     if style is None:
         return False
+    if style is PlayStyle.PROGRAM:
+        # program runs give every regular enemy an interrupt, more often
+        # against this style (enemies.with_interrupt)
+        return any(m.kind is MoveKind.INTERRUPT for m in enemy.moves)
     if enemy.affix is not None and enemy.affix is COUNTER_AFFIX[style]:
         return True
     return any(
@@ -124,8 +137,9 @@ def answers(enemy: Enemy, style: PlayStyle | None) -> bool:
 
 
 def agent_hint(style: PlayStyle | None) -> str | None:
-    """A sentence for the encounter agent's prompt, or None without a style."""
-    if style is None:
+    """A sentence for the encounter agent's prompt, or None without a style -
+    or for a program, which the game answers itself."""
+    if style is None or style is PlayStyle.PROGRAM:
         return None
     kinds = sorted(k.value for k in COUNTER_MOVES[style])
     if kinds == ["defend"]:

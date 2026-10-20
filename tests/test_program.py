@@ -41,6 +41,7 @@ from agentic_rogue_like.models import (
     RunStatus,
 )
 from agentic_rogue_like.sessions import get_session
+from agentic_rogue_like.style import PlayStyle, agent_hint, answers, play_style
 from agentic_rogue_like.threat import threat
 
 
@@ -455,3 +456,25 @@ def test_only_the_vibe_coder_gets_pipe_and_batch() -> None:
     vibe_classic = new_run(1, character=Character.VIBE_CODER)
     assert not names & {c.name for c in reward_pool(vibe_classic)}
     assert all(c.name in CARD_UPGRADES for c in VIBE_CODER_PROGRAM_POOL)
+
+
+# ---- the AGI reads a program
+
+
+def test_control_flow_is_a_style_the_agi_answers_with_interrupts() -> None:
+    deck = starter_deck() + [_card(n) for n in ("Fork", "Loop", "If Wounded", "Pipe")]
+    for i, card in enumerate(deck):
+        card.id = f"c{i}"
+    assert play_style(deck) is PlayStyle.PROGRAM
+    assert agent_hint(PlayStyle.PROGRAM) is None  # the game answers it itself
+
+    enemy = ENEMY_POOL["mid"][0]
+
+    def share(armed) -> float:
+        interrupt = next(m for m in armed.moves if m.kind is MoveKind.INTERRUPT)
+        return interrupt.weight / sum(m.weight for m in armed.moves)
+
+    plain, answered = with_interrupt(enemy), with_interrupt(enemy, PlayStyle.PROGRAM)
+    assert share(answered) > share(plain)
+    assert abs(threat(answered) - threat(enemy)) / threat(enemy) < 0.05
+    assert answers(answered, PlayStyle.PROGRAM)

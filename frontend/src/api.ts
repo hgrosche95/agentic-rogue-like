@@ -164,7 +164,7 @@ export type EnemyIntentType =
   | "refactor";
 
 // How the player plays, read from their chosen cards - see style.py.
-export type PlayStyle = "permanents" | "graveyard" | "one_shot" | "aggro" | "turtle" | "malware";
+export type PlayStyle = "permanents" | "graveyard" | "one_shot" | "aggro" | "turtle" | "malware" | "program";
 
 // Lasting effects on either side of a fight - see models.Status.
 export type Status = "malware" | "exposed" | "throttled";

@@ -690,7 +690,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
             if node.type is NodeType.ELITE and cfg.affixes:
                 base = with_affix(base, rng, style)
             if cfg.program and node.type is not NodeType.BOSS:
-                base = with_interrupt(base)
+                base = with_interrupt(base, style)
             enemy = escalate(base, node.floor, NUM_FLOORS, act)
             result = fight(player, enemy, tier, bot, rng, act, cfg.program)
             fights.append(result)

@@ -114,6 +114,12 @@ class CardType(StrEnum):
     BATCH = "batch"  # frees `value` used tokens per action still to run after it
 
 
+# Control flow (program mode, combat.run_program): steers the actions around
+# it instead of doing anything itself.
+CONTROL_FLOW_TYPES = frozenset(
+    {CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED, CardType.PIPE, CardType.BATCH}
+)
+
 PERMANENT_CARD_TYPES = frozenset(
     {
         CardType.AMPLIFIER,

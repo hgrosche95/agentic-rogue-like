@@ -366,7 +366,7 @@ def _room_enemy(
         affix_rng = random.Random(f"{run.seed}-affix-{run.act}-{node.id}")
         enemy = with_affix(enemy, affix_rng, style)
     if run.program_mode and not boss:
-        enemy = with_interrupt(enemy)
+        enemy = with_interrupt(enemy, style)
     if style is not None and answers(enemy, style):
         enemy = enemy.model_copy(update={"taunt": taunt(style)})
     return escalate(enemy, node.floor, NUM_FLOORS, run.act)

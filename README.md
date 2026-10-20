@@ -605,6 +605,7 @@ und wenn er vor allen anderen liegt. Dann antwortet sie darauf:
 | Angriffe | starker Block (≥120 %) | Thorny |
 | Block | infect (Malware ignoriert Block) | Enraged |
 | Malware | – | Regenerating |
+| Kontrollfluss (Programm-Modus) | häufigere Interrupts (40 % statt 25 % der Züge) | – |
 
 Gegner aus dem Pool und Elite-Zusätze, die antworten, sind 3× so
 wahrscheinlich (nie erzwungen, Bosse ausgenommen). Der Encounter-Agent
