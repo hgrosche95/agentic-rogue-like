@@ -615,6 +615,94 @@ schwerer: Im Simulator bleibt die Run-Siegquote mit und ohne Anpassung gleich
 antwortender Gegner eröffnet den Kampf mit einer Zeile der AGI, und auf der
 Karte zeigt das Panel „AGI analysis“, was sie bisher gelesen hat.
 
+## Programm-Modus (Prototyp)
+
+Ein zweiter Spielmodus pro Run (`new_run(..., program_mode=True)`, in der API
+`"program_mode": true` beim Anlegen, im Terminal `--program`): Das Feld wird
+zum Programm. Angriffe, Block, Heilung und Final Strike wirken nicht sofort,
+sondern werden in eine der 5 Zeilen eingereiht und laufen am Zugende von
+links nach rechts (`combat.run_program`), direkt vor dem Zug des Gegners.
+Kartenfluss (Ziehen, Retrieve, Free Play, …) wirkt weiter sofort, und
+Permanente liegen *unter* den Zeilen: Ein Overclock in Zeile 1 verstärkt jede
+Anweisung rechts davon, eine Zeile kann Permanent und Anweisung zugleich
+tragen. Bis zum Zugende lassen sich eingereihte Karten umsortieren
+(`combat.move_queued`, `POST /runs/{id}/combat/move-queued`).
+`combat.program_preview` zeigt dabei, wo der Kampf nach dem Programm steht
+(HP und Block beider Seiten) – sonst plant man blind, weil eingereihter
+Schaden erst am Zugende ankommt. Die API liefert sie im Kampf mit. Der
+Vibe-Coder hat 6 Zeilen statt 5: Er zieht nach jeder Karte und füllte 5
+Zeilen in fast jedem dritten Zug.
+
+Drei Kontrollfluss-Karten gibt es nur in Programm-Runs als Belohnung
+(`cards.PROGRAM_REWARD_POOL`):
+
+| Karte | Seltenheit | Wirkung | Upgrade |
+| --- | --- | --- | --- |
+| If Wounded | häufig | nächste Aktion läuft doppelt, wenn der Gegner *in dem Moment* auf ≤ 50 % HP ist | + 1 Karte ziehen |
+| Loop | ungewöhnlich | wiederholt die letzte Aktion links davon | zweimal |
+| Fork | selten | nächste Aktion rechts läuft doppelt | + 1 Karte ziehen |
+
+Ein „if attack“ gibt es bewusst nicht: Der Intent des Gegners steht beim
+Einreihen schon fest, die Bedingung wäre keine Entscheidung. If Wounded
+dagegen hängt davon ab, was vorher im Programm lief, also von der
+Reihenfolge. Stirbt der Gegner mitten im Programm, wandert der Rest
+ungenutzt auf den Ablagestapel (Einmal-Karten bleiben erhalten).
+
+Ob die Reihenfolge wirklich zählt, misst `balance-sim --program --order
+{played,best,random}`: Der Smart-Bot spielt seine Karten, dann bleibt das
+Programm wie gespielt, wird zufällig gemischt oder auf die beste aller
+Anordnungen gebracht (jede auf einer Kopie des Kampfes ausprobiert). Mit
+`--pool`, 1000 Runs, mit Kontrollfluss-Karten und Programm-Artefakten
+(Schwankung etwa ±1 Prozentpunkt):
+
+| Run-Siegquote | Classic | wie gespielt | zufällig | beste Reihenfolge |
+| --- | --- | --- | --- | --- |
+| Chronos | 10 % | 7 % | 5 % | 13 % |
+| Vibe-Coder | 10 % | 8 % | 6 % | 10 % |
+
+Wer die Reihenfolge ignoriert, steht etwas schlechter als in Classic, wer sie
+durchdenkt, gleich gut oder besser – bei beiden Charakteren. „Beste
+Reihenfolge“ ist eine Obergrenze (der Bot probiert jeden Zug alles durch),
+ein Spieler landet dazwischen.
+
+Im Frontend wählt man den Modus beim Start („Classic“ / „Program“). Im Kampf
+ist das Feld eine Reihe von Zeilen: Angriffe, Block und Heilung landen oben
+in der Zeile, ein Permanent im Sockel darunter (ein Overclock dort verstärkt
+die Zeilen rechts davon). Ein Klick auf eine eingereihte Karte hebt sie auf,
+ein Klick auf eine andere Zeile legt sie dort ab (eine belegte tauscht). Über
+den Zeilen steht, was das Programm bewirken wird (Gegner-HP und -Block, eigener
+Block), und „Incoming“ rechnet den eingereihten Block schon ein. Die
+Hot-Path-Zeile ist gold markiert, und ihre Vorschau zeigt den verbesserten
+Wert. „Run program“ lässt die Zeilen nacheinander aufleuchten, bevor der Gegner
+zieht.
+
+### Programm-Artefakte
+
+Sechs Artefakte gibt es nur in Programm-Runs (`artifacts.PROGRAM_ARTIFACT_POOL`,
+zusätzlich zum Pool des Charakters). Sie belohnen, *wo* etwas im Programm
+steht und *was neben was* läuft, keine reinen Werte:
+
+| Artefakt | Wirkung |
+| --- | --- |
+| Hot Path | die Karte in Zeile 2 läuft als `+`-Version (das Deck behält die normale), aber Gegner haben 10 % mehr HP |
+| Branch Predictor | sobald der Gegner auf ≤ 50 % HP ist, bekommt jede weitere Aktion +3 |
+| Tail Call | jeden 2. Zug läuft die Aktion in der letzten Zeile einmal mehr |
+| Pipeline | die Aktion direkt nach einer Kontrollfluss-Karte bekommt +3 |
+| Compiler | die Aktion in der letzten Zeile bekommt +1 pro anderem Kartentyp, der vorher lief |
+| Extra Line | eine 6. Zeile (ohne Permanent darunter), jeden 2. Zug 1 Karte mehr |
+
+Ein längeres Feld für alle bringt wenig: Chronos füllt nur in 10 % der Züge
+alle 5 Zeilen (der Vibe-Coder in 29 %), ihm fehlen Karten, nicht Platz. Darum
+ist die 6. Zeile ein Artefakt und bringt Karten mit.
+
+Gemessen in Einzelkämpfen (mittlere Gegner und Elites, Starterdeck plus Fork,
+Loop und If Wounded, 300 Kämpfe): HP-Verlust mit bester Reihenfolge 31 ohne
+Artefakt, 23–26 mit einem Programm-Artefakt, so viel wie mit den klassischen
+(Tunnel Vision 24, Backdoor 26, Heat Sink 27). Der Abstand zwischen bester
+und zufälliger Reihenfolge wächst dabei von 5 auf bis zu 10 HP (Hot Path,
+Compiler, Tail Call): Die Artefakte machen die Reihenfolge wichtiger, nicht
+nur den Spieler stärker.
+
 ## Karten-Upgrades
 
 Im Safehouse lässt sich eine Karte einmal verbessern: Sie bekommt ein „+“ am

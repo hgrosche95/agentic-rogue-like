@@ -380,6 +380,15 @@ body {
   box-shadow: inset 4px 4px 0 #bff8ff, inset -4px -4px 0 #138fb0, 4px 4px 0 var(--px-ink);
 }
 
+.mode-hint {
+  max-width: 440px;
+  margin: 0.7rem auto 0;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--text-dim);
+}
+
 .custom-setting-input {
   display: block;
   width: 100%;
@@ -2298,6 +2307,12 @@ button.is-primary:hover:not(:disabled),
 .type-turret {
   --card: #ff8ae6;
 }
+/* control flow (program mode) */
+.type-fork,
+.type-loop,
+.type-if_wounded {
+  --card: #7cf5c4;
+}
 
 /* reward cards */
 .hand-card.reward-card {
@@ -3352,4 +3367,220 @@ body > .card-flight {
 .hand-card.is-overflowing {
   outline: 3px dashed var(--danger);
   outline-offset: -8px;
+}
+
+/* ---------- program mode: one row of lines, each an action over a socket ---------- */
+.program-line {
+  display: flex;
+  flex: 0 1 92px;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.program-line .field-slot {
+  box-sizing: border-box;
+  flex: none;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 92 / 128;
+}
+
+/* the socket a permanent sits in, under its line */
+.line-socket {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 5px;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.line-socket.is-empty {
+  justify-content: center;
+  border: 3px dotted var(--line-strong);
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.line-socket.is-empty.is-targetable {
+  border: 3px solid var(--accent);
+  color: var(--accent);
+  background: #0a2a3a;
+  cursor: pointer;
+}
+
+.line-socket.is-empty.is-targetable:hover,
+.line-socket.is-empty.is-drop-target {
+  color: #fff;
+  border-color: #fff;
+  background: #138fb0;
+}
+
+.line-socket.is-installed {
+  background: var(--bg-deep);
+  border: 3px solid var(--card, var(--line-strong));
+  box-shadow: inset 0 -3px 0 var(--bevel-lo);
+}
+
+.line-socket.is-installed span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.line-socket .card-icon {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--card);
+}
+
+.line-socket.is-landing {
+  animation: slot-landing 0.2s steps(2, jump-start) 0.5s both;
+}
+
+.line-socket.is-locked {
+  border: 3px solid var(--danger);
+  background: repeating-linear-gradient(45deg, #2a1f55 0 6px, #1c1440 6px 12px);
+}
+
+/* an extra line (Extra Line, the Vibe-Coder's 6th) has no socket */
+.line-socket.is-none {
+  border: 0;
+}
+
+.line-label {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.hot-mark {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--px-ink);
+  background: var(--gold);
+  padding: 1px 4px;
+}
+
+/* the Hot Path line glows gold, empty or not */
+.field-slot.is-hot.is-empty {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.field-slot.is-hot.is-occupied {
+  box-shadow: 0 0 0 3px var(--gold), 4px 4px 0 3px var(--px-ink);
+}
+
+/* a queued card: clickable, to move it to another line */
+button.field-slot.is-queued {
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+/* queued cards are only disabled while a move or the program is in flight */
+button.field-slot.is-queued:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.line-tag {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  z-index: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.field-slot.is-queued.is-moving {
+  transform: translateY(-8px);
+  box-shadow: 0 0 0 3px #fff, 4px 12px 0 3px var(--px-ink);
+}
+
+.field-slot.is-queued.is-swap-target {
+  outline: 3px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+.field-slot.is-queued.is-glitched {
+  outline: 3px solid var(--danger);
+  outline-offset: -3px;
+}
+
+.field-slot.is-queued.is-glitched .line-tag {
+  color: var(--danger);
+}
+
+/* the line that is running right now */
+.field-slot.is-running {
+  transform: translateY(-10px) scale(1.06);
+  box-shadow: 0 0 0 4px #fff, 0 0 18px 6px var(--card, var(--accent));
+  transition: transform 0.1s steps(2);
+}
+
+.program-output {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.program-output.is-idle {
+  color: var(--text-dim);
+}
+
+.program-output em {
+  font-style: normal;
+  color: var(--boost);
+}
+
+.program-output .is-lethal {
+  color: var(--gold);
+}
+
+.program-output .is-hurt {
+  color: var(--danger);
+}
+
+@media (max-width: 600px) {
+  .program-lines {
+    gap: 6px;
+  }
+  .line-tag {
+    display: none;
+  }
+}
+
+/* queued cards keep their type color (installed permanents go grey) */
+.program-lines .type-attack {
+  --card: #ff9a3d;
+}
+.program-lines .type-block {
+  --card: #3fd6e8;
+}
+.program-lines .type-heal {
+  --card: #3ee08a;
+}
+.program-lines .type-final_strike {
+  --card: #ff4f8b;
+}
+.program-lines .type-fork,
+.program-lines .type-loop,
+.program-lines .type-if_wounded {
+  --card: #7cf5c4;
 }

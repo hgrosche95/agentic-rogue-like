@@ -20,9 +20,15 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from .artifacts import ARTIFACT_POOL, VIBE_CODER_ARTIFACT_POOL
-from .cards import REWARD_POOL, VIBE_CODER_REWARD_POOL, starter_deck, vibe_coder_starter_deck
-from .models import Artifact, Card, Character
+from .artifacts import ARTIFACT_POOL, PROGRAM_ARTIFACT_POOL, VIBE_CODER_ARTIFACT_POOL
+from .cards import (
+    PROGRAM_REWARD_POOL,
+    REWARD_POOL,
+    VIBE_CODER_REWARD_POOL,
+    starter_deck,
+    vibe_coder_starter_deck,
+)
+from .models import Artifact, Card, Character, RunState
 
 
 @dataclass(frozen=True)
@@ -43,6 +49,8 @@ class CharacterProfile:
     token_regen: int = 0  # used tokens freed at the end of every turn
     draw_on_play: int = 0  # cards drawn after every card played
     turn_draw_modifier: int = 0  # added to the cards drawn at the end of the turn
+    # Program mode (combat.run_program): lines on top of the field's slots.
+    extra_program_lines: int = 0
 
 
 CHARACTERS: dict[Character, CharacterProfile] = {
@@ -75,9 +83,25 @@ CHARACTERS: dict[Character, CharacterProfile] = {
         token_regen=3,
         draw_on_play=1,
         turn_draw_modifier=-1,
+        # He draws after every card, so 5 lines fill up too often.
+        extra_program_lines=1,
     ),
 }
 
 
 def profile(character: Character) -> CharacterProfile:
     return CHARACTERS[character]
+
+
+def reward_pool(run: RunState) -> list[Card]:
+    """What the run's card rewards, starting pick, shops and events offer: the
+    character's pool, plus the control flow cards in a program-mode run."""
+    pool = CHARACTERS[run.player.character].reward_pool
+    return pool + PROGRAM_REWARD_POOL if run.program_mode else pool
+
+
+def artifact_pool(run: RunState) -> list[Artifact]:
+    """What the run's artifact offers and shops offer: the character's pool,
+    plus the program artifacts in a program-mode run."""
+    pool = CHARACTERS[run.player.character].artifact_pool
+    return pool + PROGRAM_ARTIFACT_POOL if run.program_mode else pool

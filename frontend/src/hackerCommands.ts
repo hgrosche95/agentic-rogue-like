@@ -65,5 +65,11 @@ export function commandFor(card: Card, enemyName: string): string {
       return `pair --driver copilot`;
     case "glitch":
       return `rm -f ./glitch.tmp`;
+    case "fork":
+      return `fork() && fork()`;
+    case "loop":
+      return `while true; do !!; done`;
+    case "if_wounded":
+      return `[ $${slug(enemyName) || "target"}_hp -le 50 ] &&`;
   }
 }

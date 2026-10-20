@@ -163,8 +163,8 @@ def test_api_shop_flow(monkeypatch) -> None:
 def _patched_new_run(original):
     """Every API run starts in a shop room with 300 gold."""
 
-    def new_run(seed, setting="dungeon", character=Character.CHRONOS):
-        run = original(seed, setting=setting, character=character)
+    def new_run(seed, setting="dungeon", character=Character.CHRONOS, **kwargs):
+        run = original(seed, setting=setting, character=character, **kwargs)
         node = run.nodes[run.current_node_id]
         run.nodes[node.id] = node.model_copy(update={"type": NodeType.SHOP})
         run.player.gold = 300

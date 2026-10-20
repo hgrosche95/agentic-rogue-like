@@ -64,6 +64,14 @@ class Artifact(BaseModel):
     token_regen: int = 0  # used tokens freed at the end of every turn
     opening_free_plays: int = 0  # the first N cards of every fight cost no tokens
     hallucination_percent: int = 0  # cards past the window hallucinate this % more often
+    # Only in program mode (combat.run_program):
+    hot_path: int = 0  # the card in this line (1-based) runs as its upgraded version
+    extra_lines: int = 0  # program lines beyond the field's slots
+    wounded_bonus: int = 0  # flat bonus for actions run once the enemy is at half HP
+    tail_call: int = 0  # extra runs of the program's last line ...
+    tail_call_every: int = 1  # ... on every Nth turn only
+    pipeline: int = 0  # flat bonus for the action right after control flow
+    compiler_bonus: int = 0  # the last line's action +this per card type that ran before it
 
 
 class CardType(StrEnum):
@@ -96,6 +104,11 @@ class CardType(StrEnum):
     OPENER = "opener"  # the first `value` cards of every turn cost no tokens
     # Junk an enemy's corrupt move shuffles in: does nothing, gone once played.
     GLITCH = "glitch"
+    # Control flow - program mode only (combat.run_program): they steer the
+    # action cards around them instead of doing anything themselves.
+    FORK = "fork"  # the next action to its right runs twice
+    LOOP = "loop"  # runs the last action to its left once more
+    IF_WOUNDED = "if_wounded"  # the next action runs twice if the enemy is at half HP by then
 
 
 PERMANENT_CARD_TYPES = frozenset(
@@ -366,6 +379,9 @@ class RunState(BaseModel):
     seed: int
     # Which map of the run the player is on - beating an act's boss opens
     # the next one (see engine.advance_act), beating the last one wins.
+    # Program mode (combat.run_program): action cards are queued on the field
+    # and run left to right when the turn ends, instead of on the spot.
+    program_mode: bool = False
     act: int = 1
     floor: int = 0
     status: RunStatus = RunStatus.ONGOING

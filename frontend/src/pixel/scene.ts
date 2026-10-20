@@ -58,6 +58,10 @@ const EV: Record<ArenaEvent, number> = {
   safeguard: 6, // armor
   opener: 5, // amplifier
   glitch: 8, // draw - flushing junk out of the hand
+  // control flow borrows the amplifier's (it boosts what follows it)
+  fork: 5,
+  loop: 5,
+  if_wounded: 5,
   enemy_attack: 20,
   enemy_attack_blocked: 21,
   enemy_brace: 22,

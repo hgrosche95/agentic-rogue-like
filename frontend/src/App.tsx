@@ -9,6 +9,7 @@ import {
   chooseEventOption,
   chooseNextNode,
   createRun,
+  moveQueued,
   endCombatTurn,
   leaveShop,
   listCharacters,
@@ -44,6 +45,7 @@ import { CloseButton, Overlay } from "./components/Overlay";
 import { eraLabel, numFloorsOf } from "./eras";
 import { RestScreen } from "./components/RestScreen";
 import { RewardScreen } from "./components/RewardScreen";
+import { ModePicker } from "./components/ModePicker";
 import { SettingPicker } from "./components/SettingPicker";
 import { ShopScreen } from "./components/ShopScreen";
 
@@ -77,6 +79,7 @@ function App() {
   const [selectedSetting, setSelectedSetting] = useState(FALLBACK_SETTINGS[0]);
   const [characters, setCharacters] = useState<CharacterView[]>(FALLBACK_CHARACTERS);
   const [selectedCharacter, setSelectedCharacter] = useState<Character>("chronos");
+  const [programMode, setProgramMode] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
   // Hovering a room on the map previews it in the next-jump panel.
   const [focusedJump, setFocusedJump] = useState<string | null>(null);
@@ -185,12 +188,23 @@ function App() {
           onSelect={setSelectedSetting}
           disabled={isLoading}
         />
+        <ModePicker
+          program={programMode}
+          onSelect={(program) => {
+            sfx.play("select");
+            setProgramMode(program);
+          }}
+          disabled={isLoading}
+        />
         <button
           className="is-primary start-run"
           disabled={isLoading || selectedSetting.trim() === ""}
           onClick={() => {
             sfx.play("select");
-            runAction(() => createRun(selectedSetting, selectedCharacter), "Building the dungeon...");
+            runAction(
+              () => createRun(selectedSetting, selectedCharacter, programMode),
+              "Building the dungeon...",
+            );
           }}
         >
           Start run
@@ -297,6 +311,7 @@ function App() {
             runAction(() => playCard(run.run_id, handIndex, slotIndex))
           }
           onEndTurn={(discard) => runAction(() => endCombatTurn(run.run_id, discard))}
+          onMoveQueued={(fromSlot, toSlot) => runAction(() => moveQueued(run.run_id, fromSlot, toSlot))}
         />
       ) : (
         <div className="map-layout">

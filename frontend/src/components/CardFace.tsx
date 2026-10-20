@@ -1,5 +1,5 @@
 import { useContext } from "react";
-import { PERMANENT_CARD_TYPES, type Card, type CardType } from "../api";
+import { CONTROL_FLOW_TYPES, PERMANENT_CARD_TYPES, type Card, type CardType } from "../api";
 import { ShowTokensContext } from "../characters";
 import { unitOf } from "../readouts";
 
@@ -8,10 +8,11 @@ import { unitOf } from "../readouts";
 // Vibe-Coder's tokens, bottom left), and, in combat, a readout with the
 // number the card will really come out with.
 
-type Kind = "strike" | "shield" | "repair" | "purge" | "flow" | "module";
+type Kind = "strike" | "shield" | "repair" | "purge" | "flow" | "module" | "control";
 
 function kindOf(type: CardType): Kind {
   if (PERMANENT_CARD_TYPES.includes(type)) return "module";
+  if (CONTROL_FLOW_TYPES.includes(type)) return "control";
   if (type === "attack") return "strike";
   if (type === "block") return "shield";
   if (type === "heal") return "repair";
@@ -26,6 +27,7 @@ const KIND_LABEL: Record<Kind, string> = {
   purge: "Purge",
   flow: "Card flow",
   module: "Permanent",
+  control: "Control flow",
 };
 
 export function CardTypeIcon({ type }: { type: CardType }) {
@@ -47,6 +49,10 @@ export function CardTypeIcon({ type }: { type: CardType }) {
           <path d="M15.6 7.4A6 6 0 0 0 4.6 7M4.4 12.6A6 6 0 0 0 15.4 13" />
           <path d="M4.2 3.6v3.6h3.6M15.8 16.4v-3.6h-3.6" />
         </>
+      )}
+      {kind === "control" && (
+        // a branch: one line splitting in two
+        <path d="M6 2.5v15M6 7.5c0 3 8 2 8 5.5v4.5M14 17.5l-2.4-2.4M14 17.5l2.4-2.4" />
       )}
       {kind === "module" && (
         <>

@@ -28,7 +28,11 @@ export type CardType =
   | "safeguard"
   | "opener"
   // junk an enemy's corrupt move shuffles in
-  | "glitch";
+  | "glitch"
+  // control flow - program mode only
+  | "fork"
+  | "loop"
+  | "if_wounded";
 
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
@@ -41,6 +45,17 @@ export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "token_regen",
   "safeguard",
   "opener",
+];
+
+// Program mode: what queues into the program instead of resolving on the
+// spot (combat.QUEUED_TYPES), and the control flow among it.
+export const CONTROL_FLOW_TYPES: readonly CardType[] = ["fork", "loop", "if_wounded"];
+export const QUEUED_TYPES: readonly CardType[] = [
+  "attack",
+  "block",
+  "heal",
+  "final_strike",
+  ...CONTROL_FLOW_TYPES,
 ];
 
 export type Rarity = "starter" | "common" | "uncommon" | "rare";
@@ -86,6 +101,8 @@ export interface Artifact {
   id: string;
   name: string;
   description: string;
+  // program mode: the line (1-based) whose card runs upgraded - 0 if none
+  hot_path: number;
 }
 
 export interface PlayerState {
@@ -207,6 +224,20 @@ export interface PendingCombatView {
   tokens_used: number;
   // used tokens freed at the end of the turn
   token_regen: number;
+  // Program mode: queued actions per line (may be longer than `field`),
+  // which of them will hallucinate, and where the fight will stand once the
+  // program has run. Null / empty in a classic run.
+  program_mode: boolean;
+  program: (Card | null)[];
+  program_glitched: boolean[];
+  program_preview: ProgramPreview | null;
+}
+
+export interface ProgramPreview {
+  enemy_hp: number;
+  enemy_block: number;
+  player_hp: number;
+  player_block: number;
 }
 
 export interface ShopCard {
@@ -289,10 +320,15 @@ export function listCharacters(): Promise<CharacterView[]> {
   return request<CharacterView[]>("/characters");
 }
 
-export function createRun(setting: string, character: Character, seed?: number): Promise<RunView> {
+export function createRun(
+  setting: string,
+  character: Character,
+  programMode = false,
+  seed?: number,
+): Promise<RunView> {
   return request<RunView>("/runs", {
     method: "POST",
-    body: JSON.stringify({ seed: seed ?? null, setting, character }),
+    body: JSON.stringify({ seed: seed ?? null, setting, character, program_mode: programMode }),
   });
 }
 
@@ -383,5 +419,13 @@ export function endCombatTurn(runId: string, discardIndices: number[] = []): Pro
   return request<RunView>(`/runs/${runId}/combat/end-turn`, {
     method: "POST",
     body: JSON.stringify({ discard_indices: discardIndices }),
+  });
+}
+
+// Program mode: move a queued action to another line (swaps with what waits there).
+export function moveQueued(runId: string, fromSlot: number, toSlot: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/combat/move-queued`, {
+    method: "POST",
+    body: JSON.stringify({ from_slot: fromSlot, to_slot: toSlot }),
   });
 }
