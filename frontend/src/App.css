@@ -3453,9 +3453,61 @@ body > .card-flight {
   background: repeating-linear-gradient(45deg, #2a1f55 0 6px, #1c1440 6px 12px);
 }
 
-/* an extra line (Extra Line, the Vibe-Coder's 6th) has no socket */
-.line-socket.is-none {
-  border: 0;
+/* the background under the lines: every permanent running, no limit */
+.program-board {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.program-background {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 4px 6px;
+  border: 3px dotted var(--line-strong);
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  opacity: 1;
+}
+
+.program-background:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.program-background.is-targetable {
+  border: 3px solid var(--accent);
+  background: #0a2a3a;
+  cursor: pointer;
+}
+
+.program-background.is-targetable:hover,
+.program-background.is-drop-target {
+  border-color: #fff;
+  background: #138fb0;
+}
+
+.background-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--muted, var(--text));
+}
+
+.background-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.program-background .line-socket {
+  max-width: 140px;
 }
 
 .line-label {

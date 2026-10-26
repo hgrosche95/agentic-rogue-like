@@ -4,9 +4,9 @@ import { queues } from "../program";
 import { CardFace, CardTypeIcon } from "./CardFace";
 import { SlotPreview } from "./SlotPreview";
 
-// Program mode's part of the stack: one row of lines, each a queued action
-// over the socket a permanent sits in, and the line saying what the program
-// will do. CombatPanel owns the state (what is aimed, picked up, dragged,
+// Program mode's part of the stack: one row of lines, each a queued action,
+// the background the permanents run in under it, and the line saying what the
+// program will do. CombatPanel owns the state (what is aimed, picked up, dragged,
 // running); this only draws it and reports clicks back.
 
 // Program mode: where the fight will stand once the queued program has run -
@@ -167,55 +167,57 @@ export function ProgramLines({
     );
   }
 
-  // the socket under a line, where a permanent sits - an
-  // Overclock there boosts the lines to its right, as on the classic field.
-  // Card flow, which still resolves on the spot, is played here too.
-  function renderSocket(line: number) {
-    if (line >= combat.field.length) {
-      return <div className="line-socket is-none" title="No field slot under this line" />;
-    }
-    const installed = combat.field[line];
-    const landing =
-      installed === null && pending?.slotIndex === line && !queues(combat, pending.card)
-        ? pending.card
-        : null;
-    const shown = installed ?? (landing && PERMANENT_CARD_TYPES.includes(landing.type) ? landing : null);
-    if (shown) {
-      return (
-        <div
-          className={`line-socket is-installed type-${shown.type}${landing ? " is-landing" : ""}`}
-          title={`${shown.name}: ${shown.description}`}
-        >
-          <CardTypeIcon type={shown.type} />
-          <span>{shown.name}</span>
-        </div>
-      );
-    }
-    if (combat.locked_slots.includes(line)) {
-      return <div className="line-socket is-locked" title="Locked by the enemy for this turn" />;
-    }
+  // The background, under the lines: every permanent running, as many as get
+  // played - each one works on the whole program, wherever it lands. Card flow,
+  // which still resolves on the spot, is dropped here too.
+  function renderBackground() {
+    const landing = pending && !queues(combat, pending.card) && PERMANENT_CARD_TYPES.includes(pending.card.type)
+      ? pending.card
+      : null;
     const aims = aimedCard !== undefined && !queues(combat, aimedCard);
+    const running = [...combat.field.filter((card) => card !== null), ...(landing ? [landing] : [])];
     return (
       <button
-        data-slot-index={aims ? line : undefined}
-        className={`line-socket is-empty${aims ? " is-targetable" : ""}${aims && handHoverSlot === line ? " is-drop-target" : ""}`}
+        type="button"
+        data-slot-index={aims ? 0 : undefined}
+        className={`program-background${aims ? " is-targetable" : ""}${aims && handHoverSlot === 0 ? " is-drop-target" : ""}`}
         disabled={locked || !cardSelected || !aims}
-        title={aims ? undefined : "Permanents go here"}
-        onClick={(event) => onPlay(line, event.currentTarget)}
+        onClick={(event) => onPlay(0, event.currentTarget)}
+        onPointerEnter={() => aims && onPoint(0, true)}
+        onPointerLeave={() => aims && onPoint(0, false)}
       >
-        {aims && (PERMANENT_CARD_TYPES.includes(aimedCard.type) ? "install" : "run")}
+        <span className="background-label">bg</span>
+        {running.map((card, i) => (
+          <span
+            key={i}
+            className={`line-socket is-installed type-${card.type}${card === landing ? " is-landing" : ""}`}
+            title={`${card.name}: ${card.description}`}
+          >
+            <CardTypeIcon type={card.type} />
+            <span>{card.name}</span>
+          </span>
+        ))}
+        {aims ? (
+          <span className="background-hint">
+            {PERMANENT_CARD_TYPES.includes(aimedCard.type) ? "+ install" : "run now"}
+          </span>
+        ) : (
+          running.length === 0 && <span className="background-hint">Permanents run here</span>
+        )}
       </button>
     );
   }
 
   return (
-    <div className="field program-lines">
-      {combat.program.map((card, line) => (
-        <div key={line} className={`program-line${line === hotLine ? " is-hot" : ""}`}>
-          {renderAction(card, line)}
-          {renderSocket(line)}
-        </div>
-      ))}
+    <div className="program-board">
+      <div className="field program-lines">
+        {combat.program.map((card, line) => (
+          <div key={line} className={`program-line${line === hotLine ? " is-hot" : ""}`}>
+            {renderAction(card, line)}
+          </div>
+        ))}
+      </div>
+      {renderBackground()}
     </div>
   );
 }

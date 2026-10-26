@@ -624,9 +624,11 @@ zum Programm. Angriffe, Block, Heilung und Final Strike wirken nicht sofort,
 sondern werden in eine der 5 Zeilen eingereiht und laufen am Zugende von
 links nach rechts (`combat.run_program`), direkt vor dem Zug des Gegners.
 Kartenfluss (Ziehen, Retrieve, Free Play, …) wirkt weiter sofort, und
-Permanente liegen *unter* den Zeilen: Ein Overclock in Zeile 1 verstärkt jede
-Anweisung rechts davon, eine Zeile kann Permanent und Anweisung zugleich
-tragen. Bis zum Zugende lassen sich eingereihte Karten umsortieren
+Permanente belegen keine Zeile: Sie laufen im Hintergrund, so viele man
+spielt (kein Limit von 5 Slots wie in Classic), und wirken aufs ganze
+Programm – ein Overclock verstärkt jede Zeile, eine Säuberung entfernt den
+zuletzt gestarteten. Das hebt die Run-Siegquote mit der Reihenfolge „wie
+gespielt“ (1000 Runs, `--pool`, Chronos) von 4 % auf 8 %, näher an Classic. Bis zum Zugende lassen sich eingereihte Karten umsortieren
 (`combat.move_queued`, `POST /runs/{id}/combat/move-queued`).
 `combat.program_preview` zeigt dabei, wo der Kampf nach dem Programm steht
 (HP und Block beider Seiten) – sonst plant man blind, weil eingereihter
@@ -668,14 +670,14 @@ ein Spieler landet dazwischen.
 
 Im Frontend wählt man den Modus beim Start („Classic“ / „Program“). Im Kampf
 ist das Feld eine Reihe von Zeilen: Angriffe, Block und Heilung landen oben
-in der Zeile, ein Permanent im Sockel darunter (ein Overclock dort verstärkt
-die Zeilen rechts davon). Eingereihte Karten zieht man auf eine andere Zeile
+in der Zeile, Permanente und Kartenfluss in der Hintergrund-Leiste darunter. Eingereihte Karten zieht man auf eine andere Zeile
 (oder klickt sie an und dann die Zeile); eine belegte Zeile tauscht. Über
 den Zeilen steht, was das Programm bewirken wird (Gegner-HP und -Block, eigener
 Block), und „Incoming“ rechnet den eingereihten Block schon ein. Die
 Hot-Path-Zeile ist gold markiert, und ihre Vorschau zeigt den verbesserten
-Wert. „Run program“ lässt die Zeilen nacheinander aufleuchten, bevor der Gegner
-zieht.
+Wert. Eingereihte Karten werden beim Ausspielen nur eingetippt; ihre
+Animation läuft erst, wenn „Run program“ die Zeilen nacheinander (gut eine
+Sekunde pro Zeile) aufleuchten lässt, bevor der Gegner zieht.
 
 ### Interrupt
 

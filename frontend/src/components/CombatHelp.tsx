@@ -10,8 +10,8 @@ const PROGRAM_RULES: [string, string][] = [
     "Run program runs the lines left to right, then the enemy acts. Above the lines you see what the program will do: the enemy's HP and block, your block.",
   ],
   [
-    "Sockets",
-    "Permanents go into the socket under a line. An Overclock boosts every line to its right - so it belongs far left.",
+    "Background",
+    "Permanents don't take a line: they run in the background, as many as you play, and work on the whole program - an Overclock boosts every line.",
   ],
   ["Right away", "Draw, retrieve and other card-flow cards still work the moment you play them."],
   ["Move", "Drag a queued card onto another line - or click it, then the line. An occupied line swaps."],

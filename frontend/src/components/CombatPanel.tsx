@@ -585,13 +585,13 @@ export function CombatPanel({
             : movingLine !== null
             ? `Moving line ${movingLine + 1}: click another line - an occupied one swaps.`
             : programMode && selectedHandIndex === null
-            ? "Attacks, blocks and heals queue into the lines; permanents go into the socket under a line and boost the lines to its right. Drag a queued card to move it."
+            ? "Attacks, blocks and heals queue into the lines; permanents run in the background and boost the whole program. Drag a queued card to move it."
             : programMode && aimedCard && queues(combat, aimedCard)
             ? "Choose a program line - it runs at the end of the turn, left to right."
             : programMode && aimedCard && PERMANENT_CARD_TYPES.includes(aimedCard.type)
-            ? "Choose a socket under a line - it boosts the lines to its right."
+            ? "Drop it into the background - it boosts every line of the program."
             : programMode && aimedCard
-            ? "Choose a socket - this card runs right away, not in the program."
+            ? "Drop it into the background - this card runs right away, not in the program."
             : selectedHandIndex === null
             ? "Drag a card onto an empty slot of the stack - or click it, then click a slot."
             : "Choose an empty slot to run the selected card."}

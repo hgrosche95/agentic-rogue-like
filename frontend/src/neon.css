@@ -424,8 +424,16 @@ body > .card-drag.type-batch {
   color: var(--card, var(--text));
 }
 
-.line-socket.is-empty {
+.line-socket.is-empty,
+.program-background {
   border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+}
+
+.program-background.is-targetable {
+  border: 1px solid var(--accent);
+  background: rgba(52, 231, 255, 0.08);
+  box-shadow: 0 0 12px rgba(52, 231, 255, 0.45);
 }
 
 .line-socket.is-empty.is-targetable {
