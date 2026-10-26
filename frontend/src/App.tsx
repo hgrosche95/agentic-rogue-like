@@ -20,6 +20,7 @@ import {
   leaveShop,
   listCharacters,
   listSettings,
+  ping,
   playCard,
   resolveCurrentNode,
   restHeal,
@@ -58,6 +59,9 @@ import { ShopScreen } from "./components/ShopScreen";
 
 const FALLBACK_SETTINGS = ["dungeon"];
 const INTRO_SEEN_KEY = "agentic-rogue-like:intro-seen";
+// well under the container app's 300 s scale-down cooldown
+const KEEP_ALIVE_MS = 2 * 60 * 1000;
+const KEEP_ALIVE_IDLE_MS = 30 * 60 * 1000;
 
 // The intro plays once per browser; storage can be blocked (private mode),
 // and then it simply plays again next time.
@@ -145,6 +149,28 @@ function App() {
         // Keep Dr. Chronos alone - he's the API's default anyway.
       });
   }, []);
+
+  // Keep the API awake while a run is open: runs only live in its memory, and
+  // the container scales to zero after 5 idle minutes - reading a card or the
+  // map that long used to lose the run. The ping stops once nobody has touched
+  // the page for a while, so a forgotten tab doesn't keep the server up.
+  const runOpen = run !== null && run.status === "ongoing";
+  useEffect(() => {
+    if (!runOpen) return;
+    let lastActivity = Date.now();
+    const touch = () => {
+      lastActivity = Date.now();
+    };
+    const events = ["pointerdown", "keydown", "pointermove"] as const;
+    events.forEach((e) => window.addEventListener(e, touch, { passive: true }));
+    const timer = window.setInterval(() => {
+      if (Date.now() - lastActivity < KEEP_ALIVE_IDLE_MS) ping().catch(() => {});
+    }, KEEP_ALIVE_MS);
+    return () => {
+      window.clearInterval(timer);
+      events.forEach((e) => window.removeEventListener(e, touch));
+    };
+  }, [runOpen]);
 
   async function runAction(action: () => Promise<RunView>, label = "Loading...") {
     setLoadingLabel(label);

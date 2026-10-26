@@ -548,6 +548,14 @@ def _finish_fight(session: RunSession) -> None:
         session.prefetch.warm(session.run)
 
 
+@app.get("/health")
+def health() -> dict[str, str]:
+    """For the frontend's keep-alive while a run is open: runs only live in
+    this process (sessions.py), and the container scales to zero after a few
+    minutes without requests."""
+    return {"status": "ok"}
+
+
 @app.get("/settings")
 def list_settings() -> list[str]:
     return list(SETTING_PRESETS)

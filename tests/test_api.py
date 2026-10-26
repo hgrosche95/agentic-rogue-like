@@ -265,3 +265,10 @@ def test_vibe_coder_run_always_terminates() -> None:
     for seed in range(5):
         run = _play_full_run(seed, character="vibe_coder")
         assert run["status"] in ("victory", "defeat")
+
+
+def test_health_answers_for_the_keep_alive() -> None:
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}

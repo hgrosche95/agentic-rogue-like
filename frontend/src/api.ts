@@ -334,6 +334,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export function ping(): Promise<{ status: string }> {
+  return request<{ status: string }>("/health");
+}
+
 export function listSettings(): Promise<string[]> {
   return request<string[]>("/settings");
 }
