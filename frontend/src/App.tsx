@@ -119,6 +119,13 @@ function App() {
     music.setMood(mood);
   }, [mood]);
 
+  // How far down the AGI's code the run is, 0 at the title screen to 1 at the
+  // last core: the page's ground darkens with it (see body in neon.css).
+  const depth = run ? (run.act - 1 + run.floor / Math.max(1, numFloorsOf(run.nodes) - 1)) / run.num_acts : 0;
+  useEffect(() => {
+    document.documentElement.style.setProperty("--depth", depth.toFixed(3));
+  }, [depth]);
+
   useEffect(() => {
     if (!inCombat) setIsMapOpen(false);
   }, [inCombat]);
