@@ -311,6 +311,14 @@ export interface RunView {
   nodes: Record<string, MapNode>;
 }
 
+// Runs only live in the API's memory (sessions.py): a restart or an idle
+// timeout loses them, and every request for that run answers 404.
+export class RunLostError extends Error {
+  constructor() {
+    super("The server lost this run (it was restarted or idle too long). Start a new one.");
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -318,6 +326,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = await response.text();
+    if (response.status === 404 && path.startsWith("/runs/") && body.includes("run not found")) {
+      throw new RunLostError();
+    }
     throw new Error(`${init?.method ?? "GET"} ${path} failed: ${response.status} ${body}`);
   }
   return response.json() as Promise<T>;

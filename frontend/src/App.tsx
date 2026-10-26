@@ -25,6 +25,7 @@ import {
   restHeal,
   restRemove,
   restUpgrade,
+  RunLostError,
   type Character,
   type CharacterView,
   type PendingCombatView,
@@ -154,6 +155,11 @@ function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       sfx.play("error");
+      // nothing left to retry against - back to the title screen
+      if (err instanceof RunLostError) {
+        setRun(null);
+        setSlainCombat(null);
+      }
     } finally {
       setIsLoading(false);
     }
