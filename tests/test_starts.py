@@ -137,3 +137,21 @@ def test_a_vibe_coder_kit_swaps_one_basic_attack_and_one_basic_block() -> None:
     size = len(run.player.deck)
     choose_kit(run, 0)
     assert len(run.player.deck) == size
+
+
+def test_api_deals_name_their_cards_for_hover_previews() -> None:
+    from fastapi.testclient import TestClient
+
+    from agentic_rogue_like.api import app
+
+    client = TestClient(app)
+    for seed in range(30):
+        run = client.post("/runs", json={"seed": seed}).json()
+        run_id = run["run_id"]
+        client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0})
+        run = client.post(f"/runs/{run_id}/kit", json={"kit_index": 0}).json()
+        for deal in run["agi_deals"]:
+            for card in deal["mentions"]:
+                assert card["name"].rstrip("+") in deal["description"]
+            if deal["kind"] == "hotfix":
+                assert all(c["upgraded"] for c in deal["mentions"])

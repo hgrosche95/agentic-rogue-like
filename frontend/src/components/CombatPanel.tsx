@@ -549,17 +549,31 @@ export function CombatPanel({
         </div>
 
         <div className="table-side">
-          <button
-            className="end-turn-button"
-            disabled={busy || (discarding !== null && discarding.length !== excess)}
-            onClick={endTurn}
-          >
-            {discarding !== null
-              ? "Discard & end turn"
-              : queuedLines.length > 0
-                ? "Run program"
-                : "End turn"}
-          </button>
+          {/* After the killing blow the same big button moves on - it doesn't
+              wait for the arena's fade-in, which a background tab may never play. */}
+          {enemySlain ? (
+            <button
+              className="end-turn-button"
+              onClick={() => {
+                sfx.play("click");
+                onContinue?.();
+              }}
+            >
+              Continue
+            </button>
+          ) : (
+            <button
+              className="end-turn-button"
+              disabled={busy || (discarding !== null && discarding.length !== excess)}
+              onClick={endTurn}
+            >
+              {discarding !== null
+                ? "Discard & end turn"
+                : queuedLines.length > 0
+                  ? "Run program"
+                  : "End turn"}
+            </button>
+          )}
           {discarding !== null && (
             <button className="end-turn-button is-cancel" disabled={busy} onClick={() => setDiscarding(null)}>
               Cancel

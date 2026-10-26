@@ -53,12 +53,14 @@ import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
 import { CloseButton, Overlay } from "./components/Overlay";
 import { layerLabel, numFloorsOf } from "./layers";
+import { ProgramModeContext } from "./program";
 import { RestScreen } from "./components/RestScreen";
 import { RewardScreen } from "./components/RewardScreen";
 import { ModePicker } from "./components/ModePicker";
 import { SettingPicker } from "./components/SettingPicker";
 import { DealScreen, KitScreen } from "./components/StartScreens";
 import { ShopScreen } from "./components/ShopScreen";
+import { Tooltips } from "./components/RichText";
 
 const FALLBACK_SETTINGS = ["dungeon"];
 const INTRO_SEEN_KEY = "agentic-rogue-like:intro-seen";
@@ -218,6 +220,7 @@ function App() {
   if (run === null) {
     return (
       <main className="game is-title">
+        <Tooltips />
         <AudioControls className="is-floating" />
         <Brand />
         <p className="title-tagline">A deckbuilder: hack your way down into a rogue AGI's code</p>
@@ -497,7 +500,12 @@ function App() {
     </main>
   );
 
-  return <ShowTokensContext.Provider value={showTokens}>{screen}</ShowTokensContext.Provider>;
+  return (
+    <ShowTokensContext.Provider value={showTokens}>
+      <ProgramModeContext.Provider value={run.program_mode}>{screen}</ProgramModeContext.Provider>
+      <Tooltips />
+    </ShowTokensContext.Provider>
+  );
 }
 
 export default App;

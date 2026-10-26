@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import type { AgiDeal, StarterKit } from "../api";
 import { sfx } from "../audio";
 import { CardFace } from "./CardFace";
+import { TextWithCards } from "./CardMention";
+import { RichText } from "./RichText";
 
 // The start of a run, after the first artifact (see the backend's starts.py):
 // a starter kit that sets the deck's direction, then the AGI's deal.
@@ -37,7 +39,9 @@ export function KitScreen({
             }}
           >
             <span className="kit-name">{kit.name}</span>
-            <span className="kit-blurb">{kit.blurb}</span>
+            <span className="kit-blurb">
+              <RichText text={kit.blurb} />
+            </span>
             <span className="kit-cards">
               {kit.cards.map((card) => (
                 <span key={card.id} className={`hand-card reward-card type-${card.type} rarity-${card.rarity}`}>
@@ -89,7 +93,9 @@ export function DealScreen({
             }}
           >
             <span className="deal-name">{deal.name}</span>
-            <span className="deal-text">{deal.description}</span>
+            <span className="deal-text">
+              <TextWithCards text={deal.description} cards={deal.mentions} />
+            </span>
           </button>
         ))}
       </div>

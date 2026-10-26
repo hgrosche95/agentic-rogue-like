@@ -303,6 +303,8 @@ export interface RunView {
   pending_combat: PendingCombatView | null;
   card_reward: Card[] | null;
   artifact_offer: Artifact[] | null;
+  // program mode for the whole run - card texts read differently there
+  program_mode: boolean;
   // the start of the run, after the first artifact: a kit, then the AGI's deal
   kit_offer: StarterKit[] | null;
   agi_deals: AgiDeal[] | null;
@@ -331,12 +333,14 @@ export interface StarterKit {
   cards: Card[];
 }
 
-// One of the AGI's opening deals; `cards` is what taking it adds to the deck.
+// One of the AGI's opening deals; `cards` is what taking it adds to the deck,
+// `mentions` every card its description names (an upgrade as it will be).
 export interface AgiDeal {
   kind: "strip" | "mutate" | "forbidden" | "trojan" | "hotfix" | "bribe";
   name: string;
   description: string;
   cards: Card[];
+  mentions: Card[];
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
