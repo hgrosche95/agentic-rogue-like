@@ -108,8 +108,9 @@ function fanStyle(index: number, count: number): CSSProperties {
   return { "--rot": `${rot}deg`, "--lift": `${lift}px` } as CSSProperties;
 }
 
-// how long each program line stays lit while the program runs
-const PROGRAM_STEP_MS = 420;
+// how long each program line stays lit while the program runs - long enough
+// for its card animation to play out before the next line starts
+const PROGRAM_STEP_MS = 1100;
 
 export function CombatPanel({
   combat,
@@ -281,12 +282,17 @@ export function CombatPanel({
     setCommands((sent) => [...sent, { at: log.length, text }]);
     setTyping(true);
     sfx.play("typing", { durationMs: TYPING_MS });
+    // A card that queues into the program only runs at the end of the turn,
+    // so its animation waits for "Run program" (see endTurn).
+    const runsNow = !queues(combat, played);
     window.setTimeout(() => {
       setTyping(false);
       // Enter, and the command runs
       sfx.play("enter");
-      sfx.play(cardSound(played.type), { hits: hitsOf(played.description), delayMs: 40 });
-      arenaRef.current?.cardPlayed(played.type, played.value);
+      if (runsNow) {
+        sfx.play(cardSound(played.type), { hits: hitsOf(played.description), delayMs: 40 });
+        arenaRef.current?.cardPlayed(played.type, played.value);
+      }
       onPlayCard(handIndex, slotIndex);
     }, TYPING_MS + 150);
   }
@@ -579,13 +585,13 @@ export function CombatPanel({
             : movingLine !== null
             ? `Moving line ${movingLine + 1}: click another line - an occupied one swaps.`
             : programMode && selectedHandIndex === null
-            ? "Attacks, blocks and heals queue into the lines; permanents go into the socket under a line and boost the lines to its right. Drag a queued card to move it."
+            ? "Attacks, blocks and heals queue into the lines; permanents run in the background and boost the whole program. Drag a queued card to move it."
             : programMode && aimedCard && queues(combat, aimedCard)
             ? "Choose a program line - it runs at the end of the turn, left to right."
             : programMode && aimedCard && PERMANENT_CARD_TYPES.includes(aimedCard.type)
-            ? "Choose a socket under a line - it boosts the lines to its right."
+            ? "Drop it into the background - it boosts every line of the program."
             : programMode && aimedCard
-            ? "Choose a socket - this card runs right away, not in the program."
+            ? "Drop it into the background - this card runs right away, not in the program."
             : selectedHandIndex === null
             ? "Drag a card onto an empty slot of the stack - or click it, then click a slot."
             : "Choose an empty slot to run the selected card."}

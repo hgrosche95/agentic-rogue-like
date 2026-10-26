@@ -12,7 +12,9 @@ import {
   buyShopCard,
   chooseArtifact,
   chooseCardReward,
+  chooseDeal,
   chooseEventOption,
+  chooseKit,
   chooseNextNode,
   createRun,
   moveQueued,
@@ -20,11 +22,13 @@ import {
   leaveShop,
   listCharacters,
   listSettings,
+  ping,
   playCard,
   resolveCurrentNode,
   restHeal,
   restRemove,
   restUpgrade,
+  RunLostError,
   type Character,
   type CharacterView,
   type PendingCombatView,
@@ -48,15 +52,19 @@ import { LoadingIndicator } from "./components/LoadingIndicator";
 import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
 import { CloseButton, Overlay } from "./components/Overlay";
-import { eraLabel, numFloorsOf } from "./eras";
+import { layerLabel, numFloorsOf } from "./layers";
 import { RestScreen } from "./components/RestScreen";
 import { RewardScreen } from "./components/RewardScreen";
 import { ModePicker } from "./components/ModePicker";
 import { SettingPicker } from "./components/SettingPicker";
+import { DealScreen, KitScreen } from "./components/StartScreens";
 import { ShopScreen } from "./components/ShopScreen";
 
 const FALLBACK_SETTINGS = ["dungeon"];
 const INTRO_SEEN_KEY = "agentic-rogue-like:intro-seen";
+// well under the container app's 300 s scale-down cooldown
+const KEEP_ALIVE_MS = 2 * 60 * 1000;
+const KEEP_ALIVE_IDLE_MS = 30 * 60 * 1000;
 
 // The intro plays once per browser; storage can be blocked (private mode),
 // and then it simply plays again next time.
@@ -118,6 +126,13 @@ function App() {
     music.setMood(mood);
   }, [mood]);
 
+  // How far down the AGI's code the run is, 0 at the title screen to 1 at the
+  // last core: the page's ground darkens with it (see body in neon.css).
+  const depth = run ? (run.act - 1 + run.floor / Math.max(1, numFloorsOf(run.nodes) - 1)) / run.num_acts : 0;
+  useEffect(() => {
+    document.documentElement.style.setProperty("--depth", depth.toFixed(3));
+  }, [depth]);
+
   useEffect(() => {
     if (!inCombat) setIsMapOpen(false);
   }, [inCombat]);
@@ -138,6 +153,28 @@ function App() {
       });
   }, []);
 
+  // Keep the API awake while a run is open: runs only live in its memory, and
+  // the container scales to zero after 5 idle minutes - reading a card or the
+  // map that long used to lose the run. The ping stops once nobody has touched
+  // the page for a while, so a forgotten tab doesn't keep the server up.
+  const runOpen = run !== null && run.status === "ongoing";
+  useEffect(() => {
+    if (!runOpen) return;
+    let lastActivity = Date.now();
+    const touch = () => {
+      lastActivity = Date.now();
+    };
+    const events = ["pointerdown", "keydown", "pointermove"] as const;
+    events.forEach((e) => window.addEventListener(e, touch, { passive: true }));
+    const timer = window.setInterval(() => {
+      if (Date.now() - lastActivity < KEEP_ALIVE_IDLE_MS) ping().catch(() => {});
+    }, KEEP_ALIVE_MS);
+    return () => {
+      window.clearInterval(timer);
+      events.forEach((e) => window.removeEventListener(e, touch));
+    };
+  }, [runOpen]);
+
   async function runAction(action: () => Promise<RunView>, label = "Loading...") {
     setLoadingLabel(label);
     setIsLoading(true);
@@ -154,6 +191,11 @@ function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       sfx.play("error");
+      // nothing left to retry against - back to the title screen
+      if (err instanceof RunLostError) {
+        setRun(null);
+        setSlainCombat(null);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -178,7 +220,7 @@ function App() {
       <main className="game is-title">
         <AudioControls className="is-floating" />
         <Brand />
-        <p className="title-tagline">A time-travel deckbuilder against a rogue AGI</p>
+        <p className="title-tagline">A deckbuilder: hack your way down into a rogue AGI's code</p>
         <CharacterPicker
           characters={characters}
           selected={selectedCharacter}
@@ -229,7 +271,7 @@ function App() {
   function jumpTo(nodeId: string) {
     sfx.play("map_select");
     setFocusedJump(null);
-    runAction(() => chooseNextNode(run!.run_id, nodeId), "Jumping through time...");
+    runAction(() => chooseNextNode(run!.run_id, nodeId), "Going one layer deeper...");
   }
 
   function enterRoom() {
@@ -255,6 +297,8 @@ function App() {
     !run.pending_event &&
     !run.card_reward &&
     !run.artifact_offer &&
+    !run.kit_offer &&
+    !run.agi_deals &&
     !run.shop &&
     !run.rest &&
     !run.node_resolved;
@@ -308,7 +352,7 @@ function App() {
           combat={combat}
           setting={run.setting}
           player={run.player}
-          era={eraLabel(run.floor, numFloors, run.act)}
+          era={layerLabel(run.floor, numFloors, run.act)}
           log={run.history}
           disabled={isLoading || slainCombat !== null}
           enemySlain={slainCombat !== null}
@@ -323,7 +367,7 @@ function App() {
         <div className="map-layout">
           <section className="panel map-panel">
             <div className="panel-head">
-              <h2 className="panel-title">Temporal map</h2>
+              <h2 className="panel-title">Call stack</h2>
               <span className="panel-sub">{canJump ? "Select your next jump" : run.setting}</span>
             </div>
             <DungeonMap {...mapProps} onHover={setFocusedJump} />
@@ -364,15 +408,32 @@ function App() {
           />
         </Overlay>
       )}
-      {/* at the start the artifact comes first, then the starting card */}
       {!combat && ongoing && run.card_reward && !run.artifact_offer && (
         <Overlay label="Choose a card" className="is-wide">
           <RewardScreen
             offer={run.card_reward}
-            isStart={!run.current_node.visited}
             deckSize={run.player.deck.length}
             disabled={isLoading}
             onPick={(cardIndex) => runAction(() => chooseCardReward(run.run_id, cardIndex))}
+          />
+        </Overlay>
+      )}
+      {/* at the start the artifact comes first, then the kit, then the AGI's deal */}
+      {!combat && ongoing && run.kit_offer && !run.artifact_offer && (
+        <Overlay label="Pack a starter kit" className="is-wide">
+          <KitScreen
+            offer={run.kit_offer}
+            disabled={isLoading}
+            onPick={(kitIndex) => runAction(() => chooseKit(run.run_id, kitIndex))}
+          />
+        </Overlay>
+      )}
+      {!combat && ongoing && run.agi_deals && (
+        <Overlay label="The AGI's offer" className="is-wide">
+          <DealScreen
+            deals={run.agi_deals}
+            disabled={isLoading}
+            onPick={(dealIndex) => runAction(() => chooseDeal(run.run_id, dealIndex))}
           />
         </Overlay>
       )}
@@ -416,10 +477,10 @@ function App() {
       )}
 
       {inCombat && isMapOpen && (
-        <Overlay label="Temporal map" onClose={() => setIsMapOpen(false)} className="is-wide">
+        <Overlay label="Call stack" onClose={() => setIsMapOpen(false)} className="is-wide">
           <section className="panel">
             <div className="panel-head">
-              <h2 className="panel-title">Temporal map</h2>
+              <h2 className="panel-title">Call stack</h2>
               <CloseButton onClick={() => setIsMapOpen(false)} label="Close map" />
             </div>
             <DungeonMap {...mapProps} />

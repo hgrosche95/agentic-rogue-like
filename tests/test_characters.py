@@ -260,7 +260,7 @@ def test_vibe_coder_rewards_and_shops_come_from_his_pool() -> None:
     seen: set[str] = set()
     for seed in range(40):
         run = new_run(seed, character=Character.VIBE_CODER)
-        seen |= {c.name for c in run.card_reward}
+        seen |= {c.name for kit in run.kit_offer for c in kit.cards}
         seen |= {item.card.name for item in roll_shop(run).cards}
 
     assert seen <= pool

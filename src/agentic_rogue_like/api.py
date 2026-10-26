@@ -55,6 +55,8 @@ from .engine import (
     available_choices,
     choose_artifact,
     choose_card_reward,
+    choose_deal,
+    choose_kit,
     end_combat_turn,
     finalize_combat,
     move_to,
@@ -68,11 +70,13 @@ from .engine import (
     rest_upgrade,
     start_combat_node,
     start_event,
+    start_pending,
 )
 from .events import describe_option
 from .models import (
     MAX_CUSTOM_SETTING_LENGTH,
     SETTING_PRESETS,
+    AgiDeal,
     Artifact,
     Card,
     Character,
@@ -82,6 +86,7 @@ from .models import (
     RestSite,
     RunStatus,
     Shop,
+    StarterKit,
 )
 from .sessions import RunSession, create_session, get_session
 from .shop import MIN_DECK_SIZE, buy_artifact, buy_card, leave_shop, remove_card
@@ -326,6 +331,10 @@ class RunView(BaseModel):
     card_reward: list[CardView] | None
     # Artifacts to pick one from before the current room can be entered.
     artifact_offer: list[Artifact] | None
+    # The start of the run, after the first artifact: a starter kit to pick,
+    # then the AGI's deals to take one of or turn down (starts.py).
+    kit_offer: list[StarterKitView] | None
+    agi_deals: list[AgiDealView] | None
     # The shop being browsed, until the player leaves it.
     shop: ShopView | None
     # The rest site's choice, until the player makes it.
@@ -387,6 +396,44 @@ class EndTurnRequest(BaseModel):
 
 class ArtifactChoiceRequest(BaseModel):
     artifact_index: int
+
+
+class KitChoiceRequest(BaseModel):
+    kit_index: int
+
+
+class DealChoiceRequest(BaseModel):
+    # None turns every deal down.
+    deal_index: int | None
+
+
+class StarterKitView(BaseModel):
+    id: str
+    name: str
+    blurb: str
+    cards: list[CardView]
+
+    @classmethod
+    def of(cls, kit: StarterKit) -> StarterKitView:
+        cards = [CardView.of(c) for c in kit.cards]
+        return cls(id=kit.id, name=kit.name, blurb=kit.blurb, cards=cards)
+
+
+class AgiDealView(BaseModel):
+    kind: str
+    name: str
+    description: str
+    # the cards taking it puts in the deck, to show as card faces
+    cards: list[CardView]
+
+    @classmethod
+    def of(cls, deal: AgiDeal) -> AgiDealView:
+        return cls(
+            kind=deal.kind.value,
+            name=deal.name,
+            description=deal.description,
+            cards=[CardView.of(c) for c in deal.add],
+        )
 
 
 class CardRewardRequest(BaseModel):
@@ -523,6 +570,8 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             None if run.card_reward is None else [CardView.of(c) for c in run.card_reward]
         ),
         artifact_offer=run.artifact_offer,
+        kit_offer=None if run.kit_offer is None else [StarterKitView.of(k) for k in run.kit_offer],
+        agi_deals=None if run.agi_deals is None else [AgiDealView.of(d) for d in run.agi_deals],
         shop=None if run.shop is None else ShopView.of(run.shop),
         rest=None if run.rest is None else RestView.of(run.rest, run.player.deck),
         play_style=(style.value if (style := play_style(run.player.deck)) else None),
@@ -546,6 +595,14 @@ def _finish_fight(session: RunSession) -> None:
         # A beaten boss opened the next act's map - its first rooms are
         # reachable now, not only after the next jump.
         session.prefetch.warm(session.run)
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    """For the frontend's keep-alive while a run is open: runs only live in
+    this process (sessions.py), and the container scales to zero after a few
+    minutes without requests."""
+    return {"status": "ok"}
 
 
 @app.get("/settings")
@@ -605,6 +662,8 @@ def resolve_current_node(run_id: str) -> RunView:
         raise HTTPException(status_code=409, detail="choose an artifact first")
     if run.card_reward is not None:
         raise HTTPException(status_code=409, detail="choose a card first")
+    if start_pending(run):
+        raise HTTPException(status_code=409, detail="finish the start of the run first")
 
     prefetch = session.prefetch
     if node.type is NodeType.EVENT:
@@ -719,6 +778,30 @@ def choose_artifact_endpoint(run_id: str, request: ArtifactChoiceRequest) -> Run
     return _run_view(run_id, session)
 
 
+@app.post("/runs/{run_id}/kit")
+def choose_kit_endpoint(run_id: str, request: KitChoiceRequest) -> RunView:
+    session = _get_session_or_404(run_id)
+    if session.run.kit_offer is None:
+        raise HTTPException(status_code=409, detail="no starter kit offered")
+    try:
+        choose_kit(session.run, request.kit_index)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _run_view(run_id, session)
+
+
+@app.post("/runs/{run_id}/agi-deal")
+def choose_deal_endpoint(run_id: str, request: DealChoiceRequest) -> RunView:
+    session = _get_session_or_404(run_id)
+    if session.run.agi_deals is None:
+        raise HTTPException(status_code=409, detail="no deal pending")
+    try:
+        choose_deal(session.run, request.deal_index)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _run_view(run_id, session)
+
+
 def _shop_action(run_id: str, action) -> RunView:
     session = _get_session_or_404(run_id)
     if session.run.shop is None:
@@ -792,6 +875,7 @@ def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
         or run.card_reward is not None
         or run.shop is not None
         or run.rest is not None
+        or start_pending(run)
     ):
         raise HTTPException(status_code=409, detail="current node is not resolved yet")
     if request.node_id not in available_choices(run):

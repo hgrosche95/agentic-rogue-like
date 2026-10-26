@@ -69,7 +69,7 @@ export function RestScreen({
 
       {mode === "choose" && (
         <>
-          <p className="reward-hint">Choose one - then the timeline pulls you onward.</p>
+          <p className="reward-hint">Choose one - then the code pulls you deeper.</p>
           <div className="artifact-offer rest-options">
             <button
               type="button"

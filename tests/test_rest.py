@@ -23,7 +23,7 @@ from agentic_rogue_like.shop import MIN_DECK_SIZE
 
 def _at_rest(**player):
     run = new_run(1)
-    run.artifact_offer = run.card_reward = None
+    run.artifact_offer = run.kit_offer = None
     rest_id = next(i for i, n in run.nodes.items() if n.type is NodeType.REST)
     run.current_node_id = rest_id
     for key, value in player.items():
@@ -79,7 +79,7 @@ def test_upgraded_overclock_and_encryption_are_stronger_in_combat() -> None:
 
 def test_rest_heals_by_default_through_resolve_node() -> None:
     run = new_run(1)
-    run.artifact_offer = run.card_reward = None
+    run.artifact_offer = run.kit_offer = None
     run.current_node_id = next(i for i, n in run.nodes.items() if n.type is NodeType.REST)
     run.player.hp = 10
 
@@ -92,7 +92,7 @@ def test_rest_heals_by_default_through_resolve_node() -> None:
 def test_heal_amount_includes_artifacts() -> None:
     sleep_mode = next(a for a in ARTIFACT_POOL if a.rest_heal)
     run = new_run(1)
-    run.artifact_offer = run.card_reward = None
+    run.artifact_offer = run.kit_offer = None
     run.player.artifacts.append(sleep_mode)
     run.current_node_id = next(i for i, n in run.nodes.items() if n.type is NodeType.REST)
     open_rest(run, narrator=lambda s, t: None)
@@ -155,7 +155,7 @@ client = TestClient(app)
 def _api_run_at_rest() -> str:
     run_id = client.post("/runs", json={"seed": 1}).json()["run_id"]
     run = get_session(run_id).run
-    run.artifact_offer = run.card_reward = None
+    run.artifact_offer = run.kit_offer = None
     run.current_node_id = next(i for i, n in run.nodes.items() if n.type is NodeType.REST)
     return run_id
 
