@@ -60,7 +60,7 @@ CHARACTERS: dict[Character, CharacterProfile] = {
     Character.CHRONOS: CharacterProfile(
         id=Character.CHRONOS,
         name="Dr. Chronos",
-        title="Human · Time traveller",
+        title="Human · Hacker",
         description="Plays steady: draws 3 cards at the end of every turn.",
         hp=45,
         attack=2,

@@ -49,7 +49,7 @@ import { LoadingIndicator } from "./components/LoadingIndicator";
 import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
 import { CloseButton, Overlay } from "./components/Overlay";
-import { eraLabel, numFloorsOf } from "./eras";
+import { layerLabel, numFloorsOf } from "./layers";
 import { RestScreen } from "./components/RestScreen";
 import { RewardScreen } from "./components/RewardScreen";
 import { ModePicker } from "./components/ModePicker";
@@ -184,7 +184,7 @@ function App() {
       <main className="game is-title">
         <AudioControls className="is-floating" />
         <Brand />
-        <p className="title-tagline">A time-travel deckbuilder against a rogue AGI</p>
+        <p className="title-tagline">A deckbuilder: hack your way down into a rogue AGI's code</p>
         <CharacterPicker
           characters={characters}
           selected={selectedCharacter}
@@ -235,7 +235,7 @@ function App() {
   function jumpTo(nodeId: string) {
     sfx.play("map_select");
     setFocusedJump(null);
-    runAction(() => chooseNextNode(run!.run_id, nodeId), "Jumping through time...");
+    runAction(() => chooseNextNode(run!.run_id, nodeId), "Going one layer deeper...");
   }
 
   function enterRoom() {
@@ -314,7 +314,7 @@ function App() {
           combat={combat}
           setting={run.setting}
           player={run.player}
-          era={eraLabel(run.floor, numFloors, run.act)}
+          era={layerLabel(run.floor, numFloors, run.act)}
           log={run.history}
           disabled={isLoading || slainCombat !== null}
           enemySlain={slainCombat !== null}
@@ -329,7 +329,7 @@ function App() {
         <div className="map-layout">
           <section className="panel map-panel">
             <div className="panel-head">
-              <h2 className="panel-title">Temporal map</h2>
+              <h2 className="panel-title">Call stack</h2>
               <span className="panel-sub">{canJump ? "Select your next jump" : run.setting}</span>
             </div>
             <DungeonMap {...mapProps} onHover={setFocusedJump} />
@@ -422,10 +422,10 @@ function App() {
       )}
 
       {inCombat && isMapOpen && (
-        <Overlay label="Temporal map" onClose={() => setIsMapOpen(false)} className="is-wide">
+        <Overlay label="Call stack" onClose={() => setIsMapOpen(false)} className="is-wide">
           <section className="panel">
             <div className="panel-head">
-              <h2 className="panel-title">Temporal map</h2>
+              <h2 className="panel-title">Call stack</h2>
               <CloseButton onClick={() => setIsMapOpen(false)} label="Close map" />
             </div>
             <DungeonMap {...mapProps} />

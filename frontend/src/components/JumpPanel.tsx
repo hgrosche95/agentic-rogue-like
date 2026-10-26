@@ -1,5 +1,5 @@
 import type { MapNode } from "../api";
-import { eraLabel } from "../eras";
+import { layerLabel } from "../layers";
 import { NODE_STYLE } from "../nodeTypes";
 import { NodeBadge } from "./DungeonMap";
 
@@ -36,7 +36,7 @@ export function JumpPanel({
       <section className="panel jump-panel is-arrived">
         <div className="panel-head">
           <h2 className="panel-title">Arrived</h2>
-          <span className="panel-sub">{eraLabel(current.floor, numFloors, act)}</span>
+          <span className="panel-sub">{layerLabel(current.floor, numFloors, act)}</span>
         </div>
         <div className="jump-target">
           <NodeBadge type={current.type} size={40} />
@@ -57,7 +57,7 @@ export function JumpPanel({
     <section className="panel jump-panel">
       <div className="panel-head">
         <h2 className="panel-title">Next jump</h2>
-        {target && canJump && <span className="panel-sub">{eraLabel(target.floor, numFloors, act)}</span>}
+        {target && canJump && <span className="panel-sub">{layerLabel(target.floor, numFloors, act)}</span>}
       </div>
       {target && canJump ? (
         <>
@@ -86,7 +86,7 @@ export function JumpPanel({
           </button>
         </>
       ) : (
-        <p className="muted">{canJump ? "No route leads further." : "Finish this era before you jump."}</p>
+        <p className="muted">{canJump ? "No route leads further." : "Clear this layer before you go deeper."}</p>
       )}
     </section>
   );

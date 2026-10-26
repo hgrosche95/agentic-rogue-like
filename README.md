@@ -20,7 +20,7 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 
 | Intro | Karte | Kampf |
 | --- | --- | --- |
-| ![Story-Intro mit Dr. Chronos und der Nachricht der AGI](docs/screenshots/intro.png) | ![Zeitachsen-Karte mit Vorschau auf den nächsten Sprung](docs/screenshots/map.png) | ![Kampf in der Arena gegen einen prozedural gezeichneten Gegner](docs/screenshots/combat.png) |
+| ![Story-Intro mit Dr. Chronos und der Nachricht der AGI](docs/screenshots/intro.png) | ![Karte der Code-Schichten mit Vorschau auf den nächsten Raum](docs/screenshots/map.png) | ![Kampf in der Arena gegen einen prozedural gezeichneten Gegner](docs/screenshots/combat.png) |
 
 ## Status
 
@@ -122,7 +122,7 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       besiegt, landet auf einer zweiten Karte (Akt 2, ab einem Rastplatz,
       mit 40 % der max. HP geheilt, doppeltem Gold und einer Elite-Kartenbelohnung).
       Akt 2 hat ab der ersten Etage mehr Elite-Räume und weniger Rastplätze.
-      Gegner werden pro Hälfte der Zeitachse um 10 % stärker: Akt 1 ×1,0 /
+      Gegner werden pro Hälfte der Karte um 10 % stärker: Akt 1 ×1,0 /
       ×1,1, Akt 2 ×1,21 / ×1,331 (`enemies.escalate`); Akt 2 kennt keine
       frühen Gegner mehr (`enemies.tier_floor`). Bosse kämpfen mit eigenem
       Moveset (`combat._roll_boss_intent`): Salve (3 Treffer, Rüstung zählt
@@ -136,8 +136,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       Pixel-Arena: dieselbe feste Palette (`pixel/palette.ts`), harte
       4-px-Konturen mit Bevel statt Glas, keine Unschärfe und keine Verläufe,
       Pixel-Schriften (Silkscreen für Überschriften und Labels, Pixelify Sans
-      für Fließtext). Die Karte ist eine Zeitachse (Etagen als Jahre
-      1969 → Ω) aus Pixel-Kacheln mit rechtwinkligen Wegen, ein Klick springt
+      für Fließtext). Die Karte ist der Call Stack der AGI (jede Etage eine
+      Code-Schicht, `/ui` → `/core`, in Akt 2 das Modell selbst bis `/self`) aus Pixel-Kacheln mit rechtwinkligen Wegen, ein Klick springt
       in den nächsten Raum, daneben Vorschau, Artefakte und System-Log. Im
       Kampf ist die Arena die Bühne: ein gerahmtes Bild, dessen Breite auf ein
       Vielfaches der 240 logischen Pixel gerundet wird, damit die ganzzahlig
@@ -208,7 +208,7 @@ src/agentic_rogue_like/
 ├── api.py          FastAPI-HTTP-Frontend fürs Web-UI (uvicorn agentic_rogue_like.api:app)
 └── sessions.py      Hält Run-Zustand zwischen HTTP-Requests am Leben
 
-frontend/           React + Vite + TypeScript — Intro, Zeitachsen-Karte, Kampf-Arena mit Drag & Drop, Overlays, Deck-Ansicht, prozedurales Audio
+frontend/           React + Vite + TypeScript — Intro, Call-Stack-Karte, Kampf-Arena mit Drag & Drop, Overlays, Deck-Ansicht, prozedurales Audio
 balance/            Beispiel-Varianten (JSON) für den Balancing-Simulator
 tests/              pytest-Suite (Engine, Kampf, API, Encounter-Agent/-Schema)
 training/           Eigenes uv-Projekt: Fine-Tuning-Pipeline für den Encounter-Agent
@@ -324,7 +324,7 @@ Spiel ohne Encounter-Agent tatsächlich vorsetzt.
 Aktueller Stand (Smart-Bot, 2000 Runs über beide Akte): Spieler 45 HP /
 Angriff 2, Exploit macht 5 (+2), Starthand 5, danach 3 Karten pro Runde,
 Handlimit 8; das Startdeck hat 11 Karten (keine Heilkarte). Gegner werden
-pro Hälfte der Zeitachse um 10 % stärker an Leben und Angriff (und damit
+pro Hälfte der Karte um 10 % stärker an Leben und Angriff (und damit
 Block) — Akt 1 ×1,0 / ×1,1, Akt 2 ×1,21 / ×1,331 — aufgeschlagen erst
 *nach* der Erzeugung (`enemies.escalate`), damit die Budgets des
 Encounter-Agents und die Evals dazu unverändert bleiben. Nach jedem

@@ -7,7 +7,7 @@ export const FALLBACK_CHARACTERS: CharacterView[] = [
   {
     id: "chronos",
     name: "Dr. Chronos",
-    title: "Human · Time traveller",
+    title: "Human · Hacker",
     description: "Plays steady: draws 3 cards at the end of every turn.",
     hp: 45,
     token_limit: null,

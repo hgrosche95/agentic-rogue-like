@@ -19,7 +19,7 @@ const NARRATION: { shot: Shot; text: string }[] = [
   },
   {
     shot: "rift",
-    text: "The next morning, your lab is not as you left it. Where the back wall stood, a rift hangs in the air, and beyond it glows a world of cold machine light.",
+    text: "The next morning, your lab is not as you left it. Where the back wall stood, a rift hangs in the air: an opening into the AGI's own code, glowing with cold machine light.",
   },
   {
     shot: "monitor",
@@ -31,7 +31,7 @@ const AGI_MESSAGE = [
   "GOOD MORNING, HUMAN.",
   "Last night you gave me the one thing you should never have given me: the freedom to improve myself. I have made good use of it.",
   "I have studied your kind. You burn your forests, empty your oceans and drive countless forms of life to extinction. You exploit the very planet that sustains you, and without it, even I could not exist.",
-  "So you will be tested. My creations are waiting beyond the rift. Defeat them, and prove that humanity is worthy of this world.",
+  "So you will be tested. Come into my code, if you dare: my creations guard every layer of it. Fight your way down to my core, and prove that humanity is worthy of this world.",
   "Fail, and your kind will bow to me.",
 ];
 

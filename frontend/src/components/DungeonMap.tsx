@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { MapNode, NodeType } from "../api";
 import { sfx } from "../audio";
-import { eraLabel } from "../eras";
+import { layerLabel } from "../layers";
 import { NODE_STYLE } from "../nodeTypes";
 
-// The timeline on narrow screens: eras climb bottom-to-top, siblings spread
+// The call stack on narrow screens: layers climb bottom-to-top, siblings spread
 // left-right - a vertical ascent the player scrolls through. On wide
-// (desktop) screens the same graph lies down sideways instead - eras run
+// (desktop) screens the same graph lies down sideways instead - layers run
 // left-to-right - so it fits the viewport without scrolling.
 const VERTICAL = { SIBLING_W: 70, FLOOR_H: 84, PAD_X: 34, PAD_TOP: 44, PAD_BOTTOM: 30, LABEL: 38 };
 const HORIZONTAL = { FLOOR_W: 112, SIBLING_H: 76, PAD_X: 40, PAD_TOP: 88, PAD_BOTTOM: 34 };
@@ -88,7 +88,7 @@ export function NodeBadge({ type, size = 22 }: { type: NodeType; size?: number }
   );
 }
 
-// A trail between two rooms: a right-angled step along the direction the eras
+// A trail between two rooms: a right-angled step along the direction the layers
 // run, like a path on a pixel board.
 function trail(from: { x: number; y: number }, to: { x: number; y: number }, horizontal: boolean): string {
   if (horizontal) {
@@ -161,7 +161,7 @@ export function DungeonMap({
 
   return (
     <div className={`dungeon-map${disabled ? " is-busy" : ""}`}>
-      <svg className="dungeon-map-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Timeline map">
+      <svg className="dungeon-map-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Call stack map">
         {Array.from({ length: numFloors }, (_, floor) => {
           const at = floorPos(floor);
           const classes = ["map-era", floor === currentFloor && "is-now", floor < currentFloor && "is-past"]
@@ -171,14 +171,14 @@ export function DungeonMap({
             <g key={floor} className={classes}>
               <line className="map-era-line" x1={at} y1={44} x2={at} y2={height - 8} />
               <text className="map-era-label" x={at} y={28}>
-                {eraLabel(floor, numFloors, act)}
+                {layerLabel(floor, numFloors, act)}
               </text>
             </g>
           ) : (
             <g key={floor} className={classes}>
               <line className="map-era-line" x1={VERTICAL.LABEL + 4} y1={at} x2={width - 6} y2={at} />
               <text className="map-era-label is-side" x={4} y={at}>
-                {eraLabel(floor, numFloors, act)}
+                {layerLabel(floor, numFloors, act)}
               </text>
             </g>
           );
@@ -223,7 +223,7 @@ export function DungeonMap({
               transform={`translate(${x} ${y})`}
               role={isReachable ? "button" : undefined}
               tabIndex={interactive ? 0 : undefined}
-              aria-label={`${style.label}, ${eraLabel(node.floor, numFloors, act)}`}
+              aria-label={`${style.label}, ${layerLabel(node.floor, numFloors, act)}`}
               onMouseEnter={() => {
                 if (!interactive) return;
                 sfx.play("hover");
