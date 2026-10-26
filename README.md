@@ -95,8 +95,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       eine Chat-Blase, die beim Tippen pulsiert und bei vollem Kontextfenster
       orange flackert.
 - [x] **Deck-Building** — zu Beginn des Runs (nach dem ersten Artefakt)
-      eine von drei Karten der Seltenheit Uncommon/Rare ins Startdeck
-      nehmen (oder überspringen), danach nach jedem Sieg eine von drei Karten wählen
+      ein Start-Kit wählen und ein Angebot der AGI annehmen oder ablehnen
+      (siehe *Start eines Runs*), danach nach jedem Sieg eine von drei Karten wählen
       (`/runs/{id}/card-reward`); 18 Belohnungskarten mit Abwurfkosten,
       Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
 - [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
@@ -762,6 +762,50 @@ Artefakt, 23–26 mit einem Programm-Artefakt, so viel wie mit den klassischen
 und zufälliger Reihenfolge wächst dabei von 5 auf bis zu 10 HP (Hot Path,
 Compiler, Tail Call): Die Artefakte machen die Reihenfolge wichtiger, nicht
 nur den Spieler stärker.
+
+## Start eines Runs
+
+Damit sich der Anfang nicht jedes Mal gleich spielt, kommen nach dem ersten
+Artefakt zwei Entscheidungen (`starts.py`, `POST /runs/{id}/kit` und
+`/agi-deal`):
+
+**Start-Kit** – eins von drei Kits, je zwei Karten einer Strategie, die
+Grundkarten ersetzen (bei Dr. Chronos 2 Angriffe und 1 Block, beim
+Vibe-Coder 1 und 1, weil ihm ein dünneres Deck mehr bringt). Ein Kit wird
+nur angeboten, wenn beide Karten im Belohnungspool des Runs liegen, also
+erscheinen Vibe-Coder- und Programm-Kits nur dort.
+
+| Kit | Karten | Für |
+| --- | --- | --- |
+| Daemon farm | Daemon, Botnet | Permanente |
+| Graveyard | Brute Force, Rollback | Friedhof |
+| One-shot | Payload, Undelete | Einmal-Karten |
+| Malware | Trojan, Worm | Malware |
+| Move fast | YOLO Deploy, Vibe Check | nur Vibe-Coder |
+| Rubber duck | Rubber Duck, Copy-Paste | nur Vibe-Coder |
+| Control flow | Loop, If Wounded | nur Programm-Modus |
+| Pipeline | Batch, Pipe | Vibe-Coder im Programm-Modus |
+
+Kit-Karten zählen für die AGI als selbst gewählt (`style.py`), sie liest den
+Stil also schon ab dem ersten Kampf mit.
+
+**Angebot der AGI** – danach bietet die AGI drei von sechs Deals an, oder
+man lehnt ab. Jeder Deal wird beim Würfeln bis auf die Karte ausgerechnet,
+der Text sagt also genau, was man bekommt:
+
+| Deal | Wirkung |
+| --- | --- |
+| Delete legacy code | eine Grundkarte Angriff und eine Block aus dem Deck |
+| Mutation | zwei Grundkarten werden zu zwei bestimmten häufigen Karten |
+| Forbidden patch | eine bestimmte seltene Karte, kostet 5 max. HP |
+| Trojan gift | ein bestimmtes Artefakt, aber ein Glitch dauerhaft im Deck |
+| Hotfix | zwei Grundkarten verbessern |
+| Bribe | 90 Credits, aber ein Glitch dauerhaft im Deck |
+
+Balancing (`balance-sim --pool`, 1000 Runs, Kit und Deal zufällig): Chronos
+10 % → 10 %, Vibe-Coder 10 % → 12 %, Programm-Modus wie gespielt 8 % → 10 %.
+Zwei Kartenpaare flogen dabei raus: Zero-Day + Sandbox (39 % Run-Siegquote
+allein mit diesem Kit) und Tab-Tab-Tab beim Vibe-Coder (27–29 %).
 
 ## Karten-Upgrades
 
