@@ -326,6 +326,9 @@ class RunView(BaseModel):
     current_node: MapNode
     node_resolved: bool
     available_choices: list[MapNode]
+    # Program mode for the whole run (combat.run_program) - card texts and
+    # previews read differently there, also outside a fight.
+    program_mode: bool
     pending_event: PendingEventView | None
     pending_combat: PendingCombatView | None
     card_reward: list[CardView] | None
@@ -564,6 +567,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         current_node=node,
         node_resolved=node_resolved,
         available_choices=choices,
+        program_mode=run.program_mode,
         pending_event=pending_event,
         pending_combat=pending_combat,
         card_reward=(

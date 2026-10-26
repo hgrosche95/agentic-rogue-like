@@ -1,6 +1,6 @@
 import type { PointerEvent } from "react";
 import { PERMANENT_CARD_TYPES, type Card, type HandCardView, type PendingCombatView } from "../api";
-import { queues } from "../program";
+import { cardText, queues } from "../program";
 import { CardFace, CardTypeIcon } from "./CardFace";
 import { SlotPreview } from "./SlotPreview";
 
@@ -191,7 +191,7 @@ export function ProgramLines({
           <span
             key={i}
             className={`line-socket is-installed type-${card.type}${card === landing ? " is-landing" : ""}`}
-            title={`${card.name}: ${card.description}`}
+            title={`${card.name}: ${cardText(card, true)}`}
           >
             <CardTypeIcon type={card.type} />
             <span>{card.name}</span>

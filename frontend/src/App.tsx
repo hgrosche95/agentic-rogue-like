@@ -53,6 +53,7 @@ import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
 import { CloseButton, Overlay } from "./components/Overlay";
 import { layerLabel, numFloorsOf } from "./layers";
+import { ProgramModeContext } from "./program";
 import { RestScreen } from "./components/RestScreen";
 import { RewardScreen } from "./components/RewardScreen";
 import { ModePicker } from "./components/ModePicker";
@@ -497,7 +498,11 @@ function App() {
     </main>
   );
 
-  return <ShowTokensContext.Provider value={showTokens}>{screen}</ShowTokensContext.Provider>;
+  return (
+    <ShowTokensContext.Provider value={showTokens}>
+      <ProgramModeContext.Provider value={run.program_mode}>{screen}</ProgramModeContext.Provider>
+    </ShowTokensContext.Provider>
+  );
 }
 
 export default App;

@@ -1,6 +1,7 @@
 import { useContext } from "react";
 import { CONTROL_FLOW_TYPES, PERMANENT_CARD_TYPES, type Card, type CardType } from "../api";
 import { ShowTokensContext } from "../characters";
+import { useCardText } from "../program";
 import { unitOf } from "../readouts";
 
 // Each card is a module: a drawn type icon in the socket top left (where
@@ -78,7 +79,7 @@ export interface Readout {
 // goes for one-shot cards and their "1×" tag
 export function CardFace({ card, onField = false, readout }: { card: Card; onField?: boolean; readout?: Readout }) {
   const showTokens = useContext(ShowTokensContext);
-  const description = card.description.replace(
+  const description = useCardText(card).replace(
     onField ? /^(Permanent|One-shot)\.\s*/ : /^One-shot\.\s*/,
     "",
   );
