@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { AgiDeal, StarterKit } from "../api";
 import { sfx } from "../audio";
 import { CardFace } from "./CardFace";
+import { TextWithCards } from "./CardMention";
 import { RichText } from "./RichText";
 
 // The start of a run, after the first artifact (see the backend's starts.py):
@@ -92,7 +93,9 @@ export function DealScreen({
             }}
           >
             <span className="deal-name">{deal.name}</span>
-            <span className="deal-text">{deal.description}</span>
+            <span className="deal-text">
+              <TextWithCards text={deal.description} cards={deal.mentions} />
+            </span>
           </button>
         ))}
       </div>

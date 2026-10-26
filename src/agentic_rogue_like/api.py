@@ -428,14 +428,20 @@ class AgiDealView(BaseModel):
     description: str
     # the cards taking it puts in the deck, to show as card faces
     cards: list[CardView]
+    # every card its description names - removed, added, or (for an upgrade)
+    # as it will be afterwards - so the frontend can show each on hover
+    mentions: list[CardView]
 
     @classmethod
-    def of(cls, deal: AgiDeal) -> AgiDealView:
+    def of(cls, deal: AgiDeal, deck: list[Card]) -> AgiDealView:
+        removed = [c for c in deck if c.id in deal.remove]
+        upgraded = [upgrade_card(c) for c in deck if c.id in deal.upgrade]
         return cls(
             kind=deal.kind.value,
             name=deal.name,
             description=deal.description,
             cards=[CardView.of(c) for c in deal.add],
+            mentions=[CardView.of(c) for c in removed + deal.add + upgraded],
         )
 
 
@@ -575,7 +581,11 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         ),
         artifact_offer=run.artifact_offer,
         kit_offer=None if run.kit_offer is None else [StarterKitView.of(k) for k in run.kit_offer],
-        agi_deals=None if run.agi_deals is None else [AgiDealView.of(d) for d in run.agi_deals],
+        agi_deals=(
+            None
+            if run.agi_deals is None
+            else [AgiDealView.of(d, run.player.deck) for d in run.agi_deals]
+        ),
         shop=None if run.shop is None else ShopView.of(run.shop),
         rest=None if run.rest is None else RestView.of(run.rest, run.player.deck),
         play_style=(style.value if (style := play_style(run.player.deck)) else None),
