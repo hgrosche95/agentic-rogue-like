@@ -108,8 +108,9 @@ function fanStyle(index: number, count: number): CSSProperties {
   return { "--rot": `${rot}deg`, "--lift": `${lift}px` } as CSSProperties;
 }
 
-// how long each program line stays lit while the program runs
-const PROGRAM_STEP_MS = 420;
+// how long each program line stays lit while the program runs - long enough
+// for its card animation to play out before the next line starts
+const PROGRAM_STEP_MS = 1100;
 
 export function CombatPanel({
   combat,
@@ -281,12 +282,17 @@ export function CombatPanel({
     setCommands((sent) => [...sent, { at: log.length, text }]);
     setTyping(true);
     sfx.play("typing", { durationMs: TYPING_MS });
+    // A card that queues into the program only runs at the end of the turn,
+    // so its animation waits for "Run program" (see endTurn).
+    const runsNow = !queues(combat, played);
     window.setTimeout(() => {
       setTyping(false);
       // Enter, and the command runs
       sfx.play("enter");
-      sfx.play(cardSound(played.type), { hits: hitsOf(played.description), delayMs: 40 });
-      arenaRef.current?.cardPlayed(played.type, played.value);
+      if (runsNow) {
+        sfx.play(cardSound(played.type), { hits: hitsOf(played.description), delayMs: 40 });
+        arenaRef.current?.cardPlayed(played.type, played.value);
+      }
       onPlayCard(handIndex, slotIndex);
     }, TYPING_MS + 150);
   }
