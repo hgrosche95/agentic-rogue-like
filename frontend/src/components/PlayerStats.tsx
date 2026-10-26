@@ -6,8 +6,9 @@ import { PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 function BrandGlyph() {
   return (
     <svg className="brand-glyph" viewBox="0 0 32 32" aria-hidden="true">
+      {/* a shell prompt, >_ : the way into the AGI's code */}
       <circle cx="16" cy="16" r="13" />
-      <path d="M11 8 H21 L16 16 L21 24 H11 L16 16 Z" />
+      <path d="M9 10 L16 16 L9 22 V18.6 L12.2 16 L9 13.4 Z M17 19.5 H23.5 V22 H17 Z" />
       <line x1="16" y1="1" x2="16" y2="4" />
       <line x1="16" y1="28" x2="16" y2="31" />
     </svg>

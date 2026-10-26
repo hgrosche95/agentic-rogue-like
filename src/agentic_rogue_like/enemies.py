@@ -290,7 +290,7 @@ def pick_enemy(
 
 
 # Enemies get +10% HP and attack (and with it block - a defending enemy
-# blocks its attack stat, see combat.py) for every half of the timeline
+# blocks its attack stat, see combat.py) for every half of the map
 # behind them: act 1's second half x1.1, act 2's first half x1.21 and its
 # second half x1.331. Applied after an enemy is picked or generated, on top
 # of agent/budgets.py, so the encounter agent's envelopes - and the evals

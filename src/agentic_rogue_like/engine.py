@@ -341,7 +341,7 @@ def _room_enemy(
     prefetched: Callable[[], Enemy] | None = None,
 ) -> Enemy:
     """The enemy of a combat room, ready to fight: picked (agent or pool),
-    affixed if elite, escalated for the timeline.
+    affixed if elite, escalated for its depth on the map.
 
     Once the player's deck shows a clear style (style.play_style), the AGI
     prefers enemies and affixes that answer it - and an enemy that does opens

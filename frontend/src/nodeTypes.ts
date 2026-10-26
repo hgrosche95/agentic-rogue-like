@@ -5,10 +5,10 @@ import type { NodeType } from "./api";
 // symbols (swords/skull/crown): those render as fixed-color emoji on most
 // platforms and ignore the CSS colors that tell node types apart.
 export const NODE_STYLE: Record<NodeType, { symbol: string; label: string; blurb: string }> = {
-  combat: { symbol: "C", label: "Fight", blurb: "A construct of the AGI blocks the timeline." },
+  combat: { symbol: "C", label: "Fight", blurb: "A construct of the AGI guards this layer." },
   elite: { symbol: "E", label: "Elite", blurb: "A hardened construct. Tougher fight, better loot." },
-  event: { symbol: "?", label: "Anomaly", blurb: "Something odd in this era. Choose how to react." },
+  event: { symbol: "?", label: "Anomaly", blurb: "Something odd in this layer. Choose how to react." },
   shop: { symbol: "$", label: "Black market", blurb: "Trade credits for an edge." },
   rest: { symbol: "R", label: "Safehouse", blurb: "Patch yourself up, rework a card, or strip one out." },
-  boss: { symbol: "B", label: "Core AI", blurb: "The AGI itself, waiting at the end of time." },
+  boss: { symbol: "B", label: "Core AI", blurb: "The AGI itself, waiting at the bottom of its code." },
 };

@@ -220,7 +220,7 @@ def random_enemy(budget: EnemyBudget, tier: str, rng: random.Random) -> Enemy:
 
 
 # The floor a tier's enemies are scaled for (enemies.escalate) when fought on
-# their own: mid and boss always sit in the timeline's second half, and an
+# their own: mid and boss always sit in the map's second half, and an
 # elite is measured there too - its harder case.
 _TIER_FLOOR = {"early": 0, "mid": NUM_FLOORS // 2, "elite": NUM_FLOORS // 2, "boss": NUM_FLOORS - 1}
 
