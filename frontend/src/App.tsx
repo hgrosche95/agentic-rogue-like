@@ -54,6 +54,7 @@ import { LoadingIndicator } from "./components/LoadingIndicator";
 import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
 import { CloseButton, Overlay } from "./components/Overlay";
+import { RUN_ID_KEY } from "./errors";
 import { layerLabel, numFloorsOf } from "./layers";
 import { ProgramModeContext } from "./program";
 import { RestScreen } from "./components/RestScreen";
@@ -66,9 +67,7 @@ import { Tooltips } from "./components/RichText";
 
 const FALLBACK_SETTINGS = ["dungeon"];
 const INTRO_SEEN_KEY = "agentic-rogue-like:intro-seen";
-// The run in progress, so a reload (or a stuck screen) picks it up again
-// instead of starting over - as long as the API still has it (sessions.py).
-const RUN_ID_KEY = "agentic-rogue-like:run-id";
+
 // well under the container app's 300 s scale-down cooldown
 const KEEP_ALIVE_MS = 2 * 60 * 1000;
 const KEEP_ALIVE_IDLE_MS = 30 * 60 * 1000;
@@ -83,6 +82,8 @@ function hasSeenIntro(): boolean {
   }
 }
 
+// The run in progress (RUN_ID_KEY), so a reload - or a stuck screen - picks
+// it up again instead of starting over, as long as the API still has it.
 function storedRunId(): string | null {
   try {
     return localStorage.getItem(RUN_ID_KEY);
