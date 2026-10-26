@@ -14,7 +14,7 @@ from .agent.encounter_agent import enemy_for_node
 from .agent.event_agent import event_for_room
 from .agent.narrator import narrate
 from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
-from .cards import START_CARD_WEIGHTS, can_upgrade, reward_card, roll_card_reward, upgrade_card
+from .cards import can_upgrade, reward_card, roll_card_reward, upgrade_card
 from .characters import CHARACTERS, artifact_pool, reward_pool
 from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
@@ -37,6 +37,7 @@ from .models import (
     RunStatus,
 )
 from .shop import MIN_DECK_SIZE, leave_shop, roll_shop
+from .starts import apply_deal, apply_kit, roll_deals, roll_kits
 from .style import answers, play_style, taunt
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
@@ -108,12 +109,59 @@ def new_run(
     run.artifact_offer = roll_artifact_offer(
         random.Random(f"{seed}-artifacts-0"), [], pool=artifact_pool(run)
     )
-    # ... and so does the starting card pick: three uncommon/rare cards, one of
-    # which (or none) joins the starter deck before the first room.
-    run.card_reward = roll_card_reward(
-        random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS, pool=reward_pool(run)
-    )
+    # ... and so do the starter kits (starts.py), picked after the artifact;
+    # the AGI's deal follows once a kit is in the deck (choose_kit).
+    run.kit_offer = roll_kits(random.Random(f"{seed}-kits"), reward_pool(run))
     return run
+
+
+def choose_kit(run: RunState, index: int) -> None:
+    """Swap kit `index` into the starter deck, then roll the AGI's deals.
+
+    Raises ValueError if no kit is offered, the artifact comes first, or the
+    index is out of range.
+    """
+    offer = run.kit_offer
+    if offer is None:
+        raise ValueError("no starter kit offered")
+    if run.artifact_offer is not None:
+        raise ValueError("choose an artifact first")
+    if not 0 <= index < len(offer):
+        raise ValueError(f"kit index {index} is out of range")
+    kit = offer[index]
+    removed = apply_kit(run.player, kit)
+    run.history.append(
+        f"You pack the {kit.name} kit: {' and '.join(c.name for c in kit.cards)} "
+        f"replace {', '.join(c.name for c in removed)}."
+    )
+    run.kit_offer = None
+    run.agi_deals = roll_deals(
+        random.Random(f"{run.seed}-deals"), run.player, reward_pool(run), artifact_pool(run)
+    )
+
+
+def choose_deal(run: RunState, index: int | None) -> None:
+    """Take the AGI's deal `index`, or turn them all down (None).
+
+    Raises ValueError if no deal is pending or the index is out of range.
+    """
+    deals = run.agi_deals
+    if deals is None:
+        raise ValueError("no deal pending")
+    if index is None:
+        run.history.append("You turn the AGI's offer down.")
+    else:
+        if not 0 <= index < len(deals):
+            raise ValueError(f"deal index {index} is out of range")
+        apply_deal(run.player, deals[index])
+        deal = deals[index]
+        run.history.append(f"You take the AGI's deal - {deal.name}: {deal.description}")
+    run.agi_deals = None
+
+
+def start_pending(run: RunState) -> bool:
+    """Whether the start of the run (artifact, kit, deal) still waits on the player."""
+    return run.artifact_offer is not None or run.kit_offer is not None or run.agi_deals is not None
 
 
 def available_choices(run: RunState) -> list[str]:
@@ -441,9 +489,10 @@ def resolve_node(
             choose_artifact_option(offer) if choose_artifact_option else rng.randrange(len(offer)),
         )
 
-    if run.card_reward is not None:  # the starting card pick
-        offer = run.card_reward
-        choose_card_reward(run, choose_card(offer) if choose_card else rng.randrange(len(offer)))
+    if run.kit_offer is not None:  # the start of the run, picked at random
+        choose_kit(run, rng.randrange(len(run.kit_offer)))
+    if run.agi_deals is not None:
+        choose_deal(run, rng.randrange(len(run.agi_deals)))
 
     node = run.nodes[run.current_node_id]
 

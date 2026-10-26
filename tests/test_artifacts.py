@@ -179,5 +179,6 @@ def test_api_blocks_the_room_until_an_artifact_is_picked() -> None:
     assert run["artifact_offer"] is None
     assert run["player"]["artifacts"][0]["id"] == picked["id"]
     assert client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0}).status_code == 409
-    client.post(f"/runs/{run_id}/card-reward", json={"card_index": None})  # starting pick
+    client.post(f"/runs/{run_id}/kit", json={"kit_index": 0})
+    client.post(f"/runs/{run_id}/agi-deal", json={"deal_index": None})  # run start
     assert client.post(f"/runs/{run_id}/resolve").status_code == 200

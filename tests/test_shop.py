@@ -121,7 +121,8 @@ def _api_run_at_shop() -> tuple[str, dict]:
     run_id = run["run_id"]
     if run["artifact_offer"] is not None:
         client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0})
-    client.post(f"/runs/{run_id}/card-reward", json={"card_index": None})
+    client.post(f"/runs/{run_id}/kit", json={"kit_index": 0})
+    client.post(f"/runs/{run_id}/agi-deal", json={"deal_index": None})
     return run_id, client.post(f"/runs/{run_id}/resolve").json()
 
 

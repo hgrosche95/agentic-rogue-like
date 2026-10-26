@@ -230,7 +230,7 @@ def test_api_runs_a_program() -> None:
     client = TestClient(app)
     run_id = client.post("/runs", json={"seed": 3, "program_mode": True}).json()["run_id"]
     run = get_session(run_id).run
-    run.artifact_offer = run.card_reward = None
+    run.artifact_offer = run.kit_offer = None
     client.post(f"/runs/{run_id}/resolve")
     get_session(run_id).combat.hand = [_card("Exploit")]
 
@@ -362,7 +362,7 @@ def test_previews_count_hot_path_and_the_queued_block() -> None:
     client = TestClient(app)
     run_id = client.post("/runs", json={"seed": 3, "program_mode": True}).json()["run_id"]
     run = get_session(run_id).run
-    run.artifact_offer = run.card_reward = None
+    run.artifact_offer = run.kit_offer = None
     client.post(f"/runs/{run_id}/resolve")
     combat = get_session(run_id).combat
     combat.enemy_intent = EnemyIntentType.ATTACK

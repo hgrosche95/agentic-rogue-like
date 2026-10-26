@@ -7,12 +7,13 @@ client = TestClient(app)
 
 def _resolve(run_id: str):
     """POST /resolve, first taking the first artifact if one is on offer and
-    skipping the starting card pick."""
+    picking the first kit and turning the deal down."""
     run = client.get(f"/runs/{run_id}").json()
     if run["artifact_offer"] is not None:
         client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0})
-    if run["card_reward"] is not None and not run["current_node"]["visited"]:
-        client.post(f"/runs/{run_id}/card-reward", json={"card_index": None})
+    if run["kit_offer"] is not None:
+        client.post(f"/runs/{run_id}/kit", json={"kit_index": 0})
+        client.post(f"/runs/{run_id}/agi-deal", json={"deal_index": None})
     return client.post(f"/runs/{run_id}/resolve")
 
 
@@ -240,7 +241,8 @@ def test_vibe_coder_fight_shows_and_spends_the_context_window() -> None:
     assert combat["tokens_used"] == 0
     assert all("token_cost" in c and not c["overflows"] for c in combat["hand"])
 
-    card = next(c for c in combat["hand"] if c["token_cost"] == 1)
+    # a basic card - a kit card may discard as it is played
+    card = next(c for c in combat["hand"] if c["token_cost"] == 1 and c["rarity"] == "starter")
     hand_size = len(combat["hand"])
     run = client.post(
         f"/runs/{run_id}/combat/play-card",

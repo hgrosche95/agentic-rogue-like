@@ -524,8 +524,6 @@ _RARITY_WEIGHTS: dict[bool, dict[Rarity, int]] = {
     False: {Rarity.COMMON: 60, Rarity.UNCOMMON: 32, Rarity.RARE: 8},
     True: {Rarity.COMMON: 30, Rarity.UNCOMMON: 45, Rarity.RARE: 25},  # elite
 }
-# The pick offered at the start of a run (engine.new_run): no commons.
-START_CARD_WEIGHTS: dict[Rarity, int] = {Rarity.UNCOMMON: 65, Rarity.RARE: 35}
 
 
 def reward_card(template: Card, deck: list[Card]) -> Card:

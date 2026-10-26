@@ -104,7 +104,7 @@ def test_api_shows_and_enforces_locked_slots() -> None:
     client = TestClient(app)
     run_id = client.post("/runs", json={"seed": 3}).json()["run_id"]
     run = get_session(run_id).run
-    run.artifact_offer = run.card_reward = None
+    run.artifact_offer = run.kit_offer = None
     client.post(f"/runs/{run_id}/resolve")
     get_session(run_id).combat.locked_slots = [2]
 
