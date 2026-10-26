@@ -1307,6 +1307,117 @@ button.is-primary:hover:not(:disabled),
   margin-bottom: 1.3rem;
 }
 
+/* -- the start of a run (StartScreens): kits, then the AGI's deal -- */
+.kit-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.kit-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.9rem 0.8rem 1rem;
+  text-transform: none;
+  animation: reward-deal 0.3s steps(4, jump-start) both;
+}
+
+.kit-name {
+  font-family: var(--font-head);
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.kit-blurb {
+  min-height: 2.6em;
+  font-size: 0.9rem;
+  line-height: 1.3;
+  color: var(--text-dim);
+}
+
+.kit-cards {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.kit-cards .hand-card.reward-card {
+  width: 124px;
+  height: 172px;
+  animation: none;
+}
+
+/* more specific than .reward-card's, which sizes the bigger reward cards */
+.kit-cards .reward-card .card-header {
+  font-size: 0.6rem;
+  letter-spacing: 0.02em;
+}
+
+.kit-cards .reward-card .card-body {
+  font-size: 0.78rem;
+}
+
+.overlay-window > .deal-screen {
+  position: relative;
+  padding: 1rem 1.2rem 1.3rem;
+  color: #b4ecf5;
+  background: var(--px-ink);
+  border: var(--px-border);
+  animation: pop-in 0.25s steps(3, jump-start) both;
+}
+
+.deal-greeting {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--ai-red);
+}
+
+.deal-pitch {
+  margin: 0 0 1rem;
+  line-height: 1.4;
+}
+
+.deal-options {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.deal-option {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  align-items: baseline;
+  gap: 0.8rem;
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  text-transform: none;
+}
+
+.deal-name {
+  font-family: var(--font-head);
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ai-red);
+}
+
+.deal-text {
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 600px) {
+  .deal-option {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+}
+
 /* -- the black market (ShopScreen): cards and artifacts with price tags -- */
 .shop-credits {
   color: var(--gold);

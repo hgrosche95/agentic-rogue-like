@@ -303,6 +303,9 @@ export interface RunView {
   pending_combat: PendingCombatView | null;
   card_reward: Card[] | null;
   artifact_offer: Artifact[] | null;
+  // the start of the run, after the first artifact: a kit, then the AGI's deal
+  kit_offer: StarterKit[] | null;
+  agi_deals: AgiDeal[] | null;
   shop: ShopView | null;
   rest: RestView | null;
   // what the AGI has read from the cards the player chose
@@ -317,6 +320,23 @@ export class RunLostError extends Error {
   constructor() {
     super("The server lost this run (it was restarted or idle too long). Start a new one.");
   }
+}
+
+// One of the starter kits (starts.py): two cards of one strategy that
+// replace basic cards.
+export interface StarterKit {
+  id: string;
+  name: string;
+  blurb: string;
+  cards: Card[];
+}
+
+// One of the AGI's opening deals; `cards` is what taking it adds to the deck.
+export interface AgiDeal {
+  kind: "strip" | "mutate" | "forbidden" | "trojan" | "hotfix" | "bribe";
+  name: string;
+  description: string;
+  cards: Card[];
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -380,6 +400,21 @@ export function chooseCardReward(runId: string, cardIndex: number | null): Promi
   return request<RunView>(`/runs/${runId}/card-reward`, {
     method: "POST",
     body: JSON.stringify({ card_index: cardIndex }),
+  });
+}
+
+export function chooseKit(runId: string, kitIndex: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/kit`, {
+    method: "POST",
+    body: JSON.stringify({ kit_index: kitIndex }),
+  });
+}
+
+// null turns every deal down
+export function chooseDeal(runId: string, dealIndex: number | null): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/agi-deal`, {
+    method: "POST",
+    body: JSON.stringify({ deal_index: dealIndex }),
   });
 }
 

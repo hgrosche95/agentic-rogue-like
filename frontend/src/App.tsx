@@ -12,7 +12,9 @@ import {
   buyShopCard,
   chooseArtifact,
   chooseCardReward,
+  chooseDeal,
   chooseEventOption,
+  chooseKit,
   chooseNextNode,
   createRun,
   moveQueued,
@@ -55,6 +57,7 @@ import { RestScreen } from "./components/RestScreen";
 import { RewardScreen } from "./components/RewardScreen";
 import { ModePicker } from "./components/ModePicker";
 import { SettingPicker } from "./components/SettingPicker";
+import { DealScreen, KitScreen } from "./components/StartScreens";
 import { ShopScreen } from "./components/ShopScreen";
 
 const FALLBACK_SETTINGS = ["dungeon"];
@@ -294,6 +297,8 @@ function App() {
     !run.pending_event &&
     !run.card_reward &&
     !run.artifact_offer &&
+    !run.kit_offer &&
+    !run.agi_deals &&
     !run.shop &&
     !run.rest &&
     !run.node_resolved;
@@ -403,15 +408,32 @@ function App() {
           />
         </Overlay>
       )}
-      {/* at the start the artifact comes first, then the starting card */}
       {!combat && ongoing && run.card_reward && !run.artifact_offer && (
         <Overlay label="Choose a card" className="is-wide">
           <RewardScreen
             offer={run.card_reward}
-            isStart={!run.current_node.visited}
             deckSize={run.player.deck.length}
             disabled={isLoading}
             onPick={(cardIndex) => runAction(() => chooseCardReward(run.run_id, cardIndex))}
+          />
+        </Overlay>
+      )}
+      {/* at the start the artifact comes first, then the kit, then the AGI's deal */}
+      {!combat && ongoing && run.kit_offer && !run.artifact_offer && (
+        <Overlay label="Pack a starter kit" className="is-wide">
+          <KitScreen
+            offer={run.kit_offer}
+            disabled={isLoading}
+            onPick={(kitIndex) => runAction(() => chooseKit(run.run_id, kitIndex))}
+          />
+        </Overlay>
+      )}
+      {!combat && ongoing && run.agi_deals && (
+        <Overlay label="The AGI's offer" className="is-wide">
+          <DealScreen
+            deals={run.agi_deals}
+            disabled={isLoading}
+            onPick={(dealIndex) => runAction(() => chooseDeal(run.run_id, dealIndex))}
           />
         </Overlay>
       )}
