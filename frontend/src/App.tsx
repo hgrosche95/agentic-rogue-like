@@ -23,11 +23,13 @@ import {
   listCharacters,
   listSettings,
   ping,
+  getRun,
   playCard,
   resolveCurrentNode,
   restHeal,
   restRemove,
   restUpgrade,
+  RequestLostError,
   RunLostError,
   type Character,
   type CharacterView,
@@ -64,6 +66,9 @@ import { Tooltips } from "./components/RichText";
 
 const FALLBACK_SETTINGS = ["dungeon"];
 const INTRO_SEEN_KEY = "agentic-rogue-like:intro-seen";
+// The run in progress, so a reload (or a stuck screen) picks it up again
+// instead of starting over - as long as the API still has it (sessions.py).
+const RUN_ID_KEY = "agentic-rogue-like:run-id";
 // well under the container app's 300 s scale-down cooldown
 const KEEP_ALIVE_MS = 2 * 60 * 1000;
 const KEEP_ALIVE_IDLE_MS = 30 * 60 * 1000;
@@ -75,6 +80,23 @@ function hasSeenIntro(): boolean {
     return localStorage.getItem(INTRO_SEEN_KEY) === "1";
   } catch {
     return false;
+  }
+}
+
+function storedRunId(): string | null {
+  try {
+    return localStorage.getItem(RUN_ID_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeRunId(runId: string | null) {
+  try {
+    if (runId === null) localStorage.removeItem(RUN_ID_KEY);
+    else localStorage.setItem(RUN_ID_KEY, runId);
+  } catch {
+    // Nothing to do - a reload then starts on the title screen.
   }
 }
 
@@ -177,6 +199,24 @@ function App() {
     };
   }, [runOpen]);
 
+  // Pick up the stored run on load; a run the API no longer knows is dropped.
+  useEffect(() => {
+    const runId = storedRunId();
+    if (!runId) return;
+    getRun(runId)
+      .then((stored) => {
+        if (stored.status === "ongoing") setRun((current) => current ?? stored);
+        else storeRunId(null);
+      })
+      .catch(() => storeRunId(null));
+  }, []);
+
+  const runId = run !== null && run.status === "ongoing" ? run.run_id : null;
+  useEffect(() => {
+    // only forget the stored run once one was open here - not on first load
+    if (runId !== null) storeRunId(runId);
+  }, [runId]);
+
   async function runAction(action: () => Promise<RunView>, label = "Loading...") {
     setLoadingLabel(label);
     setIsLoading(true);
@@ -197,6 +237,16 @@ function App() {
       if (err instanceof RunLostError) {
         setRun(null);
         setSlainCombat(null);
+      }
+      // The move may have gone through without its answer: take the server's
+      // word for where the run stands now.
+      if (err instanceof RequestLostError && run !== null) {
+        try {
+          setRun(await getRun(run.run_id));
+          setSlainCombat(null);
+        } catch {
+          // still unreachable - the error stays up and the next click retries
+        }
       }
     } finally {
       setIsLoading(false);
@@ -373,7 +423,7 @@ function App() {
               <h2 className="panel-title">Call stack</h2>
               <span className="panel-sub">{canJump ? "Select your next jump" : run.setting}</span>
             </div>
-            <DungeonMap {...mapProps} onHover={setFocusedJump} />
+            <DungeonMap {...mapProps} onHover={setFocusedJump} onEnter={needsEnter ? enterRoom : undefined} />
           </section>
 
           <aside className="map-side">
