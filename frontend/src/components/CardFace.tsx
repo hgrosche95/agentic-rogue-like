@@ -107,7 +107,10 @@ export function CardFace({ card, onField = false, readout }: { card: Card; onFie
         </div>
       )}
       <div className="card-body">
-        <RichText text={description} />
+        {/* one inline box: the body is a flex container, the terms must not become items */}
+        <span>
+          <RichText text={description} />
+        </span>
       </div>
       {showTokens && !onField && (
         <span className="card-tokens" title={`Costs ${card.token_cost} token(s) of context`}>

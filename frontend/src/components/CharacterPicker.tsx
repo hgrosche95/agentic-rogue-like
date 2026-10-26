@@ -31,7 +31,10 @@ export function CharacterPicker({
       {current && (
         <p className="character-blurb">
           <span>{current.title}</span>
-          <RichText text={current.description} />
+          {/* one block, so the marked terms stay inline (direct spans are blocks here) */}
+          <span>
+            <RichText text={current.description} />
+          </span>
         </p>
       )}
     </div>
