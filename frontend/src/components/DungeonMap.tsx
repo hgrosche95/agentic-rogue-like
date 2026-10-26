@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { MapNode, NodeType } from "../api";
 import { sfx } from "../audio";
 import { layerLabel } from "../layers";
@@ -105,6 +105,7 @@ export function DungeonMap({
   reachableIds,
   onChoose,
   onHover,
+  onEnter,
   disabled,
   act = 1,
 }: {
@@ -113,6 +114,8 @@ export function DungeonMap({
   reachableIds: string[];
   onChoose: (nodeId: string) => void;
   onHover?: (nodeId: string | null) => void;
+  // set while the current room waits to be entered: clicking it enters
+  onEnter?: () => void;
   disabled: boolean;
   act?: number;
 }) {
@@ -200,6 +203,7 @@ export function DungeonMap({
           const { x, y } = pos(node);
           const isCurrent = node.id === currentNodeId;
           const isReachable = reachable.has(node.id);
+          const isEnterable = isCurrent && onEnter !== undefined;
           const isVisited = node.visited && !isCurrent;
           // rooms in eras already behind you that you never entered
           const isPassed = !node.visited && !isCurrent && node.floor <= currentFloor;
@@ -212,36 +216,43 @@ export function DungeonMap({
             isVisited && "is-visited",
             isPassed && "is-passed",
             isReachable && "is-reachable",
+            isEnterable && "is-enterable",
           ]
             .filter(Boolean)
             .join(" ");
-          const interactive = isReachable && !disabled;
+          const interactive = (isReachable || isEnterable) && !disabled;
+          const activate = () => {
+            if (!interactive) return;
+            if (isEnterable) onEnter?.();
+            else onChoose(node.id);
+          };
           return (
             <g
               key={node.id}
               className={classes}
               transform={`translate(${x} ${y})`}
-              role={isReachable ? "button" : undefined}
+              // stagger for the CSS: layers fade in one after another, and
+              // reachable rooms don't bob in lockstep
+              style={{ "--f": node.floor, "--i": nodeIndex(node.id) } as CSSProperties}
+              role={isReachable || isEnterable ? "button" : undefined}
               tabIndex={interactive ? 0 : undefined}
-              aria-label={`${style.label}, ${layerLabel(node.floor, numFloors, act)}`}
+              aria-label={`${isEnterable ? "Enter " : ""}${style.label}, ${layerLabel(node.floor, numFloors, act)}`}
               onMouseEnter={() => {
                 if (!interactive) return;
                 sfx.play("hover");
-                onHover?.(node.id);
+                if (isReachable) onHover?.(node.id);
               }}
               onMouseLeave={() => {
-                if (interactive) onHover?.(null);
+                if (interactive && isReachable) onHover?.(null);
               }}
               onFocus={() => {
-                if (interactive) onHover?.(node.id);
+                if (interactive && isReachable) onHover?.(node.id);
               }}
-              onClick={() => {
-                if (interactive) onChoose(node.id);
-              }}
+              onClick={activate}
               onKeyDown={(e) => {
                 if ((e.key === "Enter" || e.key === " ") && interactive) {
                   e.preventDefault();
-                  onChoose(node.id);
+                  activate();
                 }
               }}
             >

@@ -423,7 +423,7 @@ function App() {
               <h2 className="panel-title">Call stack</h2>
               <span className="panel-sub">{canJump ? "Select your next jump" : run.setting}</span>
             </div>
-            <DungeonMap {...mapProps} onHover={setFocusedJump} />
+            <DungeonMap {...mapProps} onHover={setFocusedJump} onEnter={needsEnter ? enterRoom : undefined} />
           </section>
 
           <aside className="map-side">
