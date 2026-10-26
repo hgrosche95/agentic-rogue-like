@@ -60,6 +60,7 @@ import { ModePicker } from "./components/ModePicker";
 import { SettingPicker } from "./components/SettingPicker";
 import { DealScreen, KitScreen } from "./components/StartScreens";
 import { ShopScreen } from "./components/ShopScreen";
+import { Tooltips } from "./components/RichText";
 
 const FALLBACK_SETTINGS = ["dungeon"];
 const INTRO_SEEN_KEY = "agentic-rogue-like:intro-seen";
@@ -219,6 +220,7 @@ function App() {
   if (run === null) {
     return (
       <main className="game is-title">
+        <Tooltips />
         <AudioControls className="is-floating" />
         <Brand />
         <p className="title-tagline">A deckbuilder: hack your way down into a rogue AGI's code</p>
@@ -501,6 +503,7 @@ function App() {
   return (
     <ShowTokensContext.Provider value={showTokens}>
       <ProgramModeContext.Provider value={run.program_mode}>{screen}</ProgramModeContext.Provider>
+      <Tooltips />
     </ShowTokensContext.Provider>
   );
 }

@@ -1,4 +1,5 @@
 import type { PendingEventView } from "../api";
+import { RichText } from "./RichText";
 
 export function EventPrompt({
   event,
@@ -21,7 +22,9 @@ export function EventPrompt({
             onClick={() => onChoose(option.index)}
           >
             <span className="event-option-label">{option.label}</span>
-            <span className="event-option-effects">{option.effects}</span>
+            <span className="event-option-effects">
+              <RichText text={option.effects} />
+            </span>
           </button>
         ))}
       </div>

@@ -1,4 +1,5 @@
 import type { Character, CharacterView } from "../api";
+import { RichText } from "./RichText";
 
 export function CharacterPicker({
   characters,
@@ -30,7 +31,7 @@ export function CharacterPicker({
       {current && (
         <p className="character-blurb">
           <span>{current.title}</span>
-          {current.description}
+          <RichText text={current.description} />
         </p>
       )}
     </div>

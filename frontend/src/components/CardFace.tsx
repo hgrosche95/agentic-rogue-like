@@ -3,6 +3,7 @@ import { CONTROL_FLOW_TYPES, PERMANENT_CARD_TYPES, type Card, type CardType } fr
 import { ShowTokensContext } from "../characters";
 import { useCardText } from "../program";
 import { unitOf } from "../readouts";
+import { RichText } from "./RichText";
 
 // Each card is a module: a drawn type icon in the socket top left (where
 // other deckbuilders put a cost - this game has none, except the
@@ -105,7 +106,9 @@ export function CardFace({ card, onField = false, readout }: { card: Card; onFie
           {readout.best > readout.value && <span className="card-best">max {readout.best}</span>}
         </div>
       )}
-      <div className="card-body">{description}</div>
+      <div className="card-body">
+        <RichText text={description} />
+      </div>
       {showTokens && !onField && (
         <span className="card-tokens" title={`Costs ${card.token_cost} token(s) of context`}>
           {card.token_cost}
