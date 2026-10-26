@@ -23,8 +23,10 @@ the test suite depends on (see README).
 
 from __future__ import annotations
 
+import logging
 import os
 import random
+import time
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -617,6 +619,38 @@ def health() -> dict[str, str]:
     this process (sessions.py), and the container scales to zero after a few
     minutes without requests."""
     return {"status": "ok"}
+
+
+# Errors the browser reports (see frontend/src/errors.ts): a crash there is
+# otherwise invisible - the game just freezes on the player's screen.
+client_log = logging.getLogger("agentic_rogue_like.client")
+CLIENT_ERRORS_PER_MINUTE = 30
+_client_error_times: list[float] = []
+
+
+class ClientErrorReport(BaseModel):
+    message: str
+    stack: str | None = None
+    run_id: str | None = None
+    where: str | None = None
+
+
+@app.post("/client-errors", status_code=204)
+def report_client_error(report: ClientErrorReport) -> None:
+    """Log a frontend crash. Capped per minute and per field, so a page stuck
+    in an error loop (or anyone posting here) can't flood the logs."""
+    now = time.monotonic()
+    _client_error_times[:] = [t for t in _client_error_times if now - t < 60]
+    if len(_client_error_times) >= CLIENT_ERRORS_PER_MINUTE:
+        return
+    _client_error_times.append(now)
+    client_log.warning(
+        "client error in %s (run %s): %s | %s",
+        (report.where or "?")[:80],
+        (report.run_id or "-")[:40],
+        report.message[:500],
+        (report.stack or "")[:4000],
+    )
 
 
 @app.get("/settings")

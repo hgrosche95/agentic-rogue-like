@@ -274,3 +274,21 @@ def test_health_answers_for_the_keep_alive() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_client_errors_are_logged_and_capped(caplog) -> None:
+    import agentic_rogue_like.api as api
+
+    api._client_error_times.clear()
+    with caplog.at_level("WARNING", logger="agentic_rogue_like.client"):
+        response = client.post(
+            "/client-errors",
+            json={"message": "boom", "stack": "at CombatPanel", "run_id": "r1", "where": "render"},
+        )
+        assert response.status_code == 204
+        assert "boom" in caplog.text and "at CombatPanel" in caplog.text
+
+        for _ in range(api.CLIENT_ERRORS_PER_MINUTE + 5):
+            client.post("/client-errors", json={"message": "again"})
+    assert caplog.text.count("again") == api.CLIENT_ERRORS_PER_MINUTE - 1
+    api._client_error_times.clear()

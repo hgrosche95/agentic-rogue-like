@@ -1,7 +1,7 @@
 // Types mirror the Pydantic response models in src/agentic_rogue_like/api.py -
 // keep the two in sync by hand for now, there's no shared schema generation yet.
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 export type RunStatus = "ongoing" | "victory" | "defeat";
 export type NodeType = "combat" | "elite" | "event" | "shop" | "rest" | "boss";
