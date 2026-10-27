@@ -163,13 +163,17 @@ interface ProgramFx {
 
 const PROGRAM_FX_MS = 1100;
 
+// Numbers on Dr. Chronos' side go on his body, like the enemy's on its own:
+// over his head they would float up into the HUD plate hanging there.
+const PLAYER_FX_TOP = FLOOR - 34;
+
 function ProgramFxPopup({ fx, enemyTop }: { fx: ProgramFx; enemyTop: number }) {
   if (fx.kind === "cut") {
     return <span className="arena-cut">{fx.text}</span>;
   }
   const onEnemy = fx.kind === "damage" || fx.kind === "combo";
   // on the enemy's body, clear of the intent marker over its head
-  const top = onEnemy ? enemyTop + 14 - (fx.kind === "combo" ? 14 : 0) - fx.stack * 9 : FLOOR - 48 - fx.stack * 9;
+  const top = onEnemy ? enemyTop + 14 - (fx.kind === "combo" ? 14 : 0) - fx.stack * 9 : PLAYER_FX_TOP - fx.stack * 9;
   return (
     <span
       className={`arena-popup arena-program-fx is-${fx.kind}`}
@@ -314,7 +318,7 @@ export function CombatArena({
         {exchange && (
           <div key={exchange.id} className="arena-fx" aria-hidden="true">
             {exchange.enemyDelta !== 0 && <DamagePopup side="enemy" delta={exchange.enemyDelta} top={top - 6} />}
-            {exchange.playerDelta !== 0 && <DamagePopup side="player" delta={exchange.playerDelta} top={FLOOR - 48} />}
+            {exchange.playerDelta !== 0 && <DamagePopup side="player" delta={exchange.playerDelta} top={PLAYER_FX_TOP} />}
           </div>
         )}
         {programFx.map((fx) => (

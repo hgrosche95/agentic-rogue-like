@@ -44,6 +44,18 @@
   --font-head: "Orbitron", "Rajdhani", sans-serif;
   --font-body: "Rajdhani", system-ui, sans-serif;
   --font-mono: "Rajdhani", system-ui, sans-serif;
+
+  /* Motion: a few shared durations and curves, so everything on the table
+     moves alike. `--ease-out` for things arriving and settling, `--ease-in-out`
+     for things moving from one place to another, `--ease-pop` (a slight
+     overshoot) for things that jump at you. Only transform, opacity and
+     glows are animated - nothing that makes the page lay itself out again. */
+  --dur-fast: 140ms;
+  --dur: 240ms;
+  --dur-slow: 420ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 html,
@@ -141,7 +153,11 @@ button {
   border: 1px solid var(--line-strong);
   background: #14142e;
   box-shadow: none;
-  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 
 button:hover:not(:disabled) {
@@ -550,5 +566,201 @@ body > .card-drag.type-batch {
   .hand .hand-card .card-header {
     font-size: 0.58rem;
     letter-spacing: 0.02em;
+  }
+}
+
+/* ---------- the combat table in motion ----------
+   App.css moves the table in pixel steps; here everything glides on the
+   shared curves above, and only by transform, opacity and glow. */
+
+/* the fan: cards ease into their turn and lift, and hovering keeps the
+   card's own colour instead of the generic button cyan */
+.hand .hand-card {
+  transition:
+    transform var(--dur) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+}
+
+.hand .hand-card:hover:not(:disabled) {
+  border-color: var(--card);
+  background: var(--panel);
+  box-shadow:
+    0 0 22px color-mix(in srgb, var(--card) 65%, transparent),
+    inset 0 0 14px color-mix(in srgb, var(--card) 16%, transparent);
+}
+
+/* stack slots and program lines: one outline, one glow, one curve */
+.field-slot,
+.program-background,
+.line-socket {
+  transition:
+    transform var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    filter var(--dur) var(--ease-out);
+}
+
+button.field-slot.is-queued:hover:not(:disabled) {
+  border-color: var(--card);
+  background: var(--panel);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--card) 65%, transparent);
+}
+
+.field-slot.is-empty.is-drop-target {
+  transform: translateY(-4px);
+}
+
+.program-background {
+  border: 2px dashed var(--line-strong);
+  border-radius: 12px;
+}
+
+.program-background.is-targetable {
+  border: 2px solid var(--accent);
+}
+
+.program-background.is-targetable:hover,
+.program-background.is-drop-target,
+.line-socket.is-empty.is-targetable:hover,
+.line-socket.is-empty.is-drop-target {
+  border-color: #fff;
+  background: rgba(52, 231, 255, 0.16);
+  box-shadow: 0 0 18px rgba(52, 231, 255, 0.6);
+}
+
+/* the program running: the live line lifts and glows, smoothly */
+.field-slot.is-running {
+  transform: translateY(-10px) scale(1.06);
+  transition:
+    transform var(--dur) var(--ease-pop),
+    box-shadow var(--dur) var(--ease-out);
+}
+
+/* a line that has run: it steps back while the program moves on, so the
+   lines clearing once the turn is over is no surprise */
+.field-slot.is-queued.is-spent {
+  opacity: 0.4;
+  filter: saturate(0.4);
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    filter var(--dur-slow) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+}
+
+.field-slot.is-queued.is-moving {
+  transform: translateY(-8px);
+}
+
+.field-slot.is-queued.is-drop-target {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.field-slot.is-queued.is-swap-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+}
+
+/* ---------- HP bars glide ---------- */
+.hud-bar > span {
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+/* ---------- numbers over the fighters: smooth, and glowing ---------- */
+.arena-popup {
+  animation-name: arena-popup-glide;
+  animation-timing-function: var(--ease-out);
+}
+
+.arena-popup.is-damage.is-enemy,
+.arena-program-fx.is-damage {
+  text-shadow: 0 0 3px var(--px-ink), 0 0 3px var(--px-ink), 0 0 16px var(--cyan);
+}
+
+.arena-popup.is-damage.is-player {
+  text-shadow: 0 0 3px var(--px-ink), 0 0 3px var(--px-ink), 0 0 16px var(--danger);
+}
+
+.arena-popup.is-heal,
+.arena-program-fx.is-heal {
+  text-shadow: 0 0 3px var(--px-ink), 0 0 3px var(--px-ink), 0 0 16px var(--safe);
+}
+
+.arena-program-fx.is-block {
+  text-shadow: 0 0 3px var(--px-ink), 0 0 3px var(--px-ink), 0 0 16px var(--cyan);
+}
+
+.arena-program-fx.is-combo {
+  text-shadow: 0 0 3px var(--px-ink), 0 0 3px var(--px-ink), 0 0 16px var(--boost);
+}
+
+@keyframes arena-popup-glide {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10%) scale(0.6);
+  }
+  16% {
+    opacity: 1;
+    transform: translate(-50%, -20%) scale(1.18);
+  }
+  30% {
+    transform: translate(-50%, -35%) scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -120%) scale(0.95);
+  }
+}
+
+/* the victory prompt glides in instead of stepping */
+.arena-victory {
+  animation-timing-function: var(--ease-out);
+  animation-duration: var(--dur-slow);
+}
+
+/* ---------- End turn / Run program: never dead while the table works ---------- */
+.end-turn-button {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* busy: a sweep of light runs across it, and it dims a little */
+.end-turn-button.is-busy {
+  background: color-mix(in srgb, var(--gold) 70%, var(--panel));
+  box-shadow: 0 0 14px rgba(255, 216, 74, 0.35);
+  cursor: progress;
+}
+
+.end-turn-button.is-busy::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.75) 50%, transparent 80%);
+  transform: translateX(-100%);
+  animation: busy-sweep 1s var(--ease-in-out) infinite;
+}
+
+@keyframes busy-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .end-turn-button.is-busy::after {
+    animation: none;
+  }
+  .hand .hand-card,
+  .field-slot,
+  .hud-bar > span {
+    transition: none;
   }
 }

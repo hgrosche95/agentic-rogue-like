@@ -80,7 +80,8 @@ function HpBar({ hp, max, side, ghost }: { hp: number; max: number; side: "playe
   const after = ghost === undefined ? percent : pct(Math.min(ghost, hp));
   return (
     <span className={`hud-bar is-${side}`}>
-      <span style={{ width: `${percent}%` }} />
+      {/* slid along rather than resized, so the bar's motion stays off layout */}
+      <span style={{ transform: `translateX(${percent - 100}%)` }} />
       {after < percent && <i className="hud-ghost" style={{ left: `${after}%`, width: `${percent - after}%` }} />}
       <em>
         {hp} / {max}
@@ -179,6 +180,10 @@ export function CombatPanel({
   // the turn goes to the server - and the queued card picked up to move,
   // which, like the discard picks, belongs to the table it was picked on.
   const [running, setRunning] = useState<number | null>(null);
+  // the lines that have run already, dimmed as the program moves on - for the
+  // table they ran on: the server's answer clears them out of the lines
+  const [spent, setSpent] = useState<{ on: PendingCombatView; lines: number[] } | null>(null);
+  const spentLines = spent?.on === combat ? spent.lines : [];
   const [helpOpen, setHelpOpen] = useState(false);
   const [moveChoice, setMoveChoice] = useState<{ on: PendingCombatView; line: number } | null>(null);
   const movingLine = moveChoice?.on === combat ? moveChoice.line : null;
@@ -253,6 +258,7 @@ export function CombatPanel({
     shown.forEach((step, i) => {
       window.setTimeout(() => {
         setRunning(step.slot);
+        setSpent({ on: combat, lines: shown.slice(0, i).map((s) => s.slot) });
         if (step.outcome === "cut") {
           arenaRef.current?.programHit({ dealt: 0, runs: 0, block: 0, heal: 0, weight: 0, cut: true });
           sfx.play("error");
@@ -280,6 +286,7 @@ export function CombatPanel({
     // the last hit lands before the turn moves on
     window.setTimeout(() => {
       setRunning(null);
+      setSpent({ on: combat, lines: shown.map((s) => s.slot) });
       finish();
     }, (shown.length - 1) * PROGRAM_STEP_MS + ENEMY_HIT_MS + 250);
   }
@@ -539,6 +546,7 @@ export function CombatPanel({
               hotLine={hotLine}
               running={running}
               cutLines={cutLines}
+              spentLines={spentLines}
               movingLine={movingLine}
               locked={busy || discarding !== null}
               pending={pending && pendingCard ? { slotIndex: pending.slotIndex, card: pendingCard } : null}
@@ -624,9 +632,11 @@ export function CombatPanel({
               Continue
             </button>
           ) : (
+            // busy: still shown at work (a sweep of light), never just dead
             <button
-              className="end-turn-button"
+              className={`end-turn-button${busy ? " is-busy" : ""}`}
               disabled={busy || (discarding !== null && discarding.length !== excess)}
+              aria-busy={busy}
               onClick={endTurn}
             >
               {discarding !== null
