@@ -999,8 +999,9 @@ button.field-slot.is-queued:hover:not(:disabled) {
   transform: translate(-50%, -50%) rotate(-8deg);
 }
 
-/* ---------- hover help: dark glass with a cyan edge ---------- */
-.tooltip {
+/* ---------- hover help and coach marks: dark glass with a cyan edge ---------- */
+.tooltip,
+.coach-bubble {
   background: color-mix(in srgb, var(--panel-solid) 94%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   border-radius: var(--radius-s);

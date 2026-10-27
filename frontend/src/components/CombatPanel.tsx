@@ -21,8 +21,10 @@ import { CardFace, type Readout } from "./CardFace";
 import { CombatHelp, HelpButton } from "./CombatHelp";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
 import { programPlan, queues } from "../program";
+import { hasSeenTutorial } from "../tutorial";
 import { ProgramLines, ProgramOutput } from "./ProgramLines";
 import { SlotPreview } from "./SlotPreview";
+import { Tutorial } from "./Tutorial";
 
 // The Vibe-Coder's context window: one pip per token, lit while used; past
 // the window the extra pips glow red - every card from there may hallucinate.
@@ -195,6 +197,13 @@ export function CombatPanel({
   const [spent, setSpent] = useState<{ on: PendingCombatView; lines: number[] } | null>(null);
   const spentLines = spent?.on === combat ? spent.lines : [];
   const [helpOpen, setHelpOpen] = useState(false);
+  // The coach marks: shown in the first fight of each mode, again from the
+  // help sheet (a new key starts them over); they follow the cards played
+  // and turns ended.
+  const [tutorialRun, setTutorialRun] = useState(() =>
+    hasSeenTutorial(combat.program_mode ? "program" : "classic") ? 0 : 1,
+  );
+  const [moves, setMoves] = useState({ plays: 0, turns: 0 });
   const [moveChoice, setMoveChoice] = useState<{ on: PendingCombatView; line: number } | null>(null);
   const movingLine = moveChoice?.on === combat ? moveChoice.line : null;
   const setMovingLine = (line: number | null) => setMoveChoice(line === null ? null : { on: combat, line });
@@ -253,6 +262,7 @@ export function CombatPanel({
       return;
     }
     if (discarding !== null && discarding.length !== excess) return;
+    setMoves((m) => ({ ...m, turns: m.turns + 1 }));
     const picks = discarding ?? [];
     const steps = combat.program_preview?.steps ?? [];
     const taken = combat.enemy_hp - (steps.at(-1)?.enemy_hp ?? combat.enemy_hp);
@@ -347,6 +357,7 @@ export function CombatPanel({
     if (card) flyCard(card, slot.querySelector<HTMLElement>(".background-hint") ?? slot, stays);
     setSelectedHandIndex(null);
     setPlayed({ on: combat, handIndex, slotIndex });
+    setMoves((m) => ({ ...m, plays: m.plays + 1 }));
     if (!played) {
       onPlayCard(handIndex, slotIndex);
       return;
@@ -404,7 +415,24 @@ export function CombatPanel({
 
   return (
     <div className={`combat-panel${discarding !== null ? " is-discarding" : ""}`}>
-      {helpOpen && <CombatHelp programMode={programMode} onClose={() => setHelpOpen(false)} />}
+      {helpOpen && (
+        <CombatHelp
+          programMode={programMode}
+          onClose={() => setHelpOpen(false)}
+          onTutorial={() => {
+            setHelpOpen(false);
+            setTutorialRun((n) => n + 1);
+          }}
+        />
+      )}
+      {tutorialRun > 0 && !enemySlain && (
+        <Tutorial
+          key={tutorialRun}
+          mode={programMode ? "program" : "classic"}
+          plays={moves.plays}
+          turns={moves.turns}
+        />
+      )}
       {/* the HUD plates sit in the scene's top corners, clear of the monitor */}
       <div className="arena-wrap">
         <CombatArena
