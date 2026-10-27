@@ -85,16 +85,20 @@ from .models import (
     Artifact,
     Card,
     Character,
+    Combo,
+    KillingBlow,
     MapNode,
     NodeType,
     PlayerState,
     RestSite,
+    RunState,
     RunStatus,
     Shop,
     StarterKit,
 )
 from .sessions import RunSession, create_session, get_session
 from .shop import MIN_DECK_SIZE, buy_artifact, buy_card, leave_shop, remove_card
+from .stats import note_changes
 from .style import play_style, style_counts
 
 app = FastAPI(title="agentic-rogue-like")
@@ -329,6 +333,62 @@ class RestView(BaseModel):
         )
 
 
+class RunSummaryView(BaseModel):
+    """The run in numbers, once it is over (stats.py)."""
+
+    # Seconds from the start to the fight that ended it - None for a run
+    # started before the stats were kept.
+    duration_seconds: int | None
+    fights_won: int
+    elites_defeated: int
+    bosses_defeated: int
+    turns: int
+    damage_dealt: int
+    damage_taken: int
+    biggest_hit: int
+    best_combo: Combo | None
+    cards_played: int
+    # The card played most, and how often.
+    mvp_card: CardView | None
+    mvp_plays: int
+    cards_added: int
+    cards_removed: int
+    cards_upgraded: int
+    credits_earned: int
+    credits_spent: int
+    artifacts_collected: int
+    killed_by: KillingBlow | None
+
+    @classmethod
+    def of(cls, run: RunState) -> RunSummaryView:
+        stats = run.stats
+        mvp = stats.mvp_card
+        duration = None
+        if stats.started_at is not None and stats.ended_at is not None:
+            duration = round(stats.ended_at - stats.started_at)
+        return cls(
+            duration_seconds=duration,
+            fights_won=stats.fights_won,
+            elites_defeated=stats.elites_defeated,
+            bosses_defeated=stats.bosses_defeated,
+            turns=stats.turns,
+            damage_dealt=stats.damage_dealt,
+            damage_taken=stats.damage_taken,
+            biggest_hit=stats.biggest_hit,
+            best_combo=stats.best_combo,
+            cards_played=stats.cards_played,
+            mvp_card=None if mvp is None else CardView.of(mvp),
+            mvp_plays=0 if mvp is None else stats.play_counts.get(mvp.name, 0),
+            cards_added=stats.cards_added,
+            cards_removed=stats.cards_removed,
+            cards_upgraded=stats.cards_upgraded,
+            credits_earned=stats.credits_earned,
+            credits_spent=stats.credits_spent,
+            artifacts_collected=len(run.player.artifacts),
+            killed_by=stats.killed_by,
+        )
+
+
 class RunView(BaseModel):
     run_id: str
     status: RunStatus
@@ -367,6 +427,8 @@ class RunView(BaseModel):
     # Every node in the run, not just the current/reachable ones - the
     # frontend draws the whole dungeon graph, not just the next step.
     nodes: dict[str, MapNode]
+    # Once the run is over (victory or defeat): its summary.
+    summary: RunSummaryView | None = None
 
 
 class NewRunRequest(BaseModel):
@@ -478,6 +540,9 @@ class ChooseNodeRequest(BaseModel):
 
 def _run_view(run_id: str, session: RunSession) -> RunView:
     run = session.run
+    # Every request answers with this view, so it is where the run summary
+    # catches up on what the request changed in the deck and the credits.
+    note_changes(run)
     node = run.nodes[run.current_node_id]
     node_resolved = (
         node.visited
@@ -617,6 +682,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         play_style=(style.value if (style := play_style(run.player.deck)) else None),
         style_counts={s.value: n for s, n in style_counts(run.player.deck).items()},
         nodes=run.nodes,
+        summary=None if run.status is RunStatus.ONGOING else RunSummaryView.of(run),
     )
 
 

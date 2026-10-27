@@ -345,6 +345,42 @@ export interface RunView {
   play_style: PlayStyle | null;
   style_counts: Partial<Record<PlayStyle, number>>;
   nodes: Record<string, MapNode>;
+  // once the run is over (victory or defeat): the run in numbers
+  summary: RunSummary | null;
+}
+
+// The best stretch of damage: one program run in program mode, one turn's
+// cards in classic play (`runs`: actions run, or cards played).
+export interface Combo {
+  damage: number;
+  runs: number;
+  cards: string[];
+}
+
+// The run in numbers, kept as it went (the backend's stats.py).
+export interface RunSummary {
+  // null for a run started before the server kept stats
+  duration_seconds: number | null;
+  fights_won: number;
+  elites_defeated: number;
+  bosses_defeated: number;
+  turns: number;
+  damage_dealt: number;
+  damage_taken: number;
+  biggest_hit: number;
+  best_combo: Combo | null;
+  cards_played: number;
+  // the card played most, and how often
+  mvp_card: Card | null;
+  mvp_plays: number;
+  cards_added: number;
+  cards_removed: number;
+  cards_upgraded: number;
+  credits_earned: number;
+  credits_spent: number;
+  artifacts_collected: number;
+  // a defeat: the enemy, and the move (or Malware, Thorns, ...) that took the last HP
+  killed_by: { enemy: string; move: string } | null;
 }
 
 // Runs only live in the API's memory (sessions.py): a restart or an idle
