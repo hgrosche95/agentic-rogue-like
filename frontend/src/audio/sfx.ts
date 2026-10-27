@@ -36,6 +36,8 @@ export type SfxName =
   // cards and UI
   | "reward_open"
   | "reward_pick"
+  | "card_flip"
+  | "rare_reveal"
   | "hover"
   | "select"
   | "card_flight"
@@ -265,6 +267,18 @@ const SOUNDS: Record<SfxName, Sound> = {
     tone(g, t, { type: "square", freq: 880, dur: 0.07, gain: 0.08, attack: 0.001 });
     tone(g, t + 0.07, { type: "square", freq: 1320, dur: 0.12, gain: 0.08, attack: 0.001 });
     tone(g, t + 0.12, { type: "triangle", freq: midiToFreq(96), dur: 0.4, gain: 0.07 });
+  },
+  card_flip(g, t) {
+    // a card turned over: a short papery swish and a tick
+    noise(g, t, { dur: 0.09, gain: 0.1, filter: "bandpass", freq: 1800, to: 5000, q: 1.2, attack: 0.02 });
+    tone(g, t + 0.07, { type: "triangle", freq: 1600, dur: 0.03, gain: 0.04, attack: 0.001 });
+  },
+  rare_reveal(g, t) {
+    // something good under it: a bright shimmer up an octave
+    [88, 91, 95, 100].forEach((note, i) =>
+      tone(g, t + i * 0.04, { type: "triangle", freq: midiToFreq(note), dur: 0.45, gain: 0.06 }),
+    );
+    tone(g, t, { type: "sine", freq: midiToFreq(76), dur: 0.6, gain: 0.06, attack: 0.02 });
   },
   hover(g, t) {
     tone(g, t, { type: "sine", freq: 2400, dur: 0.018, gain: 0.03, attack: 0.001 });
