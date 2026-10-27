@@ -1014,3 +1014,45 @@ button.field-slot.is-queued:hover:not(:disabled) {
     transition: none;
   }
 }
+
+/* ---------- combat speed (AudioControls) ---------- */
+.tempo-row {
+  display: grid;
+  grid-template-columns: 4.4rem 1fr;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tempo-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  overflow: hidden;
+}
+
+.tempo-option {
+  padding: 0.3rem 0.2rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  color: var(--text-dim);
+  text-transform: inherit;
+  cursor: pointer;
+}
+
+.tempo-option + .tempo-option {
+  border-left: 1px solid var(--line-strong);
+}
+
+.tempo-option:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.tempo-option.is-active {
+  color: var(--on-accent);
+  background: var(--accent);
+}

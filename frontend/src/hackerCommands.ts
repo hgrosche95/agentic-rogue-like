@@ -1,13 +1,15 @@
 import type { Card } from "./api";
+import { tempoMs } from "./tempo";
 
 // A command Dr. Chronos typed, placed in front of the history line at `at`
 // (the line the played card will produce once the server answers).
 // Dr. Chronos types every command in about this long, whatever its length -
-// short enough not to stall the fight. The card only resolves once he is done.
+// short enough not to stall the fight (at the normal tempo, see tempo.ts). The
+// card only resolves once he is done.
 export const TYPING_MS = 600;
 
 export function typingInterval(text: string): number {
-  return TYPING_MS / Math.max(1, text.length);
+  return tempoMs(TYPING_MS) / Math.max(1, text.length);
 }
 
 export interface HackerCommand {
