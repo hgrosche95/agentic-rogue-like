@@ -694,7 +694,30 @@ def move_queued(state: CombatState, from_slot: int, to_slot: int) -> None:
     g[from_slot], g[to_slot] = g[to_slot], g[from_slot]
 
 
-def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> list[str]:
+class ProgramStep(BaseModel):
+    """What one queued line did when the program ran (run_program's trace)."""
+
+    slot: int
+    name: str
+    type: CardType
+    # "ran", "cut" (an interrupt stopped it) or "skipped" (the enemy was down)
+    outcome: str
+    runs: int  # how often its action ran - a fork's target twice, a loop its repeats
+    damage: int  # the enemy's HP lost
+    dealt: int  # ... its HP and block
+    block: int  # block the player raised
+    heal: int
+    hurt: int  # HP the player lost (a hallucination, thorns)
+    enemy_hp: int  # after it
+    enemy_block: int
+
+
+def run_program(
+    state: CombatState,
+    player: PlayerState,
+    rng: random.Random,
+    trace: list[ProgramStep] | None = None,
+) -> list[str]:
     """Program mode, end of the turn: run the queued actions left to right.
 
     Every action resolves as if it had just been played in its line (the
@@ -738,84 +761,114 @@ def run_program(state: CombatState, player: PlayerState, rng: random.Random) -> 
         card = state.program[slot]
         if card is None:
             continue
-        glitched = state.program_glitched[slot]
-        state.program[slot], state.program_glitched[slot] = None, False
-        if state.enemy_hp <= 0 or player.hp <= 0:
-            state.discard_pile.append(card)  # never ran, so never used up
-            continue
-        if cut_after is not None and lines_run >= cut_after:
-            if lines_run == cut_after:
-                log.append(f"{state.enemy.name} interrupts your program after {cut_after} line(s)!")
-                lines_run += 1  # announced once
-            state.discard_pile.append(card)
-            continue
-        lines_run += 1
-        line = f"[{slot + 1}] "
-        # Hot Path: the card runs as its upgrade, the deck keeps the original.
-        run = card
-        if slot == hot and not glitched and can_upgrade(card):
-            run = upgrade_card(card)
-            line += "(hot path) "
-        if run.type is CardType.FORK:
-            forks += run.value
-            log.append(line + f"{run.name}: the next action runs {1 + forks} times.")
-        elif run.type is CardType.IF_WOUNDED:
-            forks += run.value if _wounded(state) else 0
-            state_line = "at half HP or less" if _wounded(state) else "still above half HP"
-            log.append(line + f"{run.name}: the enemy is {state_line}.")
-        elif run.type is CardType.PIPE:
-            piped += run.value * ran
-            log.append(line + f"{run.name}: the next action gets +{piped} ({ran} ran before).")
-        elif run.type is CardType.BATCH:
-            # the actions still to run after it - an interrupt's cut ones don't
-            ahead = [state.program[s] for s in order[step + 1 :] if state.program[s]]
-            if cut_after is not None:
-                ahead = ahead[: max(0, cut_after - lines_run)]
-            actions = sum(1 for c in ahead if c.type not in CONTROL_FLOW_TYPES)
-            freed = min(state.tokens_used, run.value * actions)
-            state.tokens_used -= freed
-            log.append(line + f"{run.name} batches {actions} action(s): {freed} token(s) free up.")
-        elif run.type is CardType.LOOP:
-            repeats = run.value + (tail_call if slot == last_line else 0)
-            if last is None:
-                log.append(line + f"{run.name}: nothing has run yet to repeat.")
-            for _ in range(repeats if last is not None else 0):
-                state.plays_this_turn = max(played - 1, ran)
-                wounded = predictor if _wounded(state) else 0
+        before = (state.enemy_hp, state.enemy_block, player.hp, state.player_block, ran)
+        outcome = "ran"
+        try:
+            glitched = state.program_glitched[slot]
+            state.program[slot], state.program_glitched[slot] = None, False
+            if state.enemy_hp <= 0 or player.hp <= 0:
+                state.discard_pile.append(card)  # never ran, so never used up
+                outcome = "skipped"
+                continue
+            if cut_after is not None and lines_run >= cut_after:
+                if lines_run == cut_after:
+                    log.append(
+                        f"{state.enemy.name} interrupts your program after {cut_after} line(s)!"
+                    )
+                    lines_run += 1  # announced once
+                state.discard_pile.append(card)
+                outcome = "cut"
+                continue
+            lines_run += 1
+            line = f"[{slot + 1}] "
+            # Hot Path: the card runs as its upgrade, the deck keeps the original.
+            run = card
+            if slot == hot and not glitched and can_upgrade(card):
+                run = upgrade_card(card)
+                line += "(hot path) "
+            if run.type is CardType.FORK:
+                forks += run.value
+                log.append(line + f"{run.name}: the next action runs {1 + forks} times.")
+            elif run.type is CardType.IF_WOUNDED:
+                forks += run.value if _wounded(state) else 0
+                state_line = "at half HP or less" if _wounded(state) else "still above half HP"
+                log.append(line + f"{run.name}: the enemy is {state_line}.")
+            elif run.type is CardType.PIPE:
+                piped += run.value * ran
+                log.append(line + f"{run.name}: the next action gets +{piped} ({ran} ran before).")
+            elif run.type is CardType.BATCH:
+                # the actions still to run after it - an interrupt's cut ones don't
+                ahead = [state.program[s] for s in order[step + 1 :] if state.program[s]]
+                if cut_after is not None:
+                    ahead = ahead[: max(0, cut_after - lines_run)]
+                actions = sum(1 for c in ahead if c.type not in CONTROL_FLOW_TYPES)
+                freed = min(state.tokens_used, run.value * actions)
+                state.tokens_used -= freed
                 log.append(
-                    line + f"{run.name} -> " + _run_line(state, last, slot, player, rng, wounded)
+                    line + f"{run.name} batches {actions} action(s): {freed} token(s) free up."
                 )
-                ran += 1
-                if state.enemy_hp <= 0:
-                    break
-        else:
-            bonus = (pipeline if after_flow else 0) + piped
-            piped = 0
-            if slot == last_line:
-                bonus += compiler * len(types - {run.type})
-                forks += tail_call
-            for _ in range(1 + forks):
-                state.plays_this_turn = max(played - 1, ran)
-                wounded = predictor if _wounded(state) else 0
-                if glitched:
-                    log.append(line + _hallucinate(state, run, slot, player))
-                else:
-                    log.append(line + _run_line(state, run, slot, player, rng, bonus + wounded))
-                ran += 1
-                if state.enemy_hp <= 0:
-                    break
-            forks = 0
-            last = None if glitched else run
-        after_flow = run.type in CONTROL_FLOW_TYPES
-        types.add(run.type)
-        if run.type in CONTROL_FLOW_TYPES and run.draw:
-            log.append(line + f"You draw {_draw(state, run.draw, rng)} card(s).")
-        if card.exhaust and card.type not in CONTROL_FLOW_TYPES:
-            state.banished_pile.append(card)
-        else:
-            state.discard_pile.append(card)
-        if line := _check_boss_phase(state):
-            log.append(line.strip())
+            elif run.type is CardType.LOOP:
+                repeats = run.value + (tail_call if slot == last_line else 0)
+                if last is None:
+                    log.append(line + f"{run.name}: nothing has run yet to repeat.")
+                for _ in range(repeats if last is not None else 0):
+                    state.plays_this_turn = max(played - 1, ran)
+                    wounded = predictor if _wounded(state) else 0
+                    log.append(
+                        line
+                        + f"{run.name} -> "
+                        + _run_line(state, last, slot, player, rng, wounded)
+                    )
+                    ran += 1
+                    if state.enemy_hp <= 0:
+                        break
+            else:
+                bonus = (pipeline if after_flow else 0) + piped
+                piped = 0
+                if slot == last_line:
+                    bonus += compiler * len(types - {run.type})
+                    forks += tail_call
+                for _ in range(1 + forks):
+                    state.plays_this_turn = max(played - 1, ran)
+                    wounded = predictor if _wounded(state) else 0
+                    if glitched:
+                        log.append(line + _hallucinate(state, run, slot, player))
+                    else:
+                        log.append(line + _run_line(state, run, slot, player, rng, bonus + wounded))
+                    ran += 1
+                    if state.enemy_hp <= 0:
+                        break
+                forks = 0
+                last = None if glitched else run
+            after_flow = run.type in CONTROL_FLOW_TYPES
+            types.add(run.type)
+            if run.type in CONTROL_FLOW_TYPES and run.draw:
+                log.append(line + f"You draw {_draw(state, run.draw, rng)} card(s).")
+            if card.exhaust and card.type not in CONTROL_FLOW_TYPES:
+                state.banished_pile.append(card)
+            else:
+                state.discard_pile.append(card)
+            if line := _check_boss_phase(state):
+                log.append(line.strip())
+        finally:
+            if trace is not None:
+                trace.append(
+                    ProgramStep(
+                        slot=slot,
+                        name=card.name,
+                        type=card.type,
+                        outcome=outcome,
+                        runs=ran - before[4],
+                        damage=before[0] - state.enemy_hp,
+                        dealt=before[0] + before[1] - state.enemy_hp - state.enemy_block,
+                        block=max(0, state.player_block - before[3]),
+                        heal=max(0, player.hp - before[2]),
+                        hurt=max(0, before[2] - player.hp),
+                        enemy_hp=state.enemy_hp,
+                        enemy_block=state.enemy_block,
+                    )
+                )
+
     return log
 
 
@@ -826,6 +879,8 @@ class ProgramPreview(BaseModel):
     enemy_block: int
     player_hp: int
     player_block: int
+    # line by line, in the order they run - for the frontend to play them out
+    steps: list[ProgramStep] = Field(default_factory=list)
 
 
 def program_preview(state: CombatState, player: PlayerState) -> ProgramPreview:
@@ -843,12 +898,14 @@ def program_preview(state: CombatState, player: PlayerState) -> ProgramPreview:
             player_block=state.player_block,
         )
     trial, me = state.model_copy(deep=True), player.model_copy(deep=True)
-    run_program(trial, me, random.Random(0))
+    steps: list[ProgramStep] = []
+    run_program(trial, me, random.Random(0), steps)
     return ProgramPreview(
         enemy_hp=trial.enemy_hp,
         enemy_block=trial.enemy_block,
         player_hp=me.hp,
         player_block=trial.player_block,
+        steps=steps,
     )
 
 
