@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Card, RestUpgrade, RestView } from "../api";
 import { sfx } from "../audio";
+import { pickClass, useOverlayPick } from "../overlayStage";
 import { CardFace } from "./CardFace";
 
 type Mode = "choose" | "upgrade" | "remove";
@@ -52,6 +53,7 @@ export function RestScreen({
   onRemove: (deckIndex: number) => void;
 }) {
   const [mode, setMode] = useState<Mode>("choose");
+  const { picked, pick: pickChoice } = useOverlayPick();
   const healed = Math.min(maxHp, hp + rest.heal_amount);
 
   useEffect(() => {
@@ -73,11 +75,12 @@ export function RestScreen({
           <div className="artifact-offer rest-options">
             <button
               type="button"
-              className="artifact-card rest-option"
+              className={`artifact-card rest-option${pickClass(picked, "heal")}`}
               disabled={disabled}
               onMouseEnter={() => sfx.play("hover")}
               onClick={() => {
                 sfx.play("heal");
+                pickChoice("heal");
                 onHeal();
               }}
             >
@@ -129,12 +132,13 @@ export function RestScreen({
               <div key={item.card.id} className="rest-pick">
                 <button
                   type="button"
-                  className={`hand-card deck-card type-${item.upgraded.type}`}
+                  className={`hand-card deck-card type-${item.upgraded.type}${pickClass(picked, item.deck_index)}`}
                   disabled={disabled}
                   aria-label={`Upgrade ${item.card.name} to ${item.upgraded.name}`}
                   onMouseEnter={() => sfx.play("hover")}
                   onClick={() => {
                     sfx.play("reward_pick");
+                    pickChoice(item.deck_index);
                     onUpgrade(item.deck_index);
                   }}
                 >
@@ -161,12 +165,13 @@ export function RestScreen({
               <button
                 key={card.id}
                 type="button"
-                className={`hand-card deck-card type-${card.type}`}
+                className={`hand-card deck-card type-${card.type}${pickClass(picked, index)}`}
                 disabled={disabled}
                 aria-label={`Remove ${card.name}`}
                 onMouseEnter={() => sfx.play("hover")}
                 onClick={() => {
                   sfx.play("reward_pick");
+                  pickChoice(index);
                   onRemove(index);
                 }}
               >

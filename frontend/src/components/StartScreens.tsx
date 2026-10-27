@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { AgiDeal, StarterKit } from "../api";
 import { sfx } from "../audio";
+import { pickClass, useOverlayPick } from "../overlayStage";
 import { CardFace } from "./CardFace";
 import { TextWithCards } from "./CardMention";
 import { RichText } from "./RichText";
@@ -17,6 +18,7 @@ export function KitScreen({
   disabled: boolean;
   onPick: (kitIndex: number) => void;
 }) {
+  const { picked, pick } = useOverlayPick();
   useEffect(() => {
     sfx.play("reward_open");
   }, []);
@@ -29,12 +31,13 @@ export function KitScreen({
         {offer.map((kit, index) => (
           <button
             key={kit.id}
-            className="kit-option"
+            className={`kit-option${pickClass(picked, index)}`}
             style={{ animationDelay: `${index * 90}ms` }}
             disabled={disabled}
             onMouseEnter={() => sfx.play("hover")}
             onClick={() => {
               sfx.play("reward_pick");
+              pick(index);
               onPick(index);
             }}
           >
@@ -65,6 +68,7 @@ export function DealScreen({
   disabled: boolean;
   onPick: (dealIndex: number | null) => void;
 }) {
+  const { picked, pick } = useOverlayPick();
   useEffect(() => {
     sfx.play("reward_open");
   }, []);
@@ -84,11 +88,12 @@ export function DealScreen({
         {deals.map((deal, index) => (
           <button
             key={deal.kind}
-            className={`deal-option kind-${deal.kind}`}
+            className={`deal-option kind-${deal.kind}${pickClass(picked, index)}`}
             disabled={disabled}
             onMouseEnter={() => sfx.play("hover")}
             onClick={() => {
               sfx.play("reward_pick");
+              pick(index);
               onPick(index);
             }}
           >
@@ -100,10 +105,11 @@ export function DealScreen({
         ))}
       </div>
       <button
-        className="reward-skip"
+        className={`reward-skip${pickClass(picked, "refuse")}`}
         disabled={disabled}
         onClick={() => {
           sfx.play("click");
+          pick("refuse");
           onPick(null);
         }}
       >
