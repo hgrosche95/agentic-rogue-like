@@ -79,10 +79,7 @@ def starter_deck() -> list[Card]:
             name="Kernel Panic",
             type=CardType.FINAL_STRIKE,
             value=5,
-            description=(
-                "Destroy all permanent cards on the field. Deal 5 damage to "
-                "the enemy for each one destroyed."
-            ),
+            description="Destroy all permanent cards. Deal 5 damage for each one.",
         )
     )
     return cards
@@ -359,7 +356,7 @@ REWARD_POOL: list[Card] = [
         value=4,
         token_cost=2,
         rarity=Rarity.UNCOMMON,
-        description="Permanent. Deal 4 damage to the enemy at the end of each turn.",
+        description="Permanent. End of turn: deal 4 damage to the enemy.",
     ),
     Card(
         id="mainframe",
@@ -367,7 +364,7 @@ REWARD_POOL: list[Card] = [
         type=CardType.FORTIFY,
         value=1,
         rarity=Rarity.UNCOMMON,
-        description="Permanent. At the end of each turn gain 1 block per permanent card.",
+        description="Permanent. End of turn: gain 1 block per permanent card.",
     ),
     Card(
         id="fork-bomb",
@@ -476,7 +473,7 @@ PROGRAM_REWARD_POOL: list[Card] = [
         type=CardType.IF_WOUNDED,
         value=1,
         rarity=Rarity.COMMON,
-        description="Control flow. If the enemy is at half HP or less, the next action runs twice.",
+        description="Control flow. Enemy at half HP or less: the next action runs twice.",
     ),
     Card(
         id="loop",
@@ -574,10 +571,7 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Encryption": {"value": 2, "description": "Permanent. Reduce incoming damage by 2."},
     "Kernel Panic": {
         "value": 7,
-        "description": (
-            "Destroy all permanent cards on the field. Deal 7 damage to "
-            "the enemy for each one destroyed."
-        ),
+        "description": "Destroy all permanent cards. Deal 7 damage for each one.",
     },
     # ---- reward pool
     "Brute Force": {"value": 15, "description": "Discard 1 random card. Deal 15 (+ATK) damage."},
@@ -611,11 +605,11 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     },
     "Daemon": {
         "value": 6,
-        "description": "Permanent. Deal 6 damage to the enemy at the end of each turn.",
+        "description": "Permanent. End of turn: deal 6 damage to the enemy.",
     },
     "Mainframe": {
         "value": 2,
-        "description": "Permanent. At the end of each turn gain 2 block per permanent card.",
+        "description": "Permanent. End of turn: gain 2 block per permanent card.",
     },
     "Fork Bomb": {
         "value": 5,
@@ -692,8 +686,7 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "If Wounded": {
         "draw": 1,
         "description": (
-            "Control flow. If the enemy is at half HP or less, the next action runs twice. "
-            "Draw 1 card."
+            "Control flow. Enemy at half HP or less: the next action runs twice. Draw 1 card."
         ),
     },
     "Loop": {

@@ -500,9 +500,10 @@ body > .card-drag.type-batch {
   box-shadow: 0 0 12px rgba(255, 61, 139, 0.4);
 }
 
-/* the small cards on the stack: Orbitron runs wide, names must still fit */
+/* the small cards on the stack: Orbitron runs wide - CardFace shrinks a
+   name that doesn't fit from here */
 .field-slot.is-occupied .card-header {
-  font-size: clamp(0.5rem, 9cqw, 0.66rem);
+  font-size: 0.66rem;
   letter-spacing: 0.02em;
 }
 
