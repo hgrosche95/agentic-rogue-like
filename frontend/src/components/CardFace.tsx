@@ -220,6 +220,13 @@ export function CardFace({ card, onField = false, readout }: { card: Card; onFie
           {readout.best > readout.value && <span className="card-best">max {readout.best}</span>}
         </div>
       )}
+      {/* what is left of the effect where a narrow slot hides the text */}
+      {onField && unit && card.value > 0 && (
+        <span className="card-mini">
+          {card.hits > 1 && `${card.hits}×`}
+          {card.value} <small>{unit}</small>
+        </span>
+      )}
       <div ref={bodyRef} className="card-body">
         {/* one inline box: the body is a flex container, the terms must not become items */}
         <span>

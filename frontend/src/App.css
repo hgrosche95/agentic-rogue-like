@@ -2924,8 +2924,8 @@ button.is-primary:hover:not(:disabled),
   .field .field-slot.is-occupied .card-header {
     flex: 1;
     font-size: 0.8rem;
-    /* the bottom clear of rarity gem, one-shot tag and line number */
-    padding: var(--socket-at) 0.2rem 1.4rem;
+    /* the bottom clear of the value, rarity gem, one-shot tag and line number */
+    padding: var(--socket-at) 0.2rem 2.5rem;
     border-bottom: 0;
     font-family: var(--font-mono);
     letter-spacing: 0;
@@ -2939,6 +2939,25 @@ button.is-primary:hover:not(:disabled),
   .field-slot.is-occupied .card-body {
     display: none;
   }
+  .field-slot.is-occupied .card-mini {
+    display: block;
+  }
+}
+
+.card-mini {
+  display: none;
+  position: absolute;
+  left: 0.3rem;
+  bottom: 1.3rem;
+  font-family: var(--font-head);
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.card-mini small {
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  opacity: 0.75;
 }
 
 /* -- piles -- */
