@@ -4236,3 +4236,250 @@ body > .field-slot.card-drag {
 .card-preview.is-below {
   transform: translate(-50%, 10px);
 }
+
+/* ---------- one window handing over to the next (OverlayStage) ---------- */
+/* the pick flares up, the window folds shut into a seam that holds while the
+   server answers, and the next window opens out of it - or the backdrop
+   fades onto the map. The timings match stageTimings in overlayStage.ts. */
+.overlay-backdrop {
+  --overlay-top: 96px;
+}
+
+@media (max-width: 760px) {
+  .overlay-backdrop {
+    --overlay-top: 168px;
+  }
+}
+
+.overlay-window.is-staged.is-open {
+  animation: overlay-open 0.32s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+@keyframes overlay-open {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.6) scaleY(0.01);
+    filter: brightness(2.4);
+  }
+  35% {
+    opacity: 1;
+    transform: scaleX(1) scaleY(0.04);
+    filter: brightness(2.4);
+  }
+  100% {
+    transform: none;
+    filter: none;
+  }
+}
+
+.overlay-window.is-staged.is-closing,
+.overlay-window.is-staged.is-leaving {
+  pointer-events: none;
+  animation: overlay-close 0.24s cubic-bezier(0.7, 0, 0.84, 0) 0.18s both;
+}
+
+@keyframes overlay-close {
+  70% {
+    opacity: 1;
+    transform: scaleX(1) scaleY(0.03);
+    filter: brightness(2.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(0.6) scaleY(0.01);
+    filter: brightness(2.4);
+  }
+}
+
+/* centred on the window: the middle of the backdrop's padded box */
+.overlay-seam {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + (var(--overlay-top) - 1.2rem) / 2);
+  width: min(560px, 70vw);
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(90deg, transparent, var(--accent) 20%, #e6fcff 50%, var(--accent) 80%, transparent);
+  box-shadow: 0 0 12px var(--accent), 0 0 28px rgba(52, 231, 255, 0.45);
+  animation: seam-in 0.18s ease-out 0.36s both;
+}
+
+/* a pulse running along the seam - the request is still going */
+.overlay-seam::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 18%;
+  background: linear-gradient(90deg, transparent, #fff, transparent);
+  animation: seam-run 0.9s ease-in-out 0.5s infinite both;
+}
+
+@keyframes seam-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scaleX(1.5);
+  }
+}
+
+@keyframes seam-run {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(560%);
+  }
+}
+
+.overlay-backdrop.is-leaving {
+  pointer-events: none;
+  animation: overlay-unfade 0.24s ease-in both;
+}
+
+@keyframes overlay-unfade {
+  to {
+    opacity: 0;
+  }
+}
+
+.overlay-window.is-staged .is-picked {
+  opacity: 1;
+  animation: pick-flare 0.42s ease-out both;
+}
+
+@keyframes pick-flare {
+  0% {
+    transform: none;
+    filter: none;
+  }
+  30% {
+    transform: scale(1.05);
+    filter: brightness(1.8) drop-shadow(0 0 10px var(--accent));
+  }
+  100% {
+    transform: scale(1.03);
+    filter: brightness(1.25) drop-shadow(0 0 6px var(--accent));
+  }
+}
+
+.overlay-window.is-staged .is-passed {
+  animation: pick-pass 0.2s ease-out both;
+}
+
+@keyframes pick-pass {
+  to {
+    opacity: 0.2;
+    transform: scale(0.96);
+    filter: saturate(0.3);
+  }
+}
+
+/* -- waiting on the server never looks frozen -- */
+/* the loading toast eases in and runs a scanline along its foot */
+.loading-indicator {
+  overflow: hidden;
+  animation: loading-in 0.18s ease-out both;
+}
+
+.loading-indicator::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent) 0 0 / 40% 100% no-repeat;
+  animation: loading-scan 1.1s linear infinite;
+}
+
+@keyframes loading-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes loading-scan {
+  from {
+    background-position: -70% 0;
+  }
+  to {
+    background-position: 170% 0;
+  }
+}
+
+/* entering a room or jumping: a scan sweeps the panel until the room is built */
+.jump-panel.is-busy {
+  overflow: hidden;
+}
+
+.jump-panel.is-busy::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 40%;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, rgba(52, 231, 255, 0.14) 85%, rgba(159, 246, 255, 0.55));
+  animation: panel-scan 1.1s linear infinite;
+}
+
+/* not behind a window, where nobody sees it */
+.game:has(.overlay-backdrop) .jump-panel.is-busy::after {
+  content: none;
+}
+
+@keyframes panel-scan {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay-window.is-staged.is-open {
+    animation: overlay-fade 0.14s linear both;
+  }
+  .overlay-window.is-staged.is-closing,
+  .overlay-window.is-staged.is-leaving,
+  .overlay-backdrop.is-leaving {
+    animation: overlay-unfade 0.14s linear both;
+  }
+  .overlay-window.is-staged .is-picked {
+    animation: none;
+    filter: brightness(1.3);
+  }
+  .overlay-window.is-staged .is-passed {
+    animation: none;
+    opacity: 0.3;
+  }
+  /* still alive, without anything moving across the screen */
+  .overlay-seam {
+    animation: overlay-fade 0.14s linear both;
+  }
+  .overlay-seam::after,
+  .loading-indicator::after,
+  .jump-panel.is-busy::after {
+    animation: wait-breathe 1.6s ease-in-out infinite alternate;
+  }
+  .overlay-seam::after {
+    inset: 0;
+    width: auto;
+  }
+  .jump-panel.is-busy::after {
+    height: 100%;
+    background: rgba(52, 231, 255, 0.08);
+  }
+  .loading-indicator::after {
+    background-size: 100% 100%;
+  }
+}
+
+@keyframes wait-breathe {
+  from {
+    opacity: 0.2;
+  }
+}

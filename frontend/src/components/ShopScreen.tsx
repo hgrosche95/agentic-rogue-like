@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Card, ShopView } from "../api";
 import { sfx } from "../audio";
+import { pickClass, useOverlayPick } from "../overlayStage";
 import { ArtifactIcon } from "./ArtifactIcon";
 import { CardFace } from "./CardFace";
 import { RichText } from "./RichText";
@@ -36,6 +37,7 @@ export function ShopScreen({
   onLeave: () => void;
 }) {
   const [purging, setPurging] = useState(false);
+  const { picked, pick } = useOverlayPick();
   const deckTooSmall = deck.length <= shop.min_deck_size;
   const canPurge = !shop.removal_used && gold >= shop.removal_price && !deckTooSmall;
   const purgeNote = shop.removal_used
@@ -154,10 +156,11 @@ export function ShopScreen({
       )}
 
       <button
-        className="reward-skip"
+        className={`reward-skip${pickClass(picked, "leave")}`}
         disabled={disabled}
         onClick={() => {
           sfx.play("click");
+          pick("leave");
           onLeave();
         }}
       >
