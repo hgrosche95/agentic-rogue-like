@@ -513,6 +513,9 @@ def _check_boss_phase(state: CombatState) -> str:
             f" {state.enemy.name} overclocks into phase {state.phase}: +{strength} attack "
             f"and {block} block!"
         )
+        taunts = state.enemy.phase_taunts
+        if state.phase - 2 < len(taunts):
+            line += f" {taunts[state.phase - 2]}"
     return line
 
 

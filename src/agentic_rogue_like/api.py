@@ -51,6 +51,7 @@ from .combat import (
     program_preview,
     token_regen,
 )
+from .enemies import FINAL_BOSS_ID
 from .engine import (
     NUM_ACTS,
     apply_event_choice,
@@ -206,6 +207,9 @@ class PendingCombatView(BaseModel):
     enemy_phase: int
     enemy_phases: int
     enemy_strength: int
+    # The run's final boss, the AGI itself (enemies.FINAL_BOSS_ID) - the
+    # arena draws it with its own sprite instead of a generated one.
+    final_boss: bool = False
     # Elites: their affix (models.Affix) and what it does, else null. Whether
     # an enraged elite is raging right now.
     enemy_affix: str | None
@@ -523,6 +527,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_phase=combat.phase,
             enemy_phases=combat.boss_phases,
             enemy_strength=combat.enemy_strength,
+            final_boss=combat.enemy.id == FINAL_BOSS_ID,
             enemy_affix=None if combat.enemy.affix is None else combat.enemy.affix.value,
             enemy_affix_description=(
                 None if combat.enemy.affix is None else AFFIX_DESCRIPTIONS[combat.enemy.affix]

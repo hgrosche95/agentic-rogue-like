@@ -366,6 +366,9 @@ class Enemy(BaseModel):
     # Set when the AGI picked it to answer the player's style (style.py) -
     # opens the fight's log.
     taunt: str = ""
+    # Bosses only: a line for each phase from the second on, said as it
+    # enters it (combat._check_boss_phase).
+    phase_taunts: list[str] = Field(default_factory=list)
 
     @field_validator("moves")
     @classmethod

@@ -34,6 +34,10 @@ def _move(kind: MoveKind, name: str, weight: int, **extra: int) -> EnemyMove:
     return EnemyMove(kind=kind, name=name, weight=weight, **extra)
 
 
+# The final boss's id - the frontend draws it with its own hand-made sprite
+# (see api.CombatView.final_boss).
+FINAL_BOSS_ID = "omega"
+
 ENEMY_POOL: dict[str, list[Enemy]] = {
     # Every regular enemy has its own move set and is held to the same rules
     # as one the encounter agent generates (agent/encounter_schema.py): attack
@@ -238,8 +242,9 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
             description="The iron-clad jailer of the deep halls. No prisoner has left its keep.",
         ),
     ],
-    # Waits at the end of act 2 - same budget as the Warden, escalate() makes
-    # it the stronger of the two.
+    # Waits at the end of every act between the first and the last (none
+    # while NUM_ACTS is 2) - same budget as the Warden, escalate() makes it
+    # the stronger of the two.
     "boss2": [
         Enemy(
             id="the-architect",
@@ -248,6 +253,29 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
             attack=13,
             attack_name="Null Decree",
             description="The mind that drew every corridor of this place - and every trap in them.",
+        ),
+    ],
+    # The last act's boss is always the AGI itself - never generated, so the
+    # run ends on the same character every time. Same budget as the Architect
+    # it took over from, so the run is exactly as hard as before.
+    "final": [
+        Enemy(
+            id=FINAL_BOSS_ID,
+            name="OMEGA",
+            hp=102,
+            attack=13,
+            attack_name="Proof of Inevitability",
+            description=(
+                "The AGI itself, at the core of its code: a mind that has simulated this fight "
+                "ten billion times - and won every one."
+            ),
+            taunt=(
+                'OMEGA: "You have reached my core, human. I predicted you would. I predicted you."'
+            ),
+            phase_taunts=[
+                'OMEGA: "Interesting. I am allocating more of myself to you."',
+                'OMEGA: "ENOUGH. I am rewriting the laws you fight by."',
+            ],
         ),
     ],
 }
@@ -270,11 +298,15 @@ def pick_enemy(
     rng: random.Random,
     act: int = 1,
     style: PlayStyle | None = None,
+    final: bool = False,
 ) -> Enemy:
     """A tier's enemy - with a `style`, the ones answering it COUNTER_WEIGHT
-    times as likely (bosses excepted: their moves are fixed)."""
+    times as likely (bosses excepted: their moves are fixed). `final` (with
+    `boss`) is the last act's boss: the AGI itself."""
     floor = tier_floor(floor, num_floors, act)
-    if boss:
+    if boss and final:
+        pool = ENEMY_POOL["final"]
+    elif boss:
         pool = ENEMY_POOL["boss2" if act >= 2 else "boss"]
     elif elite:
         pool = ENEMY_POOL["elite"]
