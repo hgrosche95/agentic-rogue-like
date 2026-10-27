@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { HEIGHT, WIDTH } from "../pixel/layout";
 import { PixelScene } from "../pixel/scene";
+import { tempoSpeed } from "../tempo";
 
 const STEP_MS = 1000 / 60;
 
@@ -16,6 +17,7 @@ export function PixelStage({
   fit = "integer",
   className,
   onScene,
+  followTempo = false,
   children,
   ref,
 }: {
@@ -23,6 +25,9 @@ export function PixelStage({
   className?: string;
   // the scene, once created - to set its enemy/status and trigger events
   onScene?: (scene: PixelScene) => void;
+  // play the scene's events at the combat tempo (see tempo.ts) - only while
+  // one runs, so the idle scene keeps breathing at its own pace
+  followTempo?: boolean;
   children?: ReactNode;
   ref?: Ref<HTMLDivElement>;
 }) {
@@ -63,7 +68,7 @@ export function PixelStage({
     let last = performance.now();
     let acc = 0;
     const frame = (now: number) => {
-      acc += Math.min(now - last, 250);
+      acc += Math.min(now - last, 250) * (followTempo && scene.animating ? tempoSpeed() : 1);
       last = now;
       let steps = 0;
       while (acc >= STEP_MS && steps < 8) {
@@ -84,7 +89,7 @@ export function PixelStage({
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [scene]);
+  }, [scene, followTempo]);
 
   const dpr = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
   const pixelW = fit === "fill" ? Math.max(WIDTH, Math.round(size.cssW * dpr)) : WIDTH * size.factor;

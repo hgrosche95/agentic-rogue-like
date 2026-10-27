@@ -207,6 +207,11 @@ export function ProgramLines({
         {aims ? (
           <span className="background-hint">
             {PERMANENT_CARD_TYPES.includes(aimedCard.type) ? "+ install" : "run now"}
+            {cardSelected && (
+              <kbd className="key-hint" aria-hidden="true">
+                B
+              </kbd>
+            )}
           </span>
         ) : (
           running.length === 0 && <span className="background-hint">Permanents run here</span>
