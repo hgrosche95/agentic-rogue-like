@@ -1014,3 +1014,552 @@ button.field-slot.is-queued:hover:not(:disabled) {
     transition: none;
   }
 }
+
+/* ---------- turn banners (CombatBanners): a band wiped in over the rift,
+   between the monitor and the fighters' beams, so no hit hides behind it.
+   Its life (--banner-ms) is set by the banner queue. ---------- */
+.turn-banner {
+  --banner: var(--cyan);
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  z-index: 3;
+  width: clamp(190px, 36%, 540px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25cqw;
+  padding: max(6px, 0.9cqw) 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: banner-life var(--banner-ms, 850ms) linear both;
+}
+
+.turn-banner.is-enemy {
+  --banner: var(--danger);
+}
+
+.turn-banner.is-phase {
+  --banner: var(--gold);
+  width: clamp(240px, 56%, 820px);
+}
+
+/* the band: a dark strip with glowing rails, wiped in from the left */
+.turn-banner-band {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--px-ink) 86%, transparent) 16%,
+    color-mix(in srgb, var(--px-ink) 86%, transparent) 84%,
+    transparent
+  );
+  transform-origin: left center;
+  animation: banner-wipe var(--banner-ms, 850ms) var(--ease-out) both;
+}
+
+.turn-banner-band::before,
+.turn-banner-band::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--banner) 20%, var(--banner) 80%, transparent);
+  box-shadow: 0 0 10px var(--banner);
+}
+
+.turn-banner-band::before {
+  top: 0;
+}
+
+.turn-banner-band::after {
+  bottom: 0;
+}
+
+/* the scan head running ahead of the wipe */
+.turn-banner::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 10%;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--banner) 60%, transparent), #fff);
+  opacity: 0;
+  animation: banner-scan var(--banner-ms, 850ms) linear both;
+}
+
+.turn-banner-title {
+  position: relative;
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: max(15px, 3.3cqw);
+  line-height: 1;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+  text-shadow: 0 0 6px var(--banner), 0 0 18px var(--banner);
+  animation: banner-title var(--banner-ms, 850ms) var(--ease-out) both;
+}
+
+/* the glitch: two tinted copies jittering off the title as it lands */
+.turn-banner-title::before,
+.turn-banner-title::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  text-shadow: none;
+}
+
+.turn-banner-title::before {
+  color: var(--cyan);
+  animation: banner-glitch-a var(--banner-ms, 850ms) steps(1, end) both;
+}
+
+.turn-banner-title::after {
+  color: var(--danger);
+  animation: banner-glitch-b var(--banner-ms, 850ms) steps(1, end) both;
+}
+
+.turn-banner-sub {
+  max-width: 92%;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: max(11px, 1.25cqw);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  text-align: center;
+  color: color-mix(in srgb, var(--banner) 70%, #fff);
+  animation: banner-sub var(--banner-ms, 850ms) var(--ease-out) both;
+}
+
+/* an overclock's line is read, not shouted */
+.turn-banner.is-phase .turn-banner-sub {
+  font-size: max(12px, 1.45cqw);
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-style: italic;
+  line-height: 1.2;
+}
+
+@keyframes banner-life {
+  0%,
+  84% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes banner-wipe {
+  0% {
+    transform: scaleX(0);
+  }
+  22%,
+  84% {
+    transform: scaleX(1);
+  }
+  100% {
+    transform: scaleX(1) scaleY(0.2);
+  }
+}
+
+@keyframes banner-scan {
+  0% {
+    opacity: 1;
+    transform: translateX(-100%);
+  }
+  22% {
+    opacity: 1;
+    transform: translateX(900%);
+  }
+  30%,
+  100% {
+    opacity: 0;
+    transform: translateX(900%);
+  }
+}
+
+@keyframes banner-title {
+  0%,
+  8% {
+    opacity: 0;
+    transform: translateX(-8%) skewX(-18deg);
+  }
+  26% {
+    opacity: 1;
+    transform: none;
+  }
+  86% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(6%) skewX(12deg);
+  }
+}
+
+@keyframes banner-glitch-a {
+  0%,
+  10% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.85;
+    transform: translate(-4px, -1px);
+  }
+  17% {
+    transform: translate(3px, 1px);
+  }
+  22% {
+    transform: translate(-2px, 0);
+  }
+  27% {
+    opacity: 0;
+  }
+  80% {
+    opacity: 0.7;
+    transform: translate(5px, 0);
+  }
+  83%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes banner-glitch-b {
+  0%,
+  10% {
+    opacity: 0;
+  }
+  13% {
+    opacity: 0.85;
+    transform: translate(4px, 1px);
+  }
+  18% {
+    transform: translate(-3px, -1px);
+  }
+  23% {
+    transform: translate(2px, 0);
+  }
+  27% {
+    opacity: 0;
+  }
+  81% {
+    opacity: 0.7;
+    transform: translate(-5px, 0);
+  }
+  84%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes banner-sub {
+  0%,
+  20% {
+    opacity: 0;
+    transform: translateY(40%);
+  }
+  36%,
+  84% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------- a boss walks on (BossIntro): letterbox bars close in, a scan
+   runs down the screen, and the title card lands with a glitch ---------- */
+.boss-intro {
+  --boss: var(--warm);
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 0 16px;
+  overflow: hidden;
+  cursor: pointer;
+  animation: intro-fade var(--dur) var(--ease-out) both;
+}
+
+.boss-intro.is-final {
+  --boss: var(--danger);
+}
+
+.boss-intro::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--boss) 12%, rgba(5, 5, 15, 0.6)),
+    rgba(5, 5, 15, 0.94) 70%
+  );
+}
+
+.boss-intro-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12vh;
+  background: #000;
+  animation: intro-bar 0.55s var(--ease-out) both;
+}
+
+.boss-intro-bar.is-top {
+  top: 0;
+  transform-origin: top;
+  border-bottom: 1px solid color-mix(in srgb, var(--boss) 55%, transparent);
+}
+
+.boss-intro-bar.is-bottom {
+  bottom: 0;
+  transform-origin: bottom;
+  border-top: 1px solid color-mix(in srgb, var(--boss) 55%, transparent);
+}
+
+.boss-intro-scan {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--boss) 25%, #fff 50%, var(--boss) 75%, transparent);
+  box-shadow: 0 0 18px var(--boss);
+  opacity: 0;
+  animation: intro-scan 1s var(--ease-in-out) 0.25s both;
+}
+
+.boss-intro-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: 900px;
+  text-align: center;
+}
+
+.boss-intro-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  color: var(--boss);
+  animation: intro-rise 0.5s var(--ease-out) 0.35s both;
+}
+
+.boss-intro-kicker::before,
+.boss-intro-kicker::after {
+  content: "";
+  width: 3rem;
+  height: 1px;
+  background: var(--boss);
+  box-shadow: 0 0 8px var(--boss);
+}
+
+.boss-intro-name {
+  position: relative;
+  margin: 0;
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: clamp(2.4rem, 9vw, 6.4rem);
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 0 10px var(--boss), 0 0 34px var(--boss);
+  animation: intro-name 0.7s var(--ease-out) 0.55s both;
+}
+
+.boss-intro-name::before,
+.boss-intro-name::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  text-shadow: none;
+}
+
+.boss-intro-name::before {
+  color: var(--cyan);
+  animation: banner-glitch-a 2.4s steps(1, end) 0.4s both;
+}
+
+.boss-intro-name::after {
+  color: var(--danger);
+  animation: banner-glitch-b 2.4s steps(1, end) 0.4s both;
+}
+
+.boss-intro-tag {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  animation: intro-rise 0.5s var(--ease-out) 0.9s both;
+}
+
+.boss-intro-quote {
+  max-width: 44ch;
+  margin: 0.8rem 0 0;
+  font-family: var(--font-body);
+  font-size: 1.3rem;
+  font-style: italic;
+  line-height: 1.3;
+  color: #e8e9ff;
+  animation: intro-rise 0.6s var(--ease-out) 1.2s both;
+}
+
+.boss-intro-quote cite {
+  display: block;
+  margin-top: 0.4rem;
+  font-family: var(--font-head);
+  font-size: 0.72rem;
+  font-style: normal;
+  letter-spacing: 0.3em;
+  color: var(--boss);
+}
+
+.boss-intro-skip {
+  position: absolute;
+  right: 1.4rem;
+  bottom: 6vh;
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  transform: translateY(50%);
+  animation: intro-fade 0.4s var(--ease-out) 0.8s both;
+}
+
+/* letting go: the card flares off, the bars open, the screen comes back */
+.boss-intro.is-leaving {
+  pointer-events: none;
+  animation: intro-out 0.32s var(--ease-in-out) both;
+}
+
+.boss-intro.is-leaving .boss-intro-bar {
+  animation: intro-bar-out 0.32s var(--ease-in-out) both;
+}
+
+.boss-intro.is-leaving .boss-intro-card {
+  animation: intro-card-out 0.32s var(--ease-in-out) both;
+}
+
+@keyframes intro-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes intro-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes intro-bar {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes intro-bar-out {
+  to {
+    transform: scaleY(0);
+  }
+}
+
+@keyframes intro-scan {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(100vh);
+  }
+}
+
+@keyframes intro-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes intro-name {
+  0% {
+    opacity: 0;
+    transform: scale(1.4) skewX(-14deg);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(0.97) skewX(4deg);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes intro-card-out {
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-banner {
+    animation: banner-life var(--banner-ms, 850ms) linear both;
+  }
+  .turn-banner::before,
+  .turn-banner-title::before,
+  .turn-banner-title::after,
+  .boss-intro-scan,
+  .boss-intro-name::before,
+  .boss-intro-name::after {
+    display: none;
+  }
+  .turn-banner-band,
+  .turn-banner-title,
+  .turn-banner-sub,
+  .boss-intro-bar,
+  .boss-intro-kicker,
+  .boss-intro-name,
+  .boss-intro-tag,
+  .boss-intro-quote,
+  .boss-intro-skip,
+  .boss-intro.is-leaving .boss-intro-bar,
+  .boss-intro.is-leaving .boss-intro-card {
+    animation: none;
+  }
+  .boss-intro {
+    animation: intro-fade var(--dur-fast) linear both;
+  }
+  .boss-intro.is-leaving {
+    animation: intro-out var(--dur-fast) linear both;
+  }
+}

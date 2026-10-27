@@ -28,6 +28,11 @@ export type SfxName =
   | "enemy_defeated"
   | "victory"
   | "defeat"
+  // the turn banners, a boss walking on and overclocking
+  | "turn_start"
+  | "enemy_turn"
+  | "boss_intro"
+  | "boss_phase"
   // cards and UI
   | "reward_open"
   | "reward_pick"
@@ -216,6 +221,38 @@ const SOUNDS: Record<SfxName, Sound> = {
       tone(g, t + i * 0.28, { type: "square", freq: midiToFreq(note), dur: 0.35, gain: 0.09, filter: 1600 - i * 300 }),
     );
     tone(g, t + 1.1, { type: "sawtooth", freq: 220, to: 30, dur: 1.4, gain: 0.12, filter: 800, filterTo: 80 });
+  },
+
+  turn_start(g, t) {
+    // the prompt coming back: a quick rising two-step and a soft tick
+    noise(g, t, { dur: 0.02, gain: 0.08, filter: "bandpass", freq: 4000, q: 3 });
+    tone(g, t + 0.02, { type: "square", freq: 740, dur: 0.06, gain: 0.06, attack: 0.001, filter: 3000 });
+    tone(g, t + 0.09, { type: "square", freq: 1110, dur: 0.12, gain: 0.06, attack: 0.001, filter: 3000 });
+  },
+  enemy_turn(g, t) {
+    // the machine takes the line: a low falling two-step with a crackle
+    tone(g, t, { type: "sawtooth", freq: 220, dur: 0.08, gain: 0.08, attack: 0.001, filter: 1200 });
+    tone(g, t + 0.08, { type: "sawtooth", freq: 147, dur: 0.16, gain: 0.08, attack: 0.001, filter: 900 });
+    glitch(g, t + 0.02, 0.08, 0.03, 200, 900);
+  },
+  boss_intro(g, t) {
+    // a boss walks on: a sub drop, a rising wall of static and a dark minor
+    // stab when the name lands
+    tone(g, t, { type: "sine", freq: 90, to: 32, dur: 1.2, gain: 0.45, attack: 0.01 });
+    noise(g, t, { dur: 0.9, gain: 0.16, filter: "bandpass", freq: 300, to: 4000, q: 1.5, attack: 0.6, crush: 3 });
+    glitch(g, t + 0.75, 0.16, 0.06, 80, 1200);
+    for (const note of [38, 45, 50, 53]) {
+      tone(g, t + 0.9, { type: "sawtooth", freq: midiToFreq(note), dur: 1.6, gain: 0.07, attack: 0.01, filter: 2400, filterTo: 200 });
+    }
+    noise(g, t + 0.9, { dur: 0.3, gain: 0.3, filter: "lowpass", freq: 3000, to: 150, crush: 2 });
+  },
+  boss_phase(g, t) {
+    // overclocking: a fan spinning up into an alarm
+    tone(g, t, { type: "sawtooth", freq: 80, to: 640, dur: 0.5, gain: 0.12, filter: 600, filterTo: 3000 });
+    for (const at of [0.45, 0.65]) {
+      tone(g, t + at, { type: "square", freq: 880, to: 660, dur: 0.16, gain: 0.07, attack: 0.001, filter: 2500 });
+    }
+    noise(g, t + 0.45, { dur: 0.25, gain: 0.15, filter: "lowpass", freq: 2500, to: 200, crush: 3 });
   },
 
   reward_open(g, t) {

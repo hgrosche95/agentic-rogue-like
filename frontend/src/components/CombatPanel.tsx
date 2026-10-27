@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   ATTACKING_INTENTS,
   PERMANENT_CARD_TYPES,
@@ -8,6 +8,7 @@ import {
   type Status,
 } from "../api";
 import { cardSound, hitsOf, sfx } from "../audio";
+import { splitTaunt, useBanners } from "../banners";
 import { flyCard } from "../cardFlight";
 import { ArtifactBar } from "./ArtifactBar";
 import { HERO } from "../characters";
@@ -20,6 +21,7 @@ import { describeIntent, rangeText, STATUS_TEXT } from "../readouts";
 import { CardFace, type Readout } from "./CardFace";
 import { CombatHelp, HelpButton } from "./CombatHelp";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
+import { BossIntro, TurnBanner } from "./CombatBanners";
 import { programPlan, queues } from "../program";
 import { ProgramLines, ProgramOutput } from "./ProgramLines";
 import { SlotPreview } from "./SlotPreview";
@@ -120,6 +122,12 @@ function fanStyle(index: number, count: number): CSSProperties {
 // for its card animation to play out before the next line starts
 const PROGRAM_STEP_MS = 1100;
 
+// how long a turn banner stays up - and an overclock's, with or without the
+// boss's line to read
+const TURN_BANNER_MS = 850;
+const PHASE_BANNER_MS = 1300;
+const PHASE_TAUNT_MS = 2300;
+
 export function CombatPanel({
   combat,
   setting,
@@ -216,6 +224,47 @@ export function CombatPanel({
   // What the table looked like when the turn was ended, to tell once the
   // server answers whether the daemon fired and the enemy's blow got through.
   const endTurnFrom = useRef<{ combat: PendingCombatView; hp: number } | null>(null);
+  // A boss walks on with a title card - once, as its fight opens; then (or
+  // right away in any other fight) the first turn's banner. Each new turn
+  // gets one after the enemy's blow has landed, and an overclock gets the
+  // boss's line for it.
+  const { banner, show: showBanner } = useBanners();
+  const [bossIntro, setBossIntro] = useState(() => combat.boss && combat.turn === 1 && !enemySlain);
+  const yourTurn = useCallback(
+    (turn: number, delayMs: number) =>
+      showBanner({ kind: "player", title: "Your turn", sub: `Turn ${turn}`, ms: TURN_BANNER_MS }, delayMs),
+    [showBanner],
+  );
+  // the table as the fight opened, and the turn and phase last called out
+  const opening = useRef({ turn: combat.turn, intro: bossIntro });
+  const shownTurn = useRef(combat.turn);
+  const shownPhase = useRef(combat.enemy_phase);
+
+  useEffect(() => {
+    if (!opening.current.intro) yourTurn(opening.current.turn, 300);
+  }, [yourTurn]);
+
+  useEffect(() => {
+    const from = shownTurn.current;
+    shownTurn.current = combat.turn;
+    if (combat.turn > from && !enemySlain) yourTurn(combat.turn, PLAYER_HIT_MS + 450);
+  }, [combat.turn, enemySlain, yourTurn]);
+
+  useEffect(() => {
+    const from = shownPhase.current;
+    shownPhase.current = combat.enemy_phase;
+    if (!combat.boss || combat.enemy_phase <= from || enemySlain) return;
+    const taunt = combat.enemy_phase_taunts[combat.enemy_phase - 2];
+    showBanner(
+      {
+        kind: "phase",
+        title: `Phase ${combat.enemy_phase}`,
+        sub: taunt ? splitTaunt(taunt).line : `${combat.enemy_name} overclocks`,
+        ms: taunt ? PHASE_TAUNT_MS : PHASE_BANNER_MS,
+      },
+      ENEMY_HIT_MS + 150,
+    );
+  }, [combat.boss, combat.enemy_phase, combat.enemy_phase_taunts, combat.enemy_name, enemySlain, showBanner]);
 
   useEffect(() => {
     const before = endTurnFrom.current;
@@ -249,6 +298,18 @@ export function CombatPanel({
     const taken = combat.enemy_hp - (steps.at(-1)?.enemy_hp ?? combat.enemy_hp);
     const finish = () => {
       endTurnFrom.current = { combat, hp: player.hp };
+      // the enemy's move, called out while the server works the turn out -
+      // unless the program has already taken it down
+      if (!(combat.program_preview && combat.program_preview.enemy_hp <= 0)) {
+        const move = describeIntent(
+          combat.enemy_intent,
+          combat.enemy_intent_min,
+          combat.enemy_intent_max,
+          combat.enemy_intent_hits,
+          combat.enemy_intent_name,
+        );
+        showBanner({ kind: "enemy", title: "Enemy turn", sub: `${move.label} ${move.amount}`, ms: TURN_BANNER_MS });
+      }
       setProgramDone(taken > 0 ? { after: rawExchange?.id ?? 0, hp: taken } : null);
       onEndTurn(picks);
       setDiscarding(null);
@@ -396,6 +457,19 @@ export function CombatPanel({
   return (
     <div className={`combat-panel${discarding !== null ? " is-discarding" : ""}`}>
       {helpOpen && <CombatHelp programMode={programMode} onClose={() => setHelpOpen(false)} />}
+      {bossIntro && (
+        <BossIntro
+          name={combat.enemy_name}
+          kicker={combat.final_boss ? "Final boss" : "Boss"}
+          tag={`${combat.final_boss ? "The AGI" : "Core AI"} · ${era}`}
+          quote={combat.enemy_taunt || combat.enemy_description}
+          finalBoss={combat.final_boss}
+          onDone={() => {
+            setBossIntro(false);
+            yourTurn(combat.turn, 150);
+          }}
+        />
+      )}
       {/* the HUD plates sit in the scene's top corners, clear of the monitor */}
       <div className="arena-wrap">
         <CombatArena
@@ -429,7 +503,9 @@ export function CombatPanel({
           onContinue={onContinue}
           hero={player.character}
           contextFull={combat.token_limit !== null && combat.tokens_used >= combat.token_limit}
-        />
+        >
+          {banner && <TurnBanner key={banner.id} banner={banner} />}
+        </CombatArena>
 
         <div className="vs-hud is-player">
           <div className="vs-body">
