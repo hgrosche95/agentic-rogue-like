@@ -44,7 +44,11 @@ function LineLabel({ index, hot }: { index: number; hot: boolean }) {
   return (
     <span className="line-label">
       {String(index + 1).padStart(2, "0")}
-      {hot && <b className="hot-mark">HOT</b>}
+      {hot && (
+        <b className="hot-mark" data-keyword="hot-path">
+          HOT
+        </b>
+      )}
     </span>
   );
 }

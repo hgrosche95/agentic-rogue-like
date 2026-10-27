@@ -1,5 +1,6 @@
 import { createPortal } from "react-dom";
 import { CloseButton, Overlay } from "./Overlay";
+import { RichText } from "./RichText";
 
 // The "i" next to the stack: how a fight works - above all program mode,
 // whose rules nothing on the table explains by itself.
@@ -63,7 +64,9 @@ export function CombatHelp({ programMode, onClose }: { programMode: boolean; onC
           {rules.map(([term, text]) => (
             <div key={term}>
               <dt>{term}</dt>
-              <dd>{text}</dd>
+              <dd>
+                <RichText text={text} />
+              </dd>
             </div>
           ))}
         </dl>

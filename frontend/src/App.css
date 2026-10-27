@@ -4265,6 +4265,13 @@ body > .field-slot.card-drag {
   text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
   text-underline-offset: 2px;
   cursor: help;
+  /* a long press opens its tooltip, not the browser's menu */
+  -webkit-touch-callout: none;
+}
+
+.keyword:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .tooltip {
@@ -4283,8 +4290,23 @@ body > .field-slot.card-drag {
   background: var(--panel-solid);
   border: var(--px-border);
   box-shadow: var(--shadow-panel);
-  transform: translate(-50%, calc(-100% - 8px));
   pointer-events: none;
+}
+
+/* placed by Tooltips itself, kept inside the window */
+#game-tooltip {
+  left: 0;
+  top: 0;
+}
+
+.tooltip-term {
+  display: block;
+  margin-bottom: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
 
 .card-mention {
@@ -4304,10 +4326,6 @@ body > .field-slot.card-drag {
 
 .card-preview .hand-card.reward-card {
   animation: none;
-}
-
-.tooltip.is-below {
-  transform: translate(-50%, 8px);
 }
 
 .card-preview.is-below {

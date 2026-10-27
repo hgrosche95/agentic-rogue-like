@@ -33,7 +33,9 @@ function TokenMeter({ combat }: { combat: PendingCombatView }) {
   return (
     <span
       className={`token-meter${full ? " is-full" : ""}`}
-      title={`Context window: ${combat.tokens_used}/${limit} tokens used, ${combat.token_regen} free up at the end of the turn. Cards past the window may hallucinate.`}
+      tabIndex={0}
+      data-tip-term="Context window"
+      data-tip={`${combat.tokens_used}/${limit} tokens used, ${combat.token_regen} free up at the end of the turn. Cards past the window may hallucinate.`}
     >
       <span className="token-label">Context</span>
       <span className="token-pips" aria-hidden="true">
@@ -53,7 +55,13 @@ function StatusBadges({ statuses }: { statuses: Partial<Record<Status, number>> 
   return (
     <>
       {(Object.entries(statuses) as [Status, number][]).map(([status, left]) => (
-        <span key={status} className={`status-badge is-${status}`} title={STATUS_TEXT[status]}>
+        <span
+          key={status}
+          className={`status-badge is-${status}`}
+          tabIndex={0}
+          data-tip-term={status}
+          data-tip={STATUS_TEXT[status]}
+        >
           {status} {left}
         </span>
       ))}
@@ -61,9 +69,10 @@ function StatusBadges({ statuses }: { statuses: Partial<Record<Status, number>> 
   );
 }
 
-function Pile({ label, count, kind }: { label: string; count: number; kind: string }) {
+// `term`: the keyword (keywords.ts) the pile's tooltip explains
+function Pile({ label, count, kind, term }: { label: string; count: number; kind: string; term: string }) {
   return (
-    <div className={`pile pile-${kind}`}>
+    <div className={`pile pile-${kind}`} data-keyword={term} tabIndex={0}>
       <div className="pile-face">
         <span className="pile-count">{count}</span>
       </div>
@@ -486,7 +495,9 @@ export function CombatPanel({
               {!enemySlain && (
                 <span
                   className={`intent-badge type-${combat.enemy_intent} ${attacking ? "is-hit" : "is-guard"}`}
-                  title={intent.title}
+                  tabIndex={0}
+                  data-tip-term={`Intent · ${intent.label}`}
+                  data-tip={`${intent.title.replace(`${intent.label}: `, "")}.`}
                 >
                   <IntentIcon intent={combat.enemy_intent} />
                   {intent.label} {intent.amount}
@@ -551,7 +562,9 @@ export function CombatPanel({
                 {cutAfter !== null && !enemySlain && (
                   <span
                     className="interrupt-note"
-                    title="The enemy cuts your program off: queued lines after these don't run this turn"
+                    tabIndex={0}
+                    data-tip-term="Interrupt"
+                    data-tip="The enemy cuts your program off: queued lines after these don't run this turn - they go to the graveyard unused."
                   >
                     Interrupt after {cutAfter} line{cutAfter === 1 ? "" : "s"}
                   </span>
@@ -614,7 +627,7 @@ export function CombatPanel({
       </div>
 
       <div className="battlefield">
-        <Pile label="Source" count={combat.draw_count} kind="deck" />
+        <Pile label="Source" count={combat.draw_count} kind="deck" term="source" />
 
         <div className="hand-zone">
           {/* over the hand limit: hard to miss, or the turn seems stuck */}
@@ -683,8 +696,8 @@ export function CombatPanel({
             </button>
           )}
           <div className="side-piles">
-            <Pile label="Cache" count={combat.discard_count} kind="graveyard" />
-            <Pile label="Purged" count={combat.banished_count} kind="banished" />
+            <Pile label="Cache" count={combat.discard_count} kind="graveyard" term="graveyard" />
+            <Pile label="Purged" count={combat.banished_count} kind="banished" term="banished" />
           </div>
         </div>
       </div>
