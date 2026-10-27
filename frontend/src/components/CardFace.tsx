@@ -1,4 +1,4 @@
-import { useContext, useLayoutEffect, useRef } from "react";
+import { useContext, useLayoutEffect, useRef, type ReactNode } from "react";
 import { CONTROL_FLOW_TYPES, PERMANENT_CARD_TYPES, type Card, type CardType } from "../api";
 import { ShowTokensContext } from "../characters";
 import { useCardText } from "../program";
@@ -184,23 +184,90 @@ function useFitText(key: string) {
   return { headerRef: header, bodyRef: body };
 }
 
+// `after` word by word against `before` (an upgrade against the card it
+// was): the new words marked, and a number they replace shown struck out in
+// front of them ("Gain 5 → 8 block"). Other words it drops are left out.
+function changedText(before: string, after: string): ReactNode[] {
+  const a = before.split(/(\s+)/);
+  const b = after.split(/(\s+)/);
+  // common[i][j]: the longest run of words a[i..] and b[j..] have in common
+  const common = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
+  for (let i = a.length - 1; i >= 0; i--)
+    for (let j = b.length - 1; j >= 0; j--)
+      common[i][j] = a[i] === b[j] ? common[i + 1][j + 1] + 1 : Math.max(common[i + 1][j], common[i][j + 1]);
+  const parts: ReactNode[] = [];
+  let same = "";
+  let dropped: string[] = [];
+  let added: string[] = [];
+  const flush = () => {
+    if (same) parts.push(<RichText key={parts.length} text={same} focusable={false} />);
+    same = "";
+    const numbers = dropped.filter((word) => /\d/.test(word));
+    if (numbers.length && added.length) parts.push(<del key={parts.length}>{numbers.join(" ")}</del>, " → ");
+    const text = added.join("");
+    if (text.trim())
+      parts.push(
+        <mark key={parts.length} className="card-changed">
+          <RichText text={text} focusable={false} />
+        </mark>,
+      );
+    else same = text;
+    dropped = [];
+    added = [];
+  };
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      if (dropped.length || added.length) flush();
+      same += b[j];
+      i++;
+      j++;
+    } else if (j < b.length && (i === a.length || common[i][j + 1] >= common[i + 1][j])) {
+      added.push(b[j++]);
+    } else {
+      dropped.push(a[i++]);
+    }
+  }
+  flush();
+  if (same) parts.push(<RichText key={parts.length} text={same} focusable={false} />);
+  return parts;
+}
+
 // on the field the module icon already says "permanent" (or "control
 // flow"), so the effect text drops that prefix and keeps the room for what
-// the card does; the same goes for one-shot cards and their "1×" tag
-export function CardFace({ card, onField = false, readout }: { card: Card; onField?: boolean; readout?: Readout }) {
+// the card does; the same goes for one-shot cards and their "1×" tag.
+// `changedFrom`: the card this one was before an upgrade - what the upgrade
+// changes is highlighted (see changedText).
+export function CardFace({
+  card,
+  onField = false,
+  readout,
+  changedFrom,
+}: {
+  card: Card;
+  onField?: boolean;
+  readout?: Readout;
+  changedFrom?: Card;
+}) {
   const showTokens = useContext(ShowTokensContext);
-  const description = useCardText(card).replace(
-    onField ? /^(Permanent|One-shot|Control flow)\.\s*/ : /^One-shot\.\s*/,
-    "",
-  );
+  const strip = (text: string) =>
+    text.replace(onField ? /^(Permanent|One-shot|Control flow)\.\s*/ : /^One-shot\.\s*/, "");
+  const description = strip(useCardText(card));
+  const before = strip(useCardText(changedFrom ?? card));
   const unit = unitOf(card.type);
-  const { headerRef, bodyRef } = useFitText(`${card.name}|${description}|${readout ? 1 : 0}|${showTokens}`);
+  const { headerRef, bodyRef } = useFitText(
+    `${card.name}|${description}|${readout ? 1 : 0}|${showTokens}|${changedFrom ? before : ""}`,
+  );
+  // what the name gained (an upgrade's "+")
+  const suffix = changedFrom && card.name.startsWith(changedFrom.name) ? card.name.slice(changedFrom.name.length) : "";
   return (
     <>
       {/* on the field a slot may be too small for the effect text: the
           name then tells it on hover */}
       <div ref={headerRef} className="card-header" title={onField ? `${card.name}: ${description}` : undefined}>
-        {softHyphens(card.name)}
+        {softHyphens(card.name.slice(0, card.name.length - suffix.length))}
+        {suffix && <mark className="card-changed">{suffix}</mark>}
       </div>
       <span className="card-socket" title={KIND_LABEL[kindOf(card.type)]}>
         <CardTypeIcon type={card.type} />
@@ -230,11 +297,14 @@ export function CardFace({ card, onField = false, readout }: { card: Card; onFie
       <div ref={bodyRef} className="card-body">
         {/* one inline box: the body is a flex container, the terms must not become items */}
         <span>
-          <RichText text={description} focusable={false} />
+          {changedFrom ? changedText(before, description) : <RichText text={description} focusable={false} />}
         </span>
       </div>
       {showTokens && !onField && (
-        <span className="card-tokens" title={`Costs ${card.token_cost} token(s) of context`}>
+        <span
+          className={`card-tokens${changedFrom && changedFrom.token_cost !== card.token_cost ? " is-changed" : ""}`}
+          title={`Costs ${card.token_cost} token(s) of context`}
+        >
           {card.token_cost}
           <small>tok</small>
         </span>
