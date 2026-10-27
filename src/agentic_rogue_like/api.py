@@ -181,6 +181,11 @@ class PendingCombatView(BaseModel):
     enemy_name: str
     # One line of flavor - the encounter agent's, or the static pool's.
     enemy_description: str
+    # The line it opens the fight with (an empty string if none) and, for a
+    # boss, the line it says entering each phase from the second on - the
+    # UI's boss intro and phase banners show them.
+    enemy_taunt: str = ""
+    enemy_phase_taunts: list[str] = []
     enemy_attack_name: str
     # The enemy's base attack stat - what its look is built from.
     enemy_attack: int
@@ -243,6 +248,8 @@ class PendingCombatView(BaseModel):
     token_limit: int | None
     tokens_used: int
     token_regen: int
+    # The player's turn in this fight, from 1 - the UI's turn banner.
+    turn: int = 1
 
 
 class CharacterView(BaseModel):
@@ -514,6 +521,8 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         pending_combat = PendingCombatView(
             enemy_name=combat.enemy.name,
             enemy_description=combat.enemy.description,
+            enemy_taunt=combat.enemy.taunt,
+            enemy_phase_taunts=combat.enemy.phase_taunts,
             enemy_attack_name=combat.enemy.attack_name,
             enemy_attack=combat.enemy.attack,
             enemy_hp=combat.enemy_hp,
@@ -567,6 +576,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             token_limit=combat.token_limit,
             tokens_used=combat.tokens_used,
             token_regen=token_regen(combat) if combat.token_limit is not None else 0,
+            turn=combat.turn,
         )
 
     choices = []

@@ -186,6 +186,10 @@ export interface PendingCombatView {
   enemy_name: string;
   // one line of flavor text, may be empty
   enemy_description: string;
+  // the line it opens the fight with ("" if none), and a boss's line for
+  // each phase from the second on
+  enemy_taunt: string;
+  enemy_phase_taunts: string[];
   enemy_attack_name: string;
   // the base attack stat - what the enemy's look is built from
   enemy_attack: number;
@@ -237,6 +241,8 @@ export interface PendingCombatView {
   tokens_used: number;
   // used tokens freed at the end of the turn
   token_regen: number;
+  // the player's turn in this fight, from 1
+  turn: number;
   // Program mode: queued actions per line (may be longer than `field`),
   // which of them will hallucinate, and where the fight will stand once the
   // program has run. Null / empty in a classic run.
