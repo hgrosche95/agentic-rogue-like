@@ -71,11 +71,17 @@ function Pile({ label, count, kind }: { label: string; count: number; kind: stri
   );
 }
 
-function HpBar({ hp, max, side }: { hp: number; max: number; side: "player" | "enemy" }) {
-  const percent = Math.max(0, Math.min(100, (hp / max) * 100));
+// `ghost`: where the HP will be - what the queued program takes off the
+// enemy, what the telegraphed hit takes off the player - shown as a pulsing
+// stretch of the bar.
+function HpBar({ hp, max, side, ghost }: { hp: number; max: number; side: "player" | "enemy"; ghost?: number }) {
+  const pct = (value: number) => Math.max(0, Math.min(100, (value / max) * 100));
+  const percent = pct(hp);
+  const after = ghost === undefined ? percent : pct(Math.min(ghost, hp));
   return (
     <span className={`hud-bar is-${side}`}>
       <span style={{ width: `${percent}%` }} />
+      {after < percent && <i className="hud-ghost" style={{ left: `${after}%`, width: `${percent - after}%` }} />}
       <em>
         {hp} / {max}
       </em>
@@ -149,10 +155,23 @@ export function CombatPanel({
   const setDiscarding = (picks: number[] | null) =>
     setDiscardChoice(picks === null ? null : { on: combat, picks });
   const excess = Math.max(0, combat.hand.length - combat.max_hand_size);
-  const exchange = useHpExchange(player.hp, combat.enemy_hp);
+  const rawExchange = useHpExchange(player.hp, combat.enemy_hp);
   // the bars move when the hit lands, not when the server answers
   const shownPlayerHp = useLagged(player.hp, PLAYER_HIT_MS);
-  const shownEnemyHp = useLagged(combat.enemy_hp, ENEMY_HIT_MS);
+  const laggedEnemyHp = useLagged(combat.enemy_hp, ENEMY_HIT_MS);
+  // Program mode plays the program out line by line before the turn goes to
+  // the server: the enemy's bar follows the lines (`programHp`, for the table
+  // it was run on, until the server's own HP has caught up), and the server's
+  // answer then only shows what the program didn't already (`programDone`:
+  // the HP it took, credited to the next HP exchange).
+  const [programHp, setProgramHp] = useState<{ on: PendingCombatView; hp: number } | null>(null);
+  const [programDone, setProgramDone] = useState<{ after: number; hp: number } | null>(null);
+  const shownEnemyHp =
+    programHp && (programHp.on === combat || laggedEnemyHp !== combat.enemy_hp) ? programHp.hp : laggedEnemyHp;
+  const exchange =
+    rawExchange && programDone && rawExchange.id === programDone.after + 1 && rawExchange.enemyDelta < 0
+      ? { ...rawExchange, enemyDelta: Math.min(0, rawExchange.enemyDelta + programDone.hp) }
+      : rawExchange;
   const [commands, setCommands] = useState<HackerCommand[]>([]);
   const [typing, setTyping] = useState(false);
   // Program mode: the line lit up while the program runs, before the end of
@@ -166,7 +185,7 @@ export function CombatPanel({
   const busy = disabled || typing || running !== null;
   const programMode = combat.program_mode;
   // the order the program runs in - reversed by a refactor, cut by an interrupt
-  const { queuedLines, cutAfter, reversed, runningLines, cutLines } = programPlan(combat, enemySlain);
+  const { queuedLines, cutAfter, reversed, cutLines } = programPlan(combat, enemySlain);
   const hotLine = (player.artifacts.find((a) => a.hot_path > 0)?.hot_path ?? 0) - 1;
   // The card just played, shown as already gone from the hand (and, for a
   // permanent card, as lying in its slot) until the server answers, so the
@@ -210,31 +229,58 @@ export function CombatPanel({
     }
     if (discarding !== null && discarding.length !== excess) return;
     const picks = discarding ?? [];
+    const steps = combat.program_preview?.steps ?? [];
+    const taken = combat.enemy_hp - (steps.at(-1)?.enemy_hp ?? combat.enemy_hp);
     const finish = () => {
       endTurnFrom.current = { combat, hp: player.hp };
+      setProgramDone(taken > 0 ? { after: rawExchange?.id ?? 0, hp: taken } : null);
       onEndTurn(picks);
       setDiscarding(null);
     };
     setMovingLine(null);
-    if (runningLines.length === 0) {
+    setProgramHp(null);
+    // the lines that run, up to and including an interrupt's cut
+    const cutAt = steps.findIndex((s) => s.outcome === "cut");
+    const shown = (cutAt < 0 ? steps : steps.slice(0, cutAt + 1)).filter((s) => s.outcome !== "skipped");
+    if (shown.length === 0) {
       finish();
       return;
     }
-    // Run the program: each queued line lights up in turn, then the server
-    // works the turn out and the HP bars move as usual.
-    runningLines.forEach((line, step) => {
+    // Run the program: each line lights up in turn and lands - its damage
+    // over the enemy, its block over Dr. Chronos, a shake as heavy as the hit -
+    // then the server works the turn out.
+    shown.forEach((step, i) => {
       window.setTimeout(() => {
-        const card = combat.program[line];
-        setRunning(line);
-        if (!card) return;
-        sfx.play(cardSound(card.type), { hits: hitsOf(card.description) });
-        arenaRef.current?.cardPlayed(card.type, card.value);
-      }, step * PROGRAM_STEP_MS);
+        setRunning(step.slot);
+        if (step.outcome === "cut") {
+          arenaRef.current?.programHit({ dealt: 0, runs: 0, block: 0, heal: 0, weight: 0, cut: true });
+          sfx.play("error");
+          return;
+        }
+        const card = combat.program[step.slot];
+        if (card && step.runs > 0) {
+          sfx.play(cardSound(card.type), { hits: hitsOf(card.description) });
+          arenaRef.current?.cardPlayed(card.type, card.value);
+        } else if (card) {
+          sfx.play(cardSound(card.type));
+        }
+        arenaRef.current?.programHit({
+          dealt: step.dealt,
+          runs: step.runs,
+          block: step.block,
+          heal: step.heal,
+          weight: step.damage / combat.enemy_max_hp,
+        });
+        if (step.damage > 0) {
+          window.setTimeout(() => setProgramHp({ on: combat, hp: step.enemy_hp }), ENEMY_HIT_MS);
+        }
+      }, i * PROGRAM_STEP_MS);
     });
+    // the last hit lands before the turn moves on
     window.setTimeout(() => {
       setRunning(null);
       finish();
-    }, runningLines.length * PROGRAM_STEP_MS);
+    }, (shown.length - 1) * PROGRAM_STEP_MS + ENEMY_HIT_MS + 250);
   }
 
   // Program mode: pick a queued card up, then put it on another line - an
@@ -362,7 +408,12 @@ export function CombatPanel({
             <span className="hud-name">
               {HERO[player.character].name} <small>Human · {era}</small>
             </span>
-            <HpBar hp={shownPlayerHp} max={player.max_hp} side="player" />
+            <HpBar
+              hp={shownPlayerHp}
+              max={player.max_hp}
+              side="player"
+              ghost={attacking && !enemySlain && running === null ? player.hp - combat.incoming_max : undefined}
+            />
             <div className="hud-meta">
               {attacking && !enemySlain && (
                 <span
@@ -393,7 +444,16 @@ export function CombatPanel({
                 {combat.enemy_description}
               </p>
             )}
-            <HpBar hp={shownEnemyHp} max={combat.enemy_max_hp} side="enemy" />
+            <HpBar
+              hp={shownEnemyHp}
+              max={combat.enemy_max_hp}
+              side="enemy"
+              ghost={
+                programMode && running === null && queuedLines.length > 0 && combat.program_preview
+                  ? combat.program_preview.enemy_hp
+                  : undefined
+              }
+            />
             <div className="hud-meta">
               {!enemySlain && (
                 <span

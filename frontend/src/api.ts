@@ -249,6 +249,26 @@ export interface ProgramPreview {
   enemy_block: number;
   player_hp: number;
   player_block: number;
+  // line by line, in the order they run
+  steps: ProgramStep[];
+}
+
+// What one queued line does when the program runs (the backend's
+// combat.ProgramStep): ran, cut by an interrupt, or skipped (enemy down).
+export interface ProgramStep {
+  slot: number;
+  name: string;
+  type: CardType;
+  outcome: "ran" | "cut" | "skipped";
+  // how often its action ran - a fork's target twice, a loop its repeats
+  runs: number;
+  damage: number;
+  dealt: number;
+  block: number;
+  heal: number;
+  hurt: number;
+  enemy_hp: number;
+  enemy_block: number;
 }
 
 export interface ShopCard {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useImperativeHandle, useRef, type ReactNode, type Ref } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
 import { ATTACKING_INTENTS, type CardType, type EnemyIntentType } from "../api";
 import { sfx } from "../audio";
 import type { HackerCommand } from "../hackerCommands";
@@ -40,9 +40,24 @@ export interface ArenaStatus {
   fortify: number;
 }
 
+// One program line landing (CombatPanel plays a program out line by line,
+// from the preview's steps): what it did, and how heavy it was - the share of
+// the enemy's HP it took.
+export interface ProgramHit {
+  dealt: number;
+  runs: number;
+  block: number;
+  heal: number;
+  weight: number;
+  // an interrupt cut the program off here
+  cut?: boolean;
+}
+
 // What CombatPanel tells the arena as things happen; HP changes it works out
 // itself from `exchange`.
 export interface ArenaHandle {
+  // a program line ran (or was cut off)
+  programHit(hit: ProgramHit): void;
   // Enter was hit on a played card
   cardPlayed(type: CardType, value: number): void;
   // the server answered an end of turn
@@ -132,6 +147,35 @@ function IntentMarker({ enemy }: { enemy: ArenaEnemy }) {
   );
 }
 
+// A number a program line put up: damage over the enemy, block or healing
+// over Dr. Chronos, the fork/loop multiplier, or the interrupt's cut.
+interface ProgramFx {
+  id: number;
+  kind: "damage" | "combo" | "block" | "heal" | "cut";
+  text: string;
+  // how many of its kind are up already - they stack instead of overlapping
+  stack: number;
+}
+
+const PROGRAM_FX_MS = 1100;
+
+function ProgramFxPopup({ fx, enemyTop }: { fx: ProgramFx; enemyTop: number }) {
+  if (fx.kind === "cut") {
+    return <span className="arena-cut">{fx.text}</span>;
+  }
+  const onEnemy = fx.kind === "damage" || fx.kind === "combo";
+  // on the enemy's body, clear of the intent marker over its head
+  const top = onEnemy ? enemyTop + 14 - (fx.kind === "combo" ? 14 : 0) - fx.stack * 9 : FLOOR - 48 - fx.stack * 9;
+  return (
+    <span
+      className={`arena-popup arena-program-fx is-${fx.kind}`}
+      style={{ left: pct.x(onEnemy ? ENEMY_X : PLAYER_X), top: pct.y(top) }}
+    >
+      {fx.text}
+    </span>
+  );
+}
+
 function DamagePopup({ side, delta, top }: { side: "player" | "enemy"; delta: number; top: number }) {
   const isHeal = delta > 0;
   return (
@@ -173,6 +217,16 @@ export function CombatArena({
   ref?: Ref<ArenaHandle>;
 }) {
   const sceneRef = useRef<PixelScene | null>(null);
+  const [programFx, setProgramFx] = useState<ProgramFx[]>([]);
+  const fxId = useRef(0);
+  const showFx = useCallback((kind: ProgramFx["kind"], text: string) => {
+    const id = ++fxId.current;
+    setProgramFx((shown) => [
+      ...shown,
+      { id, kind, text, stack: shown.filter((f) => f.kind === kind).length },
+    ]);
+    window.setTimeout(() => setProgramFx((shown) => shown.filter((f) => f.id !== id)), PROGRAM_FX_MS);
+  }, []);
   const onScene = useCallback((scene: PixelScene) => {
     sceneRef.current = scene;
   }, []);
@@ -196,6 +250,25 @@ export function CombatArena({
   }, [typing, block, armor, enemyBlock, turrets, amplifiers, fortify]);
 
   useImperativeHandle(ref, () => ({
+    programHit(hit) {
+      const scene = sceneRef.current;
+      if (hit.cut) {
+        showFx("cut", "Interrupt");
+        scene?.trigger("enemy_brace");
+        return;
+      }
+      if (hit.block > 0) showFx("block", `+${hit.block}`);
+      if (hit.heal > 0) showFx("heal", `+${hit.heal}`);
+      if (hit.dealt <= 0) return;
+      // as the line's pulse comes out of the rift
+      window.setTimeout(() => {
+        scene?.trigger("enemy_hurt");
+        scene?.impact(hit.weight);
+        sfx.play("impact");
+        showFx("damage", `-${hit.dealt}`);
+        if (hit.runs > 1) showFx("combo", `×${hit.runs}`);
+      }, ENEMY_HIT_MS);
+    },
     cardPlayed(type, value) {
       sceneRef.current?.trigger(type, 0, value);
     },
@@ -237,6 +310,9 @@ export function CombatArena({
             {exchange.playerDelta !== 0 && <DamagePopup side="player" delta={exchange.playerDelta} top={FLOOR - 48} />}
           </div>
         )}
+        {programFx.map((fx) => (
+          <ProgramFxPopup key={fx.id} fx={fx} enemyTop={top} />
+        ))}
         {children}
         {slain && (
           <div className="arena-victory">

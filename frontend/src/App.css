@@ -1608,6 +1608,95 @@ button.is-primary:hover:not(:disabled),
   text-shadow: 3px 3px 0 var(--px-ink), -2px -2px 0 var(--px-ink), 2px -2px 0 var(--px-ink), -2px 2px 0 var(--px-ink);
 }
 
+/* program mode: each line's own numbers, put up the moment it lands */
+.arena-program-fx {
+  z-index: 4;
+  font-size: 5.4cqw;
+  animation-delay: 0s;
+  text-shadow: 3px 3px 0 var(--px-ink), -2px -2px 0 var(--px-ink), 2px -2px 0 var(--px-ink), -2px 2px 0 var(--px-ink);
+}
+
+.arena-program-fx.is-damage {
+  color: #bff8ff;
+}
+
+.arena-program-fx.is-combo {
+  color: var(--boost);
+  font-size: 3.4cqw;
+}
+
+.arena-program-fx.is-block {
+  color: var(--cyan);
+  font-size: 3.4cqw;
+}
+
+.arena-program-fx.is-heal {
+  color: var(--safe);
+  font-size: 3.4cqw;
+}
+
+/* an interrupt cutting the program off: a red slash across the arena */
+.arena-cut {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  padding: 0.4cqw 2.4cqw;
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 5cqw;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--danger);
+  box-shadow: 0 0 24px var(--danger);
+  transform: translate(-50%, -50%) skewX(-12deg);
+  animation: arena-cut 1.1s ease-out both;
+  pointer-events: none;
+}
+
+@keyframes arena-cut {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+  15% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) skewX(-12deg) scale(1.08);
+  }
+}
+
+/* where the HP will be after the queued program / the telegraphed hit */
+.hud-ghost {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.55) 0 4px, rgba(255, 255, 255, 0.15) 4px 8px);
+  animation: hud-ghost 1s ease-in-out infinite alternate;
+}
+
+@keyframes hud-ghost {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-ghost,
+  .arena-cut {
+    animation: none;
+  }
+}
+
 @keyframes arena-popup {
   0% {
     opacity: 0;

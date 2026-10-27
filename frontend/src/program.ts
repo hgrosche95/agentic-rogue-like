@@ -19,7 +19,6 @@ export function programPlan(combat: PendingCombatView, enemySlain: boolean) {
     queuedLines,
     cutAfter,
     reversed,
-    runningLines: cutAfter === null ? runOrder : runOrder.slice(0, cutAfter),
     cutLines: cutAfter === null ? [] : runOrder.slice(cutAfter),
   };
 }

@@ -130,6 +130,8 @@ export class PixelScene {
   shakeY = 0;
   private shake = 0;
   private shakeAmp = 0;
+  // hit-stop: steps the whole scene holds still on a heavy hit
+  private frozen = 0;
 
   private status: SceneStatus = { typing: false, block: 0, armor: 0, enemyBlock: 0, turrets: 0, amplifiers: 0, fortify: 0 };
   private playerVisible = true;
@@ -286,6 +288,10 @@ export class PixelScene {
   // --------------------------------------------------------------- update
 
   step() {
+    if (this.frozen > 0) {
+      this.frozen--;
+      return;
+    }
     this.tick++;
     const t = this.tick;
 
@@ -489,6 +495,17 @@ export class PixelScene {
     const e = this.enemy;
     if (!e) return [ENEMY_X, FLOOR - 14];
     return [ENEMY_X, FLOOR - e.h + Math.round((e.top + e.h) / 2)];
+  }
+
+  // A program line's hit landing (CombatPanel plays a program out line by
+  // line): the heavier, the longer the scene freezes and the harder it
+  // shakes. `weight` 0..1, the share of the enemy's HP the line took.
+  impact(weight: number) {
+    if (this.reducedMotion) return;
+    const w = Math.max(0, Math.min(1, weight));
+    if (w >= 0.12) this.frozen = Math.round(3 + w * 6);
+    this.shakeFor(Math.round(4 + w * 14), w >= 0.25 ? 3 : w >= 0.1 ? 2 : 1);
+    if (w >= 0.25) this.flash = Math.max(this.flash, 2);
   }
 
   private shakeFor(steps: number, amp: number) {
