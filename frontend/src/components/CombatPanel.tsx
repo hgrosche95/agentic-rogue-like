@@ -394,7 +394,7 @@ export function CombatPanel({
   );
 
   return (
-    <div className="combat-panel">
+    <div className={`combat-panel${discarding !== null ? " is-discarding" : ""}`}>
       {helpOpen && <CombatHelp programMode={programMode} onClose={() => setHelpOpen(false)} />}
       {/* the HUD plates sit in the scene's top corners, clear of the monitor */}
       <div className="arena-wrap">
@@ -611,6 +611,17 @@ export function CombatPanel({
         <Pile label="Source" count={combat.draw_count} kind="deck" />
 
         <div className="hand-zone">
+          {/* over the hand limit: hard to miss, or the turn seems stuck */}
+          {discarding !== null && (
+            <div className="discard-banner" role="status">
+              <span>
+                Hand over the limit - pick {excess} card{excess === 1 ? "" : "s"} to discard
+              </span>
+              <b className={discarding.length === excess ? "is-done" : undefined}>
+                {discarding.length}/{excess}
+              </b>
+            </div>
+          )}
           <div className="hand" ref={handRef}>
             {combat.hand.map((card: HandCardView, i) => (
               <button
@@ -618,7 +629,7 @@ export function CombatPanel({
                 data-flip-key={handKeys[i]}
                 data-hand-index={card.hand_index}
                 style={fanStyle(laidOut.indexOf(card), laidOut.length)}
-                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : ""}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}`}
+                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : discarding !== null ? " is-pickable" : ""}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}`}
                 disabled={busy}
                 onMouseEnter={() => sfx.play("hover")}
                 onPointerDown={(event) => drag.onPointerDown(event, card.hand_index)}
@@ -648,7 +659,7 @@ export function CombatPanel({
           ) : (
             // busy: still shown at work (a sweep of light), never just dead
             <button
-              className={`end-turn-button${busy ? " is-busy" : ""}`}
+              className={`end-turn-button${busy ? " is-busy" : ""}${discarding !== null ? (discarding.length === excess ? " is-ready" : " is-waiting") : ""}`}
               disabled={busy || (discarding !== null && discarding.length !== excess)}
               aria-busy={busy}
               onClick={endTurn}

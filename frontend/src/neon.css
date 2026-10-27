@@ -796,8 +796,168 @@ button.field-slot.is-queued:hover:not(:disabled) {
   }
 }
 
+/* discarding: unready until the picks are in, then it calls */
+.end-turn-button.is-waiting {
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--danger);
+  box-shadow: 0 0 12px rgba(255, 61, 139, 0.4);
+  cursor: not-allowed;
+}
+
+.end-turn-button.is-ready {
+  color: #fff;
+  background: var(--danger);
+  box-shadow: 0 0 24px rgba(255, 61, 139, 0.8);
+  animation: ready-call 1.1s var(--ease-in-out) infinite alternate;
+}
+
+.end-turn-button.is-ready:hover:not(:disabled) {
+  background: #ff5c9f;
+  box-shadow: 0 0 32px rgba(255, 61, 139, 0.95);
+}
+
+@keyframes ready-call {
+  to {
+    box-shadow: 0 0 36px rgba(255, 61, 139, 1);
+  }
+}
+
+/* ---------- the discard prompt: over the hand limit ---------- */
+.hand-zone {
+  position: relative;
+}
+
+.discard-banner {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  padding: 8px 16px;
+  white-space: nowrap;
+  font-family: var(--font-head);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  background: #2a0c1c;
+  border: 1px solid var(--danger);
+  border-radius: 999px;
+  box-shadow: 0 0 24px rgba(255, 61, 139, 0.6);
+  transform: translateX(-50%);
+  animation: discard-banner-in var(--dur-slow) var(--ease-pop) both;
+  pointer-events: none;
+}
+
+.discard-banner b {
+  padding: 2px 10px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  color: var(--on-accent);
+  background: var(--danger);
+  border-radius: 999px;
+  transition: background-color var(--dur) var(--ease-out);
+}
+
+.discard-banner b.is-done {
+  background: var(--safe);
+}
+
+/* phones: the banner wraps, and End turn, Cancel and the piles wrap too
+   instead of pushing the table wider than the screen */
+@media (max-width: 900px) {
+  .discard-banner {
+    width: max-content;
+    max-width: calc(100vw - 48px);
+    white-space: normal;
+    text-align: center;
+    border-radius: 18px;
+  }
+  .battlefield {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .battlefield > .table-side {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+}
+
+@keyframes discard-banner-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.9);
+  }
+}
+
+/* the rest of the table steps back while cards are picked */
+.combat-panel.is-discarding .field-zone {
+  opacity: 0.45;
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+/* every card in hand can be picked: a red glow breathes inside it (its
+   opacity, not the shadow, is what moves) */
+.hand .hand-card.is-pickable {
+  cursor: pointer;
+  box-shadow: 0 0 14px rgba(255, 61, 139, 0.45);
+}
+
+.hand .hand-card.is-pickable::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  box-shadow: inset 0 0 22px rgba(255, 61, 139, 0.85);
+  pointer-events: none;
+  animation: pickable 1.1s var(--ease-in-out) infinite alternate;
+}
+
+.hand .hand-card.is-pickable:hover:not(:disabled) {
+  border-color: var(--danger);
+  box-shadow: 0 0 24px rgba(255, 61, 139, 0.75);
+}
+
+@keyframes pickable {
+  from {
+    opacity: 0.2;
+  }
+}
+
+/* picked: dropped, struck through and marked */
+.hand .hand-card.is-discarding {
+  opacity: 0.6;
+  filter: saturate(0.4);
+}
+
+.hand .hand-card.is-discarding::after {
+  content: "Discard";
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  padding: 3px 10px;
+  font-family: var(--font-head);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--danger);
+  border-radius: 999px;
+  box-shadow: 0 0 14px var(--danger);
+  transform: translate(-50%, -50%) rotate(-8deg);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .end-turn-button.is-busy::after,
+  .end-turn-button.is-ready,
+  .hand .hand-card.is-pickable::before,
+  .discard-banner,
   .field-slot.is-occupied.is-landing,
   .line-socket.is-landing {
     animation: none;
