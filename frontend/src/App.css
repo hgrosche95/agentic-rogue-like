@@ -899,9 +899,141 @@ button.is-primary:hover:not(:disabled),
   cursor: default;
 }
 
+/* ---------- a map that moves (all switched off for reduced motion below) ---------- */
+
+/* rooms fade in layer by layer when the map opens */
+.map-node {
+  animation: map-node-in 0.35s ease-out both;
+  animation-delay: calc(var(--f, 0) * 45ms);
+}
+
+/* opacity only: a CSS transform here would override the node's SVG
+   transform attribute, which is what places it */
+@keyframes map-node-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* the frame around where you stand breathes */
+.map-node.is-current .map-node-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: map-pulse 1.8s ease-in-out infinite;
+}
+
+/* ...and beats harder, in gold, while the room waits to be entered by a click */
+.map-node.is-enterable {
+  cursor: pointer;
+}
+
+.map-node.is-enterable .map-node-halo {
+  stroke: var(--gold);
+  animation: map-pulse-strong 1.1s ease-in-out infinite;
+}
+
+.map-node.is-enterable:hover .map-node-body {
+  transform: scale(1.1);
+}
+
+@keyframes map-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 1;
+    filter: drop-shadow(0 0 6px var(--accent));
+  }
+}
+
+@keyframes map-pulse-strong {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+    filter: drop-shadow(0 0 2px var(--gold));
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+    filter: drop-shadow(0 0 10px var(--gold));
+  }
+}
+
+/* rooms you can jump to float a little, out of step with each other */
+.map-node.is-reachable .map-node-body {
+  animation: map-bob 2.4s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * -0.6s);
+}
+
+@keyframes map-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
 .map-node.is-reachable:hover .map-node-body,
 .map-node.is-reachable:focus-visible .map-node-body {
-  transform: translateY(-4px);
+  animation: none;
+  transform: translateY(-4px) scale(1.12);
+  filter: brightness(1.25) drop-shadow(0 0 8px var(--c));
+}
+
+.map-node.is-reachable:active .map-node-body,
+.map-node.is-enterable:active .map-node-body {
+  transform: scale(0.94);
+}
+
+/* the way on glows */
+.map-path.is-next {
+  filter: drop-shadow(0 0 4px var(--accent));
+}
+
+.map-now {
+  animation: map-bob 1.6s ease-in-out infinite;
+}
+
+.map-era.is-now .map-era-label {
+  animation: map-label-glow 1.8s ease-in-out infinite;
+}
+
+@keyframes map-label-glow {
+  50% {
+    filter: drop-shadow(0 0 5px var(--accent));
+  }
+}
+
+/* the side panel's Engage / Initiate jump button calls for the next step */
+.jump-button:not(:disabled) {
+  animation: button-call 2.2s ease-in-out infinite;
+}
+
+@keyframes button-call {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 16px 2px color-mix(in srgb, var(--gold) 55%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jump-button,
+  .map-node,
+  .map-node .map-node-halo,
+  .map-node .map-node-body,
+  .map-now,
+  .map-era.is-now .map-era-label {
+    animation: none;
+  }
 }
 
 /* the diamond itself shows focus (below), not the browser's box */
@@ -1305,6 +1437,117 @@ button.is-primary:hover:not(:disabled),
   justify-content: center;
   gap: 1.1rem;
   margin-bottom: 1.3rem;
+}
+
+/* -- the start of a run (StartScreens): kits, then the AGI's deal -- */
+.kit-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.kit-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.9rem 0.8rem 1rem;
+  text-transform: none;
+  animation: reward-deal 0.3s steps(4, jump-start) both;
+}
+
+.kit-name {
+  font-family: var(--font-head);
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.kit-blurb {
+  min-height: 2.6em;
+  font-size: 0.9rem;
+  line-height: 1.3;
+  color: var(--text-dim);
+}
+
+.kit-cards {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.kit-cards .hand-card.reward-card {
+  width: 124px;
+  height: 172px;
+  animation: none;
+}
+
+/* more specific than .reward-card's, which sizes the bigger reward cards */
+.kit-cards .reward-card .card-header {
+  font-size: 0.6rem;
+  letter-spacing: 0.02em;
+}
+
+.kit-cards .reward-card .card-body {
+  font-size: 0.78rem;
+}
+
+.overlay-window > .deal-screen {
+  position: relative;
+  padding: 1rem 1.2rem 1.3rem;
+  color: #b4ecf5;
+  background: var(--px-ink);
+  border: var(--px-border);
+  animation: pop-in 0.25s steps(3, jump-start) both;
+}
+
+.deal-greeting {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--ai-red);
+}
+
+.deal-pitch {
+  margin: 0 0 1rem;
+  line-height: 1.4;
+}
+
+.deal-options {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.deal-option {
+  display: grid;
+  grid-template-columns: 11rem 1fr;
+  align-items: baseline;
+  gap: 0.8rem;
+  padding: 0.7rem 0.9rem;
+  text-align: left;
+  text-transform: none;
+}
+
+.deal-name {
+  font-family: var(--font-head);
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ai-red);
+}
+
+.deal-text {
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 600px) {
+  .deal-option {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
 }
 
 /* -- the black market (ShopScreen): cards and artifacts with price tags -- */
@@ -3542,9 +3785,61 @@ body > .card-flight {
   background: repeating-linear-gradient(45deg, #2a1f55 0 6px, #1c1440 6px 12px);
 }
 
-/* an extra line (Extra Line, the Vibe-Coder's 6th) has no socket */
-.line-socket.is-none {
-  border: 0;
+/* the background under the lines: every permanent running, no limit */
+.program-board {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.program-background {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 4px 6px;
+  border: 3px dotted var(--line-strong);
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  opacity: 1;
+}
+
+.program-background:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.program-background.is-targetable {
+  border: 3px solid var(--accent);
+  background: #0a2a3a;
+  cursor: pointer;
+}
+
+.program-background.is-targetable:hover,
+.program-background.is-drop-target {
+  border-color: #fff;
+  background: #138fb0;
+}
+
+.background-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--muted, var(--text));
+}
+
+.background-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.program-background .line-socket {
+  max-width: 140px;
 }
 
 .line-label {
@@ -3790,4 +4085,59 @@ body > .field-slot.card-drag {
     grid-template-columns: 1fr;
     gap: 2px;
   }
+}
+
+/* ---------- hover help: game terms (RichText) and named cards (CardMention) ---------- */
+.keyword {
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, currentColor 55%, transparent);
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 90;
+  max-width: 260px;
+  padding: 0.45rem 0.6rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text);
+  background: var(--panel-solid);
+  border: var(--px-border);
+  box-shadow: var(--shadow-panel);
+  transform: translate(-50%, calc(-100% - 8px));
+  pointer-events: none;
+}
+
+.card-mention {
+  font-weight: 700;
+  color: var(--gold);
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+
+.card-preview {
+  position: fixed;
+  z-index: 90;
+  transform: translate(-50%, calc(-100% - 10px));
+  pointer-events: none;
+}
+
+.card-preview .hand-card.reward-card {
+  animation: none;
+}
+
+.tooltip.is-below {
+  transform: translate(-50%, 8px);
+}
+
+.card-preview.is-below {
+  transform: translate(-50%, 10px);
 }

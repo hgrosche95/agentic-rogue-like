@@ -101,7 +101,7 @@ def test_thorny_costs_hp_for_every_attack_card() -> None:
 
 
 def _room(run, node_type: NodeType) -> None:
-    run.artifact_offer = run.card_reward = None
+    run.artifact_offer = run.kit_offer = None
     run.current_node_id = next(i for i, n in run.nodes.items() if n.type is node_type)
 
 

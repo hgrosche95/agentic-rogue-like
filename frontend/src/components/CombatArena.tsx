@@ -5,6 +5,7 @@ import type { HackerCommand } from "../hackerCommands";
 import type { HpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS } from "../hooks/useLagged";
 import { enemySprite } from "../pixel/enemySprite";
+import { FINAL_BOSS_INTENT_X } from "../pixel/finalBoss";
 import { ENEMY_X, FLOOR, PLAYER_X, pct } from "../pixel/layout";
 import type { Hero, PixelScene } from "../pixel/scene";
 import { describeIntent } from "../readouts";
@@ -29,6 +30,9 @@ export interface ArenaEnemy {
   intentMax: number;
   intentHits: number;
   intentName: string | null;
+  // the run's final boss (hand-drawn), and the boss phase it is in
+  finalBoss?: boolean;
+  phase?: number;
 }
 
 export interface ArenaStatus {
@@ -138,7 +142,7 @@ function IntentMarker({ enemy }: { enemy: ArenaEnemy }) {
   return (
     <div
       className={`arena-intent ${kind} is-${enemy.intent}`}
-      style={{ left: pct.x(ENEMY_X), top: pct.y(enemyTop(enemy) - 2) }}
+      style={{ left: pct.x(enemy.finalBoss ? FINAL_BOSS_INTENT_X : ENEMY_X), top: pct.y(enemyTop(enemy) - 2) }}
       title={title}
     >
       <IntentIcon intent={enemy.intent} />
@@ -239,10 +243,13 @@ export function CombatArena({
     sceneRef.current?.setContextFull(contextFull);
   }, [contextFull]);
 
-  const { name, maxHp, attack, setting } = enemy;
+  const { name, maxHp, attack, setting, finalBoss, phase = 1 } = enemy;
   useEffect(() => {
-    sceneRef.current?.setEnemy({ name, maxHp, attack, setting });
-  }, [name, maxHp, attack, setting]);
+    sceneRef.current?.setEnemy({ name, maxHp, attack, setting, finalBoss });
+  }, [name, maxHp, attack, setting, finalBoss]);
+  useEffect(() => {
+    sceneRef.current?.setEnemyPhase(phase);
+  }, [phase]);
 
   const { block, armor, enemyBlock, turrets, amplifiers, fortify } = status;
   useEffect(() => {

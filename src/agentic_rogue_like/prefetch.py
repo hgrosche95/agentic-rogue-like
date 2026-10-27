@@ -31,7 +31,7 @@ from .agent.event_agent import agent_enabled as event_agent_enabled
 from .agent.event_agent import generate_valid_event
 from .agent.narrator import narrate
 from .enemies import tier_floor
-from .engine import REST_SITUATION, SHOP_SITUATION
+from .engine import REST_SITUATION, SHOP_SITUATION, is_final_boss
 from .events import EVENT_POOL, GameEvent
 from .map_gen import NUM_FLOORS
 from .models import Enemy, NodeType, RunState, RunStatus
@@ -83,7 +83,12 @@ class Prefetch:
         for node in (run.nodes[node_id] for node_id in upcoming):
             if node.visited:
                 continue
-            if node.type in _COMBAT_TYPES and node.id not in self.enemies:
+            # The final boss is fixed (engine.is_final_boss) - nothing to generate.
+            if (
+                node.type in _COMBAT_TYPES
+                and node.id not in self.enemies
+                and not is_final_boss(run, node)
+            ):
                 self.enemies[node.id] = _executor.submit(
                     generate_balanced_enemy,
                     # Placeholder - enemy_for_node() swaps in the rng-drawn id.

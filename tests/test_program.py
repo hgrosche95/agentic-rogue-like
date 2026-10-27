@@ -111,7 +111,31 @@ def test_actions_wait_for_the_end_of_the_turn() -> None:
 def test_a_permanent_and_a_queued_action_share_a_slot() -> None:
     state, player = _fight()
     _queue(state, player, "Overclock", "Exploit", slots=[0, 0])
-    assert state.field[0] is not None and state.program[0] is not None
+    assert len(state.field) == 1 and state.program[0] is not None
+
+
+def test_permanents_run_in_the_background_without_a_limit() -> None:
+    state, player = _fight()
+    _queue(state, player, *["Encryption"] * 7, slots=[0] * 7)
+    assert len(state.field) == 7
+    assert state.program == [None] * 5
+
+
+def test_overclock_boosts_every_line_of_a_program() -> None:
+    # played after the Exploit and into a line to its right - still counts
+    state, player = _fight()
+    _queue(state, player, "Exploit", "Overclock", slots=[0, 4])
+    end_turn(state, player, random.Random(2))
+    assert state.enemy.hp - state.enemy_hp == 6
+
+
+def test_a_locked_line_takes_no_action_but_a_permanent() -> None:
+    state, player = _fight()
+    state.locked_slots = [0]
+    assert 0 not in free_slots(state, _card("Exploit"))
+    assert 0 in free_slots(state, _card("Overclock"))
+    _queue(state, player, "Overclock", slots=[0])
+    assert len(state.field) == 1
 
 
 def test_card_flow_still_resolves_on_the_spot() -> None:
@@ -206,7 +230,7 @@ def test_api_runs_a_program() -> None:
     client = TestClient(app)
     run_id = client.post("/runs", json={"seed": 3, "program_mode": True}).json()["run_id"]
     run = get_session(run_id).run
-    run.artifact_offer = run.card_reward = None
+    run.artifact_offer = run.kit_offer = None
     client.post(f"/runs/{run_id}/resolve")
     get_session(run_id).combat.hand = [_card("Exploit")]
 
@@ -272,14 +296,13 @@ def test_compiler_counts_the_other_types_before_the_last_line() -> None:
     assert _damage_dealt("Firewall", "Exploit", artifact="Compiler", slots=[0, 3]) == 5
 
 
-def test_extra_line_takes_actions_only() -> None:
+def test_extra_line_takes_an_action() -> None:
     state, player = _fight(artifact="Extra Line")
     assert len(state.program) == 6
     assert 5 in free_slots(state, _card("Exploit"))
-    assert 5 not in free_slots(state, _card("Overclock"))
     _queue(state, player, "Exploit", slots=[5])
     with pytest.raises(ValueError, match="occupied"):
-        _queue(state, player, "Overclock", slots=[5])
+        _queue(state, player, "Firewall", slots=[5])
     end_turn(state, player, random.Random(2))
     assert state.enemy_hp == 95
 
@@ -339,7 +362,7 @@ def test_previews_count_hot_path_and_the_queued_block() -> None:
     client = TestClient(app)
     run_id = client.post("/runs", json={"seed": 3, "program_mode": True}).json()["run_id"]
     run = get_session(run_id).run
-    run.artifact_offer = run.card_reward = None
+    run.artifact_offer = run.kit_offer = None
     client.post(f"/runs/{run_id}/resolve")
     combat = get_session(run_id).combat
     combat.enemy_intent = EnemyIntentType.ATTACK

@@ -20,7 +20,7 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 
 | Intro | Karte | Kampf |
 | --- | --- | --- |
-| ![Story-Intro mit Dr. Chronos und der Nachricht der AGI](docs/screenshots/intro.png) | ![Zeitachsen-Karte mit Vorschau auf den nächsten Sprung](docs/screenshots/map.png) | ![Kampf in der Arena gegen einen prozedural gezeichneten Gegner](docs/screenshots/combat.png) |
+| ![Story-Intro mit Dr. Chronos und der Nachricht der AGI](docs/screenshots/intro.png) | ![Karte der Code-Schichten mit Vorschau auf den nächsten Raum](docs/screenshots/map.png) | ![Kampf in der Arena gegen einen prozedural gezeichneten Gegner](docs/screenshots/combat.png) |
 
 ## Status
 
@@ -95,8 +95,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       eine Chat-Blase, die beim Tippen pulsiert und bei vollem Kontextfenster
       orange flackert.
 - [x] **Deck-Building** — zu Beginn des Runs (nach dem ersten Artefakt)
-      eine von drei Karten der Seltenheit Uncommon/Rare ins Startdeck
-      nehmen (oder überspringen), danach nach jedem Sieg eine von drei Karten wählen
+      ein Start-Kit wählen und ein Angebot der AGI annehmen oder ablehnen
+      (siehe *Start eines Runs*), danach nach jedem Sieg eine von drei Karten wählen
       (`/runs/{id}/card-reward`); 18 Belohnungskarten mit Abwurfkosten,
       Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
 - [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
@@ -122,7 +122,7 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       besiegt, landet auf einer zweiten Karte (Akt 2, ab einem Rastplatz,
       mit 40 % der max. HP geheilt, doppeltem Gold und einer Elite-Kartenbelohnung).
       Akt 2 hat ab der ersten Etage mehr Elite-Räume und weniger Rastplätze.
-      Gegner werden pro Hälfte der Zeitachse um 10 % stärker: Akt 1 ×1,0 /
+      Gegner werden pro Hälfte der Karte um 10 % stärker: Akt 1 ×1,0 /
       ×1,1, Akt 2 ×1,21 / ×1,331 (`enemies.escalate`); Akt 2 kennt keine
       frühen Gegner mehr (`enemies.tier_floor`). Bosse kämpfen mit eigenem
       Moveset (`combat._roll_boss_intent`): Salve (3 Treffer, Rüstung zählt
@@ -136,8 +136,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       Pixel-Arena: dieselbe feste Palette (`pixel/palette.ts`), harte
       4-px-Konturen mit Bevel statt Glas, keine Unschärfe und keine Verläufe,
       Pixel-Schriften (Silkscreen für Überschriften und Labels, Pixelify Sans
-      für Fließtext). Die Karte ist eine Zeitachse (Etagen als Jahre
-      1969 → Ω) aus Pixel-Kacheln mit rechtwinkligen Wegen, ein Klick springt
+      für Fließtext). Die Karte ist der Call Stack der AGI (jede Etage eine
+      Code-Schicht, `/ui` → `/core`, in Akt 2 das Modell selbst bis `/self`) aus Pixel-Kacheln mit rechtwinkligen Wegen, ein Klick springt
       in den nächsten Raum, daneben Vorschau, Artefakte und System-Log. Im
       Kampf ist die Arena die Bühne: ein gerahmtes Bild, dessen Breite auf ein
       Vielfaches der 240 logischen Pixel gerundet wird, damit die ganzzahlig
@@ -208,7 +208,7 @@ src/agentic_rogue_like/
 ├── api.py          FastAPI-HTTP-Frontend fürs Web-UI (uvicorn agentic_rogue_like.api:app)
 └── sessions.py      Hält Run-Zustand zwischen HTTP-Requests am Leben
 
-frontend/           React + Vite + TypeScript — Intro, Zeitachsen-Karte, Kampf-Arena mit Drag & Drop, Overlays, Deck-Ansicht, prozedurales Audio
+frontend/           React + Vite + TypeScript — Intro, Call-Stack-Karte, Kampf-Arena mit Drag & Drop, Overlays, Deck-Ansicht, prozedurales Audio
 balance/            Beispiel-Varianten (JSON) für den Balancing-Simulator
 tests/              pytest-Suite (Engine, Kampf, API, Encounter-Agent/-Schema)
 training/           Eigenes uv-Projekt: Fine-Tuning-Pipeline für den Encounter-Agent
@@ -324,7 +324,7 @@ Spiel ohne Encounter-Agent tatsächlich vorsetzt.
 Aktueller Stand (Smart-Bot, 2000 Runs über beide Akte): Spieler 45 HP /
 Angriff 2, Exploit macht 5 (+2), Starthand 5, danach 3 Karten pro Runde,
 Handlimit 8; das Startdeck hat 11 Karten (keine Heilkarte). Gegner werden
-pro Hälfte der Zeitachse um 10 % stärker an Leben und Angriff (und damit
+pro Hälfte der Karte um 10 % stärker an Leben und Angriff (und damit
 Block) — Akt 1 ×1,0 / ×1,1, Akt 2 ×1,21 / ×1,331 — aufgeschlagen erst
 *nach* der Erzeugung (`enemies.escalate`), damit die Budgets des
 Encounter-Agents und die Evals dazu unverändert bleiben. Nach jedem
@@ -624,9 +624,11 @@ zum Programm. Angriffe, Block, Heilung und Final Strike wirken nicht sofort,
 sondern werden in eine der 5 Zeilen eingereiht und laufen am Zugende von
 links nach rechts (`combat.run_program`), direkt vor dem Zug des Gegners.
 Kartenfluss (Ziehen, Retrieve, Free Play, …) wirkt weiter sofort, und
-Permanente liegen *unter* den Zeilen: Ein Overclock in Zeile 1 verstärkt jede
-Anweisung rechts davon, eine Zeile kann Permanent und Anweisung zugleich
-tragen. Bis zum Zugende lassen sich eingereihte Karten umsortieren
+Permanente belegen keine Zeile: Sie laufen im Hintergrund, so viele man
+spielt (kein Limit von 5 Slots wie in Classic), und wirken aufs ganze
+Programm – ein Overclock verstärkt jede Zeile, eine Säuberung entfernt den
+zuletzt gestarteten. Das hebt die Run-Siegquote mit der Reihenfolge „wie
+gespielt“ (1000 Runs, `--pool`, Chronos) von 4 % auf 8 %, näher an Classic. Bis zum Zugende lassen sich eingereihte Karten umsortieren
 (`combat.move_queued`, `POST /runs/{id}/combat/move-queued`).
 `combat.program_preview` zeigt dabei, wo der Kampf nach dem Programm steht
 (HP und Block beider Seiten) – sonst plant man blind, weil eingereihter
@@ -668,14 +670,14 @@ ein Spieler landet dazwischen.
 
 Im Frontend wählt man den Modus beim Start („Classic“ / „Program“). Im Kampf
 ist das Feld eine Reihe von Zeilen: Angriffe, Block und Heilung landen oben
-in der Zeile, ein Permanent im Sockel darunter (ein Overclock dort verstärkt
-die Zeilen rechts davon). Eingereihte Karten zieht man auf eine andere Zeile
+in der Zeile, Permanente und Kartenfluss in der Hintergrund-Leiste darunter. Eingereihte Karten zieht man auf eine andere Zeile
 (oder klickt sie an und dann die Zeile); eine belegte Zeile tauscht. Über
 den Zeilen steht, was das Programm bewirken wird (Gegner-HP und -Block, eigener
 Block), und „Incoming“ rechnet den eingereihten Block schon ein. Die
 Hot-Path-Zeile ist gold markiert, und ihre Vorschau zeigt den verbesserten
-Wert. „Run program“ lässt die Zeilen nacheinander aufleuchten, bevor der Gegner
-zieht.
+Wert. Eingereihte Karten werden beim Ausspielen nur eingetippt; ihre
+Animation läuft erst, wenn „Run program“ die Zeilen nacheinander (gut eine
+Sekunde pro Zeile) aufleuchten lässt, bevor der Gegner zieht.
 
 ### Interrupt
 
@@ -760,6 +762,50 @@ Artefakt, 23–26 mit einem Programm-Artefakt, so viel wie mit den klassischen
 und zufälliger Reihenfolge wächst dabei von 5 auf bis zu 10 HP (Hot Path,
 Compiler, Tail Call): Die Artefakte machen die Reihenfolge wichtiger, nicht
 nur den Spieler stärker.
+
+## Start eines Runs
+
+Damit sich der Anfang nicht jedes Mal gleich spielt, kommen nach dem ersten
+Artefakt zwei Entscheidungen (`starts.py`, `POST /runs/{id}/kit` und
+`/agi-deal`):
+
+**Start-Kit** – eins von drei Kits, je zwei Karten einer Strategie, die
+Grundkarten ersetzen (bei Dr. Chronos 2 Angriffe und 1 Block, beim
+Vibe-Coder 1 und 1, weil ihm ein dünneres Deck mehr bringt). Ein Kit wird
+nur angeboten, wenn beide Karten im Belohnungspool des Runs liegen, also
+erscheinen Vibe-Coder- und Programm-Kits nur dort.
+
+| Kit | Karten | Für |
+| --- | --- | --- |
+| Daemon farm | Daemon, Botnet | Permanente |
+| Graveyard | Brute Force, Rollback | Friedhof |
+| One-shot | Payload, Undelete | Einmal-Karten |
+| Malware | Trojan, Worm | Malware |
+| Move fast | YOLO Deploy, Vibe Check | nur Vibe-Coder |
+| Rubber duck | Rubber Duck, Copy-Paste | nur Vibe-Coder |
+| Control flow | Loop, If Wounded | nur Programm-Modus |
+| Pipeline | Batch, Pipe | Vibe-Coder im Programm-Modus |
+
+Kit-Karten zählen für die AGI als selbst gewählt (`style.py`), sie liest den
+Stil also schon ab dem ersten Kampf mit.
+
+**Angebot der AGI** – danach bietet die AGI drei von sechs Deals an, oder
+man lehnt ab. Jeder Deal wird beim Würfeln bis auf die Karte ausgerechnet,
+der Text sagt also genau, was man bekommt:
+
+| Deal | Wirkung |
+| --- | --- |
+| Delete legacy code | eine Grundkarte Angriff und eine Block aus dem Deck |
+| Mutation | zwei Grundkarten werden zu zwei bestimmten häufigen Karten |
+| Forbidden patch | eine bestimmte seltene Karte, kostet 5 max. HP |
+| Trojan gift | ein bestimmtes Artefakt, aber ein Glitch dauerhaft im Deck |
+| Hotfix | zwei Grundkarten verbessern |
+| Bribe | 90 Credits, aber ein Glitch dauerhaft im Deck |
+
+Balancing (`balance-sim --pool`, 1000 Runs, Kit und Deal zufällig): Chronos
+10 % → 10 %, Vibe-Coder 10 % → 12 %, Programm-Modus wie gespielt 8 % → 10 %.
+Zwei Kartenpaare flogen dabei raus: Zero-Day + Sandbox (39 % Run-Siegquote
+allein mit diesem Kit) und Tab-Tab-Tab beim Vibe-Coder (27–29 %).
 
 ## Karten-Upgrades
 

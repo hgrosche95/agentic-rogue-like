@@ -1,3 +1,4 @@
+import { createContext, useContext } from "react";
 import { QUEUED_TYPES, type Card, type PendingCombatView } from "./api";
 
 // Program mode's rules as the frontend needs them (see the backend's
@@ -21,4 +22,19 @@ export function programPlan(combat: PendingCombatView, enemySlain: boolean) {
     reversed,
     cutLines: cutAfter === null ? [] : runOrder.slice(cutAfter),
   };
+}
+
+// Program mode: permanents run in the background and boost every line, so a
+// card text about "to its right" (Overclock, Copilot) is told the program way.
+export const ProgramModeContext = createContext(false);
+
+export function cardText(card: Card, program: boolean): string {
+  if (!program) return card.description;
+  return card.description
+    .replace("Action cards played to its right are", "Every action in the program is")
+    .replace("Action cards played to its right get", "Every action in the program gets");
+}
+
+export function useCardText(card: Card): string {
+  return cardText(card, useContext(ProgramModeContext));
 }

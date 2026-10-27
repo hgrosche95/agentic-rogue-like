@@ -23,8 +23,10 @@ the test suite depends on (see README).
 
 from __future__ import annotations
 
+import logging
 import os
 import random
+import time
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,12 +51,15 @@ from .combat import (
     program_preview,
     token_regen,
 )
+from .enemies import FINAL_BOSS_ID
 from .engine import (
     NUM_ACTS,
     apply_event_choice,
     available_choices,
     choose_artifact,
     choose_card_reward,
+    choose_deal,
+    choose_kit,
     end_combat_turn,
     finalize_combat,
     move_to,
@@ -68,11 +73,13 @@ from .engine import (
     rest_upgrade,
     start_combat_node,
     start_event,
+    start_pending,
 )
 from .events import describe_option
 from .models import (
     MAX_CUSTOM_SETTING_LENGTH,
     SETTING_PRESETS,
+    AgiDeal,
     Artifact,
     Card,
     Character,
@@ -82,6 +89,7 @@ from .models import (
     RestSite,
     RunStatus,
     Shop,
+    StarterKit,
 )
 from .sessions import RunSession, create_session, get_session
 from .shop import MIN_DECK_SIZE, buy_artifact, buy_card, leave_shop, remove_card
@@ -199,6 +207,9 @@ class PendingCombatView(BaseModel):
     enemy_phase: int
     enemy_phases: int
     enemy_strength: int
+    # The run's final boss, the AGI itself (enemies.FINAL_BOSS_ID) - the
+    # arena draws it with its own sprite instead of a generated one.
+    final_boss: bool = False
     # Elites: their affix (models.Affix) and what it does, else null. Whether
     # an enraged elite is raging right now.
     enemy_affix: str | None
@@ -321,11 +332,18 @@ class RunView(BaseModel):
     current_node: MapNode
     node_resolved: bool
     available_choices: list[MapNode]
+    # Program mode for the whole run (combat.run_program) - card texts and
+    # previews read differently there, also outside a fight.
+    program_mode: bool
     pending_event: PendingEventView | None
     pending_combat: PendingCombatView | None
     card_reward: list[CardView] | None
     # Artifacts to pick one from before the current room can be entered.
     artifact_offer: list[Artifact] | None
+    # The start of the run, after the first artifact: a starter kit to pick,
+    # then the AGI's deals to take one of or turn down (starts.py).
+    kit_offer: list[StarterKitView] | None
+    agi_deals: list[AgiDealView] | None
     # The shop being browsed, until the player leaves it.
     shop: ShopView | None
     # The rest site's choice, until the player makes it.
@@ -387,6 +405,50 @@ class EndTurnRequest(BaseModel):
 
 class ArtifactChoiceRequest(BaseModel):
     artifact_index: int
+
+
+class KitChoiceRequest(BaseModel):
+    kit_index: int
+
+
+class DealChoiceRequest(BaseModel):
+    # None turns every deal down.
+    deal_index: int | None
+
+
+class StarterKitView(BaseModel):
+    id: str
+    name: str
+    blurb: str
+    cards: list[CardView]
+
+    @classmethod
+    def of(cls, kit: StarterKit) -> StarterKitView:
+        cards = [CardView.of(c) for c in kit.cards]
+        return cls(id=kit.id, name=kit.name, blurb=kit.blurb, cards=cards)
+
+
+class AgiDealView(BaseModel):
+    kind: str
+    name: str
+    description: str
+    # the cards taking it puts in the deck, to show as card faces
+    cards: list[CardView]
+    # every card its description names - removed, added, or (for an upgrade)
+    # as it will be afterwards - so the frontend can show each on hover
+    mentions: list[CardView]
+
+    @classmethod
+    def of(cls, deal: AgiDeal, deck: list[Card]) -> AgiDealView:
+        removed = [c for c in deck if c.id in deal.remove]
+        upgraded = [upgrade_card(c) for c in deck if c.id in deal.upgrade]
+        return cls(
+            kind=deal.kind.value,
+            name=deal.name,
+            description=deal.description,
+            cards=[CardView.of(c) for c in deal.add],
+            mentions=[CardView.of(c) for c in removed + deal.add + upgraded],
+        )
 
 
 class CardRewardRequest(BaseModel):
@@ -465,6 +527,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_phase=combat.phase,
             enemy_phases=combat.boss_phases,
             enemy_strength=combat.enemy_strength,
+            final_boss=combat.enemy.id == FINAL_BOSS_ID,
             enemy_affix=None if combat.enemy.affix is None else combat.enemy.affix.value,
             enemy_affix_description=(
                 None if combat.enemy.affix is None else AFFIX_DESCRIPTIONS[combat.enemy.affix]
@@ -517,12 +580,19 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         current_node=node,
         node_resolved=node_resolved,
         available_choices=choices,
+        program_mode=run.program_mode,
         pending_event=pending_event,
         pending_combat=pending_combat,
         card_reward=(
             None if run.card_reward is None else [CardView.of(c) for c in run.card_reward]
         ),
         artifact_offer=run.artifact_offer,
+        kit_offer=None if run.kit_offer is None else [StarterKitView.of(k) for k in run.kit_offer],
+        agi_deals=(
+            None
+            if run.agi_deals is None
+            else [AgiDealView.of(d, run.player.deck) for d in run.agi_deals]
+        ),
         shop=None if run.shop is None else ShopView.of(run.shop),
         rest=None if run.rest is None else RestView.of(run.rest, run.player.deck),
         play_style=(style.value if (style := play_style(run.player.deck)) else None),
@@ -546,6 +616,46 @@ def _finish_fight(session: RunSession) -> None:
         # A beaten boss opened the next act's map - its first rooms are
         # reachable now, not only after the next jump.
         session.prefetch.warm(session.run)
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    """For the frontend's keep-alive while a run is open: runs only live in
+    this process (sessions.py), and the container scales to zero after a few
+    minutes without requests."""
+    return {"status": "ok"}
+
+
+# Errors the browser reports (see frontend/src/errors.ts): a crash there is
+# otherwise invisible - the game just freezes on the player's screen.
+client_log = logging.getLogger("agentic_rogue_like.client")
+CLIENT_ERRORS_PER_MINUTE = 30
+_client_error_times: list[float] = []
+
+
+class ClientErrorReport(BaseModel):
+    message: str
+    stack: str | None = None
+    run_id: str | None = None
+    where: str | None = None
+
+
+@app.post("/client-errors", status_code=204)
+def report_client_error(report: ClientErrorReport) -> None:
+    """Log a frontend crash. Capped per minute and per field, so a page stuck
+    in an error loop (or anyone posting here) can't flood the logs."""
+    now = time.monotonic()
+    _client_error_times[:] = [t for t in _client_error_times if now - t < 60]
+    if len(_client_error_times) >= CLIENT_ERRORS_PER_MINUTE:
+        return
+    _client_error_times.append(now)
+    client_log.warning(
+        "client error in %s (run %s): %s | %s",
+        (report.where or "?")[:80],
+        (report.run_id or "-")[:40],
+        report.message[:500],
+        (report.stack or "")[:4000],
+    )
 
 
 @app.get("/settings")
@@ -605,6 +715,8 @@ def resolve_current_node(run_id: str) -> RunView:
         raise HTTPException(status_code=409, detail="choose an artifact first")
     if run.card_reward is not None:
         raise HTTPException(status_code=409, detail="choose a card first")
+    if start_pending(run):
+        raise HTTPException(status_code=409, detail="finish the start of the run first")
 
     prefetch = session.prefetch
     if node.type is NodeType.EVENT:
@@ -719,6 +831,30 @@ def choose_artifact_endpoint(run_id: str, request: ArtifactChoiceRequest) -> Run
     return _run_view(run_id, session)
 
 
+@app.post("/runs/{run_id}/kit")
+def choose_kit_endpoint(run_id: str, request: KitChoiceRequest) -> RunView:
+    session = _get_session_or_404(run_id)
+    if session.run.kit_offer is None:
+        raise HTTPException(status_code=409, detail="no starter kit offered")
+    try:
+        choose_kit(session.run, request.kit_index)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _run_view(run_id, session)
+
+
+@app.post("/runs/{run_id}/agi-deal")
+def choose_deal_endpoint(run_id: str, request: DealChoiceRequest) -> RunView:
+    session = _get_session_or_404(run_id)
+    if session.run.agi_deals is None:
+        raise HTTPException(status_code=409, detail="no deal pending")
+    try:
+        choose_deal(session.run, request.deal_index)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _run_view(run_id, session)
+
+
 def _shop_action(run_id: str, action) -> RunView:
     session = _get_session_or_404(run_id)
     if session.run.shop is None:
@@ -792,6 +928,7 @@ def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
         or run.card_reward is not None
         or run.shop is not None
         or run.rest is not None
+        or start_pending(run)
     ):
         raise HTTPException(status_code=409, detail="current node is not resolved yet")
     if request.node_id not in available_choices(run):

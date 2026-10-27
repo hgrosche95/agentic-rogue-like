@@ -186,6 +186,9 @@ class CombatState(BaseModel):
     hand: list[Card]
     discard_pile: list[Card]
     banished_pile: list[Card] = Field(default_factory=list)
+    # Classic: FIELD_SIZE slots, a permanent's position counts. Program mode:
+    # the permanents running in the background - as many as get played, in
+    # play order, no gaps (see _empty_field).
     field: list[Card | None] = Field(default_factory=lambda: [None] * FIELD_SIZE)
     player_block: int = 0
     # The player's artifacts, copied in at the start so every hook below can
@@ -510,6 +513,9 @@ def _check_boss_phase(state: CombatState) -> str:
             f" {state.enemy.name} overclocks into phase {state.phase}: +{strength} attack "
             f"and {block} block!"
         )
+        taunts = state.enemy.phase_taunts
+        if state.phase - 2 < len(taunts):
+            line += f" {taunts[state.phase - 2]}"
     return line
 
 
@@ -552,7 +558,7 @@ def start_combat(
         draw_pile=draw_pile,
         hand=[],
         discard_pile=[],
-        field=[None] * FIELD_SIZE,
+        field=[] if program_mode else [None] * FIELD_SIZE,
         player_block=total(artifacts, "start_block"),
         artifacts=artifacts,
         boss=boss,
@@ -597,9 +603,15 @@ def _amplifier_multiplier(state: CombatState, slot_index: int) -> float:
     boost = sum(
         c.value
         for i, c in enumerate(state.field)
-        if c is not None and c.type is CardType.AMPLIFIER and i < slot_index
+        if c is not None and c.type is CardType.AMPLIFIER and _boosts(state, i, slot_index)
     )
     return 1 + boost / 100
+
+
+def _boosts(state: CombatState, field_index: int, slot_index: int) -> bool:
+    """Whether a left-boosting permanent (Overclock, Copilot) at `field_index`
+    reaches `slot_index`. A program's background permanents reach every line."""
+    return state.program_mode or field_index < slot_index
 
 
 def _chain_bonus(state: CombatState, slot_index: int) -> int:
@@ -609,7 +621,7 @@ def _chain_bonus(state: CombatState, slot_index: int) -> int:
     chain = sum(
         c.value
         for i, c in enumerate(state.field)
-        if c is not None and c.type is CardType.CHAIN and i < slot_index
+        if c is not None and c.type is CardType.CHAIN and _boosts(state, i, slot_index)
     )
     return chain * min(state.plays_this_turn, CHAIN_MAX_PLAYS)
 
@@ -623,7 +635,7 @@ def play_card(
         raise ValueError(f"slot_index {slot_index} is out of range")
     if slot_taken(state, slot_index, state.hand[hand_index]):
         raise ValueError(f"slot {slot_index} is occupied")
-    if slot_index in state.locked_slots:
+    if slot_index in state.locked_slots and _needs_slot(state, state.hand[hand_index]):
         raise ValueError(f"slot {slot_index} is locked this turn")
 
     card = state.hand.pop(hand_index)
@@ -645,6 +657,9 @@ def play_card(
     elif hallucinates:
         line = cost_line + _hallucinate(state, card, slot_index, player)
         (state.banished_pile if card.exhaust else state.discard_pile).append(card)
+    elif card.type in PERMANENT_CARD_TYPES and state.program_mode:
+        state.field.append(card)
+        line = cost_line + f"You start {card.name} - it keeps running in the background."
     elif card.type in PERMANENT_CARD_TYPES:
         state.field[slot_index] = card
         line = cost_line + f"You play {card.name} in slot {slot_index + 1} - it stays on the field."
@@ -987,12 +1002,21 @@ def queues(state: CombatState, card: Card) -> bool:
     return state.program_mode and card.type in QUEUED_TYPES
 
 
+def _needs_slot(state: CombatState, card: Card | None) -> bool:
+    """Whether `card` takes up a slot. In program mode only queued actions do:
+    permanents run in the background and card flow resolves on the spot, so
+    neither competes for lines (or minds a locked one)."""
+    return not state.program_mode or (card is not None and queues(state, card))
+
+
 def slot_taken(state: CombatState, slot_index: int, card: Card | None = None) -> bool:
     """Whether `card` can't go into the slot: a queued action needs a free
-    program line, everything else a slot without a permanent. A program line
-    sits on top of the field - a permanent and a queued action can share a slot."""
+    program line, everything else a slot without a permanent (classic) or
+    nothing at all (program mode, see _needs_slot)."""
     if card is not None and queues(state, card):
         return state.program[slot_index] is not None
+    if state.program_mode:
+        return False
     # Extra program lines (extra_lines) have no field slot under them.
     return slot_index >= FIELD_SIZE or state.field[slot_index] is not None
 
@@ -1003,7 +1027,8 @@ def free_slots(state: CombatState, card: Card | None = None) -> list[int]:
     return [
         i
         for i in range(len(state.program))
-        if not slot_taken(state, i, card) and i not in state.locked_slots
+        if not slot_taken(state, i, card)
+        and (i not in state.locked_slots or not _needs_slot(state, card))
     ]
 
 
@@ -1038,7 +1063,7 @@ def _scaling_bonus(state: CombatState, card: Card) -> int:
         Scaling.GRAVEYARD: len(state.discard_pile),
         Scaling.BANISHED: len(state.banished_pile),
         Scaling.PLAYED: state.plays_this_turn,
-        Scaling.EMPTY_SLOT: FIELD_SIZE - permanent_count(state),
+        Scaling.EMPTY_SLOT: max(0, FIELD_SIZE - permanent_count(state)),
         Scaling.MALWARE: state.enemy_status.get(Status.MALWARE, 0),
     }[card.scaling]
     return card.scale_value * count
@@ -1137,7 +1162,7 @@ def _apply_action_effect(
             state.banished_pile.remove(c)
         destroyed = [c for c in state.field if c is not None]
         state.banished_pile.extend(destroyed)
-        state.field = [None] * FIELD_SIZE
+        state.field = _empty_field(state)
         state.hand.extend(returning)
         return (
             f"You play {card.name}, wiping {len(destroyed)} permanent card(s) and "
@@ -1172,13 +1197,17 @@ def _apply_action_effect(
     # FINAL_STRIKE
     destroyed = [c for c in state.field if c is not None]
     state.banished_pile.extend(destroyed)
-    state.field = [None] * FIELD_SIZE
+    state.field = _empty_field(state)
     damage = round(card.value * len(destroyed) * multiplier)
     absorbed, dealt = _damage_enemy(state, damage)
     return (
         f"You play {card.name}, destroying {len(destroyed)} permanent card(s) for "
         f"{damage} damage. {state.enemy.name} at {state.enemy_hp} HP."
     )
+
+
+def _empty_field(state: CombatState) -> list[Card | None]:
+    return [] if state.program_mode else [None] * FIELD_SIZE
 
 
 def _take_recent(pile: list[Card], count: int) -> list[Card]:
@@ -1355,8 +1384,13 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
 
     log: list[str] = []
     if intent is EnemyIntentType.PURGE:
-        slot = next((i for i in reversed(range(FIELD_SIZE)) if state.field[i] is not None), None)
-        if slot is not None:
+        slots = reversed(range(len(state.field)))
+        slot = next((i for i in slots if state.field[i] is not None), None)
+        if slot is not None and state.program_mode:
+            purged = state.field.pop(slot)
+            state.banished_pile.append(purged)
+            log.append(f"{name} purges your {purged.name} - your newest background process!")
+        elif slot is not None:
             purged = state.field[slot]
             state.field[slot] = None
             state.banished_pile.append(purged)
@@ -1383,11 +1417,17 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
         f"{name} {uses}{move} ({rolled}). You take {taken} damage. You are at {player.hp} HP."
     )
     if intent is EnemyIntentType.LOCK:
-        empty = [i for i, c in enumerate(state.field) if c is None]
+        # A program locks one of its lines - they are all empty by now.
+        empty = (
+            list(range(len(state.program)))
+            if state.program_mode
+            else [i for i, c in enumerate(state.field) if c is None]
+        )
         if empty:
             slot = rng.choice(empty)
             state.locked_slots = [slot]
-            log.append(f"Slot {slot + 1} is locked for your next turn.")
+            kind = "Line" if state.program_mode else "Slot"
+            log.append(f"{kind} {slot + 1} is locked for your next turn.")
     if intent is EnemyIntentType.CORRUPT:
         glitches = [_glitch(state, i) for i in range(current_move(state).stacks)]
         for glitch in glitches:

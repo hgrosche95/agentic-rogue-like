@@ -1,7 +1,7 @@
 // Types mirror the Pydantic response models in src/agentic_rogue_like/api.py -
 // keep the two in sync by hand for now, there's no shared schema generation yet.
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 export type RunStatus = "ongoing" | "victory" | "defeat";
 export type NodeType = "combat" | "elite" | "event" | "shop" | "rest" | "boss";
@@ -213,6 +213,8 @@ export interface PendingCombatView {
   enemy_phase: number;
   enemy_phases: number;
   enemy_strength: number;
+  // the run's final boss, the AGI itself - drawn with its own sprite
+  final_boss: boolean;
   // elites: their affix and what it does, else null; whether rage is on
   enemy_affix: "armored" | "regenerating" | "enraged" | "thorny" | null;
   enemy_affix_description: string | null;
@@ -323,6 +325,11 @@ export interface RunView {
   pending_combat: PendingCombatView | null;
   card_reward: Card[] | null;
   artifact_offer: Artifact[] | null;
+  // program mode for the whole run - card texts read differently there
+  program_mode: boolean;
+  // the start of the run, after the first artifact: a kit, then the AGI's deal
+  kit_offer: StarterKit[] | null;
+  agi_deals: AgiDeal[] | null;
   shop: ShopView | null;
   rest: RestView | null;
   // what the AGI has read from the cards the player chose
@@ -331,16 +338,75 @@ export interface RunView {
   nodes: Record<string, MapNode>;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    ...init,
-  });
+// Runs only live in the API's memory (sessions.py): a restart or an idle
+// timeout loses them, and every request for that run answers 404.
+export class RunLostError extends Error {
+  constructor() {
+    super("The server lost this run (it was restarted or idle too long). Start a new one.");
+  }
+}
+
+// One of the starter kits (starts.py): two cards of one strategy that
+// replace basic cards.
+export interface StarterKit {
+  id: string;
+  name: string;
+  blurb: string;
+  cards: Card[];
+}
+
+// One of the AGI's opening deals; `cards` is what taking it adds to the deck,
+// `mentions` every card its description names (an upgrade as it will be).
+export interface AgiDeal {
+  kind: "strip" | "mutate" | "forbidden" | "trojan" | "hotfix" | "bribe";
+  name: string;
+  description: string;
+  cards: Card[];
+  mentions: Card[];
+}
+
+// The server's answer never arrived (or the network dropped it). The move
+// itself may well have gone through, so the caller re-reads the run (getRun)
+// instead of trusting its own state - without this the game waited forever.
+export class RequestLostError extends Error {
+  constructor(what: string) {
+    super(`${what} got no answer - the game re-synced with the server.`);
+  }
+}
+
+// Most moves answer in well under a second; creating a run and entering a
+// room may wait on the encounter agent (up to three LLM calls) and a cold start.
+const TIMEOUT_MS = 20_000;
+const SLOW_TIMEOUT_MS = 90_000;
+
+async function request<T>(path: string, init?: RequestInit, timeoutMs = TIMEOUT_MS): Promise<T> {
+  const what = `${init?.method ?? "GET"} ${path}`;
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: { "Content-Type": "application/json" },
+      ...init,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    // a timeout, or the connection failing outright (fetch's TypeError)
+    if (err instanceof TypeError || (err instanceof DOMException && err.name === "TimeoutError")) {
+      throw new RequestLostError(what);
+    }
+    throw err;
+  }
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`${init?.method ?? "GET"} ${path} failed: ${response.status} ${body}`);
+    if (response.status === 404 && path.startsWith("/runs/") && body.includes("run not found")) {
+      throw new RunLostError();
+    }
+    throw new Error(`${what} failed: ${response.status} ${body}`);
   }
   return response.json() as Promise<T>;
+}
+
+export function ping(): Promise<{ status: string }> {
+  return request<{ status: string }>("/health");
 }
 
 export function listSettings(): Promise<string[]> {
@@ -349,6 +415,10 @@ export function listSettings(): Promise<string[]> {
 
 export function listCharacters(): Promise<CharacterView[]> {
   return request<CharacterView[]>("/characters");
+}
+
+export function getRun(runId: string): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}`);
 }
 
 export function createRun(
@@ -360,11 +430,11 @@ export function createRun(
   return request<RunView>("/runs", {
     method: "POST",
     body: JSON.stringify({ seed: seed ?? null, setting, character, program_mode: programMode }),
-  });
+  }, SLOW_TIMEOUT_MS);
 }
 
 export function resolveCurrentNode(runId: string): Promise<RunView> {
-  return request<RunView>(`/runs/${runId}/resolve`, { method: "POST" });
+  return request<RunView>(`/runs/${runId}/resolve`, { method: "POST" }, SLOW_TIMEOUT_MS);
 }
 
 export function chooseEventOption(runId: string, optionIndex: number): Promise<RunView> {
@@ -385,6 +455,21 @@ export function chooseCardReward(runId: string, cardIndex: number | null): Promi
   return request<RunView>(`/runs/${runId}/card-reward`, {
     method: "POST",
     body: JSON.stringify({ card_index: cardIndex }),
+  });
+}
+
+export function chooseKit(runId: string, kitIndex: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/kit`, {
+    method: "POST",
+    body: JSON.stringify({ kit_index: kitIndex }),
+  });
+}
+
+// null turns every deal down
+export function chooseDeal(runId: string, dealIndex: number | null): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/agi-deal`, {
+    method: "POST",
+    body: JSON.stringify({ deal_index: dealIndex }),
   });
 }
 

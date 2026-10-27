@@ -366,6 +366,9 @@ class Enemy(BaseModel):
     # Set when the AGI picked it to answer the player's style (style.py) -
     # opens the fight's log.
     taunt: str = ""
+    # Bosses only: a line for each phase from the second on, said as it
+    # enters it (combat._check_boss_phase).
+    phase_taunts: list[str] = Field(default_factory=list)
 
     @field_validator("moves")
     @classmethod
@@ -405,6 +408,40 @@ class RestSite(BaseModel):
     heal_amount: int
 
 
+class StarterKit(BaseModel):
+    """One of the kits offered at the start of a run (starts.py): two cards
+    of one strategy that replace basic cards."""
+
+    id: str
+    name: str
+    blurb: str
+    cards: list[Card]
+
+
+class DealKind(StrEnum):
+    STRIP = "strip"  # remove basic cards
+    MUTATE = "mutate"  # basic cards turn into common ones
+    FORBIDDEN = "forbidden"  # a rare card for max HP
+    TROJAN = "trojan"  # an artifact, and a Glitch in the deck
+    HOTFIX = "hotfix"  # upgrade basic cards
+    BRIBE = "bribe"  # credits, and a Glitch in the deck
+
+
+class AgiDeal(BaseModel):
+    """The AGI's opening offer (starts.py), worked out down to the card when
+    it is rolled, so the description says exactly what taking it does."""
+
+    kind: DealKind
+    name: str
+    description: str
+    add: list[Card] = Field(default_factory=list)
+    remove: list[str] = Field(default_factory=list)  # deck card ids
+    upgrade: list[str] = Field(default_factory=list)  # deck card ids
+    artifact: Artifact | None = None
+    max_hp: int = 0
+    gold: int = 0
+
+
 class RunState(BaseModel):
     seed: int
     # Which map of the run the player is on - beating an act's boss opens
@@ -436,3 +473,7 @@ class RunState(BaseModel):
     # The rest site the player is at, until they pick what to do there (see
     # engine.open_rest); the run can't move on while it is open.
     rest: RestSite | None = None
+    # The start of the run, after the first artifact: a starter kit to pick,
+    # then the AGI's opening deal to take or turn down (starts.py).
+    kit_offer: list[StarterKit] | None = None
+    agi_deals: list[AgiDeal] | None = None

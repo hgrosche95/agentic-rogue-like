@@ -70,7 +70,6 @@ from .artifacts import (
     total,
 )
 from .cards import (
-    START_CARD_WEIGHTS,
     can_upgrade,
     reward_card,
     roll_card_reward,
@@ -110,6 +109,7 @@ from .models import (
     Rarity,
     Scaling,
 )
+from .starts import apply_deal, apply_kit, roll_deals, roll_kits
 from .style import play_style
 from .threat import DEFAULT_MODEL, ThreatModel, threat
 
@@ -220,7 +220,7 @@ def random_enemy(budget: EnemyBudget, tier: str, rng: random.Random) -> Enemy:
 
 
 # The floor a tier's enemies are scaled for (enemies.escalate) when fought on
-# their own: mid and boss always sit in the timeline's second half, and an
+# their own: mid and boss always sit in the map's second half, and an
 # elite is measured there too - its harder case.
 _TIER_FLOOR = {"early": 0, "mid": NUM_FLOORS // 2, "elite": NUM_FLOORS // 2, "boss": NUM_FLOORS - 1}
 
@@ -661,11 +661,11 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
     node = nodes["0-0"]
     fights: list[FightResult] = []
     steps = 0
-    if cfg.rewards:  # mirrors engine.new_run's starting card pick
-        offer = roll_card_reward(
-            random.Random(f"{seed}-start-cards"), weights=START_CARD_WEIGHTS, pool=pool
-        )
-        player.deck.append(reward_card(offer[pick_reward(offer, bot_name, rng)], player.deck))
+    if cfg.rewards:  # mirrors engine.new_run / choose_kit: a kit, then a deal (both at random)
+        kits = roll_kits(random.Random(f"{seed}-kits"), pool)
+        apply_kit(player, rng.choice(kits))
+        deals = roll_deals(random.Random(f"{seed}-deals"), player, pool, cfg.artifact_pool())
+        apply_deal(player, rng.choice(deals))
 
     while True:
         if cfg.artifacts and steps % ARTIFACT_EVERY_STEPS == 0:
@@ -684,6 +684,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                     rng=rng,
                     act=act,
                     style=style,
+                    final=node.type is NodeType.BOSS and act >= NUM_ACTS,
                 )
             else:
                 base = random_enemy(cfg.budgets[tier], tier, rng)

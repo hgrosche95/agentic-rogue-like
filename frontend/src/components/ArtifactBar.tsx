@@ -1,5 +1,6 @@
 import type { Artifact } from "../api";
 import { ArtifactIcon } from "./ArtifactIcon";
+import { RichText } from "./RichText";
 
 // The installed artifacts. On the map there is room to spell each one out;
 // in the combat HUD they shrink to chips with the effect in the tooltip.
@@ -40,7 +41,9 @@ export function ArtifactBar({ artifacts, compact = false }: { artifacts: Artifac
               </span>
               <div>
                 <b>{artifact.name}</b>
-                <span>{artifact.description}</span>
+                <span>
+                  <RichText text={artifact.description} />
+                </span>
               </div>
             </li>
           ))}

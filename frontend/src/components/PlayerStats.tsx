@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
 import type { PlayerState } from "../api";
-import { eraLabel } from "../eras";
+import { layerLabel } from "../layers";
 import { PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 
 function BrandGlyph() {
   return (
     <svg className="brand-glyph" viewBox="0 0 32 32" aria-hidden="true">
+      {/* a shell prompt, >_ : the way into the AGI's code */}
       <circle cx="16" cy="16" r="13" />
-      <path d="M11 8 H21 L16 16 L21 24 H11 L16 16 Z" />
+      <path d="M9 10 L16 16 L9 22 V18.6 L12.2 16 L9 13.4 Z M17 19.5 H23.5 V22 H17 Z" />
       <line x1="16" y1="1" x2="16" y2="4" />
       <line x1="16" y1="28" x2="16" y2="31" />
     </svg>
@@ -28,7 +29,7 @@ export function Brand({ subtitle }: { subtitle?: string }) {
   );
 }
 
-// The run's header: logo, progress along the timeline, the player's vitals
+// The run's header: logo, progress down the call stack, the player's vitals
 // and the buttons (audio, map) passed in as children.
 export function TopBar({
   player,
@@ -52,13 +53,13 @@ export function TopBar({
   const hpPercent = Math.max(0, Math.min(100, (hp / player.max_hp) * 100));
   return (
     <header className="topbar">
-      <Brand subtitle={`Timeline · ${setting}`} />
-      <div className="era-track" aria-label={`Act ${act} of ${numActs}, era ${floor + 1} of ${numFloors}`}>
+      <Brand subtitle={`Call stack · ${setting}`} />
+      <div className="era-track" aria-label={`Act ${act} of ${numActs}, layer ${floor + 1} of ${numFloors}`}>
         {Array.from({ length: numFloors }, (_, i) => (
           <i key={i} className={i < floor ? "is-past" : i === floor ? "is-now" : undefined} />
         ))}
         <span className="era-text">
-          Act <b>{act}</b>/{numActs} · Era <b>{String(floor + 1).padStart(2, "0")}</b>/{String(numFloors).padStart(2, "0")} · {eraLabel(floor, numFloors, act)}
+          Act <b>{act}</b>/{numActs} · Layer <b>{String(floor + 1).padStart(2, "0")}</b>/{String(numFloors).padStart(2, "0")} · {layerLabel(floor, numFloors, act)}
         </span>
       </div>
       <div className="stats">

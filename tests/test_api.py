@@ -7,12 +7,13 @@ client = TestClient(app)
 
 def _resolve(run_id: str):
     """POST /resolve, first taking the first artifact if one is on offer and
-    skipping the starting card pick."""
+    picking the first kit and turning the deal down."""
     run = client.get(f"/runs/{run_id}").json()
     if run["artifact_offer"] is not None:
         client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0})
-    if run["card_reward"] is not None and not run["current_node"]["visited"]:
-        client.post(f"/runs/{run_id}/card-reward", json={"card_index": None})
+    if run["kit_offer"] is not None:
+        client.post(f"/runs/{run_id}/kit", json={"kit_index": 0})
+        client.post(f"/runs/{run_id}/agi-deal", json={"deal_index": None})
     return client.post(f"/runs/{run_id}/resolve")
 
 
@@ -240,7 +241,8 @@ def test_vibe_coder_fight_shows_and_spends_the_context_window() -> None:
     assert combat["tokens_used"] == 0
     assert all("token_cost" in c and not c["overflows"] for c in combat["hand"])
 
-    card = next(c for c in combat["hand"] if c["token_cost"] == 1)
+    # a basic card - a kit card may discard as it is played
+    card = next(c for c in combat["hand"] if c["token_cost"] == 1 and c["rarity"] == "starter")
     hand_size = len(combat["hand"])
     run = client.post(
         f"/runs/{run_id}/combat/play-card",
@@ -265,3 +267,28 @@ def test_vibe_coder_run_always_terminates() -> None:
     for seed in range(5):
         run = _play_full_run(seed, character="vibe_coder")
         assert run["status"] in ("victory", "defeat")
+
+
+def test_health_answers_for_the_keep_alive() -> None:
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_client_errors_are_logged_and_capped(caplog) -> None:
+    import agentic_rogue_like.api as api
+
+    api._client_error_times.clear()
+    with caplog.at_level("WARNING", logger="agentic_rogue_like.client"):
+        response = client.post(
+            "/client-errors",
+            json={"message": "boom", "stack": "at CombatPanel", "run_id": "r1", "where": "render"},
+        )
+        assert response.status_code == 204
+        assert "boom" in caplog.text and "at CombatPanel" in caplog.text
+
+        for _ in range(api.CLIENT_ERRORS_PER_MINUTE + 5):
+            client.post("/client-errors", json={"message": "again"})
+    assert caplog.text.count("again") == api.CLIENT_ERRORS_PER_MINUTE - 1
+    api._client_error_times.clear()

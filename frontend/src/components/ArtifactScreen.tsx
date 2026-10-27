@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { Artifact } from "../api";
 import { sfx } from "../audio";
 import { ArtifactIcon } from "./ArtifactIcon";
+import { RichText } from "./RichText";
 
 export function ArtifactScreen({
   offer,
@@ -43,7 +44,9 @@ export function ArtifactScreen({
               <ArtifactIcon id={artifact.id} size={30} />
             </span>
             <span className="artifact-name">{artifact.name}</span>
-            <span className="artifact-description">{artifact.description}</span>
+            <span className="artifact-description">
+              <RichText text={artifact.description} />
+            </span>
           </button>
         ))}
       </div>

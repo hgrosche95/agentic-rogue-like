@@ -46,12 +46,12 @@
   --font-mono: "Rajdhani", system-ui, sans-serif;
 }
 
+html,
 body {
-  /* the board: a faint grid, one hairline every 40px */
-  background:
-    linear-gradient(rgba(47, 47, 94, 0.35) 1px, transparent 1px) 0 0 / 40px 40px,
-    linear-gradient(90deg, rgba(47, 47, 94, 0.35) 1px, transparent 1px) 0 0 / 40px 40px,
-    var(--bg-deep);
+  /* No pattern: a flat ground that sinks towards black the deeper the run
+     goes into the AGI's code (--depth, set by App from 0 to 1). */
+  background: color-mix(in srgb, var(--bg-deep), #000 calc(var(--depth, 0) * 70%));
+  transition: background-color 1.2s ease;
 }
 
 .game {
@@ -424,8 +424,16 @@ body > .card-drag.type-batch {
   color: var(--card, var(--text));
 }
 
-.line-socket.is-empty {
+.line-socket.is-empty,
+.program-background {
   border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+}
+
+.program-background.is-targetable {
+  border: 1px solid var(--accent);
+  background: rgba(52, 231, 255, 0.08);
+  box-shadow: 0 0 12px rgba(52, 231, 255, 0.45);
 }
 
 .line-socket.is-empty.is-targetable {

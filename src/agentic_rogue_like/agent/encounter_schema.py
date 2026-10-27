@@ -111,8 +111,15 @@ class MoveProposal(BaseModel):
             "barrage 25 per hit, charge 140, purge 50, infect / lock / corrupt 50."
         ),
     )
+    # ge=1, not EnemyMove's 2: gpt-oss sends hits=1 for a plain attack or
+    # purge, and Groq rejects a tool call outside this schema before the
+    # retry loop ever sees it. _single_hit_is_no_barrage turns it back into
+    # "no hits" before it reaches EnemyMove.
     hits: int | None = Field(
-        default=None, ge=2, le=4, description="barrage only: how many hits (2-4)."
+        default=None,
+        ge=1,
+        le=4,
+        description="barrage only: how many hits (2-4). Leave out for every other move.",
     )
     stacks: int | None = Field(
         default=None,
@@ -120,6 +127,13 @@ class MoveProposal(BaseModel):
         le=6,
         description="infect: Malware stacks it leaves (1-6). corrupt: Glitch cards (1-3).",
     )
+
+    @field_validator("hits")
+    @classmethod
+    def _single_hit_is_no_barrage(cls, hits: int | None) -> int | None:
+        # One hit is what every non-barrage move does anyway; a barrage left
+        # without hits gets EnemyMove's default.
+        return None if hits == 1 else hits
 
 
 class MovesetProposal(EnemyProposal):

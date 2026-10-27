@@ -45,7 +45,7 @@ from agentic_rogue_like.agent.encounter_schema import (  # noqa: E402
     MovesetProposal,
     proposal_moves,
 )
-from agentic_rogue_like.models import MoveKind  # noqa: E402
+from agentic_rogue_like.models import DEFAULT_BARRAGE_HITS, MoveKind  # noqa: E402
 
 MID = _BUDGETS["mid"]  # hp 48-60, attack 9-12
 
@@ -146,6 +146,40 @@ def test_hits_on_a_non_barrage_is_a_violation_not_a_crash() -> None:
     ]
     with pytest.raises(BudgetViolation, match="barrage"):
         proposal_moves(_moveset(hp=40, moves=bad))
+
+
+def test_the_llm_may_send_one_hit_on_a_plain_attack() -> None:
+    # gpt-oss sends hits=1 on attacks - the schema Groq checks the tool call
+    # against must allow it, and it must not reach EnemyMove as a barrage count.
+    hits = MovesetProposal.model_json_schema()["$defs"]["MoveProposal"]["properties"]["hits"]
+    assert {"type": "integer", "minimum": 1, "maximum": 4} in hits["anyOf"]
+
+    proposal = MovesetProposal.model_validate(
+        {
+            "name": "Wild Boar",
+            "description": "Bristling with rage.",
+            "hp": 40,
+            "attack": 10,
+            "attack_name": "Tusk Charge",
+            "moves": [
+                {"kind": "attack", "name": "Gore", "weight": 3, "power": 100, "hits": 1},
+                {"kind": "barrage", "name": "Volley", "weight": 2, "power": 35, "hits": 4},
+            ],
+        }
+    )
+    validate_proposal(proposal, MID)
+    gore, volley = proposal_moves(proposal)
+    assert gore.hits is None
+    assert volley.hits == 4
+
+
+def test_a_one_hit_barrage_falls_back_to_the_default_hits() -> None:
+    moves = [
+        MoveProposal(kind=MoveKind.ATTACK, name="Gore", weight=3, power=100),
+        MoveProposal(kind=MoveKind.BARRAGE, name="Volley", weight=2, power=35, hits=1),
+    ]
+    _, volley = proposal_moves(_moveset(hp=40, moves=moves))
+    assert volley.hits == DEFAULT_BARRAGE_HITS
 
 
 def test_bosses_are_held_to_the_plain_ranges_and_their_moves_ignored() -> None:

@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { MapNode, NodeType } from "../api";
 import { sfx } from "../audio";
-import { eraLabel } from "../eras";
+import { layerLabel } from "../layers";
 import { NODE_STYLE } from "../nodeTypes";
 
-// The timeline on narrow screens: eras climb bottom-to-top, siblings spread
+// The call stack on narrow screens: layers climb bottom-to-top, siblings spread
 // left-right - a vertical ascent the player scrolls through. On wide
-// (desktop) screens the same graph lies down sideways instead - eras run
+// (desktop) screens the same graph lies down sideways instead - layers run
 // left-to-right - so it fits the viewport without scrolling.
 const VERTICAL = { SIBLING_W: 70, FLOOR_H: 84, PAD_X: 34, PAD_TOP: 44, PAD_BOTTOM: 30, LABEL: 38 };
 const HORIZONTAL = { FLOOR_W: 112, SIBLING_H: 76, PAD_X: 40, PAD_TOP: 88, PAD_BOTTOM: 34 };
@@ -88,7 +88,7 @@ export function NodeBadge({ type, size = 22 }: { type: NodeType; size?: number }
   );
 }
 
-// A trail between two rooms: a right-angled step along the direction the eras
+// A trail between two rooms: a right-angled step along the direction the layers
 // run, like a path on a pixel board.
 function trail(from: { x: number; y: number }, to: { x: number; y: number }, horizontal: boolean): string {
   if (horizontal) {
@@ -105,6 +105,7 @@ export function DungeonMap({
   reachableIds,
   onChoose,
   onHover,
+  onEnter,
   disabled,
   act = 1,
 }: {
@@ -113,6 +114,8 @@ export function DungeonMap({
   reachableIds: string[];
   onChoose: (nodeId: string) => void;
   onHover?: (nodeId: string | null) => void;
+  // set while the current room waits to be entered: clicking it enters
+  onEnter?: () => void;
   disabled: boolean;
   act?: number;
 }) {
@@ -161,7 +164,7 @@ export function DungeonMap({
 
   return (
     <div className={`dungeon-map${disabled ? " is-busy" : ""}`}>
-      <svg className="dungeon-map-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Timeline map">
+      <svg className="dungeon-map-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Call stack map">
         {Array.from({ length: numFloors }, (_, floor) => {
           const at = floorPos(floor);
           const classes = ["map-era", floor === currentFloor && "is-now", floor < currentFloor && "is-past"]
@@ -171,14 +174,14 @@ export function DungeonMap({
             <g key={floor} className={classes}>
               <line className="map-era-line" x1={at} y1={44} x2={at} y2={height - 8} />
               <text className="map-era-label" x={at} y={28}>
-                {eraLabel(floor, numFloors, act)}
+                {layerLabel(floor, numFloors, act)}
               </text>
             </g>
           ) : (
             <g key={floor} className={classes}>
               <line className="map-era-line" x1={VERTICAL.LABEL + 4} y1={at} x2={width - 6} y2={at} />
               <text className="map-era-label is-side" x={4} y={at}>
-                {eraLabel(floor, numFloors, act)}
+                {layerLabel(floor, numFloors, act)}
               </text>
             </g>
           );
@@ -200,6 +203,7 @@ export function DungeonMap({
           const { x, y } = pos(node);
           const isCurrent = node.id === currentNodeId;
           const isReachable = reachable.has(node.id);
+          const isEnterable = isCurrent && onEnter !== undefined;
           const isVisited = node.visited && !isCurrent;
           // rooms in eras already behind you that you never entered
           const isPassed = !node.visited && !isCurrent && node.floor <= currentFloor;
@@ -212,36 +216,43 @@ export function DungeonMap({
             isVisited && "is-visited",
             isPassed && "is-passed",
             isReachable && "is-reachable",
+            isEnterable && "is-enterable",
           ]
             .filter(Boolean)
             .join(" ");
-          const interactive = isReachable && !disabled;
+          const interactive = (isReachable || isEnterable) && !disabled;
+          const activate = () => {
+            if (!interactive) return;
+            if (isEnterable) onEnter?.();
+            else onChoose(node.id);
+          };
           return (
             <g
               key={node.id}
               className={classes}
               transform={`translate(${x} ${y})`}
-              role={isReachable ? "button" : undefined}
+              // stagger for the CSS: layers fade in one after another, and
+              // reachable rooms don't bob in lockstep
+              style={{ "--f": node.floor, "--i": nodeIndex(node.id) } as CSSProperties}
+              role={isReachable || isEnterable ? "button" : undefined}
               tabIndex={interactive ? 0 : undefined}
-              aria-label={`${style.label}, ${eraLabel(node.floor, numFloors, act)}`}
+              aria-label={`${isEnterable ? "Enter " : ""}${style.label}, ${layerLabel(node.floor, numFloors, act)}`}
               onMouseEnter={() => {
                 if (!interactive) return;
                 sfx.play("hover");
-                onHover?.(node.id);
+                if (isReachable) onHover?.(node.id);
               }}
               onMouseLeave={() => {
-                if (interactive) onHover?.(null);
+                if (interactive && isReachable) onHover?.(null);
               }}
               onFocus={() => {
-                if (interactive) onHover?.(node.id);
+                if (interactive && isReachable) onHover?.(node.id);
               }}
-              onClick={() => {
-                if (interactive) onChoose(node.id);
-              }}
+              onClick={activate}
               onKeyDown={(e) => {
                 if ((e.key === "Enter" || e.key === " ") && interactive) {
                   e.preventDefault();
-                  onChoose(node.id);
+                  activate();
                 }
               }}
             >
