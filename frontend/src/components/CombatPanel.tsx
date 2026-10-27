@@ -13,6 +13,7 @@ import { ArtifactBar } from "./ArtifactBar";
 import { HERO } from "../characters";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useCardDrag } from "../hooks/useCardDrag";
+import { useHandFlip, useStableHandKeys } from "../hooks/useHandMotion";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { describeIntent, rangeText, STATUS_TEXT } from "../readouts";
@@ -80,7 +81,8 @@ function HpBar({ hp, max, side, ghost }: { hp: number; max: number; side: "playe
   const after = ghost === undefined ? percent : pct(Math.min(ghost, hp));
   return (
     <span className={`hud-bar is-${side}`}>
-      <span style={{ width: `${percent}%` }} />
+      {/* slid along rather than resized, so the bar's motion stays off layout */}
+      <span style={{ transform: `translateX(${percent - 100}%)` }} />
       {after < percent && <i className="hud-ghost" style={{ left: `${after}%`, width: `${percent - after}%` }} />}
       <em>
         {hp} / {max}
@@ -179,6 +181,10 @@ export function CombatPanel({
   // the turn goes to the server - and the queued card picked up to move,
   // which, like the discard picks, belongs to the table it was picked on.
   const [running, setRunning] = useState<number | null>(null);
+  // the lines that have run already, dimmed as the program moves on - for the
+  // table they ran on: the server's answer clears them out of the lines
+  const [spent, setSpent] = useState<{ on: PendingCombatView; lines: number[] } | null>(null);
+  const spentLines = spent?.on === combat ? spent.lines : [];
   const [helpOpen, setHelpOpen] = useState(false);
   const [moveChoice, setMoveChoice] = useState<{ on: PendingCombatView; line: number } | null>(null);
   const movingLine = moveChoice?.on === combat ? moveChoice.line : null;
@@ -193,10 +199,19 @@ export function CombatPanel({
   // table doesn't sit still through the typing and the round trip and then
   // jump. Once nothing is in flight any more it is dropped - the server's
   // state has replaced it, or the move failed and the card stays in hand.
-  const [played, setPlayed] = useState<{ handIndex: number; slotIndex: number } | null>(null);
-  const pending = busy ? played : null;
+  // It belongs to the table it was played on, like the discard picks: the
+  // killing blow leaves the table disabled for good, and the card left in
+  // hand by then must not stay hidden.
+  const [played, setPlayed] = useState<{ on: PendingCombatView; handIndex: number; slotIndex: number } | null>(
+    null,
+  );
+  const pending = busy && played?.on === combat ? played : null;
   const pendingCard = pending && combat.hand.find((c) => c.hand_index === pending.handIndex);
   const handRef = useRef<HTMLDivElement>(null);
+  // the hand as it is laid out: the card just played has already left it
+  const handKeys = useStableHandKeys(combat.hand);
+  const laidOut = combat.hand.filter((card) => card.hand_index !== pending?.handIndex);
+  useHandFlip(handRef, laidOut.map((card) => handKeys[combat.hand.indexOf(card)]).join(" "));
   const arenaRef = useRef<ArenaHandle>(null);
   // What the table looked like when the turn was ended, to tell once the
   // server answers whether the daemon fired and the enemy's blow got through.
@@ -253,6 +268,7 @@ export function CombatPanel({
     shown.forEach((step, i) => {
       window.setTimeout(() => {
         setRunning(step.slot);
+        setSpent({ on: combat, lines: shown.slice(0, i).map((s) => s.slot) });
         if (step.outcome === "cut") {
           arenaRef.current?.programHit({ dealt: 0, runs: 0, block: 0, heal: 0, weight: 0, cut: true });
           sfx.play("error");
@@ -280,6 +296,7 @@ export function CombatPanel({
     // the last hit lands before the turn moves on
     window.setTimeout(() => {
       setRunning(null);
+      setSpent({ on: combat, lines: shown.map((s) => s.slot) });
       finish();
     }, (shown.length - 1) * PROGRAM_STEP_MS + ENEMY_HIT_MS + 250);
   }
@@ -313,11 +330,14 @@ export function CombatPanel({
   function playIntoSlot(slotIndex: number, slot: HTMLElement, handIndex = selectedHandIndex, from?: HTMLElement) {
     if (handIndex === null) return;
     endTurnFrom.current = null;
-    const card = from ?? handRef.current?.querySelector<HTMLElement>(`[data-hand-index="${handIndex}"]`);
-    if (card) flyCard(card, slot);
-    setSelectedHandIndex(null);
-    setPlayed({ handIndex, slotIndex });
     const played = combat.hand.find((c) => c.hand_index === handIndex);
+    const card = from ?? handRef.current?.querySelector<HTMLElement>(`[data-hand-index="${handIndex}"]`);
+    // a queued line or a permanent stays where it lands; an action burns out there
+    const stays = played !== undefined && (queues(combat, played) || PERMANENT_CARD_TYPES.includes(played.type));
+    // into the program's background: to the hint, where its socket shows up
+    if (card) flyCard(card, slot.querySelector<HTMLElement>(".background-hint") ?? slot, stays);
+    setSelectedHandIndex(null);
+    setPlayed({ on: combat, handIndex, slotIndex });
     if (!played) {
       onPlayCard(handIndex, slotIndex);
       return;
@@ -374,7 +394,7 @@ export function CombatPanel({
   );
 
   return (
-    <div className="combat-panel">
+    <div className={`combat-panel${discarding !== null ? " is-discarding" : ""}`}>
       {helpOpen && <CombatHelp programMode={programMode} onClose={() => setHelpOpen(false)} />}
       {/* the HUD plates sit in the scene's top corners, clear of the monitor */}
       <div className="arena-wrap">
@@ -520,18 +540,24 @@ export function CombatPanel({
                 }}
               />
             </span>
-            {programMode && <ProgramOutput combat={combat} playerHp={player.hp} />}
-            {programMode && cutAfter !== null && !enemySlain && (
-              <span
-                className="interrupt-note"
-                title="The enemy cuts your program off: queued lines after these don't run this turn"
-              >
-                Interrupt after {cutAfter} line{cutAfter === 1 ? "" : "s"}
-              </span>
-            )}
             <span className="zone-label">
               Hand {combat.hand.length}/{combat.max_hand_size}
             </span>
+            {/* a row of its own, one line high whatever it says - so the table
+                below doesn't jump when the server's preview comes back */}
+            {programMode && (
+              <span className="program-status">
+                <ProgramOutput combat={combat} playerHp={player.hp} />
+                {cutAfter !== null && !enemySlain && (
+                  <span
+                    className="interrupt-note"
+                    title="The enemy cuts your program off: queued lines after these don't run this turn"
+                  >
+                    Interrupt after {cutAfter} line{cutAfter === 1 ? "" : "s"}
+                  </span>
+                )}
+              </span>
+            )}
           </div>
           {programMode ? (
             <ProgramLines
@@ -539,6 +565,7 @@ export function CombatPanel({
               hotLine={hotLine}
               running={running}
               cutLines={cutLines}
+              spentLines={spentLines}
               movingLine={movingLine}
               locked={busy || discarding !== null}
               pending={pending && pendingCard ? { slotIndex: pending.slotIndex, card: pendingCard } : null}
@@ -590,13 +617,25 @@ export function CombatPanel({
         <Pile label="Source" count={combat.draw_count} kind="deck" />
 
         <div className="hand-zone">
+          {/* over the hand limit: hard to miss, or the turn seems stuck */}
+          {discarding !== null && (
+            <div className="discard-banner" role="status">
+              <span>
+                Hand over the limit - pick {excess} card{excess === 1 ? "" : "s"} to discard
+              </span>
+              <b className={discarding.length === excess ? "is-done" : undefined}>
+                {discarding.length}/{excess}
+              </b>
+            </div>
+          )}
           <div className="hand" ref={handRef}>
             {combat.hand.map((card: HandCardView, i) => (
               <button
-                key={card.hand_index}
+                key={handKeys[i]}
+                data-flip-key={handKeys[i]}
                 data-hand-index={card.hand_index}
-                style={fanStyle(i, combat.hand.length)}
-                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : ""}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}`}
+                style={fanStyle(laidOut.indexOf(card), laidOut.length)}
+                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : discarding !== null ? " is-pickable" : ""}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}`}
                 disabled={busy}
                 onMouseEnter={() => sfx.play("hover")}
                 onPointerDown={(event) => drag.onPointerDown(event, card.hand_index)}
@@ -624,9 +663,11 @@ export function CombatPanel({
               Continue
             </button>
           ) : (
+            // busy: still shown at work (a sweep of light), never just dead
             <button
-              className="end-turn-button"
+              className={`end-turn-button${busy ? " is-busy" : ""}${discarding !== null ? (discarding.length === excess ? " is-ready" : " is-waiting") : ""}`}
               disabled={busy || (discarding !== null && discarding.length !== excess)}
+              aria-busy={busy}
               onClick={endTurn}
             >
               {discarding !== null

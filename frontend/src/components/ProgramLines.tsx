@@ -1,4 +1,4 @@
-import type { PointerEvent } from "react";
+import type { CSSProperties, PointerEvent } from "react";
 import { PERMANENT_CARD_TYPES, type Card, type HandCardView, type PendingCombatView } from "../api";
 import { cardText, queues } from "../program";
 import { CardFace, CardTypeIcon } from "./CardFace";
@@ -64,6 +64,7 @@ export function ProgramLines({
   hotLine,
   running,
   cutLines,
+  spentLines,
   movingLine,
   locked,
   pending,
@@ -81,6 +82,8 @@ export function ProgramLines({
   // the line lit up while the program runs
   running: number | null;
   cutLines: number[];
+  // the lines that have already run this turn
+  spentLines: number[];
   // the queued card picked up to move, by its line
   movingLine: number | null;
   // nothing can be clicked: a move in flight, or discards being picked
@@ -103,7 +106,7 @@ export function ProgramLines({
   // a line's action (top) - queued, landing, empty or locked
   function renderAction(card: Card | null, line: number) {
     const hot = line === hotLine;
-    const tags = `${hot ? " is-hot" : ""}${running === line ? " is-running" : ""}${cutLines.includes(line) ? " is-cut" : ""}`;
+    const tags = `${hot ? " is-hot" : ""}${running === line ? " is-running" : ""}${cutLines.includes(line) ? " is-cut" : ""}${spentLines.includes(line) ? " is-spent" : ""}`;
     if (card === null && pending?.slotIndex === line && queues(combat, pending.card)) {
       return (
         <div className={`field-slot is-occupied is-queued is-landing type-${pending.card.type}${tags}`}>
@@ -209,7 +212,7 @@ export function ProgramLines({
   }
 
   return (
-    <div className="program-board">
+    <div className="program-board" style={{ "--lines": combat.program.length } as CSSProperties}>
       <div className="field program-lines">
         {combat.program.map((card, line) => (
           <div key={line} className={`program-line${line === hotLine ? " is-hot" : ""}`}>

@@ -54,6 +54,7 @@ import { LoadingIndicator } from "./components/LoadingIndicator";
 import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
 import { CloseButton, Overlay } from "./components/Overlay";
+import { OverlayStage } from "./components/OverlayStage";
 import { RUN_ID_KEY } from "./errors";
 import { layerLabel, numFloorsOf } from "./layers";
 import { ProgramModeContext } from "./program";
@@ -322,12 +323,6 @@ function App() {
 
   const numFloors = numFloorsOf(run.nodes);
 
-  function jumpTo(nodeId: string) {
-    sfx.play("map_select");
-    setFocusedJump(null);
-    runAction(() => chooseNextNode(run!.run_id, nodeId), "Going one layer deeper...");
-  }
-
   function enterRoom() {
     sfx.play("click");
     runAction(
@@ -336,14 +331,6 @@ function App() {
     );
   }
 
-  const mapProps = {
-    nodes: run.nodes,
-    currentNodeId: run.current_node.id,
-    reachableIds: run.available_choices.map((n) => n.id),
-    disabled: isLoading,
-    act: run.act,
-    onChoose: jumpTo,
-  };
   const ongoing = run.status === "ongoing";
   const canJump = ongoing && !slainCombat && run.node_resolved && run.available_choices.length > 0;
   const needsEnter =
@@ -356,6 +343,27 @@ function App() {
     !run.shop &&
     !run.rest &&
     !run.node_resolved;
+  // A jump only commits once its room is entered: until then the player can
+  // switch to any other room the jump could have gone to.
+  const switchChoices = needsEnter ? (run.switch_choices ?? []) : [];
+
+  function jumpTo(nodeId: string) {
+    sfx.play("map_select");
+    setFocusedJump(null);
+    runAction(
+      () => chooseNextNode(run!.run_id, nodeId),
+      needsEnter ? "Switching rooms..." : "Going one layer deeper...",
+    );
+  }
+
+  const mapProps = {
+    nodes: run.nodes,
+    currentNodeId: run.current_node.id,
+    reachableIds: (needsEnter ? switchChoices : run.available_choices).map((n) => n.id),
+    disabled: isLoading,
+    act: run.act,
+    onChoose: jumpTo,
+  };
 
   // cards show their token cost only to a character with a context window
   const showTokens = characters.some((c) => c.id === run.player.character && c.token_limit !== null);
@@ -422,7 +430,13 @@ function App() {
           <section className="panel map-panel">
             <div className="panel-head">
               <h2 className="panel-title">Call stack</h2>
-              <span className="panel-sub">{canJump ? "Select your next jump" : run.setting}</span>
+              <span className="panel-sub">
+                {canJump
+                  ? "Select your next jump"
+                  : switchChoices.length > 0
+                    ? "Switch rooms until you enter"
+                    : run.setting}
+              </span>
             </div>
             <DungeonMap {...mapProps} onHover={setFocusedJump} onEnter={needsEnter ? enterRoom : undefined} />
           </section>
@@ -432,6 +446,7 @@ function App() {
               current={run.current_node}
               needsEnter={needsEnter}
               choices={run.available_choices}
+              switchChoices={switchChoices}
               focusedId={focusedJump}
               numFloors={numFloors}
               act={run.act}
@@ -447,14 +462,16 @@ function App() {
         </div>
       )}
 
-      {/* choices open as windows over the map, which stays where it is */}
+      {/* choices open as windows over the map, which stays where it is; the
+          stage folds one shut before the next opens */}
+      <OverlayStage busy={isLoading}>
       {!combat && !ongoing && (
-        <Overlay label="Run over">
+        <Overlay key="end" label="Run over">
           <EndScreen run={run} onRestart={() => setRun(null)} />
         </Overlay>
       )}
       {!combat && ongoing && run.pending_event && (
-        <Overlay label="Anomaly">
+        <Overlay key={`event:${run.pending_event.description}`} label="Anomaly">
           <EventPrompt
             event={run.pending_event}
             disabled={isLoading}
@@ -463,7 +480,7 @@ function App() {
         </Overlay>
       )}
       {!combat && ongoing && run.card_reward && !run.artifact_offer && (
-        <Overlay label="Choose a card" className="is-wide">
+        <Overlay key="card" label="Choose a card" className="is-wide">
           <RewardScreen
             offer={run.card_reward}
             deckSize={run.player.deck.length}
@@ -474,7 +491,7 @@ function App() {
       )}
       {/* at the start the artifact comes first, then the kit, then the AGI's deal */}
       {!combat && ongoing && run.kit_offer && !run.artifact_offer && (
-        <Overlay label="Pack a starter kit" className="is-wide">
+        <Overlay key="kit" label="Pack a starter kit" className="is-wide">
           <KitScreen
             offer={run.kit_offer}
             disabled={isLoading}
@@ -483,7 +500,7 @@ function App() {
         </Overlay>
       )}
       {!combat && ongoing && run.agi_deals && (
-        <Overlay label="The AGI's offer" className="is-wide">
+        <Overlay key="deal" label="The AGI's offer" className="is-wide">
           <DealScreen
             deals={run.agi_deals}
             disabled={isLoading}
@@ -492,7 +509,7 @@ function App() {
         </Overlay>
       )}
       {!combat && ongoing && run.shop && (
-        <Overlay label="Black market" className="is-wide">
+        <Overlay key="shop" label="Black market" className="is-wide">
           <ShopScreen
             shop={run.shop}
             gold={run.player.gold}
@@ -506,7 +523,7 @@ function App() {
         </Overlay>
       )}
       {!combat && ongoing && run.rest && (
-        <Overlay label="Safehouse" className="is-wide">
+        <Overlay key="rest" label="Safehouse" className="is-wide">
           <RestScreen
             rest={run.rest}
             hp={run.player.hp}
@@ -520,7 +537,7 @@ function App() {
         </Overlay>
       )}
       {!combat && ongoing && run.artifact_offer && (
-        <Overlay label="Choose an artifact" className="is-wide">
+        <Overlay key="artifact" label="Choose an artifact" className="is-wide">
           <ArtifactScreen
             offer={run.artifact_offer}
             owned={run.player.artifacts.length}
@@ -529,6 +546,7 @@ function App() {
           />
         </Overlay>
       )}
+      </OverlayStage>
 
       {inCombat && isMapOpen && (
         <Overlay label="Call stack" onClose={() => setIsMapOpen(false)} className="is-wide">

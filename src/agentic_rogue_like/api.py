@@ -74,6 +74,8 @@ from .engine import (
     start_combat_node,
     start_event,
     start_pending,
+    switch_choices,
+    switch_to,
 )
 from .events import describe_option
 from .models import (
@@ -332,6 +334,9 @@ class RunView(BaseModel):
     current_node: MapNode
     node_resolved: bool
     available_choices: list[MapNode]
+    # Until the room the last jump went to is entered, the other rooms that
+    # jump could have gone to - choose-node switches to one of them.
+    switch_choices: list[MapNode]
     # Program mode for the whole run (combat.run_program) - card texts and
     # previews read differently there, also outside a fight.
     program_mode: bool
@@ -565,8 +570,11 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         )
 
     choices = []
+    switches = []
     if node_resolved and run.status is RunStatus.ONGOING:
         choices = [run.nodes[node_id] for node_id in available_choices(run)]
+    elif run.status is RunStatus.ONGOING and not start_pending(run):
+        switches = [run.nodes[node_id] for node_id in switch_choices(run)]
 
     return RunView(
         run_id=run_id,
@@ -580,6 +588,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         current_node=node,
         node_resolved=node_resolved,
         available_choices=choices,
+        switch_choices=switches,
         program_mode=run.program_mode,
         pending_event=pending_event,
         pending_combat=pending_combat,
@@ -920,6 +929,13 @@ def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
     session = _get_session_or_404(run_id)
     run = session.run
     node = run.nodes[run.current_node_id]
+
+    # A jump only commits once its room is entered: until then the player
+    # may switch to any other room the jump could have gone to.
+    if not start_pending(run) and request.node_id in switch_choices(run):
+        switch_to(run, request.node_id)
+        session.prefetch.warm(run)
+        return _run_view(run_id, session)
 
     if (
         not node.visited

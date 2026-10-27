@@ -99,6 +99,50 @@ function trail(from: { x: number; y: number }, to: { x: number; y: number }, hor
   return `M ${from.x} ${from.y} V ${my} H ${to.x} V ${to.y}`;
 }
 
+// Corner brackets around the room you stand in, with its NOW tag above.
+function MapCursor({
+  at,
+  r,
+  floor,
+  label,
+  enterable,
+}: {
+  at: { x: number; y: number };
+  r: number;
+  floor: number;
+  label: string;
+  enterable: boolean;
+}) {
+  const d = r + 9;
+  const arm = 7;
+  const corners = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ];
+  return (
+    <g
+      className={`map-cursor${enterable ? " is-enterable" : ""}`}
+      style={{ transform: `translate(${at.x}px, ${at.y}px)`, "--f": floor } as CSSProperties}
+      aria-hidden="true"
+    >
+      <g className="map-cursor-frame">
+        {corners.map(([sx, sy]) => (
+          <path key={`${sx}${sy}`} d={`M ${sx * d} ${sy * (d - arm)} V ${sy * d} H ${sx * (d - arm)}`} />
+        ))}
+      </g>
+      {/* the tag bobs by a CSS transform, so the attribute sits on a wrapper */}
+      <g transform={`translate(0 ${-r * 1.25 - 16})`}>
+        <g className="map-now">
+          <rect x={-22} y={-9} width={44} height={17} />
+          <text>{label}</text>
+        </g>
+      </g>
+    </g>
+  );
+}
+
 export function DungeonMap({
   nodes,
   currentNodeId,
@@ -160,7 +204,14 @@ export function DungeonMap({
 
   const reachable = new Set(reachableIds);
   const allNodes = Object.values(nodes);
-  const currentFloor = nodes[currentNodeId]?.floor ?? 0;
+  const current = nodes[currentNodeId];
+  const currentFloor = current?.floor ?? 0;
+  // Where the trails on are drawn from: the room you stand in once it is
+  // entered - before that, the room the jump left, while it can be switched.
+  const pickPending = current !== undefined && !current.visited;
+  const originId = pickPending
+    ? allNodes.find((n) => n.visited && n.connections.includes(currentNodeId))?.id
+    : currentNodeId;
 
   return (
     <div className={`dungeon-map${disabled ? " is-busy" : ""}`}>
@@ -193,11 +244,15 @@ export function DungeonMap({
             const target = nodes[targetId];
             if (!target) return null;
             const walked = node.visited && target.visited;
-            const isNext = node.id === currentNodeId && reachable.has(targetId);
+            const isNext = node.id === originId && reachable.has(targetId);
             const classes = ["map-path", walked && "is-walked", isNext && "is-next"].filter(Boolean).join(" ");
             return <path key={`${node.id}->${targetId}`} d={trail(from, pos(target), isHorizontal)} className={classes} />;
           });
         })}
+        {/* the picked trail on top of the ones it shares a stretch with */}
+        {pickPending && originId && current && (
+          <path className="map-path is-picked" d={trail(pos(nodes[originId]), pos(current), isHorizontal)} />
+        )}
 
         {allNodes.map((node) => {
           const { x, y } = pos(node);
@@ -205,8 +260,9 @@ export function DungeonMap({
           const isReachable = reachable.has(node.id);
           const isEnterable = isCurrent && onEnter !== undefined;
           const isVisited = node.visited && !isCurrent;
-          // rooms in eras already behind you that you never entered
-          const isPassed = !node.visited && !isCurrent && node.floor <= currentFloor;
+          // rooms in eras already behind you that you never entered (the
+          // ones the pick can still switch to are not behind you yet)
+          const isPassed = !node.visited && !isCurrent && !isReachable && node.floor <= currentFloor;
           const style = NODE_STYLE[node.type];
           const r = node.type === "boss" ? BOSS_R : NODE_R;
           const classes = [
@@ -265,15 +321,22 @@ export function DungeonMap({
                   {isVisited ? <path className="map-node-check" d="M -6 0 L -1.5 5 L 7 -6" /> : <NodeIcon type={node.type} />}
                 </g>
               </g>
-              {isCurrent && (
-                <g className="map-now" transform={`translate(0 ${-r * 1.25 - 16})`}>
-                  <rect x={-22} y={-9} width={44} height={17} />
-                  <text>NOW</text>
-                </g>
-              )}
             </g>
           );
         })}
+
+        {/* One marker for where you stand, drawn over the rooms and placed by a
+            CSS transform, so it glides over when the pick is switched (or a
+            jump made) instead of popping up on the other room. */}
+        {current && (
+          <MapCursor
+            at={pos(current)}
+            r={current.type === "boss" ? BOSS_R : NODE_R}
+            floor={current.floor}
+            label={pickPending && reachable.size > 0 ? "NEXT" : "NOW"}
+            enterable={onEnter !== undefined}
+          />
+        )}
       </svg>
 
       <div className="map-legend">

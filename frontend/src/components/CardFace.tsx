@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { useContext, useLayoutEffect, useRef } from "react";
 import { CONTROL_FLOW_TYPES, PERMANENT_CARD_TYPES, type Card, type CardType } from "../api";
 import { ShowTokensContext } from "../characters";
 import { useCardText } from "../program";
@@ -75,19 +75,133 @@ export interface Readout {
   boosted?: boolean;
 }
 
-// on the field the module icon already says "permanent", so the effect text
-// drops that prefix and keeps the room for what the card does; the same
-// goes for one-shot cards and their "1×" tag
+// The smallest name and effect text a card face shrinks to (px) - a text
+// that doesn't fit at these has to get shorter instead.
+const NAME_FLOOR = 8;
+const BODY_FLOOR = 10;
+
+// Steps `el`'s font size down from its stylesheet size until `overflows`
+// says it fits, or the floor is reached.
+function shrinkToFit(el: HTMLElement, overflows: () => boolean, floor: number) {
+  el.style.fontSize = "";
+  let size = parseFloat(getComputedStyle(el).fontSize);
+  while (size > floor && overflows()) {
+    size = Math.max(floor, size - 0.5);
+    el.style.fontSize = `${size}px`;
+  }
+}
+
+// Whether a box's text runs wider or lower than the box (a long word does -
+// it can't wrap; scrollWidth misses one that only runs into the padding),
+// over more than `maxLines` lines, or - `besideFloat` - not all beside the
+// box's ::before float (the name beside its socket, see App.css).
+function textOverflows(el: HTMLElement, maxLines: number, besideFloat = false): boolean {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const rects = [...range.getClientRects()].filter((r) => r.width > 0);
+  const style = getComputedStyle(el);
+  const box = el.getBoundingClientRect();
+  let left = box.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+  const right = box.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+  const bottom = box.bottom - parseFloat(style.borderBottomWidth) - parseFloat(style.paddingBottom);
+  if (besideFloat) left += parseFloat(getComputedStyle(el, "::before").width) || 0;
+  const lines = new Set(rects.map((r) => Math.round(r.top))).size;
+  return lines > maxLines || rects.some((r) => r.left < left - 0.5 || r.right > right || r.bottom > bottom + 1);
+}
+
+// A long word with soft hyphens between two consonants that stand between
+// vowels, unless they belong together ("Ran-som-ware", "Encryp-tion", but
+// "Phishing"): the last resort for a word too long even at the floor size
+// (the header's hyphens are off until then).
+const VOWEL = /[aeiouy]/i;
+const BLEND = /^(?:[bcdfgkpt][lr]|[cpstw]h|ck|qu)$/i;
+
+function softHyphens(name: string): string {
+  return name.replace(/[A-Za-z]{8,}/g, (word) => {
+    let out = word[0];
+    for (let i = 1; i < word.length; i++) {
+      const split =
+        i >= 3 &&
+        i <= word.length - 3 &&
+        VOWEL.test(word[i - 2]) &&
+        !VOWEL.test(word[i - 1]) &&
+        !VOWEL.test(word[i]) &&
+        VOWEL.test(word[i + 1]) &&
+        !BLEND.test(word[i - 1] + word[i]);
+      out += (split ? "\u00ad" : "") + word[i];
+    }
+    return out;
+  });
+}
+
+// Card faces come in many sizes (hand, slots, rewards, previews), so the name
+// and the effect text are fitted to the card they are on: the name to its
+// width in at most two lines (never cut off), the effect to the room under
+// it. Measured, not guessed, since Orbitron's letters differ a lot in width.
+function useFitText(key: string) {
+  const header = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const name = header.current;
+    const text = body.current;
+    const card = name?.parentElement;
+    if (!name || !text || !card) return;
+    const fit = () => {
+      // a card folding out of the hand (its width animating to 0, see
+      // .is-played) isn't refitted on every frame
+      if (card.clientWidth < 30 || card.classList.contains("is-played")) return;
+      // a slot too small for the effect text shows only the name, under
+      // the socket (see App.css), which may then take a third line
+      const compact = getComputedStyle(text).display === "none";
+      const maxLines = compact ? 3 : 2;
+      // beside the socket if the name fits there at all, else (a word too
+      // long even at the floor) flowing under it, at the card's full width
+      name.style.hyphens = "";
+      if (!compact) shrinkToFit(name, () => textOverflows(name, maxLines, true), NAME_FLOOR);
+      if (compact || textOverflows(name, maxLines, true)) {
+        shrinkToFit(name, () => textOverflows(name, maxLines), NAME_FLOOR);
+        if (textOverflows(name, maxLines)) {
+          name.style.hyphens = "manual";
+          shrinkToFit(name, () => textOverflows(name, maxLines), NAME_FLOOR);
+        }
+      }
+      const inner = text.firstElementChild as HTMLElement | null;
+      if (!inner || compact) return;
+      const style = getComputedStyle(text);
+      const room = () => text.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      shrinkToFit(text, () => inner.getBoundingClientRect().height > room() + 0.5, BODY_FLOOR);
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(card);
+    // the web fonts may arrive after the first fit, and change every width
+    document.fonts?.addEventListener("loadingdone", fit);
+    return () => {
+      observer.disconnect();
+      document.fonts?.removeEventListener("loadingdone", fit);
+    };
+  }, [key]);
+  return { headerRef: header, bodyRef: body };
+}
+
+// on the field the module icon already says "permanent" (or "control
+// flow"), so the effect text drops that prefix and keeps the room for what
+// the card does; the same goes for one-shot cards and their "1×" tag
 export function CardFace({ card, onField = false, readout }: { card: Card; onField?: boolean; readout?: Readout }) {
   const showTokens = useContext(ShowTokensContext);
   const description = useCardText(card).replace(
-    onField ? /^(Permanent|One-shot)\.\s*/ : /^One-shot\.\s*/,
+    onField ? /^(Permanent|One-shot|Control flow)\.\s*/ : /^One-shot\.\s*/,
     "",
   );
   const unit = unitOf(card.type);
+  const { headerRef, bodyRef } = useFitText(`${card.name}|${description}|${readout ? 1 : 0}|${showTokens}`);
   return (
     <>
-      <div className="card-header">{card.name}</div>
+      {/* on the field a slot may be too small for the effect text: the
+          name then tells it on hover */}
+      <div ref={headerRef} className="card-header" title={onField ? `${card.name}: ${description}` : undefined}>
+        {softHyphens(card.name)}
+      </div>
       <span className="card-socket" title={KIND_LABEL[kindOf(card.type)]}>
         <CardTypeIcon type={card.type} />
       </span>
@@ -106,7 +220,14 @@ export function CardFace({ card, onField = false, readout }: { card: Card; onFie
           {readout.best > readout.value && <span className="card-best">max {readout.best}</span>}
         </div>
       )}
-      <div className="card-body">
+      {/* what is left of the effect where a narrow slot hides the text */}
+      {onField && unit && card.value > 0 && (
+        <span className="card-mini">
+          {card.hits > 1 && `${card.hits}×`}
+          {card.value} <small>{unit}</small>
+        </span>
+      )}
+      <div ref={bodyRef} className="card-body">
         {/* one inline box: the body is a flex container, the terms must not become items */}
         <span>
           <RichText text={description} />

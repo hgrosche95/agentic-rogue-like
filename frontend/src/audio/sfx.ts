@@ -121,8 +121,10 @@ const SOUNDS: Record<SfxName, Sound> = {
   draw(g, t) {
     // the disk head seeking: accelerating ticks over a spin-up whirr
     tone(g, t, { type: "sawtooth", freq: 180, to: 520, dur: 0.4, gain: 0.07, filter: 900 });
+    // a fixed count: the shrinking gaps add up to only 1/3 s, so a loop
+    // waiting for a later time would never end
     let at = 0;
-    for (let gap = 0.06; at < 0.38; gap *= 0.82) {
+    for (let tick = 0, gap = 0.06; tick < 12; tick++, gap *= 0.82) {
       noise(g, t + at, { dur: 0.012, gain: 0.16, filter: "bandpass", freq: 3200, q: 3 });
       at += gap;
     }

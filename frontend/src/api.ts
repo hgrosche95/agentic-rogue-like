@@ -321,6 +321,9 @@ export interface RunView {
   current_node: MapNode;
   node_resolved: boolean;
   available_choices: MapNode[];
+  // until the room just jumped into is entered: the other rooms that jump
+  // could have gone to - chooseNextNode switches to one of them
+  switch_choices: MapNode[];
   pending_event: PendingEventView | null;
   pending_combat: PendingCombatView | null;
   card_reward: Card[] | null;
