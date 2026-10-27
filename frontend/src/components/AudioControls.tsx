@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { getSettings, sfx, subscribeSettings, updateSettings } from "../audio";
+import { getTempo, setTempo, subscribeTempo, TEMPOS } from "../tempo";
 
-// Mute toggle plus a small panel with separate music and effects volume.
+// Mute toggle plus a small panel with separate music and effects volume -
+// and the combat speed, the one setting in there that isn't about sound.
 export function AudioControls({ className = "" }: { className?: string }) {
   const settings = useSyncExternalStore(subscribeSettings, getSettings);
+  const tempo = useSyncExternalStore(subscribeTempo, getTempo);
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -50,7 +53,7 @@ export function AudioControls({ className = "" }: { className?: string }) {
       <button
         type="button"
         className="icon-btn"
-        aria-label="Volume settings"
+        aria-label="Volume and speed settings"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((open) => !open)}
       >
@@ -62,7 +65,7 @@ export function AudioControls({ className = "" }: { className?: string }) {
         </svg>
       </button>
       {isOpen && (
-        <div className="audio-panel" role="group" aria-label="Volume">
+        <div className="audio-panel" role="group" aria-label="Volume and speed">
           <label>
             <span>Music</span>
             <input
@@ -89,6 +92,26 @@ export function AudioControls({ className = "" }: { className?: string }) {
             <span className="audio-value">{Math.round(settings.sfx * 100)}</span>
           </label>
           {settings.muted && <p className="audio-muted-hint">Sound is muted.</p>}
+          <div className="tempo-row" role="radiogroup" aria-label="Combat speed">
+            <span title="How fast cards, the program and the enemy's turn play out">Speed</span>
+            <span className="tempo-options">
+              {TEMPOS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={tempo === option.id}
+                  className={`tempo-option${tempo === option.id ? " is-active" : ""}`}
+                  onClick={() => {
+                    sfx.play("select");
+                    setTempo(option.id);
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </span>
+          </div>
         </div>
       )}
     </div>

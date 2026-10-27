@@ -163,6 +163,21 @@ function App() {
     if (!inCombat) setIsMapOpen(false);
   }, [inCombat]);
 
+  // D opens the deck in a fight and closes it again (the other combat keys
+  // are CombatPanel's) - not over another window, nor while typing.
+  useEffect(() => {
+    if (!inCombat) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "d" || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select")) return;
+      if (!isDeckOpen && document.querySelector(".overlay-backdrop")) return;
+      sfx.play("click");
+      setIsDeckOpen(!isDeckOpen);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [inCombat, isDeckOpen]);
+
   useEffect(() => {
     listSettings()
       .then((fetched) => {
@@ -466,7 +481,7 @@ function App() {
           stage folds one shut before the next opens */}
       <OverlayStage busy={isLoading}>
       {!combat && !ongoing && (
-        <Overlay key="end" label="Run over">
+        <Overlay key="end" label="Run over" className="is-wide">
           <EndScreen run={run} onRestart={() => setRun(null)} />
         </Overlay>
       )}

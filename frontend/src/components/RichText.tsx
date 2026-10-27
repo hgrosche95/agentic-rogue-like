@@ -1,76 +1,19 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { ANY_KEYWORD, keyword, keywordFor } from "../keywords";
 
-// Game terms in card, artifact and deal texts, each with a short explanation
-// that shows on hover. The UI calls the piles Source / Cache / Purged, the
-// card texts say draw pile / graveyard / banished - the tips tie them together.
-const KEYWORDS: { pattern: RegExp; tip: string }[] = [
-  {
-    pattern: /\bgraveyard\b/i,
-    tip: "Graveyard (the Cache pile): played and discarded cards land here. When Source runs dry, it is shuffled back in.",
-  },
-  {
-    pattern: /\bbanish(?:ed)?\b/i,
-    tip: "Banished (the Purged pile): gone for the rest of the fight. One-shot cards end up here; they are back next fight.",
-  },
-  {
-    pattern: /\bone-shot\b/i,
-    tip: "One-shot: banished after it is played - gone for the rest of the fight, back in the next one.",
-  },
-  {
-    pattern: /\bmalware\b/i,
-    tip: "Malware: the infected side loses that much HP at the end of each turn, then one stack fades. Ignores block.",
-  },
-  {
-    pattern: /\bexpose[ds]?\b/i,
-    tip: "Exposed: attack cards deal 50% more to it, for that many turns.",
-  },
-  {
-    pattern: /\bthrottle[ds]?\b/i,
-    tip: "Throttled: it deals 25% less, for that many of its turns.",
-  },
-  {
-    pattern: /\bpermanent\b/i,
-    tip: "Permanent: stays in play and keeps working every turn. Classic: takes a slot on the field. Program: runs in the background, no limit.",
-  },
-  {
-    pattern: /\bcontrol flow\b/i,
-    tip: "Control flow (program mode): queued like an action and steers the actions around it when the program runs - order matters.",
-  },
-  {
-    pattern: /\btokens?\b/i,
-    tip: "Tokens (Vibe-Coder): cards cost tokens from the context window. Past it, a card may hallucinate and backfire.",
-  },
-  {
-    pattern: /\bhallucinat\w*/i,
-    tip: "Hallucination: a card played past the context window may misfire - an attack hits you, a block or heal goes to the enemy.",
-  },
-  {
-    pattern: /\bglitch\b/i,
-    tip: "Glitch: a dead card. Play it to flush it out for this fight.",
-  },
-  {
-    pattern: /\(\+ATK\)/,
-    tip: "+ATK: your attack stat is added to the damage.",
-  },
-];
-
-const ANY_KEYWORD = new RegExp(KEYWORDS.map((k) => k.pattern.source).join("|"), "gi");
-
-function tipFor(word: string): string | undefined {
-  return KEYWORDS.find((k) => new RegExp(`^(?:${k.pattern.source})$`, "i").test(word))?.tip;
-}
-
-// `text` with every game term marked for the tooltip layer (see Tooltips).
-export function RichText({ text }: { text: string }) {
+// `text` with every game term (keywords.ts) marked for the tooltip layer (see
+// Tooltips). `focusable`: whether a term can be tabbed to - not inside a
+// card face, whose card is a button of its own.
+export function RichText({ text, focusable = true }: { text: string; focusable?: boolean }) {
   const parts: ReactNode[] = [];
   let last = 0;
   for (const match of text.matchAll(ANY_KEYWORD)) {
-    const tip = tipFor(match[0]);
-    if (!tip) continue;
+    const term = keywordFor(match[0]);
+    if (!term) continue;
     parts.push(text.slice(last, match.index));
     parts.push(
-      <span key={match.index} className="keyword" data-tip={tip}>
+      <span key={match.index} className="keyword" data-keyword={term.id} tabIndex={focusable ? 0 : undefined}>
         {match[0]}
       </span>,
     );
@@ -80,39 +23,158 @@ export function RichText({ text }: { text: string }) {
   return <>{parts}</>;
 }
 
-// One tooltip for the whole page: whatever [data-tip] the pointer is over.
-// It lives in a portal with a fixed position, so it isn't clipped by the
-// card or overlay it belongs to.
+const TIP_SELECTOR = "[data-keyword], [data-tip]";
+const TOOLTIP_ID = "game-tooltip";
+// how long a touch has to rest on a term before its tooltip opens, and how
+// far it may wander meanwhile (a drag of the card it sits on cancels it)
+const LONG_PRESS_MS = 450;
+const LONG_PRESS_SLOP_PX = 8;
+const EDGE_PX = 8;
+const GAP_PX = 8;
+
+function tipOf(el: Element): { term?: string; text: string } | null {
+  const id = el.getAttribute("data-keyword");
+  const known = id ? keyword(id) : undefined;
+  if (known) return { term: known.term, text: known.text };
+  const text = el.getAttribute("data-tip");
+  return text ? { term: el.getAttribute("data-tip-term") ?? undefined, text } : null;
+}
+
+// One tooltip for the whole page: whatever term or [data-tip] is hovered,
+// focused or long-pressed. It lives in a portal with a fixed position, so it
+// isn't clipped by the card or overlay it belongs to, and follows its anchor
+// (a hand card lifts on hover) while staying inside the window. The anchor
+// is described by it (aria-describedby) while it shows.
 export function Tooltips() {
-  const [tip, setTip] = useState<{ text: string; x: number; y: number; below: boolean } | null>(null);
+  const [anchor, setAnchor] = useState<Element | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
+    let press: { timer: number; x: number; y: number } | null = null;
+    // a long press that opened a tooltip doesn't also click what it was on
+    let swallowClick = false;
+    const tipTarget = (target: EventTarget | null) =>
+      (target as Element | null)?.closest?.(TIP_SELECTOR) ?? null;
+    const cancelPress = () => {
+      if (press) window.clearTimeout(press.timer);
+      press = null;
+    };
+
     function over(event: PointerEvent) {
-      const el = (event.target as Element | null)?.closest?.("[data-tip]");
-      if (!el) {
-        setTip(null);
-        return;
-      }
-      const box = el.getBoundingClientRect();
-      // near the top of the screen it opens downwards instead
-      const below = box.top < 120;
-      setTip({
-        text: el.getAttribute("data-tip") ?? "",
-        x: box.left + box.width / 2,
-        y: below ? box.bottom : box.top,
-        below,
-      });
+      if (event.pointerType === "touch") return;
+      setAnchor(tipTarget(event.target));
     }
-    const hide = () => setTip(null);
+    function down(event: PointerEvent) {
+      cancelPress();
+      const el = tipTarget(event.target);
+      // a press - the start of a click or a drag - closes it (a term that
+      // takes focus opens it again)
+      setAnchor(null);
+      if (!el || event.pointerType !== "touch") return;
+      press = {
+        x: event.clientX,
+        y: event.clientY,
+        timer: window.setTimeout(() => {
+          press = null;
+          swallowClick = true;
+          setAnchor(el);
+        }, LONG_PRESS_MS),
+      };
+    }
+    function move(event: PointerEvent) {
+      if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > LONG_PRESS_SLOP_PX) cancelPress();
+    }
+    function up() {
+      cancelPress();
+      // the click that may follow is dispatched before any timer runs
+      if (swallowClick) window.setTimeout(() => (swallowClick = false), 0);
+    }
+    function click(event: MouseEvent) {
+      if (!swallowClick) return;
+      swallowClick = false;
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    function contextMenu(event: MouseEvent) {
+      if (tipTarget(event.target)) event.preventDefault();
+    }
+    const focusIn = (event: FocusEvent) => setAnchor(tipTarget(event.target));
+    const hide = () => setAnchor(null);
+    const key = (event: KeyboardEvent) => event.key === "Escape" && hide();
+
     document.addEventListener("pointerover", over);
+    document.addEventListener("pointerdown", down, true);
+    document.addEventListener("pointermove", move, true);
+    document.addEventListener("pointerup", up, true);
+    document.addEventListener("pointercancel", up, true);
+    window.addEventListener("click", click, true);
+    document.addEventListener("contextmenu", contextMenu, true);
+    document.addEventListener("focusin", focusIn);
+    document.addEventListener("focusout", hide);
+    document.addEventListener("keydown", key);
     window.addEventListener("scroll", hide, true);
     return () => {
+      cancelPress();
       document.removeEventListener("pointerover", over);
+      document.removeEventListener("pointerdown", down, true);
+      document.removeEventListener("pointermove", move, true);
+      document.removeEventListener("pointerup", up, true);
+      document.removeEventListener("pointercancel", up, true);
+      window.removeEventListener("click", click, true);
+      document.removeEventListener("contextmenu", contextMenu, true);
+      document.removeEventListener("focusin", focusIn);
+      document.removeEventListener("focusout", hide);
+      document.removeEventListener("keydown", key);
       window.removeEventListener("scroll", hide, true);
     };
   }, []);
+
+  // the anchor names the tooltip as its description while it shows
+  useEffect(() => {
+    if (!anchor) return;
+    const before = anchor.getAttribute("aria-describedby");
+    anchor.setAttribute("aria-describedby", TOOLTIP_ID);
+    return () => {
+      if (before === null) anchor.removeAttribute("aria-describedby");
+      else anchor.setAttribute("aria-describedby", before);
+    };
+  }, [anchor]);
+
+  // Above the anchor, or under it where the top of the window leaves no
+  // room; slid sideways to stay inside the window. Re-placed every frame, so
+  // it follows a card lifting on hover - and goes once its anchor is gone.
+  useLayoutEffect(() => {
+    if (!anchor) return;
+    let frame = 0;
+    const place = () => {
+      const el = box.current;
+      if (!anchor.isConnected) {
+        setAnchor(null);
+        return;
+      }
+      if (el) {
+        const at = anchor.getBoundingClientRect();
+        const { width, height } = el.getBoundingClientRect();
+        const below = at.top - height - GAP_PX < EDGE_PX;
+        const left = Math.max(EDGE_PX, Math.min(window.innerWidth - width - EDGE_PX, at.left + at.width / 2 - width / 2));
+        const top = below
+          ? Math.min(window.innerHeight - height - EDGE_PX, at.bottom + GAP_PX)
+          : at.top - height - GAP_PX;
+        el.style.left = `${left}px`;
+        el.style.top = `${top}px`;
+        el.classList.toggle("is-below", below);
+      }
+      frame = requestAnimationFrame(place);
+    };
+    place();
+    return () => cancelAnimationFrame(frame);
+  }, [anchor]);
+
+  const tip = anchor && tipOf(anchor);
   if (!tip) return null;
   return createPortal(
-    <div className={`tooltip${tip.below ? " is-below" : ""}`} role="tooltip" style={{ left: tip.x, top: tip.y }}>
+    <div ref={box} id={TOOLTIP_ID} className="tooltip" role="tooltip">
+      {tip.term && <b className="tooltip-term">{tip.term}</b>}
       {tip.text}
     </div>,
     document.body,

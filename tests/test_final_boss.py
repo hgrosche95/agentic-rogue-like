@@ -134,3 +134,10 @@ def test_combat_view_flags_the_final_boss() -> None:
     combat = _resolve(run_id)["pending_combat"]
     assert combat["final_boss"] is True
     assert combat["enemy_name"] == "OMEGA"
+    # the boss intro and the phase banners speak its lines; the turn banner counts
+    (omega,) = ENEMY_POOL["final"]
+    assert combat["enemy_taunt"] == omega.taunt
+    assert combat["enemy_phase_taunts"] == omega.phase_taunts
+    assert combat["turn"] == 1
+    turned = client.post(f"/runs/{run_id}/combat/end-turn", json={"discard_indices": []}).json()
+    assert turned["pending_combat"]["turn"] == 2

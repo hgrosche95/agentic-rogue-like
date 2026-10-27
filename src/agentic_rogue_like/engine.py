@@ -38,6 +38,7 @@ from .models import (
 )
 from .shop import MIN_DECK_SIZE, leave_shop, roll_shop
 from .starts import apply_deal, apply_kit, roll_deals, roll_kits
+from .stats import begin, close_turn, record_fight, record_play
 from .style import answers, play_style, taunt
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
@@ -118,6 +119,7 @@ def new_run(
     # ... and so do the starter kits (starts.py), picked after the artifact;
     # the AGI's deal follows once a kit is in the deck (choose_kit).
     run.kit_offer = roll_kits(random.Random(f"{seed}-kits"), reward_pool(run))
+    begin(run)
     return run
 
 
@@ -481,7 +483,10 @@ def play_combat_card(
     run: RunState, state: CombatState, hand_index: int, slot_index: int, rng: random.Random
 ) -> None:
     """Raises ValueError (via combat.play_card) on an invalid index or an occupied slot."""
+    card = state.hand[hand_index] if 0 <= hand_index < len(state.hand) else None
+    dealt = state.tally.damage_dealt
     run.history.append(_play_combat_card(state, hand_index, slot_index, run.player, rng))
+    record_play(run, state, card, state.tally.damage_dealt - dealt)
 
 
 def end_combat_turn(
@@ -490,12 +495,16 @@ def end_combat_turn(
     """Raises ValueError (via combat.end_turn) if `discard` doesn't bring the
     hand down to exactly the hand limit."""
     run.history.extend(_end_combat_turn(state, run.player, rng, discard))
+    if not state.program_mode:
+        close_turn(state)
 
 
 def finalize_combat(run: RunState, state: CombatState, rng: random.Random) -> None:
     """Call once state.enemy_hp <= 0 or run.player.hp <= 0 to close out an interactive fight."""
     node = run.nodes[run.current_node_id]
-    _finish_combat(run, node, state.enemy.name, victory=run.player.hp > 0, rng=rng)
+    victory = run.player.hp > 0
+    _finish_combat(run, node, state.enemy.name, victory=victory, rng=rng)
+    record_fight(run, state, node, victory)
 
 
 def resolve_node(

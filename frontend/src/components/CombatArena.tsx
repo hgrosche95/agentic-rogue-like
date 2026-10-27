@@ -9,6 +9,7 @@ import { FINAL_BOSS_INTENT_X } from "../pixel/finalBoss";
 import { ENEMY_X, FLOOR, PLAYER_X, pct } from "../pixel/layout";
 import type { Hero, PixelScene } from "../pixel/scene";
 import { describeIntent } from "../readouts";
+import { tempoMs } from "../tempo";
 import { CombatMonitor } from "./CombatMonitor";
 import { PixelStage } from "./PixelStage";
 
@@ -278,7 +279,7 @@ export function CombatArena({
         sfx.play("impact");
         showFx("damage", `-${hit.dealt}`);
         if (hit.runs > 1) showFx("combo", `×${hit.runs}`);
-      }, ENEMY_HIT_MS);
+      }, tempoMs(ENEMY_HIT_MS));
     },
     cardPlayed(type, value) {
       sceneRef.current?.trigger(type, 0, value);
@@ -292,7 +293,8 @@ export function CombatArena({
     },
   }));
 
-  // hits land with the animations, like the HP bars (hooks/useLagged)
+  // hits land with the animations, like the HP bars (hooks/useLagged) - the
+  // scene counts its delays in its own time, which already follows the tempo
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene || !exchange) return;
@@ -305,14 +307,14 @@ export function CombatArena({
   useEffect(() => {
     if (!slain) return;
     sceneRef.current?.trigger("enemy_die", ENEMY_HIT_MS + 150);
-    sfx.play("enemy_defeated", { delayMs: ENEMY_HIT_MS + 150 });
+    sfx.play("enemy_defeated", { delayMs: tempoMs(ENEMY_HIT_MS + 150) });
   }, [slain]);
 
   const top = enemyTop(enemy);
 
   return (
     <div className="arena-stage">
-      <PixelStage onScene={onScene}>
+      <PixelStage onScene={onScene} followTempo>
         {!slain && <IntentMarker key={`${enemy.intent}-${enemy.intentMin}-${enemy.intentMax}`} enemy={enemy} />}
         <CombatMonitor lines={log} commands={commands} />
         {exchange && (

@@ -206,7 +206,7 @@ export function CardFace({ card, onField = false, readout }: { card: Card; onFie
         <CardTypeIcon type={card.type} />
       </span>
       {card.exhaust && (
-        <span className="card-tag" title="One-shot: banished after use">
+        <span className="card-tag" data-keyword="one-shot">
           1×
         </span>
       )}
@@ -230,7 +230,7 @@ export function CardFace({ card, onField = false, readout }: { card: Card; onFie
       <div ref={bodyRef} className="card-body">
         {/* one inline box: the body is a flex container, the terms must not become items */}
         <span>
-          <RichText text={description} />
+          <RichText text={description} focusable={false} />
         </span>
       </div>
       {showTokens && !onField && (

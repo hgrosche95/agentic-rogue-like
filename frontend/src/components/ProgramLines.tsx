@@ -44,7 +44,11 @@ function LineLabel({ index, hot }: { index: number; hot: boolean }) {
   return (
     <span className="line-label">
       {String(index + 1).padStart(2, "0")}
-      {hot && <b className="hot-mark">HOT</b>}
+      {hot && (
+        <b className="hot-mark" data-keyword="hot-path">
+          HOT
+        </b>
+      )}
     </span>
   );
 }
@@ -203,6 +207,11 @@ export function ProgramLines({
         {aims ? (
           <span className="background-hint">
             {PERMANENT_CARD_TYPES.includes(aimedCard.type) ? "+ install" : "run now"}
+            {cardSelected && (
+              <kbd className="key-hint" aria-hidden="true">
+                B
+              </kbd>
+            )}
           </span>
         ) : (
           running.length === 0 && <span className="background-hint">Permanents run here</span>

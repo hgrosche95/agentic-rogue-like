@@ -186,6 +186,10 @@ export interface PendingCombatView {
   enemy_name: string;
   // one line of flavor text, may be empty
   enemy_description: string;
+  // the line it opens the fight with ("" if none), and a boss's line for
+  // each phase from the second on
+  enemy_taunt: string;
+  enemy_phase_taunts: string[];
   enemy_attack_name: string;
   // the base attack stat - what the enemy's look is built from
   enemy_attack: number;
@@ -237,6 +241,8 @@ export interface PendingCombatView {
   tokens_used: number;
   // used tokens freed at the end of the turn
   token_regen: number;
+  // the player's turn in this fight, from 1
+  turn: number;
   // Program mode: queued actions per line (may be longer than `field`),
   // which of them will hallucinate, and where the fight will stand once the
   // program has run. Null / empty in a classic run.
@@ -339,6 +345,42 @@ export interface RunView {
   play_style: PlayStyle | null;
   style_counts: Partial<Record<PlayStyle, number>>;
   nodes: Record<string, MapNode>;
+  // once the run is over (victory or defeat): the run in numbers
+  summary: RunSummary | null;
+}
+
+// The best stretch of damage: one program run in program mode, one turn's
+// cards in classic play (`runs`: actions run, or cards played).
+export interface Combo {
+  damage: number;
+  runs: number;
+  cards: string[];
+}
+
+// The run in numbers, kept as it went (the backend's stats.py).
+export interface RunSummary {
+  // null for a run started before the server kept stats
+  duration_seconds: number | null;
+  fights_won: number;
+  elites_defeated: number;
+  bosses_defeated: number;
+  turns: number;
+  damage_dealt: number;
+  damage_taken: number;
+  biggest_hit: number;
+  best_combo: Combo | null;
+  cards_played: number;
+  // the card played most, and how often
+  mvp_card: Card | null;
+  mvp_plays: number;
+  cards_added: number;
+  cards_removed: number;
+  cards_upgraded: number;
+  credits_earned: number;
+  credits_spent: number;
+  artifacts_collected: number;
+  // a defeat: the enemy, and the move (or Malware, Thorns, ...) that took the last HP
+  killed_by: { enemy: string; move: string } | null;
 }
 
 // Runs only live in the API's memory (sessions.py): a restart or an idle

@@ -283,6 +283,11 @@ export class PixelScene {
     this.night = night;
   }
 
+  // an event is playing out (or waiting to)
+  get animating(): boolean {
+    return this.akind.some((kind) => kind !== 0);
+  }
+
   trigger(event: ArenaEvent, delayMs = 0, param = 0) {
     const kind = EV[event];
     // reuse a free slot, else the oldest

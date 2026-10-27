@@ -442,6 +442,53 @@ class AgiDeal(BaseModel):
     gold: int = 0
 
 
+class Combo(BaseModel):
+    """The best stretch of a run's damage (stats.offer_combo): one program run
+    in program mode, one turn's cards otherwise."""
+
+    damage: int
+    runs: int  # actions run (program) or cards played (classic)
+    cards: list[str]
+
+
+class KillingBlow(BaseModel):
+    enemy: str
+    move: str
+
+
+class RunStats(BaseModel):
+    """What the run summary shows once the run is over - kept as the run goes
+    (see stats.py). Every field defaults, so a run started before stats
+    existed still loads; it just reads zero for what it missed."""
+
+    # Unix timestamps: the run's start, and the fight that ended it.
+    started_at: float | None = None
+    ended_at: float | None = None
+    fights_won: int = 0
+    elites_defeated: int = 0
+    bosses_defeated: int = 0
+    turns: int = 0
+    damage_dealt: int = 0
+    damage_taken: int = 0
+    biggest_hit: int = 0
+    best_combo: Combo | None = None
+    cards_played: int = 0
+    # Plays per card name, and the card played most (the MVP) - Glitches
+    # count as plays but are never the MVP.
+    play_counts: dict[str, int] = Field(default_factory=dict)
+    mvp_card: Card | None = None
+    cards_added: int = 0
+    cards_removed: int = 0
+    cards_upgraded: int = 0
+    credits_earned: int = 0
+    credits_spent: int = 0
+    killed_by: KillingBlow | None = None
+    # The ledger stats.note_changes compares the run against: the deck's
+    # card ids (and whether each is upgraded) and the credits, as last seen.
+    seen_deck: dict[str, bool] = Field(default_factory=dict)
+    seen_gold: int = 0
+
+
 class RunState(BaseModel):
     seed: int
     # Which map of the run the player is on - beating an act's boss opens
@@ -481,3 +528,5 @@ class RunState(BaseModel):
     # then the AGI's opening deal to take or turn down (starts.py).
     kit_offer: list[StarterKit] | None = None
     agi_deals: list[AgiDeal] | None = None
+    # For the summary at the end of the run (stats.py) - never read by play.
+    stats: RunStats = Field(default_factory=RunStats)
