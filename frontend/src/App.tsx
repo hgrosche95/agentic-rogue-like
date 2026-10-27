@@ -466,7 +466,7 @@ function App() {
           stage folds one shut before the next opens */}
       <OverlayStage busy={isLoading}>
       {!combat && !ongoing && (
-        <Overlay key="end" label="Run over">
+        <Overlay key="end" label="Run over" className="is-wide">
           <EndScreen run={run} onRestart={() => setRun(null)} />
         </Overlay>
       )}
