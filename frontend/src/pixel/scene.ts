@@ -1,5 +1,6 @@
 import type { CardType } from "../api";
 import { enemySprite, type EnemySpec, type EnemySprite } from "./enemySprite";
+import { FINAL_BOSS_CENTER, FinalBoss } from "./finalBoss";
 import { C, COLORS, RAMPS, RAMP } from "./palette";
 import { ENEMY_X, FLOOR, HEIGHT, KEYBOARD, MONITOR, PLAYER_X, RIFT_X, WIDTH } from "./layout";
 
@@ -145,6 +146,8 @@ export class PixelScene {
   private enemyDead = false;
   private enemyAppear = 0;
   private enemyShield = 0; // 0..1, eased toward enemyBlock > 0
+  // the final boss draws and animates itself (finalBoss.ts)
+  private finalBoss: FinalBoss | null = null;
 
   // -- player pose (eased) and what is shown (sampled at ~12 fps)
   private hand = { fx: 14, fy: -24, bx: 11, by: -23 };
@@ -224,15 +227,38 @@ export class PixelScene {
   setEnemy(spec: EnemySpec | null) {
     if (!spec) {
       this.enemy = null;
+      this.finalBoss = null;
       return;
     }
     const sprite = enemySprite(spec);
     if (sprite === this.enemy) return;
     this.enemy = sprite;
+    this.finalBoss = spec.finalBoss ? this.newFinalBoss() : null;
     this.enemyCanvas = this.spriteCanvas(sprite, false);
     this.enemyFlashCanvas = this.spriteCanvas(sprite, true);
     this.enemyDead = false;
     this.enemyAppear = 24;
+  }
+
+  // the boss phase the server reports - the final boss transforms on a new one
+  setEnemyPhase(phase: number) {
+    this.finalBoss?.setPhase(phase);
+  }
+
+  private newFinalBoss(): FinalBoss {
+    const host = {
+      ctx: this.ctx,
+      rect: (x: number, y: number, w: number, h: number, c: number) => this.rect(x, y, w, h, c),
+      dither: (x: number, y: number, w: number, h: number, c: number) => this.dither(x, y, w, h, c),
+      spawn: (x: number, y: number, vx: number, vy: number, life: number, ramp: number, size?: number, grav?: number, color?: number) =>
+        this.spawn(x, y, vx, vy, life, ramp, size, grav, color),
+      burst: (x: number, y: number, n: number, ramp: number, speed: number) => this.burst(x, y, n, ramp, speed),
+      shake: (steps: number, amp: number) => this.shakeFor(steps, amp),
+      flash: (steps: number) => {
+        this.flash = Math.max(this.flash, steps);
+      },
+    };
+    return new FinalBoss(host, this.reducedMotion);
   }
 
   setStatus(status: SceneStatus) {
@@ -472,6 +498,7 @@ export class PixelScene {
       this.spawn(90 + hash(t) * 4, FLOOR - hash(t * 3) * 30, 0, -0.35, 16, RAMP.amber, 1, 0);
     }
 
+    this.finalBoss?.step(t);
     this.stepParticles();
     this.stepProjectiles();
     for (let i = 0; i < MAX_PULSES; i++) {
@@ -487,6 +514,7 @@ export class PixelScene {
 
   private enemyCenter(): [number, number] {
     const e = this.enemy;
+    if (this.finalBoss) return FINAL_BOSS_CENTER;
     if (!e) return [ENEMY_X, FLOOR - 14];
     return [ENEMY_X, FLOOR - e.h + Math.round((e.top + e.h) / 2)];
   }
@@ -623,6 +651,8 @@ export class PixelScene {
       // -- the enemy's turn
       case EV.enemy_attack:
       case EV.enemy_attack_blocked: {
+        const blocked = kind === EV.enemy_attack_blocked;
+        if (this.finalBoss) return this.finalBoss.attack(age, blocked && this.wall > 0.3 ? 93 : chestX + 2, chestY, blocked);
         if (age < 8) this.ex = 3;
         if (age === 8) {
           this.ex = -7;
@@ -653,6 +683,7 @@ export class PixelScene {
           this.enemyFlash = 4;
           this.glitch = 12;
           this.ex = 4;
+          this.finalBoss?.hurt();
           this.burst(ecx - 4, ecy, 14, RAMP.cyan, 1.4);
           this.shakeFor(4, 1);
         }
@@ -772,6 +803,7 @@ export class PixelScene {
     const e = this.enemy;
     if (!e || this.enemyDead) return;
     this.enemyDead = true;
+    if (this.finalBoss) return this.finalBoss.die();
     this.flash = 2;
     this.shakeFor(10, 2);
     const ox = ENEMY_X - Math.floor(e.w / 2);
@@ -822,12 +854,14 @@ export class PixelScene {
     ctx.drawImage(this.bg, 0, 0);
     this.drawAmbient(t);
     if (this.tower > 0.05) this.drawTower();
-    if (this.enemy && !this.enemyDead) this.drawEnemy(t);
+    if (this.finalBoss) this.finalBoss.draw(this.ex, this.enemyFlash > 0, this.glitch, this.enemyShield);
+    else if (this.enemy && !this.enemyDead) this.drawEnemy(t);
     if (this.playerVisible) this.drawPlayer();
     if (this.wall > 0.05) this.drawWall(t);
     this.drawDrones(t);
     this.drawActionsFront();
     this.drawProjectiles();
+    this.finalBoss?.drawFront();
     this.drawParticles();
     if (this.sweep >= 0) {
       this.dither(0, HEIGHT - this.sweep, WIDTH, 3, C.cyanHi);

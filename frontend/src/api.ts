@@ -213,6 +213,8 @@ export interface PendingCombatView {
   enemy_phase: number;
   enemy_phases: number;
   enemy_strength: number;
+  // the run's final boss, the AGI itself - drawn with its own sprite
+  final_boss: boolean;
   // elites: their affix and what it does, else null; whether rage is on
   enemy_affix: "armored" | "regenerating" | "enraged" | "thorny" | null;
   enemy_affix_description: string | null;

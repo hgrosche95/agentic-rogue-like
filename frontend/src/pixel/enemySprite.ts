@@ -7,6 +7,7 @@ import {
   themeFor,
   type Feature,
 } from "../components/enemyShape";
+import { finalBossSprite } from "./finalBoss";
 import { C, RAMP } from "./palette";
 
 // Enemies are invented by the LLM at runtime, so there is no art to load.
@@ -22,6 +23,8 @@ export interface EnemySpec {
   maxHp: number;
   attack: number;
   setting: string;
+  // the run's final boss - hand-drawn, see finalBoss.ts
+  finalBoss?: boolean;
 }
 
 export interface EnemySprite {
@@ -62,6 +65,7 @@ function inTriangle(px: number, py: number, ax: number, ay: number, bx: number, 
 const cache = new Map<string, EnemySprite>();
 
 export function enemySprite(spec: EnemySpec): EnemySprite {
+  if (spec.finalBoss) return finalBossSprite();
   const key = `${spec.name}|${spec.maxHp}|${spec.attack}|${spec.setting}`;
   const hit = cache.get(key);
   if (hit) return hit;

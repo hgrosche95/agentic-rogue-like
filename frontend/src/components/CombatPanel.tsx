@@ -352,6 +352,8 @@ export function CombatPanel({
             intentMax: combat.enemy_intent_max,
             intentHits: combat.enemy_intent_hits,
             intentName: combat.enemy_intent_name,
+            finalBoss: combat.final_boss,
+            phase: combat.enemy_phase,
           }}
           exchange={exchange}
           log={log}
