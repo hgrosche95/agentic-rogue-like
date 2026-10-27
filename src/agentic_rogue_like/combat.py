@@ -67,6 +67,7 @@ from .models import (
     Card,
     CardType,
     Character,
+    Combo,
     Enemy,
     EnemyMove,
     MoveKind,
@@ -174,6 +175,31 @@ STATUS_DESCRIPTIONS = {
 }
 
 
+class FightTally(BaseModel):
+    """What the fight adds to the run summary (stats.py) - counted as it
+    happens, folded into RunState.stats once the fight is over. Play never
+    reads it."""
+
+    damage_dealt: int = 0  # HP the enemy lost
+    damage_taken: int = 0  # HP the player lost
+    biggest_hit: int = 0
+    # The best program run so far - in classic play the best turn, and the
+    # turn being played (engine.play_combat_card / end_combat_turn).
+    best_combo: Combo | None = None
+    turn_combo: Combo | None = None
+    # What took the player's last HP: the move's name, or what else did it.
+    killed_by: str | None = None
+
+
+def offer_combo(best: Combo | None, combo: Combo | None) -> Combo | None:
+    """The better of two combos: more damage, then more actions run."""
+    if combo is None or not combo.runs:
+        return best
+    if best is None or (combo.damage, combo.runs) > (best.damage, best.runs):
+        return combo
+    return best
+
+
 class CombatState(BaseModel):
     enemy: Enemy
     enemy_hp: int
@@ -223,6 +249,7 @@ class CombatState(BaseModel):
     program_glitched: list[bool] = Field(default_factory=lambda: [False] * FIELD_SIZE)
     # cards left this turn that cost no tokens (Tab-Tab-Tab, Pair Programming)
     free_plays: int = 0
+    tally: FightTally = Field(default_factory=FightTally)
 
 
 def _draw(state: CombatState, count: int, rng: random.Random) -> int:
@@ -524,8 +551,20 @@ def _damage_enemy(state: CombatState, damage: int) -> tuple[int, int]:
     absorbed = min(damage, state.enemy_block)
     state.enemy_block -= absorbed
     dealt = damage - absorbed
+    state.tally.damage_dealt += min(dealt, state.enemy_hp)
+    state.tally.biggest_hit = max(state.tally.biggest_hit, min(dealt, state.enemy_hp))
     state.enemy_hp = max(state.enemy_hp - dealt, 0)
     return absorbed, dealt
+
+
+def _hurt(state: CombatState, player: PlayerState, damage: int, source: str) -> None:
+    """The player loses `damage` HP to `source` (a move's name, Malware, ...),
+    which the run summary names if it is the blow that takes their last HP."""
+    lost = min(damage, player.hp)
+    player.hp -= lost
+    state.tally.damage_taken += lost
+    if lost and player.hp == 0 and state.tally.killed_by is None:
+        state.tally.killed_by = source
 
 
 def start_combat(
@@ -766,6 +805,8 @@ def run_program(
     compiler = total(state.artifacts, "compiler_bonus")
     types: set[CardType] = set()  # what ran so far
     after_flow = False
+    # For the run summary's best combo: the damage this run deals, and what ran.
+    dealt_before, ran_names = state.tally.damage_dealt, []
     piped = 0  # Pipe's bonus for the next action
     # A refactoring boss runs it right to left: control flow then steers the
     # actions run after it, now the ones to its left.
@@ -795,6 +836,7 @@ def run_program(
                 outcome = "cut"
                 continue
             lines_run += 1
+            ran_names.append(card.name)
             line = f"[{slot + 1}] "
             # Hot Path: the card runs as its upgrade, the deck keeps the original.
             run = card
@@ -884,6 +926,8 @@ def run_program(
                     )
                 )
 
+    combo = Combo(damage=state.tally.damage_dealt - dealt_before, runs=ran, cards=ran_names)
+    state.tally.best_combo = offer_combo(state.tally.best_combo, combo)
     return log
 
 
@@ -971,7 +1015,7 @@ def _hallucinate(state: CombatState, card: Card, slot_index: int, player: Player
         hits = [attack_damage(state, card, player, multiplier, bonus)] * max(card.hits, 1)
         taken = _damage_taken(hits, state.player_block, 0)
         state.player_block = max(0, state.player_block - sum(hits))
-        player.hp = max(player.hp - taken, 0)
+        _hurt(state, player, taken, f"{card.name} (hallucinated)")
         return f"{lead} and hits you for {taken} damage. You are at {player.hp} HP."
     if card.type is CardType.BLOCK:
         amount = block_amount(state, card, multiplier, bonus)
@@ -1119,7 +1163,7 @@ def _apply_action_effect(
         if healed := heal(player, total(state.artifacts, "lifesteal")):
             leech = f" You leech {healed} HP."
         if state.enemy.affix is Affix.THORNY:
-            player.hp = max(player.hp - THORNY_DAMAGE, 0)
+            _hurt(state, player, THORNY_DAMAGE, "Thorns")
             leech += f" Its thorns cost you {THORNY_DAMAGE} HP."
         if absorbed > 0:
             return (
@@ -1277,8 +1321,8 @@ def end_turn(
         raw_damage = low - 1 + rng.randint(1, high - low + 1)
         blocked = min(raw_damage, reduction)
         taken = raw_damage - blocked
-        player.hp = max(player.hp - taken, 0)
         attack_name = move_name(state) or state.enemy.attack_name
+        _hurt(state, player, taken, attack_name)
 
         if blocked > 0:
             armor_note = f" (includes {armor} armor)" if armor else ""
@@ -1344,10 +1388,11 @@ def _tick_statuses(state: CombatState, player: PlayerState) -> list[str]:
     log: list[str] = []
     name = state.enemy.name
     if stacks := state.enemy_status.get(Status.MALWARE, 0):
+        state.tally.damage_dealt += min(stacks, state.enemy_hp)
         state.enemy_hp = max(state.enemy_hp - stacks, 0)
         log.append(f"Malware eats {stacks} HP off {name}. {name} at {state.enemy_hp} HP.")
     if stacks := state.player_status.get(Status.MALWARE, 0):
-        player.hp = max(player.hp - stacks, 0)
+        _hurt(state, player, stacks, "Malware")
         log.append(f"Malware eats {stacks} of your HP. You are at {player.hp} HP.")
     for statuses in (state.enemy_status, state.player_status):
         for status in list(statuses):
@@ -1369,6 +1414,14 @@ def _glitch(state: CombatState, n: int) -> Card:
         token_cost=0,
         description="Does nothing. Play it to flush it out.",
     )
+
+
+# What the run summary calls a special move without a name of its own that
+# took the player's last HP - the rest go by the enemy's attack_name.
+_SPECIAL_MOVE_NAMES = {
+    EnemyIntentType.BARRAGE: "Barrage",
+    EnemyIntentType.OVERLOAD: "Overload",
+}
 
 
 def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -> list[str]:
@@ -1399,7 +1452,7 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
     hits = [rng.randint(low, high) for low, high in intent_hits(state)]
     armor = player_armor(state)
     taken = _damage_taken(hits, state.player_block, armor)
-    player.hp = max(player.hp - taken, 0)
+    _hurt(state, player, taken, own or _SPECIAL_MOVE_NAMES.get(intent, state.enemy.attack_name))
     move = {
         EnemyIntentType.BARRAGE: f"unleashes a {len(hits)}-hit barrage",
         EnemyIntentType.OVERLOAD: "releases an overload",
