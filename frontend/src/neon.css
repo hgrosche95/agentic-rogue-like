@@ -1314,6 +1314,11 @@ button.field-slot.is-queued:hover:not(:disabled) {
   backdrop-filter: blur(6px);
 }
 
+/* the coach marks sit in the arena, which sets the pixel font */
+.coach-bubble {
+  font-family: var(--font-body);
+}
+
 .keyword {
   text-decoration-color: color-mix(in srgb, var(--accent) 50%, transparent);
 }
