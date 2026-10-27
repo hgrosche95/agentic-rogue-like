@@ -540,18 +540,24 @@ export function CombatPanel({
                 }}
               />
             </span>
-            {programMode && <ProgramOutput combat={combat} playerHp={player.hp} />}
-            {programMode && cutAfter !== null && !enemySlain && (
-              <span
-                className="interrupt-note"
-                title="The enemy cuts your program off: queued lines after these don't run this turn"
-              >
-                Interrupt after {cutAfter} line{cutAfter === 1 ? "" : "s"}
-              </span>
-            )}
             <span className="zone-label">
               Hand {combat.hand.length}/{combat.max_hand_size}
             </span>
+            {/* a row of its own, one line high whatever it says - so the table
+                below doesn't jump when the server's preview comes back */}
+            {programMode && (
+              <span className="program-status">
+                <ProgramOutput combat={combat} playerHp={player.hp} />
+                {cutAfter !== null && !enemySlain && (
+                  <span
+                    className="interrupt-note"
+                    title="The enemy cuts your program off: queued lines after these don't run this turn"
+                  >
+                    Interrupt after {cutAfter} line{cutAfter === 1 ? "" : "s"}
+                  </span>
+                )}
+              </span>
+            )}
           </div>
           {programMode ? (
             <ProgramLines

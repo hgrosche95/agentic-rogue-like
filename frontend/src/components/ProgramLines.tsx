@@ -1,4 +1,4 @@
-import type { PointerEvent } from "react";
+import type { CSSProperties, PointerEvent } from "react";
 import { PERMANENT_CARD_TYPES, type Card, type HandCardView, type PendingCombatView } from "../api";
 import { cardText, queues } from "../program";
 import { CardFace, CardTypeIcon } from "./CardFace";
@@ -212,7 +212,7 @@ export function ProgramLines({
   }
 
   return (
-    <div className="program-board">
+    <div className="program-board" style={{ "--lines": combat.program.length } as CSSProperties}>
       <div className="field program-lines">
         {combat.program.map((card, line) => (
           <div key={line} className={`program-line${line === hotLine ? " is-hot" : ""}`}>

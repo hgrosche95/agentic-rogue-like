@@ -656,6 +656,9 @@ button.field-slot.is-queued:hover:not(:disabled) {
 }
 
 .program-background {
+  /* tall enough for a socket from the start, so the first permanent
+     installed doesn't grow the stack */
+  min-height: 38px;
   border: 2px dashed var(--line-strong);
   border-radius: 12px;
 }
@@ -704,6 +707,48 @@ button.field-slot.is-queued:hover:not(:disabled) {
 .field-slot.is-queued.is-swap-target {
   outline: 2px dashed var(--accent);
   outline-offset: 3px;
+}
+
+/* program mode's preview and interrupt note: one row under the stack's
+   title, never wrapping (it changes with every card the server answers) */
+.zone-head:has(> .program-status) {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+/* The board is as wide as its lines at full size (shrinking with the
+   screen) - not as wide as whatever they hold, or queuing a card or a
+   longer preview would widen the stack, grow every line and push the hand
+   down. */
+.program-board {
+  width: calc(var(--lines, 5) * 92px + (var(--lines, 5) - 1) * 10px);
+  max-width: 100%;
+}
+
+.program-status {
+  /* never what sizes the stack: it fits the width the lines give it */
+  contain: inline-size;
+  display: flex;
+  flex: 1 0 100%;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.program-status .program-output {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.program-status .program-output > span + span {
+  margin-left: 12px;
+}
+
+.program-status .interrupt-note {
+  flex-shrink: 0;
 }
 
 /* ---------- HP bars glide ---------- */
