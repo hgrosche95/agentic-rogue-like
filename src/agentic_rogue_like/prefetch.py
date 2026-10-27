@@ -31,7 +31,7 @@ from .agent.event_agent import agent_enabled as event_agent_enabled
 from .agent.event_agent import generate_valid_event
 from .agent.narrator import narrate
 from .enemies import tier_floor
-from .engine import REST_SITUATION, SHOP_SITUATION, is_final_boss
+from .engine import REST_SITUATION, SHOP_SITUATION, is_final_boss, switch_choices
 from .events import EVENT_POOL, GameEvent
 from .map_gen import NUM_FLOORS
 from .models import Enemy, NodeType, RunState, RunStatus
@@ -71,7 +71,13 @@ class Prefetch:
         if os.environ.get("ENCOUNTER_AGENT_ENABLED") != "1" or run.status is not RunStatus.ONGOING:
             return
 
-        upcoming = [run.current_node_id, *run.nodes[run.current_node_id].connections]
+        # The rooms the player can still switch to stay warm too, until the
+        # one they jumped into is entered.
+        upcoming = [
+            run.current_node_id,
+            *run.nodes[run.current_node_id].connections,
+            *switch_choices(run),
+        ]
 
         # Enemies for rooms the player walked past are dead weight. cancel()
         # only stops ones still queued; a running call just finishes unused.

@@ -322,12 +322,6 @@ function App() {
 
   const numFloors = numFloorsOf(run.nodes);
 
-  function jumpTo(nodeId: string) {
-    sfx.play("map_select");
-    setFocusedJump(null);
-    runAction(() => chooseNextNode(run!.run_id, nodeId), "Going one layer deeper...");
-  }
-
   function enterRoom() {
     sfx.play("click");
     runAction(
@@ -336,14 +330,6 @@ function App() {
     );
   }
 
-  const mapProps = {
-    nodes: run.nodes,
-    currentNodeId: run.current_node.id,
-    reachableIds: run.available_choices.map((n) => n.id),
-    disabled: isLoading,
-    act: run.act,
-    onChoose: jumpTo,
-  };
   const ongoing = run.status === "ongoing";
   const canJump = ongoing && !slainCombat && run.node_resolved && run.available_choices.length > 0;
   const needsEnter =
@@ -356,6 +342,27 @@ function App() {
     !run.shop &&
     !run.rest &&
     !run.node_resolved;
+  // A jump only commits once its room is entered: until then the player can
+  // switch to any other room the jump could have gone to.
+  const switchChoices = needsEnter ? (run.switch_choices ?? []) : [];
+
+  function jumpTo(nodeId: string) {
+    sfx.play("map_select");
+    setFocusedJump(null);
+    runAction(
+      () => chooseNextNode(run!.run_id, nodeId),
+      needsEnter ? "Switching rooms..." : "Going one layer deeper...",
+    );
+  }
+
+  const mapProps = {
+    nodes: run.nodes,
+    currentNodeId: run.current_node.id,
+    reachableIds: (needsEnter ? switchChoices : run.available_choices).map((n) => n.id),
+    disabled: isLoading,
+    act: run.act,
+    onChoose: jumpTo,
+  };
 
   // cards show their token cost only to a character with a context window
   const showTokens = characters.some((c) => c.id === run.player.character && c.token_limit !== null);
@@ -422,7 +429,13 @@ function App() {
           <section className="panel map-panel">
             <div className="panel-head">
               <h2 className="panel-title">Call stack</h2>
-              <span className="panel-sub">{canJump ? "Select your next jump" : run.setting}</span>
+              <span className="panel-sub">
+                {canJump
+                  ? "Select your next jump"
+                  : switchChoices.length > 0
+                    ? "Switch rooms until you enter"
+                    : run.setting}
+              </span>
             </div>
             <DungeonMap {...mapProps} onHover={setFocusedJump} onEnter={needsEnter ? enterRoom : undefined} />
           </section>
@@ -432,6 +445,7 @@ function App() {
               current={run.current_node}
               needsEnter={needsEnter}
               choices={run.available_choices}
+              switchChoices={switchChoices}
               focusedId={focusedJump}
               numFloors={numFloors}
               act={run.act}

@@ -1,9 +1,14 @@
 import random
 
+import pytest
+
 from agentic_rogue_like.engine import (
     available_choices,
+    move_to,
     new_run,
     resolve_node,
+    switch_choices,
+    switch_to,
 )
 from agentic_rogue_like.models import RunStatus
 
@@ -72,3 +77,22 @@ def test_beating_the_last_boss_wins_the_run() -> None:
     _win_boss(run, rng)
 
     assert run.status is RunStatus.VICTORY
+
+
+def test_switching_the_last_jump_is_no_step_of_its_own() -> None:
+    run = new_run(seed=14)
+    run.artifact_offer = run.kit_offer = None
+    run.nodes["0-0"].visited = True
+    first, second, *_ = available_choices(run)
+
+    move_to(run, first)
+    assert switch_choices(run) == [n for n in run.nodes["0-0"].connections if n != first]
+    switch_to(run, second)
+
+    assert run.current_node_id == second
+    assert run.steps == 1
+    with pytest.raises(ValueError):
+        switch_to(run, run.nodes[second].connections[0])
+
+    run.nodes[second].visited = True
+    assert switch_choices(run) == []

@@ -161,6 +161,54 @@ def test_card_reward_blocks_moving_on_until_picked() -> None:
     assert len(ids) == len(set(ids))
 
 
+def _jumped(seed: int) -> tuple[str, dict]:
+    """Seeds where the first room has several ways on: the first jump taken
+    (to the first of them), its room not entered yet."""
+    run_id, run = _won_fight(seed)
+    client.post(f"/runs/{run_id}/card-reward", json={"card_index": None})
+    first, *_ = run["current_node"]["connections"]
+    run = client.post(f"/runs/{run_id}/choose-node", json={"node_id": first}).json()
+    return run_id, run
+
+
+def test_jumped_into_room_can_be_switched_until_entered() -> None:
+    run_id, run = _jumped(14)
+    first, *others = run["nodes"]["0-0"]["connections"]
+    assert run["current_node"]["id"] == first
+    assert not run["node_resolved"]
+    assert [n["id"] for n in run["switch_choices"]] == others
+
+    run = client.post(f"/runs/{run_id}/choose-node", json={"node_id": others[0]}).json()
+    assert run["current_node"]["id"] == others[0]
+    assert sorted(n["id"] for n in run["switch_choices"]) == sorted([first, *others[1:]])
+    # switching back and forth is no step of its own
+    run = client.post(f"/runs/{run_id}/choose-node", json={"node_id": first}).json()
+    assert run["current_node"]["id"] == first
+    assert not run["nodes"][others[0]]["visited"]
+
+    # entering commits the jump
+    run = _resolve(run_id).json()
+    assert run["switch_choices"] == []
+    switched = client.post(f"/runs/{run_id}/choose-node", json={"node_id": others[0]})
+    assert switched.status_code == 409
+
+
+def test_switch_only_goes_to_rooms_the_last_jump_could_reach() -> None:
+    run_id, run = _jumped(14)
+    onward = run["current_node"]["connections"][0]
+
+    # not a sibling: going on still needs the room entered first
+    response = client.post(f"/runs/{run_id}/choose-node", json={"node_id": onward})
+    assert response.status_code == 409
+    response = client.post(f"/runs/{run_id}/choose-node", json={"node_id": "0-0"})
+    assert response.status_code == 409
+
+
+def test_a_fresh_run_has_nothing_to_switch_to() -> None:
+    run = client.post("/runs", json={"seed": 1}).json()
+    assert run["switch_choices"] == []
+
+
 def test_card_reward_can_be_skipped() -> None:
     run_id, run = _won_fight(3)
     deck_size = len(run["player"]["deck"])

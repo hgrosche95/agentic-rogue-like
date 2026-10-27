@@ -455,6 +455,10 @@ class RunState(BaseModel):
     player: PlayerState
     nodes: dict[str, MapNode] = Field(default_factory=dict)
     current_node_id: str | None = None
+    # The room the last jump left from - until the room jumped into is
+    # entered, the player may still switch to any other room reachable from
+    # there (engine.switch_choices).
+    previous_node_id: str | None = None
     history: list[str] = Field(default_factory=list)
     setting: str = DEFAULT_SETTING
     # Cards offered after a won fight, waiting for the player to pick one

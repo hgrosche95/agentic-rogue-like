@@ -176,6 +176,7 @@ def available_choices(run: RunState) -> list[str]:
 
 def move_to(run: RunState, node_id: str) -> None:
     """Step onto `node_id`; every ARTIFACT_EVERY_STEPS steps an artifact offer waits there."""
+    run.previous_node_id = run.current_node_id
     run.current_node_id = node_id
     run.steps += 1
     if run.steps % ARTIFACT_EVERY_STEPS == 0:
@@ -183,6 +184,23 @@ def move_to(run: RunState, node_id: str) -> None:
         run.artifact_offer = (
             roll_artifact_offer(rng, run.player.artifacts, pool=artifact_pool(run)) or None
         )
+
+
+def switch_choices(run: RunState) -> list[str]:
+    """The other rooms the last jump could have gone to, while the room it
+    went to is not entered yet - the jump only commits on entering."""
+    node = run.nodes[run.current_node_id]
+    if node.visited or run.previous_node_id is None:
+        return []
+    return [n for n in run.nodes[run.previous_node_id].connections if n != node.id]
+
+
+def switch_to(run: RunState, node_id: str) -> None:
+    """Take the last jump to `node_id` instead. Not another step: the step
+    count (and with it the artifact offer) stays as the jump left it."""
+    if node_id not in switch_choices(run):
+        raise ValueError("node_id is not a room the last jump could have gone to")
+    run.current_node_id = node_id
 
 
 def choose_artifact(run: RunState, index: int) -> None:
@@ -333,6 +351,7 @@ def advance_act(run: RunState) -> None:
     run.act += 1
     run.nodes = generate_map(run.seed, run.act)
     run.current_node_id = "0-0"
+    run.previous_node_id = None
     run.nodes["0-0"].visited = True
     run.floor = 0
     healed = heal(run.player, run.player.max_hp * ACT_HEAL_PERCENT // 100)
