@@ -684,6 +684,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                     rng=rng,
                     act=act,
                     style=style,
+                    final=node.type is NodeType.BOSS and act >= NUM_ACTS,
                 )
             else:
                 base = random_enemy(cfg.budgets[tier], tier, rng)

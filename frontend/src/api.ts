@@ -213,6 +213,8 @@ export interface PendingCombatView {
   enemy_phase: number;
   enemy_phases: number;
   enemy_strength: number;
+  // the run's final boss, the AGI itself - drawn with its own sprite
+  final_boss: boolean;
   // elites: their affix and what it does, else null; whether rage is on
   enemy_affix: "armored" | "regenerating" | "enraged" | "thorny" | null;
   enemy_affix_description: string | null;
@@ -249,6 +251,26 @@ export interface ProgramPreview {
   enemy_block: number;
   player_hp: number;
   player_block: number;
+  // line by line, in the order they run
+  steps: ProgramStep[];
+}
+
+// What one queued line does when the program runs (the backend's
+// combat.ProgramStep): ran, cut by an interrupt, or skipped (enemy down).
+export interface ProgramStep {
+  slot: number;
+  name: string;
+  type: CardType;
+  outcome: "ran" | "cut" | "skipped";
+  // how often its action ran - a fork's target twice, a loop its repeats
+  runs: number;
+  damage: number;
+  dealt: number;
+  block: number;
+  heal: number;
+  hurt: number;
+  enemy_hp: number;
+  enemy_block: number;
 }
 
 export interface ShopCard {

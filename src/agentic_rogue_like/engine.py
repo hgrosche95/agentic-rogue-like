@@ -69,6 +69,12 @@ NUM_ACTS = 2
 ACT_HEAL_PERCENT = 40
 
 
+def is_final_boss(run: RunState, node: MapNode) -> bool:
+    """Whether `node` holds the run's final boss: the last act's boss, always
+    the AGI itself (enemies.ENEMY_POOL["final"])."""
+    return node.type is NodeType.BOSS and run.act >= NUM_ACTS
+
+
 def boss_phases(act: int) -> int:
     """Act 1's boss has two phases, every later act's boss a third one."""
     return 2 if act <= 1 else 3
@@ -409,6 +415,7 @@ def _room_enemy(
         prefetched=prefetched,
         act=run.act,
         style=style,
+        final=is_final_boss(run, node),
     )
     if node.type is NodeType.ELITE:
         affix_rng = random.Random(f"{run.seed}-affix-{run.act}-{node.id}")

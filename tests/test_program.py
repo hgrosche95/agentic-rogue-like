@@ -501,3 +501,19 @@ def test_control_flow_is_a_style_the_agi_answers_with_interrupts() -> None:
     assert share(answered) > share(plain)
     assert abs(threat(answered) - threat(enemy)) / threat(enemy) < 0.05
     assert answers(answered, PlayStyle.PROGRAM)
+
+
+def test_the_preview_plays_out_line_by_line() -> None:
+    state, player = _interrupting()
+    _queue(state, player, "Fork", "Exploit", "Firewall")
+    steps = program_preview(state, player).steps
+    assert [(s.name, s.outcome) for s in steps] == [
+        ("Fork", "ran"),
+        ("Exploit", "ran"),
+        ("Firewall", "cut"),
+    ]
+    fork, exploit, firewall = steps
+    assert (fork.runs, fork.dealt) == (0, 0)
+    assert (exploit.runs, exploit.damage, exploit.enemy_hp) == (2, 10, 90)
+    assert (firewall.runs, firewall.block) == (0, 0)
+    assert state.program[0] is not None  # still only a preview

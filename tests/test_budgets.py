@@ -32,7 +32,7 @@ def test_static_pool_stays_inside_its_own_tier_budget(tier: str) -> None:
     budgets it is meant to stand in for would make a failed agent call a
     balance cliff rather than an invisible degradation. Same rules as for an
     agent-generated enemy (encounter_schema.validate_proposal)."""
-    budget = _BUDGETS["boss" if tier == "boss2" else tier]
+    budget = _BUDGETS["boss" if tier in ("boss2", "final") else tier]
 
     for enemy in ENEMY_POOL[tier]:
         assert budget.min_attack <= enemy.attack <= budget.max_attack, (
