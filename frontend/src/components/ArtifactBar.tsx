@@ -13,7 +13,8 @@ export function ArtifactBar({ artifacts, compact = false }: { artifacts: Artifac
           <li
             key={artifact.id}
             className="artifact-chip"
-            title={`${artifact.name}: ${artifact.description}`}
+            data-tip-term={artifact.name}
+            data-tip={artifact.description}
             tabIndex={0}
           >
             <ArtifactIcon id={artifact.id} size={13} />

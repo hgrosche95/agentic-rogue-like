@@ -1,5 +1,6 @@
 import { createPortal } from "react-dom";
 import { CloseButton, Overlay } from "./Overlay";
+import { RichText } from "./RichText";
 
 // The "i" next to the stack: how a fight works - above all program mode,
 // whose rules nothing on the table explains by itself.
@@ -47,7 +48,16 @@ const SHARED_RULES: [string, string][] = [
   ],
 ];
 
-export function CombatHelp({ programMode, onClose }: { programMode: boolean; onClose: () => void }) {
+// `onTutorial`: walks the player through the fight again (Tutorial).
+export function CombatHelp({
+  programMode,
+  onClose,
+  onTutorial,
+}: {
+  programMode: boolean;
+  onClose: () => void;
+  onTutorial?: () => void;
+}) {
   const rules = [...(programMode ? PROGRAM_RULES : CLASSIC_RULES), ...SHARED_RULES];
   // Portalled out of the combat panel: an ancestor there would otherwise
   // become the fixed backdrop's containing block, and it would scroll away.
@@ -63,10 +73,17 @@ export function CombatHelp({ programMode, onClose }: { programMode: boolean; onC
           {rules.map(([term, text]) => (
             <div key={term}>
               <dt>{term}</dt>
-              <dd>{text}</dd>
+              <dd>
+                <RichText text={text} />
+              </dd>
             </div>
           ))}
         </dl>
+        {onTutorial && (
+          <button type="button" className="help-replay" onClick={onTutorial}>
+            Show the tutorial again
+          </button>
+        )}
       </section>
     </Overlay>,
     document.body,
