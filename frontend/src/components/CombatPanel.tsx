@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ATTACKING_INTENTS,
   PERMANENT_CARD_TYPES,
@@ -16,7 +16,9 @@ import { useCardDrag } from "../hooks/useCardDrag";
 import { useHandFlip, useStableHandKeys } from "../hooks/useHandMotion";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
+import { useSequence } from "../hooks/useSequence";
 import { describeIntent, rangeText, STATUS_TEXT } from "../readouts";
+import { tempoMs } from "../tempo";
 import { CardFace, type Readout } from "./CardFace";
 import { CombatHelp, HelpButton } from "./CombatHelp";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
@@ -58,6 +60,15 @@ function StatusBadges({ statuses }: { statuses: Partial<Record<Status, number>> 
         </span>
       ))}
     </>
+  );
+}
+
+// A shortcut key, next to what it does - left out on touch screens (CSS).
+function KeyHint({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return (
+    <kbd className={`key-hint ${className}`} aria-hidden="true">
+      {children}
+    </kbd>
   );
 }
 
@@ -117,8 +128,17 @@ function fanStyle(index: number, count: number): CSSProperties {
 }
 
 // how long each program line stays lit while the program runs - long enough
-// for its card animation to play out before the next line starts
+// for its card animation to play out before the next line starts (at the
+// normal tempo, see tempo.ts)
 const PROGRAM_STEP_MS = 1100;
+
+// Keys pressed into an input, or on a button focused from the keyboard
+// (Space and Enter press that button), aren't combat shortcuts.
+function ownKeys(event: KeyboardEvent): boolean {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  if (target?.closest("input, textarea, select, [contenteditable='true']")) return true;
+  return (event.key === " " || event.key === "Enter") && target?.matches("button:focus-visible") === true;
+}
 
 export function CombatPanel({
   combat,
@@ -160,8 +180,8 @@ export function CombatPanel({
   const excess = Math.max(0, combat.hand.length - combat.max_hand_size);
   const rawExchange = useHpExchange(player.hp, combat.enemy_hp);
   // the bars move when the hit lands, not when the server answers
-  const shownPlayerHp = useLagged(player.hp, PLAYER_HIT_MS);
-  const laggedEnemyHp = useLagged(combat.enemy_hp, ENEMY_HIT_MS);
+  const shownPlayerHp = useLagged(player.hp, tempoMs(PLAYER_HIT_MS));
+  const laggedEnemyHp = useLagged(combat.enemy_hp, tempoMs(ENEMY_HIT_MS));
   // Program mode plays the program out line by line before the turn goes to
   // the server: the enemy's bar follows the lines (`programHp`, for the table
   // it was run on, until the server's own HP has caught up), and the server's
@@ -213,6 +233,9 @@ export function CombatPanel({
   const laidOut = combat.hand.filter((card) => card.hand_index !== pending?.handIndex);
   useHandFlip(handRef, laidOut.map((card) => handKeys[combat.hand.indexOf(card)]).join(" "));
   const arenaRef = useRef<ArenaHandle>(null);
+  const fieldRef = useRef<HTMLDivElement>(null);
+  // Dr. Chronos typing a card in, the program running: skippable
+  const sequence = useSequence();
   // What the table looked like when the turn was ended, to tell once the
   // server answers whether the daemon fired and the enemy's blow got through.
   const endTurnFrom = useRef<{ combat: PendingCombatView; hp: number } | null>(null);
@@ -231,9 +254,9 @@ export function CombatPanel({
     });
     if (daemon) sfx.play("daemon_tick");
     if (!attacked) return;
-    sfx.play("enemy_attack", { delayMs: 150 });
+    sfx.play("enemy_attack", { delayMs: tempoMs(150) });
     // a hit through the block is voiced by the HP exchange (useHpExchange)
-    if (player.hp >= before.hp && before.combat.player_block > 0) sfx.play("block_absorb", { delayMs: 300 });
+    if (player.hp >= before.hp && before.combat.player_block > 0) sfx.play("block_absorb", { delayMs: tempoMs(300) });
   }, [combat, player.hp, enemySlain]);
 
   function endTurn() {
@@ -264,9 +287,12 @@ export function CombatPanel({
     }
     // Run the program: each line lights up in turn and lands - its damage
     // over the enemy, its block over Dr. Chronos, a shake as heavy as the hit -
-    // then the server works the turn out.
+    // then the server works the turn out. Skipped (see skipAnimation), the
+    // lines still left all land at once - their numbers up, without a sound
+    // and an animation each.
     shown.forEach((step, i) => {
-      window.setTimeout(() => {
+      sequence.after(tempoMs(i * PROGRAM_STEP_MS), () => {
+        const live = !sequence.skipping.current;
         setRunning(step.slot);
         setSpent({ on: combat, lines: shown.slice(0, i).map((s) => s.slot) });
         if (step.outcome === "cut") {
@@ -275,10 +301,10 @@ export function CombatPanel({
           return;
         }
         const card = combat.program[step.slot];
-        if (card && step.runs > 0) {
+        if (card && step.runs > 0 && live) {
           sfx.play(cardSound(card.type), { hits: hitsOf(card.description) });
           arenaRef.current?.cardPlayed(card.type, card.value);
-        } else if (card) {
+        } else if (card && live) {
           sfx.play(cardSound(card.type));
         }
         arenaRef.current?.programHit({
@@ -289,16 +315,23 @@ export function CombatPanel({
           weight: step.damage / combat.enemy_max_hp,
         });
         if (step.damage > 0) {
-          window.setTimeout(() => setProgramHp({ on: combat, hp: step.enemy_hp }), ENEMY_HIT_MS);
+          sequence.after(tempoMs(ENEMY_HIT_MS), () => setProgramHp({ on: combat, hp: step.enemy_hp }));
         }
-      }, i * PROGRAM_STEP_MS);
+      });
     });
     // the last hit lands before the turn moves on
-    window.setTimeout(() => {
+    sequence.after(tempoMs((shown.length - 1) * PROGRAM_STEP_MS + ENEMY_HIT_MS + 250), () => {
       setRunning(null);
       setSpent({ on: combat, lines: shown.map((s) => s.slot) });
       finish();
-    }, (shown.length - 1) * PROGRAM_STEP_MS + ENEMY_HIT_MS + 250);
+    });
+  }
+
+  // A click on the arena or Space while Dr. Chronos types or the program
+  // runs: the rest of it happens at once.
+  // False when nothing was running.
+  function skipAnimation(): boolean {
+    return sequence.skip();
   }
 
   // Program mode: pick a queued card up, then put it on another line - an
@@ -347,11 +380,11 @@ export function CombatPanel({
     const text = commandFor(played, combat.enemy_name);
     setCommands((sent) => [...sent, { at: log.length, text }]);
     setTyping(true);
-    sfx.play("typing", { durationMs: TYPING_MS });
+    sfx.play("typing", { durationMs: tempoMs(TYPING_MS) });
     // A card that queues into the program only runs at the end of the turn,
     // so its animation waits for "Run program" (see endTurn).
     const runsNow = !queues(combat, played);
-    window.setTimeout(() => {
+    sequence.after(tempoMs(TYPING_MS + 150), () => {
       setTyping(false);
       // Enter, and the command runs
       sfx.play("enter");
@@ -360,7 +393,7 @@ export function CombatPanel({
         arenaRef.current?.cardPlayed(played.type, played.value);
       }
       onPlayCard(handIndex, slotIndex);
-    }, TYPING_MS + 150);
+    });
   }
 
   const drag = useCardDrag({
@@ -377,6 +410,67 @@ export function CombatPanel({
         onMoveQueued?.(fromLine, toLine);
       }
     },
+  });
+
+  // Keyboard play: 1-9 pick hand card N, then 1-9 the line (or slot) it goes
+  // to, B the program's background; Space or Enter end the turn (Space first
+  // skips an animation still running); Esc lets go of a pick. Re-bound on
+  // every commit (a layout effect: before the next key can come in), so it
+  // always sees the table as it is now.
+  useLayoutEffect(() => {
+    // the n-th line or slot, while it takes a click
+    const target = (n: number) => {
+      const slots = fieldRef.current?.querySelectorAll<HTMLElement>(
+        programMode ? ".program-line > .field-slot" : ".field > .field-slot",
+      );
+      const slot = slots?.[n];
+      return slot instanceof HTMLButtonElement && !slot.disabled ? slot : null;
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || ownKeys(event)) return;
+      // a window over the fight (deck, map, help) has the keys
+      if (helpOpen || document.querySelector(".overlay-backdrop")) return;
+      const key = event.key.toLowerCase();
+      if (key === " " || key === "enter") {
+        event.preventDefault();
+        if (event.repeat || (key === " " && skipAnimation())) return;
+        if (enemySlain) {
+          sfx.play("click");
+          onContinue?.();
+        } else if (!busy && (discarding === null || discarding.length === excess)) {
+          endTurn();
+        }
+        return;
+      }
+      if (key === "escape") {
+        if (selectedHandIndex !== null || movingLine !== null) sfx.play("click");
+        setSelectedHandIndex(null);
+        setMovingLine(null);
+        if (discarding !== null && !busy) setDiscarding(null);
+        return;
+      }
+      if (busy || enemySlain) return;
+      if (key === "b" && programMode && selectedHandIndex !== null) {
+        const background = fieldRef.current?.querySelector<HTMLButtonElement>(".program-background");
+        if (background && !background.disabled) background.click();
+        return;
+      }
+      if (!/^[1-9]$/.test(key)) return;
+      const n = Number(key) - 1;
+      if (discarding === null && (selectedHandIndex !== null || movingLine !== null)) {
+        const slot = target(n);
+        if (slot) {
+          slot.click();
+          return;
+        }
+        if (movingLine !== null) return;
+      }
+      // no line to put the picked card on there: pick another card instead
+      const card = laidOut[n];
+      if (card) selectCard(card.hand_index);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   });
 
   // the card being aimed (selected or dragged) and the slot it is aimed at
@@ -397,7 +491,8 @@ export function CombatPanel({
     <div className={`combat-panel${discarding !== null ? " is-discarding" : ""}`}>
       {helpOpen && <CombatHelp programMode={programMode} onClose={() => setHelpOpen(false)} />}
       {/* the HUD plates sit in the scene's top corners, clear of the monitor */}
-      <div className="arena-wrap">
+      {/* a click on the arena cuts an animation short */}
+      <div className="arena-wrap" onPointerDown={() => skipAnimation()}>
         <CombatArena
           ref={arenaRef}
           status={{
@@ -529,7 +624,7 @@ export function CombatPanel({
 
       {/* the stack stands on the arena floor */}
       <div className="combat-row">
-        <div className="field-zone">
+        <div className="field-zone" ref={fieldRef}>
           <div className="zone-head">
             <span className="zone-label zone-title">
               {programMode ? `Program · runs ${reversed ? "right to left" : "left to right"}` : "Execution stack"}
@@ -644,6 +739,9 @@ export function CombatPanel({
                 }}
               >
                 <CardFace card={card} readout={readoutOf(card, aimedIndex === card.hand_index ? aimedSlot : null)} />
+                {laidOut.indexOf(card) >= 0 && laidOut.indexOf(card) < 9 && (
+                  <KeyHint className="is-hand">{laidOut.indexOf(card) + 1}</KeyHint>
+                )}
               </button>
             ))}
           </div>
@@ -661,6 +759,7 @@ export function CombatPanel({
               }}
             >
               Continue
+              <KeyHint>Space</KeyHint>
             </button>
           ) : (
             // busy: still shown at work (a sweep of light), never just dead
@@ -675,11 +774,13 @@ export function CombatPanel({
                 : queuedLines.length > 0
                   ? "Run program"
                   : "End turn"}
+              <KeyHint>Space</KeyHint>
             </button>
           )}
           {discarding !== null && (
             <button className="end-turn-button is-cancel" disabled={busy} onClick={() => setDiscarding(null)}>
               Cancel
+              <KeyHint>Esc</KeyHint>
             </button>
           )}
           <div className="side-piles">
@@ -693,7 +794,10 @@ export function CombatPanel({
         {enemySlain
           ? "Enemy defeated."
           : running !== null
-            ? `Running line ${running + 1}...`
+            ? <>
+                Running line {running + 1}...<KeyHint>Space</KeyHint>
+                <span className="key-only">to skip</span>
+              </>
           : discarding !== null
             ? `Hand limit is ${combat.max_hand_size}: pick ${excess} card(s) to discard (${discarding.length}/${excess}).`
             : selectedHandIndex !== null &&

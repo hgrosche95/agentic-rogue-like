@@ -1056,3 +1056,46 @@ button.field-slot.is-queued:hover:not(:disabled) {
   color: var(--on-accent);
   background: var(--accent);
 }
+
+/* ---------- keyboard hints (CombatPanel's shortcuts) ----------
+   small and dim, next to what the key does; touch screens have no keys */
+.key-hint {
+  display: inline-block;
+  margin-left: 0.5em;
+  padding: 0 0.35em;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font: 600 9px/1.5 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  opacity: 0.6;
+}
+
+/* a hand card's number: a tab hanging from its top edge, in its colour */
+.key-hint.is-hand {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  margin: 0;
+  padding: 0 0.5em;
+  transform: translateX(-50%);
+  border-color: var(--card);
+  border-top: 0;
+  border-radius: 0 0 5px 5px;
+  background: var(--panel-solid);
+  color: var(--card);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.key-only {
+  margin-left: 0.4em;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .key-hint,
+  .key-only {
+    display: none;
+  }
+}
