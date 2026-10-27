@@ -4280,6 +4280,70 @@ body > .field-slot.card-drag {
   }
 }
 
+/* -- waiting on the server never looks frozen -- */
+/* the loading toast eases in and runs a scanline along its foot */
+.loading-indicator {
+  overflow: hidden;
+  animation: loading-in 0.18s ease-out both;
+}
+
+.loading-indicator::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent) 0 0 / 40% 100% no-repeat;
+  animation: loading-scan 1.1s linear infinite;
+}
+
+@keyframes loading-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes loading-scan {
+  from {
+    background-position: -70% 0;
+  }
+  to {
+    background-position: 170% 0;
+  }
+}
+
+/* entering a room or jumping: a scan sweeps the panel until the room is built */
+.jump-panel.is-busy {
+  overflow: hidden;
+}
+
+.jump-panel.is-busy::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 40%;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, rgba(52, 231, 255, 0.14) 85%, rgba(159, 246, 255, 0.55));
+  animation: panel-scan 1.1s linear infinite;
+}
+
+/* not behind a window, where nobody sees it */
+.game:has(.overlay-backdrop) .jump-panel.is-busy::after {
+  content: none;
+}
+
+@keyframes panel-scan {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(250%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .overlay-window.is-staged.is-open {
     animation: overlay-fade 0.14s linear both;
@@ -4301,10 +4365,21 @@ body > .field-slot.card-drag {
   .overlay-seam {
     animation: overlay-fade 0.14s linear both;
   }
-  .overlay-seam::after {
+  .overlay-seam::after,
+  .loading-indicator::after,
+  .jump-panel.is-busy::after {
     animation: wait-breathe 1.6s ease-in-out infinite alternate;
+  }
+  .overlay-seam::after {
     inset: 0;
     width: auto;
+  }
+  .jump-panel.is-busy::after {
+    height: 100%;
+    background: rgba(52, 231, 255, 0.08);
+  }
+  .loading-indicator::after {
+    background-size: 100% 100%;
   }
 }
 

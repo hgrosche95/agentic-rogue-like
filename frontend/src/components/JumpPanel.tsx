@@ -6,7 +6,8 @@ import { NodeBadge } from "./DungeonMap";
 // The side column's first panel - always in the same place, so the map never
 // moves: before a room is entered it offers to enter it, afterwards it
 // previews the next jump (the room under the pointer, else the first route).
-// Jumping itself is one click, on the map or on the button here.
+// Jumping itself is one click, on the map or on the button here. While the
+// server builds the room, a scanline runs over the panel (is-busy).
 export function JumpPanel({
   current,
   needsEnter,
@@ -33,7 +34,7 @@ export function JumpPanel({
   if (needsEnter) {
     const room = NODE_STYLE[current.type];
     return (
-      <section className="panel jump-panel is-arrived">
+      <section className={`panel jump-panel is-arrived${disabled ? " is-busy" : ""}`}>
         <div className="panel-head">
           <h2 className="panel-title">Arrived</h2>
           <span className="panel-sub">{layerLabel(current.floor, numFloors, act)}</span>
@@ -54,7 +55,7 @@ export function JumpPanel({
 
   const target = choices.find((n) => n.id === focusedId) ?? choices[0];
   return (
-    <section className="panel jump-panel">
+    <section className={`panel jump-panel${disabled ? " is-busy" : ""}`}>
       <div className="panel-head">
         <h2 className="panel-title">Next jump</h2>
         {target && canJump && <span className="panel-sub">{layerLabel(target.floor, numFloors, act)}</span>}
