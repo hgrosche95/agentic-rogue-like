@@ -13,6 +13,7 @@ import { ArtifactBar } from "./ArtifactBar";
 import { HERO } from "../characters";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useCardDrag } from "../hooks/useCardDrag";
+import { useHandFlip, useStableHandKeys } from "../hooks/useHandMotion";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { describeIntent, rangeText, STATUS_TEXT } from "../readouts";
@@ -198,10 +199,19 @@ export function CombatPanel({
   // table doesn't sit still through the typing and the round trip and then
   // jump. Once nothing is in flight any more it is dropped - the server's
   // state has replaced it, or the move failed and the card stays in hand.
-  const [played, setPlayed] = useState<{ handIndex: number; slotIndex: number } | null>(null);
-  const pending = busy ? played : null;
+  // It belongs to the table it was played on, like the discard picks: the
+  // killing blow leaves the table disabled for good, and the card left in
+  // hand by then must not stay hidden.
+  const [played, setPlayed] = useState<{ on: PendingCombatView; handIndex: number; slotIndex: number } | null>(
+    null,
+  );
+  const pending = busy && played?.on === combat ? played : null;
   const pendingCard = pending && combat.hand.find((c) => c.hand_index === pending.handIndex);
   const handRef = useRef<HTMLDivElement>(null);
+  // the hand as it is laid out: the card just played has already left it
+  const handKeys = useStableHandKeys(combat.hand);
+  const laidOut = combat.hand.filter((card) => card.hand_index !== pending?.handIndex);
+  useHandFlip(handRef, laidOut.map((card) => handKeys[combat.hand.indexOf(card)]).join(" "));
   const arenaRef = useRef<ArenaHandle>(null);
   // What the table looked like when the turn was ended, to tell once the
   // server answers whether the daemon fired and the enemy's blow got through.
@@ -320,11 +330,14 @@ export function CombatPanel({
   function playIntoSlot(slotIndex: number, slot: HTMLElement, handIndex = selectedHandIndex, from?: HTMLElement) {
     if (handIndex === null) return;
     endTurnFrom.current = null;
-    const card = from ?? handRef.current?.querySelector<HTMLElement>(`[data-hand-index="${handIndex}"]`);
-    if (card) flyCard(card, slot);
-    setSelectedHandIndex(null);
-    setPlayed({ handIndex, slotIndex });
     const played = combat.hand.find((c) => c.hand_index === handIndex);
+    const card = from ?? handRef.current?.querySelector<HTMLElement>(`[data-hand-index="${handIndex}"]`);
+    // a queued line or a permanent stays where it lands; an action burns out there
+    const stays = played !== undefined && (queues(combat, played) || PERMANENT_CARD_TYPES.includes(played.type));
+    // into the program's background: to the hint, where its socket shows up
+    if (card) flyCard(card, slot.querySelector<HTMLElement>(".background-hint") ?? slot, stays);
+    setSelectedHandIndex(null);
+    setPlayed({ on: combat, handIndex, slotIndex });
     if (!played) {
       onPlayCard(handIndex, slotIndex);
       return;
@@ -601,9 +614,10 @@ export function CombatPanel({
           <div className="hand" ref={handRef}>
             {combat.hand.map((card: HandCardView, i) => (
               <button
-                key={card.hand_index}
+                key={handKeys[i]}
+                data-flip-key={handKeys[i]}
                 data-hand-index={card.hand_index}
-                style={fanStyle(i, combat.hand.length)}
+                style={fanStyle(laidOut.indexOf(card), laidOut.length)}
                 className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : ""}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}`}
                 disabled={busy}
                 onMouseEnter={() => sfx.play("hover")}

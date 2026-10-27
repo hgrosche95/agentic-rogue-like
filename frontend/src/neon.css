@@ -591,6 +591,25 @@ body > .card-drag.type-batch {
     inset 0 0 14px color-mix(in srgb, var(--card) 16%, transparent);
 }
 
+/* the played card leaves the layout at once; the others slide together
+   (hooks/useHandMotion) while its copy flies to the slot (cardFlight.ts) */
+.hand .hand-card.is-played {
+  display: none;
+}
+
+/* the fan's outer cards dip below the row - keep them off the hint under it */
+@media (min-width: 901px) {
+  .hand {
+    padding-bottom: 14px;
+  }
+}
+
+@media (min-width: 901px) and (max-height: 820px) {
+  .hand {
+    padding-bottom: 8px;
+  }
+}
+
 /* stack slots and program lines: one outline, one glow, one curve */
 .field-slot,
 .program-background,
@@ -607,6 +626,29 @@ button.field-slot.is-queued:hover:not(:disabled) {
   border-color: var(--card);
   background: var(--panel);
   box-shadow: 0 0 20px color-mix(in srgb, var(--card) 65%, transparent);
+}
+
+.field-slot.is-occupied {
+  animation: none;
+}
+
+/* the card waiting in its slot appears as the flying copy touches down
+   (cardFlight.ts: settled at 85% of FLIGHT_MS, then fading), cross-fading
+   with it, and flashes once in its colour */
+.field-slot.is-occupied.is-landing,
+.line-socket.is-landing {
+  animation: slot-touchdown var(--dur-slow) var(--ease-out) 400ms both;
+}
+
+@keyframes slot-touchdown {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+    box-shadow: 0 0 0 4px var(--card), 0 0 36px var(--card);
+  }
+  35% {
+    opacity: 1;
+  }
 }
 
 .field-slot.is-empty.is-drop-target {
@@ -755,7 +797,9 @@ button.field-slot.is-queued:hover:not(:disabled) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .end-turn-button.is-busy::after {
+  .end-turn-button.is-busy::after,
+  .field-slot.is-occupied.is-landing,
+  .line-socket.is-landing {
     animation: none;
   }
   .hand .hand-card,
