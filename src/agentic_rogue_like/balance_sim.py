@@ -81,6 +81,8 @@ from .combat import (
     MAX_AUTO_PLAYS_PER_TURN,
     MAX_AUTO_TURNS,
     CombatState,
+    banish_candidates,
+    banish_count,
     end_turn,
     free_slots,
     incoming_damage,
@@ -297,12 +299,41 @@ def _hold_back(state: CombatState, card: Card) -> bool:
     return card.scaling is Scaling.PLAYED and state.plays_this_turn < SHIP_IT_MIN_PLAYS
 
 
+def _junk(state: CombatState, card: Card) -> bool:
+    """A hand card the smart bot gladly banishes: a Glitch, or a plain
+    starter attack or block the enemy's intent doesn't call for."""
+    if card.type is CardType.GLITCH:
+        return True
+    wanted = CardType.BLOCK if state.enemy_intent in ATTACKING_INTENTS else CardType.ATTACK
+    special = card.scaling or card.applies or card.discard_cost or card.exhaust or card.upgraded
+    return (
+        card.rarity is Rarity.STARTER
+        and not special
+        and card.type in (CardType.ATTACK, CardType.BLOCK)
+        and card.type is not wanted
+    )
+
+
+def _banish_pick(state: CombatState, idx: int) -> list[int] | None:
+    """What hand card `idx` (Purge) should banish - the weakest junk - or
+    None if there is too little junk to make it worth playing."""
+    count = banish_count(state, state.hand[idx])
+    junk = [i for i in banish_candidates(state, idx) if _junk(state, state.hand[i])]
+    return junk[:count] if len(junk) >= count else None
+
+
 def _play_action(state: CombatState, idx: int, player: PlayerState, rng: random.Random) -> bool:
-    """Play hand card `idx` into its best slot - False if it has none (a full program)."""
+    """Play hand card `idx` into its best slot - False if it has none (a full
+    program), or if it banishes and there is nothing worth banishing."""
     slot = _best_action_slot(state, state.hand[idx])
     if slot is None:
         return False
-    play_card(state, idx, slot, player, rng)
+    banish = None
+    if state.hand[idx].banish:
+        banish = _banish_pick(state, idx)
+        if banish is None:
+            return False
+    play_card(state, idx, slot, player, rng, banish)
     return True
 
 
@@ -321,7 +352,13 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
             return
         played = False
         # 0. Flush Glitch cards first - free, and they only clog the hand.
+        # A Purge does it better: it draws on top.
         glitch = next((i for i, c in enumerate(state.hand) if c.type is CardType.GLITCH), None)
+        purge = next(
+            (i for i, c in enumerate(state.hand) if c.banish and not overflows(state, c)), None
+        )
+        if glitch is not None and purge is not None and _play_action(state, purge, player, rng):
+            continue
         slots = free_slots(state)
         if glitch is not None and slots:
             play_card(state, glitch, slots[-1], player, rng)
@@ -403,6 +440,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
                     and not overflows(state, c)
                     and not _hold_back(state, c)
                     and _best_action_slot(state, c) is not None
+                    and not (c.banish and _banish_pick(state, i) is None)
                 ),
                 None,
             )

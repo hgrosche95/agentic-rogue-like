@@ -32,6 +32,7 @@ from agentic_rogue_like.engine import _room_enemy, available_choices, move_to, n
 from agentic_rogue_like.models import (
     Artifact,
     Card,
+    CardType,
     Character,
     Enemy,
     EnemyMove,
@@ -335,6 +336,23 @@ def test_the_bot_stops_once_the_program_is_lethal() -> None:
     smart_bot(state, player, random.Random(1))
     assert sum(c is not None for c in state.program) == 1
     assert len(state.hand) == 1
+
+
+def test_the_bot_purges_junk_only() -> None:
+    glitch = Card(
+        id="g", name="Glitch", type=CardType.GLITCH, value=0, exhaust=True, description=""
+    )
+    state, player = _fight(program_mode=False)
+    state.hand = [_card("Purge"), _card("Zero-Day"), glitch]
+    smart_bot(state, player, random.Random(1))
+    assert [c.name for c in state.banished_pile[:2]] == ["Glitch", "Purge"]
+
+    # Nothing worth banishing: the Purge waits until it is alone in hand,
+    # and then only draws - the Zero-Day gets played, not purged.
+    state, player = _fight(program_mode=False)
+    state.hand = [_card("Purge"), _card("Zero-Day")]
+    smart_bot(state, player, random.Random(1))
+    assert [c.name for c in state.banished_pile[:2]] == ["Zero-Day", "Purge"]
 
 
 def test_the_vibe_coder_gets_a_sixth_line() -> None:
