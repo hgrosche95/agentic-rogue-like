@@ -148,7 +148,11 @@ class SimConfig:
         hero = CHARACTERS[self.character]
         self.player_hp = hero.hp if self.player_hp is None else self.player_hp
         self.player_attack = hero.attack if self.player_attack is None else self.player_attack
-        self.deck_factory = self.deck_factory or hero.deck
+
+    def starter_deck(self) -> list[Card]:
+        """The character's starter deck - for program mode once `program` is
+        set, which may happen after the config is built."""
+        return CHARACTERS[self.character].deck(self.program)
 
     def new_player(self) -> PlayerState:
         return PlayerState(
@@ -156,7 +160,7 @@ class SimConfig:
             hp=self.player_hp,
             max_hp=self.player_hp,
             attack=self.player_attack,
-            deck=self.deck_factory(),
+            deck=(self.deck_factory or self.starter_deck)(),
         )
 
     def reward_pool(self) -> list[Card]:
@@ -172,7 +176,6 @@ class SimConfig:
 def load_variant(path: Path, character: Character = Character.CHRONOS) -> SimConfig:
     raw = json.loads(path.read_text())
     base = SimConfig(name=path.stem, character=Character(raw.get("character", character)))
-    starter = base.deck_factory
 
     for tier, overrides in raw.get("budgets", {}).items():
         if tier not in TIERS:
@@ -194,7 +197,7 @@ def load_variant(path: Path, character: Character = Character.CHRONOS) -> SimCon
     removed: list[str] = list(raw.get("remove_cards", []))
 
     def deck() -> list[Card]:
-        cards = starter()
+        cards = base.starter_deck()
         for name in removed:
             idx = next((i for i, c in enumerate(cards) if c.name == name), None)
             if idx is None:
@@ -355,9 +358,14 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         ):
             # Control flow only steers - worth a line once there is
             # something for it to steer; arrange_program puts it in place.
-            order += [CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED]
+            order += [CardType.FORK, CardType.IF_WOUNDED]
             order += [CardType.PIPE, CardType.BATCH]
         order.append(CardType.ATTACK)
+        # Loop repeats what ran to its left, so it goes in after an action.
+        if state.program_mode and any(
+            c is not None and c.type in _PROGRAM_TARGETS for c in state.program
+        ):
+            order.append(CardType.LOOP)
         if state.enemy_intent in ATTACKING_INTENTS:
             order.append(CardType.BLOCK)
         if player.hp < player.max_hp:

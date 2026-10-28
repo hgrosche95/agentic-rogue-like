@@ -100,7 +100,7 @@ def new_run(
         max_hp=hero.hp,
         attack=hero.attack,
         gold=0,
-        deck=hero.deck(),
+        deck=hero.deck(program_mode),
     )
     nodes = generate_map(seed)
     run = RunState(

@@ -39,6 +39,23 @@ def test_a_kit_swaps_two_basic_attacks_and_a_basic_block_for_its_cards() -> None
     assert run.kit_offer is None and run.agi_deals is not None
 
 
+def test_a_kit_keeps_the_starter_decks_strategy_cards() -> None:
+    # It swaps plain basics only, so every strategy the starter deck shows
+    # (Ping, Undo, Retry, ...) survives it - and there are basics enough.
+    for character in Character:
+        for program_mode in (False, True):
+            run = _at_kit(character=character, program_mode=program_mode)
+            before = list(run.player.deck)
+            kit = run.kit_offer[0]
+
+            choose_kit(run, 0)
+
+            gone = [c for c in before if c not in run.player.deck]
+            assert len(gone) == len(before) + len(kit.cards) - len(run.player.deck)
+            assert {c.name for c in gone} <= {"Exploit", "Firewall", "Prompt", "Make It Safe"}
+            assert len(gone) == (3 if character is Character.CHRONOS else 2)
+
+
 def test_kits_only_come_from_the_runs_own_pool() -> None:
     names = {k.id for seed in range(40) for k in new_run(seed).kit_offer}
     assert {"move_fast", "rubber_duck", "control_flow", "pipeline"}.isdisjoint(names)
