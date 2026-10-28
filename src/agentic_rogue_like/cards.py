@@ -24,8 +24,53 @@ import random
 from .models import Card, CardType, Rarity, Scaling, Status
 
 
-def starter_deck() -> list[Card]:
-    """A fresh set of Card instances - callers must not share these across runs."""
+# The starter decks show every strategy of the pool once, each with a weak
+# STARTER-rarity card, so a new run already hints at what a deck can become
+# and a reward is still an upgrade: Ping (Malware) for both, Undo (graveyard,
+# and one-shot - it is banished after use) for Dr. Chronos, Force Push
+# (graveyard) next to /compact (one-shot) for the Vibe-Coder - an Undo costs
+# him a token for a card he would draw anyway - and a Loop in program mode.
+# test_characters.py checks every starter deck covers the styles style.py
+# reads; style.py never counts STARTER cards as the player's choice.
+def _ping() -> Card:
+    return Card(
+        id="ping-0",
+        name="Ping",
+        type=CardType.ATTACK,
+        value=2,
+        applies=Status.MALWARE,
+        applies_amount=2,
+        description="Deal 2 (+ATK) damage. Infect it with 2 Malware.",
+    )
+
+
+def _undo() -> Card:
+    return Card(
+        id="undo-0",
+        name="Undo",
+        type=CardType.RETRIEVE,
+        value=1,
+        exhaust=True,
+        description="One-shot. Return the last card from your graveyard to your hand.",
+    )
+
+
+def _starter_copy(name: str) -> Card:
+    """A control flow card from the program pools as a STARTER card - the
+    same card, it just doesn't count as the player's choice (style.py)."""
+    template = next(c for c in PROGRAM_REWARD_POOL + VIBE_CODER_PROGRAM_POOL if c.name == name)
+    return template.model_copy(
+        update={"id": f"{template.id}-0", "rarity": Rarity.STARTER}, deep=True
+    )
+
+
+def starter_deck(program_mode: bool = False) -> list[Card]:
+    """A fresh set of Card instances - callers must not share these across runs.
+
+    `program_mode`: a Loop instead of one Exploit - control flow only does
+    something in a program (combat.run_program). Added on top, balance-sim
+    put program runs 1-3 points lower: a thicker deck draws its few strong
+    cards less often."""
     cards = [
         Card(
             id=f"strike-{i}",
@@ -34,8 +79,9 @@ def starter_deck() -> list[Card]:
             value=5,
             description="Deal 5 (+ATK) damage.",
         )
-        for i in range(4)
+        for i in range(2 if program_mode else 3)
     ]
+    cards.append(_ping())
     cards += [
         Card(
             id=f"defend-{i}",
@@ -82,12 +128,17 @@ def starter_deck() -> list[Card]:
             description="Destroy all permanent cards. Deal 5 damage for each one.",
         )
     )
+    cards.append(_undo())
+    if program_mode:
+        cards.append(_starter_copy("Loop"))
     return cards
 
 
-def vibe_coder_starter_deck() -> list[Card]:
+def vibe_coder_starter_deck(program_mode: bool = False) -> list[Card]:
     """The Vibe-Coder's starter deck (see characters.py) - weaker single cards
-    than starter_deck(), since every card he plays draws him a new one."""
+    than starter_deck(), since every card he plays draws him a new one.
+
+    `program_mode`: a Loop instead of one Prompt, like starter_deck()."""
     cards = [
         Card(
             id=f"prompt-{i}",
@@ -96,7 +147,18 @@ def vibe_coder_starter_deck() -> list[Card]:
             value=4,
             description="Deal 4 (+ATK) damage.",
         )
-        for i in range(4)
+        for i in range(2 if program_mode else 3)
+    ]
+    cards += [
+        _ping(),
+        Card(
+            id="force-push-0",
+            name="Force Push",
+            type=CardType.ATTACK,
+            value=7,
+            discard_cost=1,
+            description="Discard 1 random card. Deal 7 (+ATK) damage.",
+        ),
     ]
     cards += [
         Card(
@@ -141,6 +203,8 @@ def vibe_coder_starter_deck() -> list[Card]:
             description="One-shot. Costs no tokens. Frees 4 used tokens.",
         )
     )
+    if program_mode:
+        cards.append(_starter_copy("Loop"))
     return cards
 
 
@@ -573,6 +637,14 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
         "value": 7,
         "description": "Destroy all permanent cards. Deal 7 damage for each one.",
     },
+    "Ping": {
+        "applies_amount": 3,
+        "description": "Deal 2 (+ATK) damage. Infect it with 3 Malware.",
+    },
+    "Undo": {
+        "value": 2,
+        "description": "One-shot. Return the last 2 cards from your graveyard to your hand.",
+    },
     # ---- reward pool
     "Brute Force": {"value": 15, "description": "Discard 1 random card. Deal 15 (+ATK) damage."},
     "DDoS": {"hits": 4, "description": "Hit 4 times for 0 (+ATK) damage."},
@@ -651,6 +723,7 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
         "description": "Permanent. Frees 2 tokens at the end of each turn.",
     },
     "/compact": {"value": 6, "description": "One-shot. Costs no tokens. Frees 6 used tokens."},
+    "Force Push": {"value": 10, "description": "Discard 1 random card. Deal 10 (+ATK) damage."},
     "YOLO Deploy": {"value": 19, "description": "Discard 1 random card. Deal 19 (+ATK) damage."},
     "Copy-Paste": {
         "value": 2,

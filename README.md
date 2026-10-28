@@ -70,8 +70,9 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       mit 50 %: ein Angriff trifft ihn selbst, ein Block oder eine Heilung
       geht an den Gegner, alles andere verpufft. Eigenes Startdeck mit
       Prompt, Make It Safe, Copilot (Aktionskarten rechts davon +1 pro schon
-      gespielter Karte im Zug, höchstens +3), Energy Drink (+1 Token pro Zug)
-      und /compact (0 Tokens, gibt 4 frei). Die Zahlen kommen aus
+      gespielter Karte im Zug, höchstens +3), Energy Drink (+1 Token pro Zug),
+      /compact (0 Tokens, gibt 4 frei), Ping und Force Push (siehe
+      *Startdecks*). Die Zahlen kommen aus
       `balance-sim --character vibe_coder`: ein festes Budget für den ganzen
       Kampf ließ ihn fast jeden Gegner in Zug 1 umhauen oder gegen Bosse
       leerlaufen; so landen beide Charaktere bei ~9 % Run-Siegquote.
@@ -323,7 +324,7 @@ Spiel ohne Encounter-Agent tatsächlich vorsetzt.
 
 Aktueller Stand (Smart-Bot, 2000 Runs über beide Akte): Spieler 45 HP /
 Angriff 2, Exploit macht 5 (+2), Starthand 5, danach 3 Karten pro Runde,
-Handlimit 8; das Startdeck hat 11 Karten (keine Heilkarte). Gegner werden
+Handlimit 8; das Startdeck hat 12 Karten (keine Heilkarte). Gegner werden
 pro Hälfte der Karte um 10 % stärker an Leben und Angriff (und damit
 Block) — Akt 1 ×1,0 / ×1,1, Akt 2 ×1,21 / ×1,331 — aufgeschlagen erst
 *nach* der Erzeugung (`enemies.escalate`), damit die Budgets des
@@ -769,9 +770,48 @@ Damit sich der Anfang nicht jedes Mal gleich spielt, kommen nach dem ersten
 Artefakt zwei Entscheidungen (`starts.py`, `POST /runs/{id}/kit` und
 `/agi-deal`):
 
+### Startdecks
+
+Jedes Startdeck zeigt jede Strategie des Pools einmal, mit einer schwachen
+Startkarte (Seltenheit `starter`, zählt für die AGI nicht als gewählt), damit
+Belohnungen Upgrades bleiben. `test_characters.py` prüft, dass jedes Deck alle
+Stile aus `style.py` abdeckt, Kontrollfluss nur im Programm-Modus.
+
+| Strategie | Dr. Chronos | Vibe-Coder |
+| --- | --- | --- |
+| Angriff | 3× Exploit | 3× Prompt |
+| Block | 3× Firewall, Encryption | 3× Make It Safe |
+| Permanente | Overclock, Encryption, Prefetch, Kernel Panic | Copilot, Energy Drink |
+| Malware | Ping (2 Schaden, 2 Malware) | Ping |
+| Friedhof | Undo (1×, holt die letzte Karte zurück) | Force Push (1 Karte abwerfen, 7 Schaden) |
+| Einmal-Karten | Undo | /compact |
+| Kontrollfluss (nur Programm-Modus) | Loop statt eines Exploits | Loop statt eines Prompts |
+
+Undo würde den Vibe-Coder einen Token für eine Karte kosten, die er ohnehin
+nachzieht (balance-sim: 10 % → 4 % Run-Siegquote), darum bekommt er Force
+Push. Im Programm-Modus ersetzt die Loop einen Angriff, statt dazuzukommen:
+obendrauf lag die Siegquote 1–3 Punkte tiefer, ein dickeres Deck zieht seine
+wenigen starken Karten seltener. Pipe oder Batch als Startkarte des
+Vibe-Coders spielte der Bot noch schlechter (2 % statt 6 % bei bester
+Reihenfolge).
+
+Run-Siegquote vorher → nachher (Smart-Bot, Kit und Deal zufällig; 4000 Runs,
+beste Reihenfolge 1000; in Klammern: Akt 1 geschafft):
+
+| | Classic | Classic `--pool` | Programm wie gespielt | Programm beste Reihenfolge |
+| --- | --- | --- | --- | --- |
+| Dr. Chronos | 12,9 → 12,8 % (43 → 44 %) | 14,6 → 13,7 % (44 → 46 %) | 11,3 → 11,2 % (41 → 40 %) | 16,8 → 16,4 % (49 → 49 %) |
+| Vibe-Coder | 9,9 → 9,0 % (50 → 50 %) | 11,4 → 10,4 % (51 → 50 %) | 4,3 → 4,1 % (35 → 35 %) | 7,4 → 7,8 % (43 → 44 %) |
+
+Der Bot legt eine Loop dabei erst nach einer Aktion ins Programm (vorher
+davor, wo sie nichts zu wiederholen hat); die Vorher-Zahlen im Programm-Modus
+sind mit derselben Regel gemessen.
+
 **Start-Kit** – eins von drei Kits, je zwei Karten einer Strategie, die
 Grundkarten ersetzen (bei Dr. Chronos 2 Angriffe und 1 Block, beim
-Vibe-Coder 1 und 1, weil ihm ein dünneres Deck mehr bringt). Ein Kit wird
+Vibe-Coder 1 und 1, weil ihm ein dünneres Deck mehr bringt). Nur die
+schlichten Grundkarten (Exploit, Firewall, Prompt, Make It Safe) gehen, die
+Strategie-Startkarten bleiben. Ein Kit wird
 nur angeboten, wenn beide Karten im Belohnungspool des Runs liegen, also
 erscheinen Vibe-Coder- und Programm-Kits nur dort.
 
@@ -828,7 +868,9 @@ Variante heilt der Bot wieder immer.
 
 Nach jedem gewonnenen Kampf (außer dem letzten Boss) gibt es drei Karten zur Auswahl
 (oder Überspringen), gewichtet nach Seltenheit — nach Elite-Kämpfen sind
-seltene wahrscheinlicher. Der Pool (`cards.py`) ist um drei Strategien gebaut:
+seltene wahrscheinlicher. Der Pool (`cards.py`) ist um drei Strategien gebaut
+(dazu Malware, Kontrollfluss im Programm-Modus und die Karten des
+Vibe-Coders; jede zeigt das Startdeck schon einmal, siehe *Startdecks*):
 
 - **Permanente** — Botnet, Load Balancer, Daemon, Mainframe werden stärker,
   je voller das Feld ist; Kernel Panic kassiert das Feld am Ende ein.

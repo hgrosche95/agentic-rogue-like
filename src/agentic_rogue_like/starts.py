@@ -30,6 +30,7 @@ from .models import (
     Rarity,
     StarterKit,
 )
+from .style import PlayStyle, card_styles
 
 KIT_CHOICES = 3
 DEAL_CHOICES = 3
@@ -108,7 +109,15 @@ _KIT_REPLACES: dict[Character, tuple[tuple[CardType, int], ...]] = {
 
 
 def _basics(deck: list[Card], card_type: CardType) -> list[Card]:
-    return [c for c in deck if c.rarity is Rarity.STARTER and c.type is card_type]
+    """The plain starter cards of `card_type` - not the starter deck's
+    strategy cards (Ping, ...), which stay to show what else the deck can do."""
+    return [
+        c
+        for c in deck
+        if c.rarity is Rarity.STARTER
+        and c.type is card_type
+        and card_styles(c) <= {PlayStyle.AGGRO, PlayStyle.TURTLE}
+    ]
 
 
 def roll_kits(rng: random.Random, pool: list[Card]) -> list[StarterKit]:
