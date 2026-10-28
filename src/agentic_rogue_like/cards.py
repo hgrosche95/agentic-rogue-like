@@ -8,6 +8,7 @@ their own payoff card, so a run can lean into one of them:
 - permanents: Botnet, Load Balancer, Mainframe hit harder the fuller the field;
 - graveyard: Memory Dump/Brute Force/Fork Bomb fill it, Stack Overflow and Rollback use it;
 - one-shot cards: Zero-Day/Sandbox/Backup are strong but banished after use,
+  Purge banishes a hand card of the player's choice on top,
   Payload grows with the banished pile, Undelete brings one card back and
   System Restore all of them - at the price of the whole field.
 
@@ -378,6 +379,16 @@ REWARD_POOL: list[Card] = [
         description="One-shot. Draw 2 cards.",
     ),
     Card(
+        id="purge",
+        name="Purge",
+        type=CardType.DRAW,
+        value=2,
+        banish=1,
+        exhaust=True,
+        rarity=Rarity.COMMON,
+        description="One-shot. Banish a card from your hand. Draw 2 cards.",
+    ),
+    Card(
         id="memory-dump",
         name="Memory Dump",
         type=CardType.DRAW,
@@ -682,6 +693,7 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Sandbox": {"value": 21, "description": "One-shot. Gain 21 block."},
     "Backup": {"value": 14, "description": "One-shot. Heal 14 HP."},
     "Phishing": {"value": 3, "description": "One-shot. Draw 3 cards."},
+    "Purge": {"value": 3, "description": "One-shot. Banish a card from your hand. Draw 3 cards."},
     "Memory Dump": {"value": 5, "description": "One-shot. Discard your hand, then draw 5 cards."},
     "Rollback": {
         "value": 3,

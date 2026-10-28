@@ -480,12 +480,18 @@ def start_combat_node(
 
 
 def play_combat_card(
-    run: RunState, state: CombatState, hand_index: int, slot_index: int, rng: random.Random
+    run: RunState,
+    state: CombatState,
+    hand_index: int,
+    slot_index: int,
+    rng: random.Random,
+    banish: list[int] | None = None,
 ) -> None:
-    """Raises ValueError (via combat.play_card) on an invalid index or an occupied slot."""
+    """Raises ValueError (via combat.play_card) on an invalid index, an
+    occupied slot or a `banish` choice that doesn't fit the card."""
     card = state.hand[hand_index] if 0 <= hand_index < len(state.hand) else None
     dealt = state.tally.damage_dealt
-    run.history.append(_play_combat_card(state, hand_index, slot_index, run.player, rng))
+    run.history.append(_play_combat_card(state, hand_index, slot_index, run.player, rng, banish))
     record_play(run, state, card, state.tally.damage_dealt - dealt)
 
 

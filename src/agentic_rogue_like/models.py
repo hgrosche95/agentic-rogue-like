@@ -177,6 +177,7 @@ class Card(BaseModel):
     # "off", so a plain Card(...) still behaves exactly like before.
     exhaust: bool = False  # one-shot: banished after use instead of discarded
     discard_cost: int = 0  # discard this many random other hand cards first
+    banish: int = 0  # banish this many other hand cards first - the player picks which
     hits: int = 1  # attacks only: the damage is dealt this many times
     draw: int = 0  # draw this many cards after the effect
     scaling: Scaling | None = None  # attacks and blocks only: +scale_value per ...

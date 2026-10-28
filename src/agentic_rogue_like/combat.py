@@ -72,6 +72,7 @@ from .models import (
     EnemyMove,
     MoveKind,
     PlayerState,
+    Rarity,
     Scaling,
     Status,
 )
@@ -666,8 +667,15 @@ def _chain_bonus(state: CombatState, slot_index: int) -> int:
 
 
 def play_card(
-    state: CombatState, hand_index: int, slot_index: int, player: PlayerState, rng: random.Random
+    state: CombatState,
+    hand_index: int,
+    slot_index: int,
+    player: PlayerState,
+    rng: random.Random,
+    banish: list[int] | None = None,
 ) -> str:
+    """`banish`: for a card that banishes hand cards (Purge), the hand
+    indices - before the play - of the cards it takes (see _banish_choice)."""
     if not 0 <= hand_index < len(state.hand):
         raise ValueError(f"hand_index {hand_index} is out of range")
     if not 0 <= slot_index < len(state.program):
@@ -676,6 +684,7 @@ def play_card(
         raise ValueError(f"slot {slot_index} is occupied")
     if slot_index in state.locked_slots and _needs_slot(state, state.hand[hand_index]):
         raise ValueError(f"slot {slot_index} is locked this turn")
+    banished = _banish_choice(state, hand_index, banish)
 
     card = state.hand.pop(hand_index)
     # Rolled before anything else is paid, and only past the context window -
@@ -685,8 +694,8 @@ def play_card(
     if state.free_plays:
         state.free_plays -= 1
     # The cost is paid before anything else, so a card like Memory Dump can't
-    # throw away the very cards it is about to draw.
-    cost_line = _pay_discard_cost(state, card, rng)
+    # throw away the very cards it is about to draw - and Purge can't banish them.
+    cost_line = _pay_banish(state, banished) + _pay_discard_cost(state, card, rng)
 
     if queues(state, card):
         # Paid for now, run at the end of the turn (run_program).
@@ -1039,6 +1048,54 @@ def _pay_discard_cost(state: CombatState, card: Card, rng: random.Random) -> str
         state.discard_pile.append(c)
     names = ", ".join(c.name for c in discarded)
     return f"You discard {names}. "
+
+
+def banish_count(state: CombatState, card: Card) -> int:
+    """How many other hand cards playing `card` banishes - its `banish`, or
+    fewer if the hand doesn't hold that many besides it."""
+    return max(0, min(card.banish, len(state.hand) - 1))
+
+
+def banish_candidates(state: CombatState, exclude: int) -> list[int]:
+    """Hand indices from the weakest card to the strongest, leaving out
+    `exclude` (the card being played): Glitches first, then the plain
+    starter basics, then the rest by value. What the bots banish."""
+
+    def rank(i: int) -> tuple[int, int, int]:
+        c = state.hand[i]
+        plain = (
+            c.rarity is Rarity.STARTER
+            and c.type in (CardType.ATTACK, CardType.BLOCK)
+            and not (c.scaling or c.applies or c.discard_cost or c.exhaust or c.upgraded)
+        )
+        return (c.type is not CardType.GLITCH, not plain, c.value)
+
+    return sorted((i for i in range(len(state.hand)) if i != exclude), key=rank)
+
+
+def _banish_choice(state: CombatState, hand_index: int, banish: list[int] | None) -> list[Card]:
+    """The hand cards a play of hand card `hand_index` banishes. `banish`
+    names their hand indices and has to match banish_count exactly; None
+    lets the bots skip the choice and takes the weakest (banish_candidates).
+    Raises ValueError before anything is touched if it doesn't fit."""
+    count = banish_count(state, state.hand[hand_index])
+    if banish is None:
+        banish = banish_candidates(state, hand_index)[:count]
+    if len(set(banish)) != len(banish) or len(banish) != count:
+        raise ValueError(f"pick exactly {count} card(s) to banish")
+    if any(not 0 <= i < len(state.hand) or i == hand_index for i in banish):
+        raise ValueError("banish index is out of range")
+    return [state.hand[i] for i in sorted(banish)]
+
+
+def _pay_banish(state: CombatState, cards: list[Card]) -> str:
+    if not cards:
+        return ""
+    for c in cards:
+        # by identity - two copies of a card compare equal
+        state.hand.pop(next(i for i, h in enumerate(state.hand) if h is c))
+        state.banished_pile.append(c)
+    return f"You banish {_names(cards)} for the rest of the fight. "
 
 
 def queues(state: CombatState, card: Card) -> bool:

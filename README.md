@@ -98,7 +98,7 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 - [x] **Deck-Building** — zu Beginn des Runs (nach dem ersten Artefakt)
       ein Start-Kit wählen und ein Angebot der AGI annehmen oder ablehnen
       (siehe *Start eines Runs*), danach nach jedem Sieg eine von drei Karten wählen
-      (`/runs/{id}/card-reward`); 18 Belohnungskarten mit Abwurfkosten,
+      (`/runs/{id}/card-reward`); 24 Belohnungskarten mit Abwurfkosten,
       Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
 - [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
       drei wählen, danach alle 3 Schritte auf der Map ein weiteres
@@ -887,9 +887,21 @@ Vibe-Coders; jede zeigt das Startdeck schon einmal, siehe *Startdecks*):
 - **Friedhof** — Brute Force, Fork Bomb, Honeypot und Memory Dump werfen
   Karten ab (Kosten!), Stack Overflow skaliert damit, Rollback holt zurück.
 - **Einmal-Karten** (1×) — Zero-Day, Sandbox, Backup sind stark, werden aber
-  für den Rest des Kampfes verbannt; Payload wächst mit dem Verbannt-Stapel,
+  für den Rest des Kampfes verbannt; Purge verbannt eine Handkarte nach Wahl
+  und zieht 2 (Upgrade: 3), Payload wächst mit dem Verbannt-Stapel,
   Undelete holt eine verbannte Karte zurück, System Restore opfert das
   ganze Feld und holt dafür alle vorher verbannten Karten auf die Hand.
+
+**Purge** lässt als einzige Karte wählen: Ausgespielt in einen Slot (im
+Programm-Modus in die Hintergrund-Leiste – wie Ziehkarten wirkt sie sofort,
+statt sich einzureihen) leuchten die übrigen Handkarten auf, ein Klick
+verbannt die gewählte, Esc oder Cancel bricht ab. Die API bekommt die Wahl als
+`banish_indices` an `POST /runs/{id}/combat/play-card` (Handindizes vor dem
+Ausspielen, wie `discard_indices` beim Zugende); fehlt sie, geht die
+schwächste Karte (`combat.banish_candidates`: Glitch, dann schlichte
+Grundkarten). Der Smart-Bot spielt Purge nur, wenn er etwas Wertloses
+loswird: einen Glitch oder eine Grundkarte, die der Intent des Gegners gerade
+nicht verlangt.
 
 Karten, die mitten im Zug Karten auf die Hand bringen (ziehen, zurückholen),
 sind absichtlich alle Einmal-Karten: Ohne Energie-System wären sonst
