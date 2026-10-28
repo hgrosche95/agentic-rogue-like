@@ -21,9 +21,14 @@ function slug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
 
-// The shell command Dr. Chronos "hacks in" for a played card.
-export function commandFor(card: Card, enemyName: string): string {
+// The shell command Dr. Chronos "hacks in" for a played card - `banished`:
+// the hand cards it banishes (Purge), shredded first.
+export function commandFor(card: Card, enemyName: string, banished: string[] = []): string {
   const target = slug(enemyName) || "target";
+  if (banished.length > 0) {
+    const files = banished.map((name) => `./${slug(name)}`).join(" ");
+    return `shred -u ${files} && curl -s ./cards | head -${card.value}`;
+  }
   switch (card.type) {
     case "attack":
       return `./exploit --target=${target} --dmg ${card.value}`;

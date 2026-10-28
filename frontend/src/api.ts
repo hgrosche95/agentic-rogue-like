@@ -72,6 +72,8 @@ export interface Card {
   rarity: Rarity;
   // one-shot: banished for the rest of the fight after it is played
   exhaust: boolean;
+  // hand cards it banishes when played - the player picks them (Purge)
+  banish: number;
   // attacks only: the damage is dealt this many times
   hits: number;
   // scaling attacks: the bonus per permanent / graveyard / banished card
@@ -569,10 +571,17 @@ export function restRemove(runId: string, index: number): Promise<RunView> {
   });
 }
 
-export function playCard(runId: string, handIndex: number, slotIndex: number): Promise<RunView> {
+// `banishIndices`: the hand cards a banishing card (Purge) takes - exactly
+// banishCount of them (program.ts).
+export function playCard(
+  runId: string,
+  handIndex: number,
+  slotIndex: number,
+  banishIndices: number[] = [],
+): Promise<RunView> {
   return request<RunView>(`/runs/${runId}/combat/play-card`, {
     method: "POST",
-    body: JSON.stringify({ hand_index: handIndex, slot_index: slotIndex }),
+    body: JSON.stringify({ hand_index: handIndex, slot_index: slotIndex, banish_indices: banishIndices }),
   });
 }
 

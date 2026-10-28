@@ -9,6 +9,12 @@ export function queues(combat: PendingCombatView, card: Card): boolean {
   return combat.program_mode && QUEUED_TYPES.includes(card.type);
 }
 
+// How many other hand cards playing `card` banishes (combat.banish_count):
+// its `banish`, or fewer if the hand doesn't hold that many besides it.
+export function banishCount(combat: PendingCombatView, card: Card): number {
+  return Math.max(0, Math.min(card.banish, combat.hand.length - 1));
+}
+
 // The order the queued lines will run in, and which of them run: a
 // refactoring boss reverses it, an interrupting enemy cuts it short.
 export function programPlan(combat: PendingCombatView, enemySlain: boolean) {
