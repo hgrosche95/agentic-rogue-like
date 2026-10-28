@@ -2,7 +2,13 @@
 
 import random
 
-from agentic_rogue_like.cards import REWARD_POOL, reward_card, roll_card_reward, starter_deck
+from agentic_rogue_like.cards import (
+    REWARD_POOL,
+    reward_card,
+    roll_card_reward,
+    starter_deck,
+    upgrade_card,
+)
 from agentic_rogue_like.combat import CombatState, end_turn, play_card
 from agentic_rogue_like.models import (
     PERMANENT_CARD_TYPES,
@@ -172,3 +178,19 @@ def test_daemon_kill_skips_the_enemy_attack() -> None:
 def test_new_permanents_are_permanent() -> None:
     for name in ("Load Balancer", "Daemon", "Mainframe"):
         assert _card(name).type in PERMANENT_CARD_TYPES
+
+
+def _garbage_collect() -> Card:
+    return next(c for c in starter_deck() if c.name == "Garbage Collect")
+
+
+def test_garbage_collect_grows_with_the_banished_pile() -> None:
+    banished = [_filler(1), _filler(2), _filler(3)]
+    state = _state([_garbage_collect()], banished_pile=list(banished))
+    play_card(state, 0, 0, _player(), random.Random(1))
+    assert state.enemy_hp == 200 - (2 + 3 + 3 * 2)
+
+    upgraded = _state([upgrade_card(_garbage_collect())], banished_pile=list(banished))
+    play_card(upgraded, 0, 0, _player(), random.Random(1))
+    assert upgraded.enemy_hp == 200 - (2 + 3 + 3 * 3)
+

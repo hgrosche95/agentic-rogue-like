@@ -38,6 +38,7 @@ from agentic_rogue_like.models import (
     Enemy,
     PlayerState,
     Rarity,
+    Scaling,
 )
 from agentic_rogue_like.shop import roll_shop
 from agentic_rogue_like.style import PlayStyle, card_styles
@@ -90,6 +91,8 @@ def test_every_starter_deck_shows_every_strategy() -> None:
             shown = set().union(*(card_styles(c) for c in deck))
             wanted = set(PlayStyle) if program_mode else set(PlayStyle) - {PlayStyle.PROGRAM}
             assert shown == wanted, (hero.name, program_mode)
+            # ... and the one-shot style's payoff, not only cards that feed it.
+            assert any(c.scaling is Scaling.BANISHED for c in deck), (hero.name, program_mode)
             assert all(c.rarity is Rarity.STARTER for c in deck)
             assert all(can_upgrade(c) for c in deck if c.name != "Prefetch")
             assert len({c.id for c in deck}) == len(deck)

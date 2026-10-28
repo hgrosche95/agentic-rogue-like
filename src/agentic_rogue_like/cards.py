@@ -30,6 +30,8 @@ from .models import Card, CardType, Rarity, Scaling, Status
 # and one-shot - it is banished after use) for Dr. Chronos, Force Push
 # (graveyard) next to /compact (one-shot) for the Vibe-Coder - an Undo costs
 # him a token for a card he would draw anyway - and a Loop in program mode.
+# Garbage Collect, in both, is the one-shot payoff: a small Payload, so the
+# banished pile counts for something from the first fight on.
 # test_characters.py checks every starter deck covers the styles style.py
 # reads; style.py never counts STARTER cards as the player's choice.
 def _ping() -> Card:
@@ -55,6 +57,18 @@ def _undo() -> Card:
     )
 
 
+def _garbage_collect() -> Card:
+    return Card(
+        id="garbage-collect-0",
+        name="Garbage Collect",
+        type=CardType.ATTACK,
+        value=2,
+        scaling=Scaling.BANISHED,
+        scale_value=2,
+        description="Deal 2 (+ATK) damage, +2 per banished card.",
+    )
+
+
 def _starter_copy(name: str) -> Card:
     """A control flow card from the program pools as a STARTER card - the
     same card, it just doesn't count as the player's choice (style.py)."""
@@ -67,10 +81,10 @@ def _starter_copy(name: str) -> Card:
 def starter_deck(program_mode: bool = False) -> list[Card]:
     """A fresh set of Card instances - callers must not share these across runs.
 
-    `program_mode`: a Loop instead of one Exploit - control flow only does
-    something in a program (combat.run_program). Added on top, balance-sim
-    put program runs 1-3 points lower: a thicker deck draws its few strong
-    cards less often."""
+    Garbage Collect takes the place of one Exploit. `program_mode`: a Loop
+    instead of another - control flow only does something in a program
+    (combat.run_program). Added on top, balance-sim put program runs 1-3
+    points lower: a thicker deck draws its few strong cards less often."""
     cards = [
         Card(
             id=f"strike-{i}",
@@ -79,9 +93,9 @@ def starter_deck(program_mode: bool = False) -> list[Card]:
             value=5,
             description="Deal 5 (+ATK) damage.",
         )
-        for i in range(2 if program_mode else 3)
+        for i in range(1 if program_mode else 2)
     ]
-    cards.append(_ping())
+    cards += [_ping(), _garbage_collect()]
     cards += [
         Card(
             id=f"defend-{i}",
@@ -138,7 +152,8 @@ def vibe_coder_starter_deck(program_mode: bool = False) -> list[Card]:
     """The Vibe-Coder's starter deck (see characters.py) - weaker single cards
     than starter_deck(), since every card he plays draws him a new one.
 
-    `program_mode`: a Loop instead of one Prompt, like starter_deck()."""
+    Garbage Collect and, in `program_mode`, a Loop take the place of a
+    Prompt each, like starter_deck()."""
     cards = [
         Card(
             id=f"prompt-{i}",
@@ -147,10 +162,11 @@ def vibe_coder_starter_deck(program_mode: bool = False) -> list[Card]:
             value=4,
             description="Deal 4 (+ATK) damage.",
         )
-        for i in range(2 if program_mode else 3)
+        for i in range(1 if program_mode else 2)
     ]
     cards += [
         _ping(),
+        _garbage_collect(),
         Card(
             id="force-push-0",
             name="Force Push",
@@ -640,6 +656,10 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Ping": {
         "applies_amount": 3,
         "description": "Deal 2 (+ATK) damage. Infect it with 3 Malware.",
+    },
+    "Garbage Collect": {
+        "scale_value": 3,
+        "description": "Deal 2 (+ATK) damage, +3 per banished card.",
     },
     "Undo": {
         "value": 2,

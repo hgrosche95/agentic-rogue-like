@@ -102,8 +102,10 @@ KITS = (
 # What a kit takes out of the starter deck. The Vibe-Coder draws a card for
 # every card he plays, so a thinner deck pays off more for him: balance-sim put
 # him 5 points above Dr. Chronos with the same swap, and 3 with one basic fewer.
+# Dr. Chronos gives up a block more than an attack: his Garbage Collect already
+# took an Exploit's place, and his program deck's Loop another.
 _KIT_REPLACES: dict[Character, tuple[tuple[CardType, int], ...]] = {
-    Character.CHRONOS: ((CardType.ATTACK, 2), (CardType.BLOCK, 1)),
+    Character.CHRONOS: ((CardType.ATTACK, 1), (CardType.BLOCK, 2)),
     Character.VIBE_CODER: ((CardType.ATTACK, 1), (CardType.BLOCK, 1)),
 }
 

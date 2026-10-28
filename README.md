@@ -71,8 +71,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       geht an den Gegner, alles andere verpufft. Eigenes Startdeck mit
       Prompt, Make It Safe, Copilot (Aktionskarten rechts davon +1 pro schon
       gespielter Karte im Zug, höchstens +3), Energy Drink (+1 Token pro Zug),
-      /compact (0 Tokens, gibt 4 frei), Ping und Force Push (siehe
-      *Startdecks*). Die Zahlen kommen aus
+      /compact (0 Tokens, gibt 4 frei), Ping, Force Push und Garbage
+      Collect (siehe *Startdecks*). Die Zahlen kommen aus
       `balance-sim --character vibe_coder`: ein festes Budget für den ganzen
       Kampf ließ ihn fast jeden Gegner in Zug 1 umhauen oder gegen Bosse
       leerlaufen; so landen beide Charaktere bei ~9 % Run-Siegquote.
@@ -775,17 +775,25 @@ Artefakt zwei Entscheidungen (`starts.py`, `POST /runs/{id}/kit` und
 Jedes Startdeck zeigt jede Strategie des Pools einmal, mit einer schwachen
 Startkarte (Seltenheit `starter`, zählt für die AGI nicht als gewählt), damit
 Belohnungen Upgrades bleiben. `test_characters.py` prüft, dass jedes Deck alle
-Stile aus `style.py` abdeckt, Kontrollfluss nur im Programm-Modus.
+Stile aus `style.py` abdeckt, Kontrollfluss nur im Programm-Modus, und dass
+jedes Deck die Auszahlung der Einmal-Karten schon kennt (eine Karte, die mit
+dem Verbannt-Stapel skaliert).
 
 | Strategie | Dr. Chronos | Vibe-Coder |
 | --- | --- | --- |
-| Angriff | 3× Exploit | 3× Prompt |
+| Angriff | 2× Exploit | 2× Prompt |
 | Block | 3× Firewall, Encryption | 3× Make It Safe |
 | Permanente | Overclock, Encryption, Prefetch, Kernel Panic | Copilot, Energy Drink |
 | Malware | Ping (2 Schaden, 2 Malware) | Ping |
 | Friedhof | Undo (1×, holt die letzte Karte zurück) | Force Push (1 Karte abwerfen, 7 Schaden) |
-| Einmal-Karten | Undo | /compact |
+| Einmal-Karten | Undo, Garbage Collect (2 Schaden, +2 pro verbannter Karte) | /compact, Garbage Collect |
 | Kontrollfluss (nur Programm-Modus) | Loop statt eines Exploits | Loop statt eines Prompts |
+
+Garbage Collect ist ein kleiner Payload (Upgrade: +3 pro verbannter Karte) und
+ersetzt einen Exploit bzw. Prompt, die Decks bleiben also bei 12 (Chronos) und
+11 Karten (Vibe-Coder). Damit lohnt sich der Verbannt-Stapel schon im ersten
+Kampf: jedes Undo, /compact oder Glitch, das ausgespielt wird, macht ihn
+stärker.
 
 Undo würde den Vibe-Coder einen Token für eine Karte kosten, die er ohnehin
 nachzieht (balance-sim: 10 % → 4 % Run-Siegquote), darum bekommt er Force
@@ -808,8 +816,10 @@ davor, wo sie nichts zu wiederholen hat); die Vorher-Zahlen im Programm-Modus
 sind mit derselben Regel gemessen.
 
 **Start-Kit** – eins von drei Kits, je zwei Karten einer Strategie, die
-Grundkarten ersetzen (bei Dr. Chronos 2 Angriffe und 1 Block, beim
-Vibe-Coder 1 und 1, weil ihm ein dünneres Deck mehr bringt). Nur die
+Grundkarten ersetzen (bei Dr. Chronos 1 Angriff und 2 Blocks, beim
+Vibe-Coder 1 und 1, weil ihm ein dünneres Deck mehr bringt). Dr. Chronos gab
+früher 2 Angriffe ab; seit Garbage Collect einen Exploit ersetzt (und im
+Programm-Modus die Loop einen zweiten), bliebe ihm sonst keiner. Nur die
 schlichten Grundkarten (Exploit, Firewall, Prompt, Make It Safe) gehen, die
 Strategie-Startkarten bleiben. Ein Kit wird
 nur angeboten, wenn beide Karten im Belohnungspool des Runs liegen, also
