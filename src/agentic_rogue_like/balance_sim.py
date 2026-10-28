@@ -355,9 +355,14 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         ):
             # Control flow only steers - worth a line once there is
             # something for it to steer; arrange_program puts it in place.
-            order += [CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED]
+            order += [CardType.FORK, CardType.IF_WOUNDED]
             order += [CardType.PIPE, CardType.BATCH]
         order.append(CardType.ATTACK)
+        # Loop repeats what ran to its left, so it goes in after an action.
+        if state.program_mode and any(
+            c is not None and c.type in _PROGRAM_TARGETS for c in state.program
+        ):
+            order.append(CardType.LOOP)
         if state.enemy_intent in ATTACKING_INTENTS:
             order.append(CardType.BLOCK)
         if player.hp < player.max_hp:
