@@ -8,6 +8,7 @@ their own payoff card, so a run can lean into one of them:
 - permanents: Botnet, Load Balancer, Mainframe hit harder the fuller the field;
 - graveyard: Memory Dump/Brute Force/Fork Bomb fill it, Stack Overflow and Rollback use it;
 - one-shot cards: Zero-Day/Sandbox/Backup are strong but banished after use,
+  Purge banishes a hand card of the player's choice on top,
   Payload grows with the banished pile, Undelete brings one card back and
   System Restore all of them - at the price of the whole field.
 
@@ -24,8 +25,70 @@ import random
 from .models import Card, CardType, Rarity, Scaling, Status
 
 
-def starter_deck() -> list[Card]:
-    """A fresh set of Card instances - callers must not share these across runs."""
+# The starter decks show every strategy of the pool once, each with a weak
+# STARTER-rarity card, so a new run already hints at what a deck can become
+# and a reward is still an upgrade: Ping (Malware) for both, Undo (graveyard,
+# and one-shot - it is banished after use) for Dr. Chronos, Force Push
+# (graveyard) next to /compact (one-shot) for the Vibe-Coder - an Undo costs
+# him a token for a card he would draw anyway - and a Loop in program mode.
+# Garbage Collect, in both, is the one-shot payoff: a small Payload, so the
+# banished pile counts for something from the first fight on.
+# test_characters.py checks every starter deck covers the styles style.py
+# reads; style.py never counts STARTER cards as the player's choice.
+def _ping() -> Card:
+    return Card(
+        id="ping-0",
+        name="Ping",
+        type=CardType.ATTACK,
+        value=2,
+        applies=Status.MALWARE,
+        applies_amount=2,
+        description="Deal 2 (+ATK) damage. Infect it with 2 Malware.",
+    )
+
+
+def _undo() -> Card:
+    return Card(
+        id="undo-0",
+        name="Undo",
+        type=CardType.RETRIEVE,
+        value=1,
+        exhaust=True,
+        description="One-shot. Return the last card from your graveyard to your hand.",
+    )
+
+
+def _garbage_collect() -> Card:
+    return Card(
+        id="garbage-collect-0",
+        name="Garbage Collect",
+        type=CardType.ATTACK,
+        value=2,
+        scaling=Scaling.BANISHED,
+        scale_value=2,
+        description="Deal 2 (+ATK) damage, +2 per banished card.",
+    )
+
+
+def _starter_copy(name: str) -> Card:
+    """A control flow card from the program pools as a STARTER card - the
+    same card, it just doesn't count as the player's choice (style.py)."""
+    template = next(c for c in PROGRAM_REWARD_POOL + VIBE_CODER_PROGRAM_POOL if c.name == name)
+    return template.model_copy(
+        update={"id": f"{template.id}-0", "rarity": Rarity.STARTER}, deep=True
+    )
+
+
+def starter_deck(program_mode: bool = False) -> list[Card]:
+    """A fresh set of Card instances - callers must not share these across runs.
+
+    Garbage Collect takes the place of one Exploit. `program_mode`: a Loop
+    instead of Kernel Panic - control flow only does something in a program
+    (combat.run_program), and a program's permanents run in the background,
+    so there is never a clogged field for Kernel Panic to clear. Added on
+    top, balance-sim put program runs 1-3 points lower (a thicker deck draws
+    its few strong cards less often); in place of an Exploit, 4 lower next
+    to Garbage Collect."""
     cards = [
         Card(
             id=f"strike-{i}",
@@ -34,8 +97,9 @@ def starter_deck() -> list[Card]:
             value=5,
             description="Deal 5 (+ATK) damage.",
         )
-        for i in range(4)
+        for i in range(2)
     ]
+    cards += [_ping(), _garbage_collect()]
     cards += [
         Card(
             id=f"defend-{i}",
@@ -73,21 +137,28 @@ def starter_deck() -> list[Card]:
             description="Permanent. Draw 1 extra card each turn.",
         )
     )
-    cards.append(
-        Card(
-            id="final-strike-0",
-            name="Kernel Panic",
-            type=CardType.FINAL_STRIKE,
-            value=5,
-            description="Destroy all permanent cards. Deal 5 damage for each one.",
+    if not program_mode:
+        cards.append(
+            Card(
+                id="final-strike-0",
+                name="Kernel Panic",
+                type=CardType.FINAL_STRIKE,
+                value=5,
+                description="Destroy all permanent cards. Deal 5 damage for each one.",
+            )
         )
-    )
+    cards.append(_undo())
+    if program_mode:
+        cards.append(_starter_copy("Loop"))
     return cards
 
 
-def vibe_coder_starter_deck() -> list[Card]:
+def vibe_coder_starter_deck(program_mode: bool = False) -> list[Card]:
     """The Vibe-Coder's starter deck (see characters.py) - weaker single cards
-    than starter_deck(), since every card he plays draws him a new one."""
+    than starter_deck(), since every card he plays draws him a new one.
+
+    Garbage Collect and, in `program_mode`, a Loop take the place of a
+    Prompt each, like starter_deck()."""
     cards = [
         Card(
             id=f"prompt-{i}",
@@ -96,7 +167,19 @@ def vibe_coder_starter_deck() -> list[Card]:
             value=4,
             description="Deal 4 (+ATK) damage.",
         )
-        for i in range(4)
+        for i in range(1 if program_mode else 2)
+    ]
+    cards += [
+        _ping(),
+        _garbage_collect(),
+        Card(
+            id="force-push-0",
+            name="Force Push",
+            type=CardType.ATTACK,
+            value=7,
+            discard_cost=1,
+            description="Discard 1 random card. Deal 7 (+ATK) damage.",
+        ),
     ]
     cards += [
         Card(
@@ -141,6 +224,8 @@ def vibe_coder_starter_deck() -> list[Card]:
             description="One-shot. Costs no tokens. Frees 4 used tokens.",
         )
     )
+    if program_mode:
+        cards.append(_starter_copy("Loop"))
     return cards
 
 
@@ -296,6 +381,16 @@ REWARD_POOL: list[Card] = [
         exhaust=True,
         rarity=Rarity.COMMON,
         description="One-shot. Draw 2 cards.",
+    ),
+    Card(
+        id="purge",
+        name="Purge",
+        type=CardType.DRAW,
+        value=2,
+        banish=1,
+        exhaust=True,
+        rarity=Rarity.COMMON,
+        description="One-shot. Banish a card from your hand. Draw 2 cards.",
     ),
     Card(
         id="memory-dump",
@@ -573,6 +668,18 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
         "value": 7,
         "description": "Destroy all permanent cards. Deal 7 damage for each one.",
     },
+    "Ping": {
+        "applies_amount": 3,
+        "description": "Deal 2 (+ATK) damage. Infect it with 3 Malware.",
+    },
+    "Garbage Collect": {
+        "scale_value": 3,
+        "description": "Deal 2 (+ATK) damage, +3 per banished card.",
+    },
+    "Undo": {
+        "value": 2,
+        "description": "One-shot. Return the last 2 cards from your graveyard to your hand.",
+    },
     # ---- reward pool
     "Brute Force": {"value": 15, "description": "Discard 1 random card. Deal 15 (+ATK) damage."},
     "DDoS": {"hits": 4, "description": "Hit 4 times for 0 (+ATK) damage."},
@@ -590,6 +697,7 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Sandbox": {"value": 21, "description": "One-shot. Gain 21 block."},
     "Backup": {"value": 14, "description": "One-shot. Heal 14 HP."},
     "Phishing": {"value": 3, "description": "One-shot. Draw 3 cards."},
+    "Purge": {"value": 3, "description": "One-shot. Banish a card from your hand. Draw 3 cards."},
     "Memory Dump": {"value": 5, "description": "One-shot. Discard your hand, then draw 5 cards."},
     "Rollback": {
         "value": 3,
@@ -651,6 +759,7 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
         "description": "Permanent. Frees 2 tokens at the end of each turn.",
     },
     "/compact": {"value": 6, "description": "One-shot. Costs no tokens. Frees 6 used tokens."},
+    "Force Push": {"value": 10, "description": "Discard 1 random card. Deal 10 (+ATK) damage."},
     "YOLO Deploy": {"value": 19, "description": "Discard 1 random card. Deal 19 (+ATK) damage."},
     "Copy-Paste": {
         "value": 2,

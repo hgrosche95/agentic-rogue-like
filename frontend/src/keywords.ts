@@ -35,8 +35,14 @@ export const KEYWORDS: Keyword[] = [
   {
     id: "banished",
     term: "Banished (Purged)",
-    pattern: /\bbanish(?:ed)?\b/,
+    pattern: /\bbanished\b/,
     text: "Gone for the rest of the fight. One-shot cards end up here; they are back next fight.",
+  },
+  {
+    id: "banish",
+    term: "Banish",
+    pattern: /\bbanish(?:es)?\b/,
+    text: "Send a card from your hand to Purged: gone for the rest of the fight, back next fight. You pick which. Every banished card feeds Payload and Garbage Collect.",
   },
   {
     id: "source",

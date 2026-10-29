@@ -32,6 +32,7 @@ from agentic_rogue_like.engine import _room_enemy, available_choices, move_to, n
 from agentic_rogue_like.models import (
     Artifact,
     Card,
+    CardType,
     Character,
     Enemy,
     EnemyMove,
@@ -337,6 +338,23 @@ def test_the_bot_stops_once_the_program_is_lethal() -> None:
     assert len(state.hand) == 1
 
 
+def test_the_bot_purges_junk_only() -> None:
+    glitch = Card(
+        id="g", name="Glitch", type=CardType.GLITCH, value=0, exhaust=True, description=""
+    )
+    state, player = _fight(program_mode=False)
+    state.hand = [_card("Purge"), _card("Zero-Day"), glitch]
+    smart_bot(state, player, random.Random(1))
+    assert [c.name for c in state.banished_pile[:2]] == ["Glitch", "Purge"]
+
+    # Nothing worth banishing: the Purge waits until it is alone in hand,
+    # and then only draws - the Zero-Day gets played, not purged.
+    state, player = _fight(program_mode=False)
+    state.hand = [_card("Purge"), _card("Zero-Day")]
+    smart_bot(state, player, random.Random(1))
+    assert [c.name for c in state.banished_pile[:2]] == ["Zero-Day", "Purge"]
+
+
 def test_the_vibe_coder_gets_a_sixth_line() -> None:
     enemy = Enemy(id="e", name="Foe", hp=10, attack=1, attack_name="Hit")
     lines = {
@@ -517,3 +535,34 @@ def test_the_preview_plays_out_line_by_line() -> None:
     assert (exploit.runs, exploit.damage, exploit.enemy_hp) == (2, 10, 90)
     assert (firewall.runs, firewall.block) == (0, 0)
     assert state.program[0] is not None  # still only a preview
+
+
+def test_purge_resolves_on_the_spot_in_a_program() -> None:
+    # Card flow, like Phishing: it banishes and draws right away, so the
+    # drawn cards can still be queued this turn - and it takes no line.
+    state, player = _fight()
+    _queue(state, player, "Exploit")
+    state.hand = [_card("Purge"), _card("Firewall")]
+    play_card(state, 0, 0, player, random.Random(1), banish=[1])
+
+    assert [c.name for c in state.banished_pile] == ["Firewall", "Purge"]
+    assert len(state.hand) == 2
+    assert [c.name for c in state.program if c] == ["Exploit"]
+
+
+def test_api_purges_the_chosen_card() -> None:
+    client = TestClient(app)
+    run_id = client.post("/runs", json={"seed": 3, "program_mode": True}).json()["run_id"]
+    run = get_session(run_id).run
+    run.artifact_offer = run.kit_offer = None
+    client.post(f"/runs/{run_id}/resolve")
+    get_session(run_id).combat.hand = [_card("Purge"), _card("Exploit"), _card("Firewall")]
+
+    view = client.get(f"/runs/{run_id}").json()["pending_combat"]
+    assert [c["banish"] for c in view["hand"]] == [1, 0, 0]
+    url = f"/runs/{run_id}/combat/play-card"
+    bad = client.post(url, json={"hand_index": 0, "slot_index": 0, "banish_indices": [0]})
+    assert bad.status_code == 400
+    response = client.post(url, json={"hand_index": 0, "slot_index": 0, "banish_indices": [2]})
+    assert response.json()["pending_combat"]["banished_count"] == 2
+    assert [c.name for c in get_session(run_id).combat.banished_pile] == ["Firewall", "Purge"]

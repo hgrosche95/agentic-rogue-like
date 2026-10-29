@@ -142,6 +142,9 @@ class CardView(BaseModel):
     description: str
     rarity: str
     exhaust: bool
+    # Hand cards it banishes when played - the player picks them
+    # (PlayCardRequest.banish_indices).
+    banish: int
     hits: int
     # Scaling attacks: the bonus per permanent / graveyard / banished card.
     scale_value: int
@@ -161,6 +164,7 @@ class CardView(BaseModel):
             description=card.description,
             rarity=card.rarity.value,
             exhaust=card.exhaust,
+            banish=card.banish,
             hits=max(card.hits, 1),
             scale_value=card.scale_value,
             applies=None if card.applies is None else card.applies.value,
@@ -464,6 +468,10 @@ class EventChoiceRequest(BaseModel):
 class PlayCardRequest(BaseModel):
     hand_index: int
     slot_index: int
+    # Hand indices (before the play) of the cards a banishing card (Purge)
+    # takes - exactly CardView.banish of them, or fewer if the hand is short.
+    # Left out, the weakest go (combat.banish_candidates).
+    banish_indices: list[int] | None = None
 
 
 class MoveQueuedRequest(BaseModel):
@@ -833,7 +841,12 @@ def play_card_endpoint(run_id: str, request: PlayCardRequest) -> RunView:
 
     try:
         play_combat_card(
-            session.run, session.combat, request.hand_index, request.slot_index, session.rng
+            session.run,
+            session.combat,
+            request.hand_index,
+            request.slot_index,
+            session.rng,
+            request.banish_indices,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

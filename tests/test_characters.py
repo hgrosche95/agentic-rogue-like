@@ -12,6 +12,7 @@ from agentic_rogue_like.artifacts import (
 from agentic_rogue_like.cards import (
     REWARD_POOL,
     VIBE_CODER_REWARD_POOL,
+    can_upgrade,
     roll_card_reward,
     starter_deck,
     vibe_coder_starter_deck,
@@ -29,8 +30,18 @@ from agentic_rogue_like.combat import (
     start_combat,
 )
 from agentic_rogue_like.engine import new_run
-from agentic_rogue_like.models import Card, CardType, Character, Enemy, PlayerState, Rarity
+from agentic_rogue_like.models import (
+    CONTROL_FLOW_TYPES,
+    Card,
+    CardType,
+    Character,
+    Enemy,
+    PlayerState,
+    Rarity,
+    Scaling,
+)
 from agentic_rogue_like.shop import roll_shop
+from agentic_rogue_like.style import PlayStyle, card_styles
 
 VIBE = CHARACTERS[Character.VIBE_CODER]
 PROMPT = Card(id="prompt", name="Prompt", type=CardType.ATTACK, value=4, description="")
@@ -68,6 +79,32 @@ def test_new_run_as_vibe_coder_uses_his_stats_and_deck() -> None:
     assert run.player.character is Character.VIBE_CODER
     assert run.player.hp == run.player.max_hp == VIBE.hp
     assert [c.name for c in run.player.deck] == [c.name for c in vibe_coder_starter_deck()]
+
+
+def test_every_starter_deck_shows_every_strategy() -> None:
+    # One card of each style the AGI reads (style.py) - control flow only in
+    # program mode, where it does something - and all of them STARTER, so the
+    # rewards stay upgrades and the AGI still reads no style off a fresh deck.
+    for hero in CHARACTERS.values():
+        for program_mode in (False, True):
+            deck = hero.deck(program_mode)
+            shown = set().union(*(card_styles(c) for c in deck))
+            wanted = set(PlayStyle) if program_mode else set(PlayStyle) - {PlayStyle.PROGRAM}
+            assert shown == wanted, (hero.name, program_mode)
+            # ... and the one-shot style's payoff, not only cards that feed it.
+            assert any(c.scaling is Scaling.BANISHED for c in deck), (hero.name, program_mode)
+            assert all(c.rarity is Rarity.STARTER for c in deck)
+            assert all(can_upgrade(c) for c in deck if c.name != "Prefetch")
+            assert len({c.id for c in deck}) == len(deck)
+
+
+def test_a_program_mode_run_starts_with_the_program_deck() -> None:
+    for character in Character:
+        hero = CHARACTERS[character]
+        run = new_run(1, character=character, program_mode=True)
+
+        assert [c.name for c in run.player.deck] == [c.name for c in hero.deck(True)]
+        assert any(c.type in CONTROL_FLOW_TYPES for c in run.player.deck)
 
 
 def test_new_run_defaults_to_dr_chronos() -> None:

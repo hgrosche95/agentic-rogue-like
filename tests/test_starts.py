@@ -24,7 +24,7 @@ def test_the_artifact_comes_before_the_kit() -> None:
         choose_kit(run, 0)
 
 
-def test_a_kit_swaps_two_basic_attacks_and_a_basic_block_for_its_cards() -> None:
+def test_a_kit_swaps_a_basic_attack_and_two_basic_blocks_for_its_cards() -> None:
     run = _at_kit()
     kit = run.kit_offer[0]
     before = [c.name for c in run.player.deck]
@@ -33,10 +33,38 @@ def test_a_kit_swaps_two_basic_attacks_and_a_basic_block_for_its_cards() -> None
 
     after = [c.name for c in run.player.deck]
     assert len(after) == len(before) - 1
-    assert after.count("Exploit") == before.count("Exploit") - 2
-    assert after.count("Firewall") == before.count("Firewall") - 1
+    assert after.count("Exploit") == before.count("Exploit") - 1
+    assert after.count("Firewall") == before.count("Firewall") - 2
     assert all(c.name in after for c in kit.cards)
     assert run.kit_offer is None and run.agi_deals is not None
+
+
+def test_in_a_program_dr_chronos_keeps_two_firewalls() -> None:
+    run = _at_kit(program_mode=True)
+    before = [c.name for c in run.player.deck]
+
+    choose_kit(run, 0)
+
+    after = [c.name for c in run.player.deck]
+    assert after.count("Exploit") == before.count("Exploit") - 2
+    assert after.count("Firewall") == before.count("Firewall") - 1 == 2
+
+
+def test_a_kit_keeps_the_starter_decks_strategy_cards() -> None:
+    # It swaps plain basics only, so every strategy the starter deck shows
+    # (Ping, Undo, Garbage Collect, ...) survives it - and there are basics enough.
+    for character in Character:
+        for program_mode in (False, True):
+            run = _at_kit(character=character, program_mode=program_mode)
+            before = list(run.player.deck)
+            kit = run.kit_offer[0]
+
+            choose_kit(run, 0)
+
+            gone = [c for c in before if c not in run.player.deck]
+            assert len(gone) == len(before) + len(kit.cards) - len(run.player.deck)
+            assert {c.name for c in gone} <= {"Exploit", "Firewall", "Prompt", "Make It Safe"}
+            assert len(gone) == (3 if character is Character.CHRONOS else 2)
 
 
 def test_kits_only_come_from_the_runs_own_pool() -> None:

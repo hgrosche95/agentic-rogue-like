@@ -1302,6 +1302,10 @@ button.field-slot.is-queued:hover:not(:disabled) {
   transform: translate(-50%, -50%) rotate(-8deg);
 }
 
+.hand .hand-card.is-banishing::after {
+  content: "Banish";
+}
+
 /* ---------- hover help and coach marks: dark glass with a cyan edge ---------- */
 .tooltip,
 .coach-bubble {

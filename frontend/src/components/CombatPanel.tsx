@@ -24,7 +24,7 @@ import { CardFace, type Readout } from "./CardFace";
 import { CombatHelp, HelpButton } from "./CombatHelp";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
 import { BossIntro, TurnBanner } from "./CombatBanners";
-import { programPlan, queues } from "../program";
+import { banishCount, programPlan, queues } from "../program";
 import { hasSeenTutorial } from "../tutorial";
 import { ProgramLines, ProgramOutput } from "./ProgramLines";
 import { SlotPreview } from "./SlotPreview";
@@ -179,7 +179,7 @@ export function CombatPanel({
   log: string[];
   disabled: boolean;
   enemySlain?: boolean;
-  onPlayCard: (handIndex: number, slotIndex: number) => void;
+  onPlayCard: (handIndex: number, slotIndex: number, banishIndices?: number[]) => void;
   onEndTurn: (discardIndices: number[]) => void;
   onMoveQueued?: (fromSlot: number, toSlot: number) => void;
   onContinue?: () => void;
@@ -197,6 +197,21 @@ export function CombatPanel({
   const setDiscarding = (picks: number[] | null) =>
     setDiscardChoice(picks === null ? null : { on: combat, picks });
   const excess = Math.max(0, combat.hand.length - combat.max_hand_size);
+  // A card that banishes hand cards (Purge), played into a slot, first asks
+  // which: the play waits here until they are picked - for the table it was
+  // played on, like the discard picks; null while not choosing.
+  const [banishChoice, setBanishChoice] = useState<{
+    on: PendingCombatView;
+    handIndex: number;
+    slotIndex: number;
+    slot: HTMLElement;
+    picks: number[];
+  } | null>(null);
+  const banishing = banishChoice?.on === combat ? banishChoice : null;
+  const banishCard = banishing ? combat.hand.find((c) => c.hand_index === banishing.handIndex) : undefined;
+  const banishNeeded = banishCard ? banishCount(combat, banishCard) : 0;
+  // picking cards from the hand - to discard or to banish - holds the rest of the table
+  const choosing = discarding !== null || banishing !== null;
   const rawExchange = useHpExchange(player.hp, combat.enemy_hp);
   // the bars move when the hit lands, not when the server answers
   const shownPlayerHp = useLagged(player.hp, tempoMs(PLAYER_HIT_MS));
@@ -430,6 +445,20 @@ export function CombatPanel({
   function selectCard(handIndex: number) {
     sfx.play("select");
     setMovingLine(null);
+    if (banishing !== null) {
+      if (handIndex === banishing.handIndex) return;
+      const picks = banishing.picks.includes(handIndex)
+        ? banishing.picks.filter((i) => i !== handIndex)
+        : [...banishing.picks, handIndex];
+      if (picks.length < banishNeeded) {
+        setBanishChoice({ ...banishing, picks });
+        return;
+      }
+      // enough picked: the play goes through
+      setBanishChoice(null);
+      playIntoSlot(banishing.slotIndex, banishing.slot, banishing.handIndex, undefined, picks);
+      return;
+    }
     if (discarding !== null) {
       if (discarding.includes(handIndex)) setDiscarding(discarding.filter((i) => i !== handIndex));
       else if (discarding.length < excess) setDiscarding([...discarding, handIndex]);
@@ -439,11 +468,23 @@ export function CombatPanel({
   }
 
   // `from` is where the card's flight into the slot starts: the card in the
-  // hand, or the dragged copy where it was dropped.
-  function playIntoSlot(slotIndex: number, slot: HTMLElement, handIndex = selectedHandIndex, from?: HTMLElement) {
+  // hand, or the dragged copy where it was dropped. `banish`: the hand cards
+  // a banishing card takes - left out, they are asked for first.
+  function playIntoSlot(
+    slotIndex: number,
+    slot: HTMLElement,
+    handIndex = selectedHandIndex,
+    from?: HTMLElement,
+    banish?: number[],
+  ) {
     if (handIndex === null) return;
     endTurnFrom.current = null;
     const played = combat.hand.find((c) => c.hand_index === handIndex);
+    if (played && banish === undefined && banishCount(combat, played) > 0) {
+      setSelectedHandIndex(null);
+      setBanishChoice({ on: combat, handIndex, slotIndex, slot, picks: [] });
+      return;
+    }
     const card = from ?? handRef.current?.querySelector<HTMLElement>(`[data-hand-index="${handIndex}"]`);
     // a queued line or a permanent stays where it lands; an action burns out there
     const stays = played !== undefined && (queues(combat, played) || PERMANENT_CARD_TYPES.includes(played.type));
@@ -453,12 +494,13 @@ export function CombatPanel({
     setPlayed({ on: combat, handIndex, slotIndex });
     setMoves((m) => ({ ...m, plays: m.plays + 1 }));
     if (!played) {
-      onPlayCard(handIndex, slotIndex);
+      onPlayCard(handIndex, slotIndex, banish);
       return;
     }
     // Dr. Chronos types the card in as a command first; it only goes to the
     // server - and hits - once he is done typing.
-    const text = commandFor(played, combat.enemy_name);
+    const banishedNames = (banish ?? []).flatMap((i) => combat.hand.find((c) => c.hand_index === i)?.name ?? []);
+    const text = commandFor(played, combat.enemy_name, banishedNames);
     setCommands((sent) => [...sent, { at: log.length, text }]);
     setTyping(true);
     sfx.play("typing", { durationMs: tempoMs(TYPING_MS) });
@@ -470,20 +512,23 @@ export function CombatPanel({
       // Enter, and the command runs
       sfx.play("enter");
       if (runsNow) {
-        sfx.play(cardSound(played.type), { hits: hitsOf(played.description), delayMs: 40 });
+        sfx.play(cardSound(played.type, (banish?.length ?? 0) > 0), {
+          hits: hitsOf(played.description),
+          delayMs: 40,
+        });
         arenaRef.current?.cardPlayed(played.type, played.value);
       }
-      onPlayCard(handIndex, slotIndex);
+      onPlayCard(handIndex, slotIndex, banish);
     });
   }
 
   const drag = useCardDrag({
-    enabled: !busy && discarding === null,
+    enabled: !busy && !choosing,
     onDrop: (handIndex, slotIndex, slot, from) => playIntoSlot(slotIndex, slot, handIndex, from),
   });
   // Program mode: drag a queued card onto another line to move it there.
   const lineDrag = useCardDrag({
-    enabled: !busy && discarding === null,
+    enabled: !busy && !choosing,
     onDrop: (fromLine, toLine) => {
       setMovingLine(null);
       if (fromLine !== toLine) {
@@ -518,7 +563,7 @@ export function CombatPanel({
         if (enemySlain) {
           sfx.play("click");
           onContinue?.();
-        } else if (!busy && (discarding === null || discarding.length === excess)) {
+        } else if (!busy && banishing === null && (discarding === null || discarding.length === excess)) {
           endTurn();
         }
         return;
@@ -528,6 +573,7 @@ export function CombatPanel({
         setSelectedHandIndex(null);
         setMovingLine(null);
         if (discarding !== null && !busy) setDiscarding(null);
+        if (banishing !== null && !busy) setBanishChoice(null);
         return;
       }
       if (busy || enemySlain) return;
@@ -538,7 +584,7 @@ export function CombatPanel({
       }
       if (!/^[1-9]$/.test(key)) return;
       const n = Number(key) - 1;
-      if (discarding === null && (selectedHandIndex !== null || movingLine !== null)) {
+      if (!choosing && (selectedHandIndex !== null || movingLine !== null)) {
         const slot = target(n);
         if (slot) {
           slot.click();
@@ -554,8 +600,18 @@ export function CombatPanel({
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  // a hand card while cards are picked: picked, pickable, or the banishing card itself
+  const handPick = (handIndex: number): string => {
+    if (banishing !== null) {
+      if (handIndex === banishing.handIndex) return " is-selected is-banisher";
+      return banishing.picks.includes(handIndex) ? " is-discarding is-banishing" : " is-pickable";
+    }
+    if (discarding === null) return "";
+    return discarding.includes(handIndex) ? " is-discarding" : " is-pickable";
+  };
+
   // the card being aimed (selected or dragged) and the slot it is aimed at
-  const aimedIndex = discarding === null ? (drag.dragging ?? selectedHandIndex) : null;
+  const aimedIndex = !choosing ? (drag.dragging ?? selectedHandIndex) : null;
   const aimedCard = aimedIndex === null ? undefined : combat.hand.find((c) => c.hand_index === aimedIndex);
   const aimedSlot = drag.dragging !== null ? drag.hoverSlot : pointedSlot;
   const aimedLow = aimedCard && readoutOf(aimedCard, null);
@@ -569,7 +625,7 @@ export function CombatPanel({
   );
 
   return (
-    <div className={`combat-panel${discarding !== null ? " is-discarding" : ""}`}>
+    <div className={`combat-panel${choosing ? " is-discarding" : ""}`}>
       {helpOpen && (
         <CombatHelp
           programMode={programMode}
@@ -779,7 +835,7 @@ export function CombatPanel({
               cutLines={cutLines}
               spentLines={spentLines}
               movingLine={movingLine}
-              locked={busy || discarding !== null}
+              locked={busy || choosing}
               pending={pending && pendingCard ? { slotIndex: pending.slotIndex, card: pendingCard } : null}
               aimedCard={aimedCard}
               aimedLow={aimedLow?.value}
@@ -807,7 +863,7 @@ export function CombatPanel({
                   key={slotIndex}
                   data-slot-index={slotIndex}
                   className={`field-slot is-empty${aimedCard ? " is-targetable" : ""}${drag.hoverSlot === slotIndex ? " is-drop-target" : ""}`}
-                  disabled={busy || selectedHandIndex === null || discarding !== null}
+                  disabled={busy || selectedHandIndex === null || choosing}
                   onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
                   onPointerEnter={() => setPointedSlot(slotIndex)}
                   onPointerLeave={() => setPointedSlot((s) => (s === slotIndex ? null : s))}
@@ -840,6 +896,16 @@ export function CombatPanel({
               </b>
             </div>
           )}
+          {banishing !== null && banishCard && (
+            <div className="discard-banner is-banish" role="status">
+              <span>
+                {banishCard.name} - pick {banishNeeded} card{banishNeeded === 1 ? "" : "s"} to banish
+              </span>
+              <b>
+                {banishing.picks.length}/{banishNeeded}
+              </b>
+            </div>
+          )}
           <div className="hand" ref={handRef}>
             {combat.hand.map((card: HandCardView, i) => (
               <button
@@ -847,7 +913,7 @@ export function CombatPanel({
                 data-flip-key={handKeys[i]}
                 data-hand-index={card.hand_index}
                 style={fanStyle(laidOut.indexOf(card), laidOut.length)}
-                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : discarding !== null ? " is-pickable" : ""}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}`}
+                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${handPick(card.hand_index)}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}`}
                 disabled={busy}
                 onMouseEnter={() => sfx.play("hover")}
                 onPointerDown={(event) => drag.onPointerDown(event, card.hand_index)}
@@ -881,8 +947,8 @@ export function CombatPanel({
           ) : (
             // busy: still shown at work (a sweep of light), never just dead
             <button
-              className={`end-turn-button${busy ? " is-busy" : ""}${discarding !== null ? (discarding.length === excess ? " is-ready" : " is-waiting") : ""}`}
-              disabled={busy || (discarding !== null && discarding.length !== excess)}
+              className={`end-turn-button${busy ? " is-busy" : ""}${discarding !== null ? (discarding.length === excess ? " is-ready" : " is-waiting") : banishing !== null ? " is-waiting" : ""}`}
+              disabled={busy || banishing !== null || (discarding !== null && discarding.length !== excess)}
               aria-busy={busy}
               onClick={endTurn}
             >
@@ -894,8 +960,16 @@ export function CombatPanel({
               <KeyHint>Space</KeyHint>
             </button>
           )}
-          {discarding !== null && (
-            <button className="end-turn-button is-cancel" disabled={busy} onClick={() => setDiscarding(null)}>
+          {choosing && (
+            <button
+              className="end-turn-button is-cancel"
+              disabled={busy}
+              onClick={() => {
+                sfx.play("click");
+                setDiscarding(null);
+                setBanishChoice(null);
+              }}
+            >
               Cancel
               <KeyHint>Esc</KeyHint>
             </button>
@@ -915,6 +989,8 @@ export function CombatPanel({
                 Running line {running + 1}...<KeyHint>Space</KeyHint>
                 <span className="key-only">to skip</span>
               </>
+          : banishing !== null && banishCard
+            ? `${banishCard.name}: click ${banishNeeded === 1 ? "the card" : `${banishNeeded} cards`} to banish for the rest of the fight - Esc to cancel.`
           : discarding !== null
             ? `Hand limit is ${combat.max_hand_size}: pick ${excess} card(s) to discard (${discarding.length}/${excess}).`
             : selectedHandIndex !== null &&

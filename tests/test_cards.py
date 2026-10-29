@@ -2,7 +2,15 @@
 
 import random
 
-from agentic_rogue_like.cards import REWARD_POOL, reward_card, roll_card_reward, starter_deck
+import pytest
+
+from agentic_rogue_like.cards import (
+    REWARD_POOL,
+    reward_card,
+    roll_card_reward,
+    starter_deck,
+    upgrade_card,
+)
 from agentic_rogue_like.combat import CombatState, end_turn, play_card
 from agentic_rogue_like.models import (
     PERMANENT_CARD_TYPES,
@@ -172,3 +180,65 @@ def test_daemon_kill_skips_the_enemy_attack() -> None:
 def test_new_permanents_are_permanent() -> None:
     for name in ("Load Balancer", "Daemon", "Mainframe"):
         assert _card(name).type in PERMANENT_CARD_TYPES
+
+
+def _garbage_collect() -> Card:
+    return next(c for c in starter_deck() if c.name == "Garbage Collect")
+
+
+def test_garbage_collect_grows_with_the_banished_pile() -> None:
+    banished = [_filler(1), _filler(2), _filler(3)]
+    state = _state([_garbage_collect()], banished_pile=list(banished))
+    play_card(state, 0, 0, _player(), random.Random(1))
+    assert state.enemy_hp == 200 - (2 + 3 + 3 * 2)
+
+    upgraded = _state([upgrade_card(_garbage_collect())], banished_pile=list(banished))
+    play_card(upgraded, 0, 0, _player(), random.Random(1))
+    assert upgraded.enemy_hp == 200 - (2 + 3 + 3 * 3)
+
+
+def test_purge_banishes_the_chosen_hand_card_then_draws() -> None:
+    state = _state([_filler(1), _card("Purge"), _filler(2), _filler(3)])
+    line = play_card(state, 1, 0, _player(), random.Random(1), banish=[2])
+    # Filler 2 is gone for the fight, and Purge itself is one-shot.
+    assert [c.name for c in state.banished_pile] == ["Filler 2", "Purge"]
+    assert [c.name for c in state.hand[:2]] == ["Filler 1", "Filler 3"]
+    assert len(state.hand) == 4  # two kept, two drawn
+    assert "You banish Filler 2" in line
+
+
+def test_purge_feeds_garbage_collect() -> None:
+    gc = _garbage_collect()
+    state = _state([_card("Purge"), _filler(1), gc])
+    play_card(state, 0, 0, _player(), random.Random(1), banish=[1])
+    play_card(state, state.hand.index(gc), 0, _player(), random.Random(1))
+    assert state.enemy_hp == 200 - (2 + 3 + 2 * 2)  # Filler 1 and Purge
+
+
+def test_purge_rejects_a_choice_that_does_not_fit() -> None:
+    for banish in ([], [0], [1, 2], [5], [1, 1]):
+        state = _state([_card("Purge"), _filler(1), _filler(2)])
+        with pytest.raises(ValueError):
+            play_card(state, 0, 0, _player(), random.Random(1), banish=banish)
+        assert len(state.hand) == 3 and not state.banished_pile  # nothing touched
+
+
+def test_purge_with_nothing_else_in_hand_just_draws() -> None:
+    state = _state([_card("Purge")])
+    play_card(state, 0, 0, _player(), random.Random(1), banish=[])
+    assert len(state.hand) == 2
+    assert [c.name for c in state.banished_pile] == ["Purge"]
+
+
+def test_without_a_choice_purge_takes_the_weakest_card() -> None:
+    glitch = Card(
+        id="g", name="Glitch", type=CardType.GLITCH, value=0, exhaust=True, description=""
+    )
+    exploit = next(c for c in starter_deck() if c.name == "Exploit")
+    state = _state([_card("Zero-Day"), exploit, _card("Purge"), glitch])
+    play_card(state, 2, 0, _player(), random.Random(1))
+    assert [c.name for c in state.banished_pile] == ["Glitch", "Purge"]
+
+    state = _state([_card("Zero-Day"), exploit, _card("Purge")])
+    play_card(state, 2, 0, _player(), random.Random(1))
+    assert [c.name for c in state.banished_pile] == ["Exploit", "Purge"]

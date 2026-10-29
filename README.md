@@ -70,8 +70,9 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       mit 50 %: ein Angriff trifft ihn selbst, ein Block oder eine Heilung
       geht an den Gegner, alles andere verpufft. Eigenes Startdeck mit
       Prompt, Make It Safe, Copilot (Aktionskarten rechts davon +1 pro schon
-      gespielter Karte im Zug, höchstens +3), Energy Drink (+1 Token pro Zug)
-      und /compact (0 Tokens, gibt 4 frei). Die Zahlen kommen aus
+      gespielter Karte im Zug, höchstens +3), Energy Drink (+1 Token pro Zug),
+      /compact (0 Tokens, gibt 4 frei), Ping, Force Push und Garbage
+      Collect (siehe *Startdecks*). Die Zahlen kommen aus
       `balance-sim --character vibe_coder`: ein festes Budget für den ganzen
       Kampf ließ ihn fast jeden Gegner in Zug 1 umhauen oder gegen Bosse
       leerlaufen; so landen beide Charaktere bei ~9 % Run-Siegquote.
@@ -97,7 +98,7 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
 - [x] **Deck-Building** — zu Beginn des Runs (nach dem ersten Artefakt)
       ein Start-Kit wählen und ein Angebot der AGI annehmen oder ablehnen
       (siehe *Start eines Runs*), danach nach jedem Sieg eine von drei Karten wählen
-      (`/runs/{id}/card-reward`); 18 Belohnungskarten mit Abwurfkosten,
+      (`/runs/{id}/card-reward`); 24 Belohnungskarten mit Abwurfkosten,
       Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
 - [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
       drei wählen, danach alle 3 Schritte auf der Map ein weiteres
@@ -323,7 +324,7 @@ Spiel ohne Encounter-Agent tatsächlich vorsetzt.
 
 Aktueller Stand (Smart-Bot, 2000 Runs über beide Akte): Spieler 45 HP /
 Angriff 2, Exploit macht 5 (+2), Starthand 5, danach 3 Karten pro Runde,
-Handlimit 8; das Startdeck hat 11 Karten (keine Heilkarte). Gegner werden
+Handlimit 8; das Startdeck hat 12 Karten (keine Heilkarte). Gegner werden
 pro Hälfte der Karte um 10 % stärker an Leben und Angriff (und damit
 Block) — Akt 1 ×1,0 / ×1,1, Akt 2 ×1,21 / ×1,331 — aufgeschlagen erst
 *nach* der Erzeugung (`enemies.escalate`), damit die Budgets des
@@ -769,9 +770,66 @@ Damit sich der Anfang nicht jedes Mal gleich spielt, kommen nach dem ersten
 Artefakt zwei Entscheidungen (`starts.py`, `POST /runs/{id}/kit` und
 `/agi-deal`):
 
+### Startdecks
+
+Jedes Startdeck zeigt jede Strategie des Pools einmal, mit einer schwachen
+Startkarte (Seltenheit `starter`, zählt für die AGI nicht als gewählt), damit
+Belohnungen Upgrades bleiben. `test_characters.py` prüft, dass jedes Deck alle
+Stile aus `style.py` abdeckt, Kontrollfluss nur im Programm-Modus, und dass
+jedes Deck die Auszahlung der Einmal-Karten schon kennt (eine Karte, die mit
+dem Verbannt-Stapel skaliert).
+
+| Strategie | Dr. Chronos | Vibe-Coder |
+| --- | --- | --- |
+| Angriff | 2× Exploit | 2× Prompt |
+| Block | 3× Firewall, Encryption | 3× Make It Safe |
+| Permanente | Overclock, Encryption, Prefetch, Kernel Panic (nur Classic) | Copilot, Energy Drink |
+| Malware | Ping (2 Schaden, 2 Malware) | Ping |
+| Friedhof | Undo (1×, holt die letzte Karte zurück) | Force Push (1 Karte abwerfen, 7 Schaden) |
+| Einmal-Karten | Undo, Garbage Collect (2 Schaden, +2 pro verbannter Karte) | /compact, Garbage Collect |
+| Kontrollfluss (nur Programm-Modus) | Loop statt Kernel Panic | Loop statt eines Prompts |
+
+Garbage Collect ist ein kleiner Payload (Upgrade: +3 pro verbannter Karte) und
+ersetzt einen Exploit bzw. Prompt, die Decks bleiben also bei 12 (Chronos) und
+11 Karten (Vibe-Coder). Damit lohnt sich der Verbannt-Stapel schon im ersten
+Kampf: jedes Undo, /compact oder Glitch, das ausgespielt wird, macht ihn
+stärker.
+
+Im Programm-Modus nimmt die Loop bei Dr. Chronos jetzt den Platz von Kernel
+Panic statt eines zweiten Exploits ein: Permanente laufen dort im Hintergrund
+und verstopfen nie eine Zeile, Kernel Panic hat also nichts freizuräumen. Mit
+Garbage Collect *und* Loop statt zweier Exploits lag die Siegquote im
+Programm-Modus 4 Punkte tiefer (14 % statt 18 %, 1000 Runs).
+
+Undo würde den Vibe-Coder einen Token für eine Karte kosten, die er ohnehin
+nachzieht (balance-sim: 10 % → 4 % Run-Siegquote), darum bekommt er Force
+Push. Im Programm-Modus ersetzt die Loop eine Karte, statt dazuzukommen:
+obendrauf lag die Siegquote 1–3 Punkte tiefer, ein dickeres Deck zieht seine
+wenigen starken Karten seltener. Pipe oder Batch als Startkarte des
+Vibe-Coders spielte der Bot noch schlechter (2 % statt 6 % bei bester
+Reihenfolge).
+
+Run-Siegquote vorher → nachher (Smart-Bot, Kit und Deal zufällig; 4000 Runs,
+beste Reihenfolge 1000; in Klammern: Akt 1 geschafft):
+
+| | Classic | Classic `--pool` | Programm wie gespielt | Programm beste Reihenfolge |
+| --- | --- | --- | --- | --- |
+| Dr. Chronos | 12,9 → 12,8 % (43 → 44 %) | 14,6 → 13,7 % (44 → 46 %) | 11,3 → 11,2 % (41 → 40 %) | 16,8 → 16,4 % (49 → 49 %) |
+| Vibe-Coder | 9,9 → 9,0 % (50 → 50 %) | 11,4 → 10,4 % (51 → 50 %) | 4,3 → 4,1 % (35 → 35 %) | 7,4 → 7,8 % (43 → 44 %) |
+
+Der Bot legt eine Loop dabei erst nach einer Aktion ins Programm (vorher
+davor, wo sie nichts zu wiederholen hat); die Vorher-Zahlen im Programm-Modus
+sind mit derselben Regel gemessen.
+
 **Start-Kit** – eins von drei Kits, je zwei Karten einer Strategie, die
-Grundkarten ersetzen (bei Dr. Chronos 2 Angriffe und 1 Block, beim
-Vibe-Coder 1 und 1, weil ihm ein dünneres Deck mehr bringt). Ein Kit wird
+Grundkarten ersetzen (bei Dr. Chronos 1 Angriff und 2 Blocks, im
+Programm-Modus 2 und 1, beim Vibe-Coder 1 und 1, weil ihm ein dünneres Deck
+mehr bringt). Seit Garbage Collect einen Exploit ersetzt, ließen 2 Angriffe
+Dr. Chronos im Classic-Modus keinen mehr – und den Deals der AGI keine
+Grundkarte Angriff. Im Programm-Modus zählen seine Firewalls mehr: mit nur
+einer übrig lag die Siegquote 4 Punkte tiefer (14 % statt 18 %). Nur die
+schlichten Grundkarten (Exploit, Firewall, Prompt, Make It Safe) gehen, die
+Strategie-Startkarten bleiben. Ein Kit wird
 nur angeboten, wenn beide Karten im Belohnungspool des Runs liegen, also
 erscheinen Vibe-Coder- und Programm-Kits nur dort.
 
@@ -828,16 +886,30 @@ Variante heilt der Bot wieder immer.
 
 Nach jedem gewonnenen Kampf (außer dem letzten Boss) gibt es drei Karten zur Auswahl
 (oder Überspringen), gewichtet nach Seltenheit — nach Elite-Kämpfen sind
-seltene wahrscheinlicher. Der Pool (`cards.py`) ist um drei Strategien gebaut:
+seltene wahrscheinlicher. Der Pool (`cards.py`) ist um drei Strategien gebaut
+(dazu Malware, Kontrollfluss im Programm-Modus und die Karten des
+Vibe-Coders; jede zeigt das Startdeck schon einmal, siehe *Startdecks*):
 
 - **Permanente** — Botnet, Load Balancer, Daemon, Mainframe werden stärker,
   je voller das Feld ist; Kernel Panic kassiert das Feld am Ende ein.
 - **Friedhof** — Brute Force, Fork Bomb, Honeypot und Memory Dump werfen
   Karten ab (Kosten!), Stack Overflow skaliert damit, Rollback holt zurück.
 - **Einmal-Karten** (1×) — Zero-Day, Sandbox, Backup sind stark, werden aber
-  für den Rest des Kampfes verbannt; Payload wächst mit dem Verbannt-Stapel,
+  für den Rest des Kampfes verbannt; Purge verbannt eine Handkarte nach Wahl
+  und zieht 2 (Upgrade: 3), Payload wächst mit dem Verbannt-Stapel,
   Undelete holt eine verbannte Karte zurück, System Restore opfert das
   ganze Feld und holt dafür alle vorher verbannten Karten auf die Hand.
+
+**Purge** lässt als einzige Karte wählen: Ausgespielt in einen Slot (im
+Programm-Modus in die Hintergrund-Leiste – wie Ziehkarten wirkt sie sofort,
+statt sich einzureihen) leuchten die übrigen Handkarten auf, ein Klick
+verbannt die gewählte, Esc oder Cancel bricht ab. Die API bekommt die Wahl als
+`banish_indices` an `POST /runs/{id}/combat/play-card` (Handindizes vor dem
+Ausspielen, wie `discard_indices` beim Zugende); fehlt sie, geht die
+schwächste Karte (`combat.banish_candidates`: Glitch, dann schlichte
+Grundkarten). Der Smart-Bot spielt Purge nur, wenn er etwas Wertloses
+loswird: einen Glitch oder eine Grundkarte, die der Intent des Gegners gerade
+nicht verlangt.
 
 Karten, die mitten im Zug Karten auf die Hand bringen (ziehen, zurückholen),
 sind absichtlich alle Einmal-Karten: Ohne Energie-System wären sonst

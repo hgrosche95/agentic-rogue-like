@@ -85,7 +85,7 @@ def card_styles(card: Card) -> set[PlayStyle]:
         styles.add(PlayStyle.PERMANENTS)
     if card.discard_cost or card.scaling is Scaling.GRAVEYARD or card.type is CardType.RETRIEVE:
         styles.add(PlayStyle.GRAVEYARD)
-    if card.exhaust or card.scaling is Scaling.BANISHED:
+    if card.exhaust or card.banish or card.scaling is Scaling.BANISHED:
         styles.add(PlayStyle.ONE_SHOT)
     if card.applies is not None or card.scaling is Scaling.MALWARE:
         styles.add(PlayStyle.MALWARE)

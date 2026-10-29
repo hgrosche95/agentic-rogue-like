@@ -320,8 +320,10 @@ export const sfx = {
   },
 };
 
-// The effect a card makes once its typed command runs.
-export function cardSound(type: CardType): SfxName {
+// The effect a card makes once its typed command runs. `banishes`: it
+// banishes hand cards (Purge) - wiping them out sounds like a reboot.
+export function cardSound(type: CardType, banishes = false): SfxName {
+  if (banishes) return "restore";
   switch (type) {
     case "attack":
     case "final_strike":

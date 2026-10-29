@@ -434,8 +434,8 @@ function App() {
           disabled={isLoading || slainCombat !== null}
           enemySlain={slainCombat !== null}
           onContinue={() => setSlainCombat(null)}
-          onPlayCard={(handIndex, slotIndex) =>
-            runAction(() => playCard(run.run_id, handIndex, slotIndex))
+          onPlayCard={(handIndex, slotIndex, banish) =>
+            runAction(() => playCard(run.run_id, handIndex, slotIndex, banish))
           }
           onEndTurn={(discard) => runAction(() => endCombatTurn(run.run_id, discard))}
           onMoveQueued={(fromSlot, toSlot) => runAction(() => moveQueued(run.run_id, fromSlot, toSlot))}
