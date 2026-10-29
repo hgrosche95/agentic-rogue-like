@@ -39,6 +39,17 @@ def test_a_kit_swaps_a_basic_attack_and_two_basic_blocks_for_its_cards() -> None
     assert run.kit_offer is None and run.agi_deals is not None
 
 
+def test_in_a_program_dr_chronos_keeps_two_firewalls() -> None:
+    run = _at_kit(program_mode=True)
+    before = [c.name for c in run.player.deck]
+
+    choose_kit(run, 0)
+
+    after = [c.name for c in run.player.deck]
+    assert after.count("Exploit") == before.count("Exploit") - 2
+    assert after.count("Firewall") == before.count("Firewall") - 1 == 2
+
+
 def test_a_kit_keeps_the_starter_decks_strategy_cards() -> None:
     # It swaps plain basics only, so every strategy the starter deck shows
     # (Ping, Undo, Garbage Collect, ...) survives it - and there are basics enough.

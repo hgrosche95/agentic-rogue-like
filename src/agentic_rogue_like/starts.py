@@ -102,11 +102,17 @@ KITS = (
 # What a kit takes out of the starter deck. The Vibe-Coder draws a card for
 # every card he plays, so a thinner deck pays off more for him: balance-sim put
 # him 5 points above Dr. Chronos with the same swap, and 3 with one basic fewer.
-# Dr. Chronos gives up a block more than an attack: his Garbage Collect already
-# took an Exploit's place, and his program deck's Loop another.
+# Dr. Chronos gives up a block more than an attack - his Garbage Collect
+# already took an Exploit's place, and two would leave him no basic attack for
+# the AGI's deals - except in a program: there his Firewalls are worth more
+# (balance-sim: 4 points lower with only one of them left, 1 higher with two).
 _KIT_REPLACES: dict[Character, tuple[tuple[CardType, int], ...]] = {
     Character.CHRONOS: ((CardType.ATTACK, 1), (CardType.BLOCK, 2)),
     Character.VIBE_CODER: ((CardType.ATTACK, 1), (CardType.BLOCK, 1)),
+}
+_PROGRAM_KIT_REPLACES: dict[Character, tuple[tuple[CardType, int], ...]] = {
+    **_KIT_REPLACES,
+    Character.CHRONOS: ((CardType.ATTACK, 2), (CardType.BLOCK, 1)),
 }
 
 
@@ -132,10 +138,11 @@ def roll_kits(rng: random.Random, pool: list[Card]) -> list[StarterKit]:
     ]
 
 
-def apply_kit(player: PlayerState, kit: StarterKit) -> list[Card]:
+def apply_kit(player: PlayerState, kit: StarterKit, program_mode: bool = False) -> list[Card]:
     """Swap the basics out for the kit's cards; returns the cards removed."""
     removed: list[Card] = []
-    for card_type, count in _KIT_REPLACES[player.character]:
+    replaces = _PROGRAM_KIT_REPLACES if program_mode else _KIT_REPLACES
+    for card_type, count in replaces[player.character]:
         removed += _basics(player.deck, card_type)[-count:]
     for card in removed:
         player.deck.remove(card)

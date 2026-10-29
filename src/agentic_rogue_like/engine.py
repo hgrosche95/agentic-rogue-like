@@ -137,7 +137,7 @@ def choose_kit(run: RunState, index: int) -> None:
     if not 0 <= index < len(offer):
         raise ValueError(f"kit index {index} is out of range")
     kit = offer[index]
-    removed = apply_kit(run.player, kit)
+    removed = apply_kit(run.player, kit, run.program_mode)
     run.history.append(
         f"You pack the {kit.name} kit: {' and '.join(c.name for c in kit.cards)} "
         f"replace {', '.join(c.name for c in removed)}."

@@ -709,7 +709,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
     steps = 0
     if cfg.rewards:  # mirrors engine.new_run / choose_kit: a kit, then a deal (both at random)
         kits = roll_kits(random.Random(f"{seed}-kits"), pool)
-        apply_kit(player, rng.choice(kits))
+        apply_kit(player, rng.choice(kits), cfg.program)
         deals = roll_deals(random.Random(f"{seed}-deals"), player, pool, cfg.artifact_pool())
         apply_deal(player, rng.choice(deals))
 

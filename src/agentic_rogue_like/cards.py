@@ -83,9 +83,12 @@ def starter_deck(program_mode: bool = False) -> list[Card]:
     """A fresh set of Card instances - callers must not share these across runs.
 
     Garbage Collect takes the place of one Exploit. `program_mode`: a Loop
-    instead of another - control flow only does something in a program
-    (combat.run_program). Added on top, balance-sim put program runs 1-3
-    points lower: a thicker deck draws its few strong cards less often."""
+    instead of Kernel Panic - control flow only does something in a program
+    (combat.run_program), and a program's permanents run in the background,
+    so there is never a clogged field for Kernel Panic to clear. Added on
+    top, balance-sim put program runs 1-3 points lower (a thicker deck draws
+    its few strong cards less often); in place of an Exploit, 4 lower next
+    to Garbage Collect."""
     cards = [
         Card(
             id=f"strike-{i}",
@@ -94,7 +97,7 @@ def starter_deck(program_mode: bool = False) -> list[Card]:
             value=5,
             description="Deal 5 (+ATK) damage.",
         )
-        for i in range(1 if program_mode else 2)
+        for i in range(2)
     ]
     cards += [_ping(), _garbage_collect()]
     cards += [
@@ -134,15 +137,16 @@ def starter_deck(program_mode: bool = False) -> list[Card]:
             description="Permanent. Draw 1 extra card each turn.",
         )
     )
-    cards.append(
-        Card(
-            id="final-strike-0",
-            name="Kernel Panic",
-            type=CardType.FINAL_STRIKE,
-            value=5,
-            description="Destroy all permanent cards. Deal 5 damage for each one.",
+    if not program_mode:
+        cards.append(
+            Card(
+                id="final-strike-0",
+                name="Kernel Panic",
+                type=CardType.FINAL_STRIKE,
+                value=5,
+                description="Destroy all permanent cards. Deal 5 damage for each one.",
+            )
         )
-    )
     cards.append(_undo())
     if program_mode:
         cards.append(_starter_copy("Loop"))

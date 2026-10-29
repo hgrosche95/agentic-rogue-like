@@ -783,11 +783,11 @@ dem Verbannt-Stapel skaliert).
 | --- | --- | --- |
 | Angriff | 2× Exploit | 2× Prompt |
 | Block | 3× Firewall, Encryption | 3× Make It Safe |
-| Permanente | Overclock, Encryption, Prefetch, Kernel Panic | Copilot, Energy Drink |
+| Permanente | Overclock, Encryption, Prefetch, Kernel Panic (nur Classic) | Copilot, Energy Drink |
 | Malware | Ping (2 Schaden, 2 Malware) | Ping |
 | Friedhof | Undo (1×, holt die letzte Karte zurück) | Force Push (1 Karte abwerfen, 7 Schaden) |
 | Einmal-Karten | Undo, Garbage Collect (2 Schaden, +2 pro verbannter Karte) | /compact, Garbage Collect |
-| Kontrollfluss (nur Programm-Modus) | Loop statt eines Exploits | Loop statt eines Prompts |
+| Kontrollfluss (nur Programm-Modus) | Loop statt Kernel Panic | Loop statt eines Prompts |
 
 Garbage Collect ist ein kleiner Payload (Upgrade: +3 pro verbannter Karte) und
 ersetzt einen Exploit bzw. Prompt, die Decks bleiben also bei 12 (Chronos) und
@@ -795,9 +795,15 @@ ersetzt einen Exploit bzw. Prompt, die Decks bleiben also bei 12 (Chronos) und
 Kampf: jedes Undo, /compact oder Glitch, das ausgespielt wird, macht ihn
 stärker.
 
+Im Programm-Modus nimmt die Loop bei Dr. Chronos jetzt den Platz von Kernel
+Panic statt eines zweiten Exploits ein: Permanente laufen dort im Hintergrund
+und verstopfen nie eine Zeile, Kernel Panic hat also nichts freizuräumen. Mit
+Garbage Collect *und* Loop statt zweier Exploits lag die Siegquote im
+Programm-Modus 4 Punkte tiefer (14 % statt 18 %, 1000 Runs).
+
 Undo würde den Vibe-Coder einen Token für eine Karte kosten, die er ohnehin
 nachzieht (balance-sim: 10 % → 4 % Run-Siegquote), darum bekommt er Force
-Push. Im Programm-Modus ersetzt die Loop einen Angriff, statt dazuzukommen:
+Push. Im Programm-Modus ersetzt die Loop eine Karte, statt dazuzukommen:
 obendrauf lag die Siegquote 1–3 Punkte tiefer, ein dickeres Deck zieht seine
 wenigen starken Karten seltener. Pipe oder Batch als Startkarte des
 Vibe-Coders spielte der Bot noch schlechter (2 % statt 6 % bei bester
@@ -816,10 +822,12 @@ davor, wo sie nichts zu wiederholen hat); die Vorher-Zahlen im Programm-Modus
 sind mit derselben Regel gemessen.
 
 **Start-Kit** – eins von drei Kits, je zwei Karten einer Strategie, die
-Grundkarten ersetzen (bei Dr. Chronos 1 Angriff und 2 Blocks, beim
-Vibe-Coder 1 und 1, weil ihm ein dünneres Deck mehr bringt). Dr. Chronos gab
-früher 2 Angriffe ab; seit Garbage Collect einen Exploit ersetzt (und im
-Programm-Modus die Loop einen zweiten), bliebe ihm sonst keiner. Nur die
+Grundkarten ersetzen (bei Dr. Chronos 1 Angriff und 2 Blocks, im
+Programm-Modus 2 und 1, beim Vibe-Coder 1 und 1, weil ihm ein dünneres Deck
+mehr bringt). Seit Garbage Collect einen Exploit ersetzt, ließen 2 Angriffe
+Dr. Chronos im Classic-Modus keinen mehr – und den Deals der AGI keine
+Grundkarte Angriff. Im Programm-Modus zählen seine Firewalls mehr: mit nur
+einer übrig lag die Siegquote 4 Punkte tiefer (14 % statt 18 %). Nur die
 schlichten Grundkarten (Exploit, Firewall, Prompt, Make It Safe) gehen, die
 Strategie-Startkarten bleiben. Ein Kit wird
 nur angeboten, wenn beide Karten im Belohnungspool des Runs liegen, also
