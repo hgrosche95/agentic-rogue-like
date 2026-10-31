@@ -2149,3 +2149,362 @@ button.field-slot.is-queued:hover:not(:disabled) {
     display: none;
   }
 }
+
+/* ---------- program mode: the program as a pipeline (ProgramLines) ----------
+   From the player's side, through the lines, into the enemy: a glowing rail
+   the lines sit on, what each line will do over it, links that show a fork,
+   a loop or the interrupt's cut, and the total at the end. On wide screens
+   the arena gives up some height for it. */
+@media (min-width: 901px) {
+  .combat-panel.is-program {
+    --arena-w: min(100%, calc(40vh * 2.4));
+    --arena-w: round(down, min(100%, 40vh * 2.4), 240px);
+  }
+  .combat-panel.is-program .combat-row {
+    max-width: min(1300px, 100%);
+    margin-top: -28px;
+  }
+  .combat-panel.is-program .field-zone {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 12px 20px 16px;
+    border-color: color-mix(in srgb, var(--cyan) 30%, var(--line-strong));
+    box-shadow: 0 0 40px color-mix(in srgb, var(--cyan) 8%, transparent);
+  }
+  .combat-panel.is-program .program-board {
+    width: 100%;
+  }
+  /* the total sits at the pipeline's end - the header keeps the interrupt,
+     in its own row no more */
+  .combat-panel.is-program .program-status .program-output {
+    display: none;
+  }
+  .combat-panel.is-program .program-status {
+    flex: 1 1 auto;
+    justify-content: center;
+    order: 1;
+  }
+  .combat-panel.is-program .zone-head > .zone-label:not(.zone-title) {
+    order: 2;
+    margin-left: auto;
+  }
+  /* wider than tall: room for the card's text, less height off the screen */
+  .combat-panel.is-program .program-line .field-slot {
+    aspect-ratio: 140 / 150;
+  }
+}
+
+.pipeline {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 168px;
+  align-items: center;
+  gap: 18px;
+}
+
+.pipeline-source {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-top: 26px;
+  border: 2px solid var(--cyan);
+  border-radius: 50%;
+  font-size: 18px;
+  color: var(--cyan);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 60%, transparent);
+}
+
+.pipeline .program-lines {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 26px;
+}
+
+/* the rail, through the middle of the lines (under their chips) */
+.pipeline .program-lines::before {
+  content: "";
+  position: absolute;
+  left: -18px;
+  right: -18px;
+  top: calc(50% + 13px);
+  height: 3px;
+  background: linear-gradient(90deg, var(--cyan), #b78bff 50%, var(--danger));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 70%, transparent);
+  opacity: 0.75;
+}
+
+.program-board.is-reversed .pipeline .program-lines::before {
+  background: linear-gradient(270deg, var(--cyan), #b78bff 50%, var(--danger));
+}
+
+@media (min-width: 901px) {
+  .pipeline .program-lines .program-line {
+    position: relative;
+    flex: 1 1 0;
+    width: auto;
+    max-width: 140px;
+    min-width: 84px;
+  }
+}
+
+.program-line {
+  position: relative;
+}
+
+/* what the line will do, over it */
+.line-chip {
+  align-self: center;
+  max-width: 100%;
+  height: 21px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 19px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: color-mix(in srgb, currentColor 12%, var(--panel-solid));
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+.line-chip.is-none {
+  visibility: hidden;
+}
+
+.line-chip.is-damage {
+  color: var(--warm);
+}
+
+.line-chip.is-block {
+  color: var(--cyan);
+}
+
+.line-chip.is-heal {
+  color: #4dffa0;
+}
+
+.line-chip.is-flow {
+  color: #b78bff;
+}
+
+.line-chip.is-cut {
+  color: var(--danger);
+}
+
+.line-chip.is-idle {
+  color: var(--text-dim);
+}
+
+.program-line.is-hot .line-chip.is-damage {
+  color: var(--gold);
+}
+
+/* the link to the next line, in the gap on the rail */
+.line-link {
+  position: absolute;
+  top: calc(50% + 13px);
+  left: 100%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 22px;
+  transform: translateY(-50%);
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: 15px;
+  color: var(--cyan);
+  pointer-events: none;
+}
+
+.line-link::after {
+  content: "›";
+}
+
+.program-board.is-reversed .line-link::after {
+  content: "‹";
+}
+
+.line-link.is-fork {
+  color: #b78bff;
+}
+
+.line-link.is-fork::after {
+  content: "⇉";
+}
+
+.line-link.is-loop {
+  color: #b78bff;
+}
+
+.line-link.is-loop::after {
+  content: "↶";
+  font-size: 18px;
+}
+
+/* the cut: a slash the full height of the lines */
+.line-link.is-cut {
+  top: 26px;
+  bottom: 0;
+  height: auto;
+  transform: none;
+}
+
+.line-link.is-cut::after {
+  content: "";
+  width: 4px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--danger);
+  box-shadow: 0 0 12px var(--danger);
+  transform: skewX(-10deg);
+}
+
+/* the running line: a packet arrives along the rail */
+.program-line.is-running::after {
+  content: "";
+  position: absolute;
+  top: calc(50% + 13px);
+  left: -26px;
+  z-index: 2;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 14px 5px var(--cyan);
+  transform: translate(-50%, -50%);
+  animation: pipeline-packet var(--dur) var(--ease-out) both;
+  pointer-events: none;
+}
+
+@keyframes pipeline-packet {
+  from {
+    opacity: 0.4;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: translate(calc(-50% + 70px), -50%) scale(1.2);
+  }
+}
+
+/* the total, at the pipeline's end */
+.pipeline-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-top: 26px;
+  padding: 14px 10px;
+  border: 2px solid var(--danger);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel-solid));
+  box-shadow: 0 0 22px color-mix(in srgb, var(--danger) 35%, transparent);
+  text-align: center;
+  transition:
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    opacity var(--dur) var(--ease-out);
+}
+
+.pipeline-result.is-idle {
+  border-color: var(--line-strong);
+  box-shadow: none;
+  opacity: 0.7;
+}
+
+.pipeline-target,
+.pipeline-unit,
+.pipeline-after {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--font-head);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-dim);
+}
+
+.pipeline-target {
+  color: var(--danger);
+}
+
+.pipeline-total {
+  font-family: var(--font-head);
+  font-size: 40px;
+  font-weight: 900;
+  line-height: 1.1;
+  color: #fff;
+  text-shadow: 0 0 14px var(--danger);
+  animation: pipeline-pop var(--dur) var(--ease-pop) both;
+}
+
+.pipeline-result.is-live .pipeline-total {
+  text-shadow: 0 0 18px var(--gold);
+}
+
+.pipeline-after {
+  margin-top: 4px;
+  color: var(--gold);
+}
+
+/* the program takes the enemy down: it says so */
+.pipeline-result.is-lethal {
+  border-color: var(--gold);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--gold) 55%, transparent);
+  animation: pipeline-lethal 1.2s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes pipeline-pop {
+  from {
+    transform: scale(1.35);
+  }
+}
+
+@keyframes pipeline-lethal {
+  to {
+    box-shadow: 0 0 40px color-mix(in srgb, var(--gold) 80%, transparent);
+  }
+}
+
+/* the background as a bus along the bottom */
+.combat-panel.is-program .program-background {
+  margin-top: 8px;
+  border-style: dashed;
+}
+
+@media (max-width: 900px) {
+  .pipeline {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .pipeline-source,
+  .line-link,
+  .pipeline .program-lines::before {
+    display: none;
+  }
+  .pipeline-result {
+    flex-direction: row;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 0;
+    padding: 6px 10px;
+  }
+  .pipeline-total {
+    font-size: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .program-line.is-running::after,
+  .pipeline-total,
+  .pipeline-result.is-lethal {
+    animation: none;
+  }
+}

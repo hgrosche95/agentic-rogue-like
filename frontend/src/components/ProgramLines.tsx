@@ -1,5 +1,12 @@
 import type { CSSProperties, PointerEvent } from "react";
-import { PERMANENT_CARD_TYPES, type Card, type HandCardView, type PendingCombatView } from "../api";
+import {
+  CONTROL_FLOW_TYPES,
+  PERMANENT_CARD_TYPES,
+  type Card,
+  type HandCardView,
+  type PendingCombatView,
+  type ProgramStep,
+} from "../api";
 import { cardText, queues } from "../program";
 import { CardFace, CardTypeIcon } from "./CardFace";
 import { SlotPreview } from "./SlotPreview";
@@ -53,6 +60,73 @@ function LineLabel({ index, hot }: { index: number; hot: boolean }) {
   );
 }
 
+// The pipeline's end: what the program will hit the enemy for, in big - and,
+// while it runs, what it has hit so far (`live`: the damage landed, the lines
+// run).
+function PipelineResult({ combat, live }: { combat: PendingCombatView; live: { dealt: number; lines: number } | null }) {
+  const after = combat.program_preview;
+  const queued = combat.program.some((card) => card !== null);
+  const dealt = after ? combat.enemy_hp + combat.enemy_block - after.enemy_hp - after.enemy_block : 0;
+  const block = after ? after.player_block - combat.player_block : 0;
+  const lethal = queued && after !== null && after.enemy_hp <= 0;
+  const left = after?.enemy_hp ?? combat.enemy_hp;
+  return (
+    <div
+      className={`pipeline-result${lethal ? " is-lethal" : ""}${live ? " is-live" : ""}${queued ? "" : " is-idle"}`}
+      aria-live="polite"
+    >
+      <span className="pipeline-target">→ {combat.enemy_name}</span>
+      <b className="pipeline-total" key={live ? live.dealt : "plan"}>
+        {live ? live.dealt : queued ? dealt : "–"}
+      </b>
+      <span className="pipeline-unit">damage{!live && block > 0 && ` · +${block} block`}</span>
+      <span className="pipeline-after">
+        {live
+          ? `${live.lines} line${live.lines === 1 ? "" : "s"} run`
+          : !queued
+            ? "nothing queued"
+            : lethal
+              ? "clean exit"
+              : `${left} HP left`}
+      </span>
+    </div>
+  );
+}
+
+// Over a queued line: what it will do when the program runs (the preview's
+// step for it) - a hit, a combo, block, or what its control flow steers.
+function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep | undefined, before: ProgramStep[]) {
+  if (!step) return null;
+  if (step.outcome === "cut") return { text: "cut", tone: "cut" };
+  if (step.outcome === "skipped") return { text: "–", tone: "idle" };
+  if (CONTROL_FLOW_TYPES.includes(card.type)) {
+    if (card.type === "loop") {
+      // a loop repeats the last action run before it - with none, it idles
+      const repeats = before.some((s) => s.outcome === "ran" && !CONTROL_FLOW_TYPES.includes(s.type));
+      return repeats ? { text: "↺ again", tone: "flow" } : { text: "nothing to repeat", tone: "idle" };
+    }
+    if (card.type === "if_wounded") {
+      return next && next.runs > 1 ? { text: "×2 armed", tone: "flow" } : { text: "waiting", tone: "idle" };
+    }
+    if (card.type === "fork") return { text: "×2 next", tone: "flow" };
+    return { text: "flow", tone: "flow" };
+  }
+  if (step.dealt > 0) return { text: step.runs > 1 ? `${step.runs}× = ${step.dealt}` : `${step.dealt}`, tone: "damage" };
+  if (step.block > 0) return { text: `+${step.block}`, tone: "block" };
+  if (step.heal > 0) return { text: `+${step.heal} HP`, tone: "heal" };
+  return null;
+}
+
+// The link on the rail from a line to the next: a fork doubling it, a loop
+// reaching back, or the interrupt's cut.
+function linkKind(combat: PendingCombatView, line: number, cutLines: number[]): string {
+  const card = combat.program[line];
+  const next = combat.program[line + 1];
+  if (cutLines.includes(line + 1) && !cutLines.includes(line)) return "cut";
+  if (next?.type === "loop") return "loop";
+  if (card && ["fork", "if_wounded"].includes(card.type)) return "fork";
+  return "plain";
+}
 
 // What CombatPanel's drag of queued cards between lines looks like from here
 // (hooks/useCardDrag, with the line as the "hand index").
@@ -77,6 +151,8 @@ export function ProgramLines({
   cardSelected,
   handHoverSlot,
   lineDrag,
+  live,
+  reversed,
   onPickLine,
   onPlay,
   onPoint,
@@ -100,6 +176,10 @@ export function ProgramLines({
   cardSelected: boolean;
   handHoverSlot: number | null;
   lineDrag: LineDrag;
+  // while the program runs: the damage landed and the lines run so far
+  live: { dealt: number; lines: number } | null;
+  // a refactor runs it right to left
+  reversed: boolean;
   onPickLine: (line: number) => void;
   onPlay: (line: number, slot: HTMLElement) => void;
   // the pointer entering (over) or leaving a line
@@ -193,7 +273,7 @@ export function ProgramLines({
         onPointerEnter={() => aims && onPoint(0, true)}
         onPointerLeave={() => aims && onPoint(0, false)}
       >
-        <span className="background-label">bg</span>
+        <span className="background-label">bg bus</span>
         {running.map((card, i) => (
           <span
             key={i}
@@ -220,14 +300,36 @@ export function ProgramLines({
     );
   }
 
+  const steps = combat.program_preview?.steps ?? [];
   return (
-    <div className="program-board" style={{ "--lines": combat.program.length } as CSSProperties}>
-      <div className="field program-lines">
-        {combat.program.map((card, line) => (
-          <div key={line} className={`program-line${line === hotLine ? " is-hot" : ""}`}>
-            {renderAction(card, line)}
-          </div>
-        ))}
+    <div
+      className={`program-board${reversed ? " is-reversed" : ""}`}
+      style={{ "--lines": combat.program.length } as CSSProperties}
+    >
+      {/* the pipeline: from the player's side, through the lines, into the enemy */}
+      <div className="pipeline">
+        <span className="pipeline-source" aria-hidden="true">
+          {reversed ? "◂" : "▸"}
+        </span>
+        <div className="field program-lines">
+          {combat.program.map((card, line) => {
+            const at = steps.findIndex((s) => s.slot === line);
+            const chip = card && at >= 0 ? lineChip(card, steps[at], steps[at + 1], steps.slice(0, at)) : null;
+            return (
+              <div
+                key={line}
+                className={`program-line${line === hotLine ? " is-hot" : ""}${running === line ? " is-running" : ""}${spentLines.includes(line) ? " is-spent" : ""}`}
+              >
+                <span className={`line-chip${chip ? ` is-${chip.tone}` : " is-none"}`}>{chip?.text}</span>
+                {renderAction(card, line)}
+                {line < combat.program.length - 1 && (
+                  <span className={`line-link is-${linkKind(combat, line, cutLines)}`} aria-hidden="true" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <PipelineResult combat={combat} live={live} />
       </div>
       {renderBackground()}
     </div>
