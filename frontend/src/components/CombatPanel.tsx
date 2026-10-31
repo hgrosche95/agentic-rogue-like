@@ -366,6 +366,9 @@ export function CombatPanel({
           combat.enemy_intent_name,
         );
         showBanner({ kind: "enemy", title: "Enemy turn", sub: `${move.label} ${move.amount}`, ms: TURN_BANNER_MS });
+      } else if (combat.program.some((card) => card !== null)) {
+        // a program that takes the enemy down in one run gets its own call
+        showBanner({ kind: "phase", title: "Clean exit", sub: "Program terminated the target", ms: PHASE_BANNER_MS });
       }
       setProgramDone(taken > 0 ? { after: rawExchange?.id ?? 0, hp: taken } : null);
       onEndTurn(picks);

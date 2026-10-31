@@ -2346,10 +2346,18 @@ button.field-slot.is-queued:hover:not(:disabled) {
   font-size: 18px;
 }
 
+/* the cut: a slash the full height of the lines */
+.line-link.is-cut {
+  top: 26px;
+  bottom: 0;
+  height: auto;
+  transform: none;
+}
+
 .line-link.is-cut::after {
   content: "";
   width: 4px;
-  height: 150px;
+  height: 100%;
   border-radius: 2px;
   background: var(--danger);
   box-shadow: 0 0 12px var(--danger);
