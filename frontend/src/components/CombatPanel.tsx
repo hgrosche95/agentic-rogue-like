@@ -467,6 +467,34 @@ export function CombatPanel({
     setSelectedHandIndex((current) => (current === handIndex ? null : handIndex));
   }
 
+  // Program mode, a click on a hand card plays it where it goes: an action
+  // into the first free line, anything else into the background. Dragging it
+  // still picks the line - and the number keys pick the card, then a line.
+  function clickHandCard(handIndex: number) {
+    const card = combat.hand.find((c) => c.hand_index === handIndex);
+    const free = programMode && !choosing && movingLine === null && selectedHandIndex === null;
+    const target = card && free ? autoTarget(card) : null;
+    if (target) {
+      sfx.play("select");
+      playIntoSlot(target.slot, target.el, handIndex);
+      return;
+    }
+    selectCard(handIndex);
+  }
+
+  function autoTarget(card: HandCardView): { slot: number; el: HTMLElement } | null {
+    const board = fieldRef.current;
+    if (!board) return null;
+    if (!queues(combat, card)) {
+      const el = board.querySelector<HTMLElement>(".program-background");
+      return el ? { slot: 0, el } : null;
+    }
+    const line = combat.program.findIndex((c, i) => c === null && !combat.locked_slots.includes(i));
+    const lines = board.querySelectorAll<HTMLElement>(".program-line");
+    const el = line < 0 ? null : lines[line]?.querySelector<HTMLElement>(".field-slot");
+    return el ? { slot: line, el } : null;
+  }
+
   // `from` is where the card's flight into the slot starts: the card in the
   // hand, or the dragged copy where it was dropped. `banish`: the hand cards
   // a banishing card takes - left out, they are asked for first.
@@ -625,7 +653,7 @@ export function CombatPanel({
   );
 
   return (
-    <div className={`combat-panel${choosing ? " is-discarding" : ""}`}>
+    <div className={`combat-panel${programMode ? " is-program" : ""}${choosing ? " is-discarding" : ""}`}>
       {helpOpen && (
         <CombatHelp
           programMode={programMode}
@@ -842,6 +870,12 @@ export function CombatPanel({
               cardSelected={selectedHandIndex !== null}
               handHoverSlot={drag.hoverSlot}
               lineDrag={lineDrag}
+              live={
+                running === null
+                  ? null
+                  : { dealt: programHp?.on === combat ? combat.enemy_hp - programHp.hp : 0, lines: spentLines.length + 1 }
+              }
+              reversed={reversed}
               onPickLine={pickLine}
               onPlay={(line, slot) => playIntoSlot(line, slot)}
               onPoint={(line, over) => setPointedSlot((s) => (over ? line : s === line ? null : s))}
@@ -918,7 +952,7 @@ export function CombatPanel({
                 onMouseEnter={() => sfx.play("hover")}
                 onPointerDown={(event) => drag.onPointerDown(event, card.hand_index)}
                 onClick={() => {
-                  if (!drag.consumeClick()) selectCard(card.hand_index);
+                  if (!drag.consumeClick()) clickHandCard(card.hand_index);
                 }}
               >
                 <CardFace card={card} readout={readoutOf(card, aimedIndex === card.hand_index ? aimedSlot : null)} />
