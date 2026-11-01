@@ -2188,9 +2188,9 @@ button.field-slot.is-queued:hover:not(:disabled) {
     order: 2;
     margin-left: auto;
   }
-  /* wider than tall: room for the card's text, less height off the screen */
+  /* shaped like the cards in the hand, so a card looks the same in a line */
   .combat-panel.is-program .program-line .field-slot {
-    aspect-ratio: 140 / 150;
+    aspect-ratio: 132 / 182;
   }
 }
 
@@ -2217,8 +2217,8 @@ button.field-slot.is-queued:hover:not(:disabled) {
 .pipeline .program-lines {
   position: relative;
   display: flex;
-  justify-content: space-between;
-  gap: 26px;
+  justify-content: center;
+  gap: 18px;
 }
 
 /* the rail, through the middle of the lines (under their chips) */
@@ -2243,7 +2243,7 @@ button.field-slot.is-queued:hover:not(:disabled) {
     position: relative;
     flex: 1 1 0;
     width: auto;
-    max-width: 140px;
+    max-width: 124px;
     min-width: 84px;
   }
 }
@@ -2311,7 +2311,7 @@ button.field-slot.is-queued:hover:not(:disabled) {
   z-index: 1;
   display: grid;
   place-items: center;
-  width: 26px;
+  width: 18px;
   height: 22px;
   transform: translateY(-50%);
   font-family: var(--font-head);
@@ -2369,7 +2369,7 @@ button.field-slot.is-queued:hover:not(:disabled) {
   content: "";
   position: absolute;
   top: calc(50% + 13px);
-  left: -26px;
+  left: -18px;
   z-index: 2;
   width: 14px;
   height: 14px;
