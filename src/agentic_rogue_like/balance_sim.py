@@ -81,6 +81,7 @@ from .combat import (
     MAX_AUTO_PLAYS_PER_TURN,
     MAX_AUTO_TURNS,
     CombatState,
+    EnemyIntentType,
     banish_candidates,
     banish_count,
     end_turn,
@@ -397,12 +398,21 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
             # something for it to steer; arrange_program puts it in place.
             order += [CardType.FORK, CardType.IF_WOUNDED]
             order += [CardType.PIPE, CardType.BATCH]
+            # Try/Catch only against an interrupt; a Buffer only with a Flush
+            # in hand to let it out again
+            if state.enemy_intent is EnemyIntentType.INTERRUPT:
+                order.append(CardType.TRY_CATCH)
+            if any(c.type is CardType.FLUSH for c in state.hand):
+                order.append(CardType.BUFFER)
         order.append(CardType.ATTACK)
-        # Loop repeats what ran to its left, so it goes in after an action.
+        # Loop repeats what ran to its left, so it goes in after an action -
+        # and a Flush after the Buffer and the action it stored.
         if state.program_mode and any(
             c is not None and c.type in _PROGRAM_TARGETS for c in state.program
         ):
             order.append(CardType.LOOP)
+            if any(c is not None and c.type is CardType.BUFFER for c in state.program):
+                order.append(CardType.FLUSH)
         if state.enemy_intent in ATTACKING_INTENTS:
             order.append(CardType.BLOCK)
         if player.hp < player.max_hp:
