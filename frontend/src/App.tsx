@@ -119,7 +119,8 @@ function App() {
   const [selectedSetting, setSelectedSetting] = useState(FALLBACK_SETTINGS[0]);
   const [characters, setCharacters] = useState<CharacterView[]>(FALLBACK_CHARACTERS);
   const [selectedCharacter, setSelectedCharacter] = useState<Character>("chronos");
-  const [programMode, setProgramMode] = useState(false);
+  // program mode is the game's own idea - it starts selected
+  const [programMode, setProgramMode] = useState(true);
   const [isMapOpen, setIsMapOpen] = useState(false);
   // Hovering a room on the map previews it in the next-jump panel.
   const [focusedJump, setFocusedJump] = useState<string | null>(null);
