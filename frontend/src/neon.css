@@ -2162,7 +2162,27 @@ button.field-slot.is-queued:hover:not(:disabled) {
   }
   .combat-panel.is-program .combat-row {
     max-width: min(1300px, 100%);
-    margin-top: -28px;
+    margin-top: 0;
+  }
+  /* the screen above is as wide as the rail below: the scene in its middle,
+     the HUD plates in the space beside it rather than over it */
+  .combat-panel.is-program .arena-wrap {
+    box-sizing: border-box;
+    width: min(1300px, 100%);
+    border: 1px solid var(--line-strong);
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    background:
+      linear-gradient(180deg, transparent 70%, color-mix(in srgb, var(--cyan) 6%, transparent)),
+      repeating-linear-gradient(90deg, color-mix(in srgb, var(--cyan) 5%, transparent) 0 1px, transparent 1px 48px),
+      #07071a;
+  }
+  .combat-panel.is-program .arena-wrap > .arena-stage {
+    width: var(--arena-w);
+    margin: 0 auto;
+  }
+  .combat-panel.is-program .arena-wrap > .vs-hud {
+    width: min(calc((100% - var(--arena-w)) / 2 - 28px), 300px);
   }
   .combat-panel.is-program .field-zone {
     box-sizing: border-box;
@@ -2173,6 +2193,10 @@ button.field-slot.is-queued:hover:not(:disabled) {
   }
   .combat-panel.is-program .program-board {
     width: 100%;
+  }
+  /* one block with the screen above it */
+  .combat-panel.is-program .field-zone {
+    border-radius: 0 0 16px 16px;
   }
   /* the total sits at the pipeline's end - the header keeps the interrupt,
      in its own row no more */
