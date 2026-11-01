@@ -70,6 +70,7 @@ function PipelineResult({ combat, live }: { combat: PendingCombatView; live: { d
   const block = after ? after.player_block - combat.player_block : 0;
   const lethal = queued && after !== null && after.enemy_hp <= 0;
   const left = after?.enemy_hp ?? combat.enemy_hp;
+  const combos = (after?.steps ?? []).flatMap((s) => (s.combo ? [s.combo] : []));
   return (
     <div
       className={`pipeline-result${lethal ? " is-lethal" : ""}${live ? " is-live" : ""}${queued ? "" : " is-idle"}`}
@@ -89,6 +90,7 @@ function PipelineResult({ combat, live }: { combat: PendingCombatView; live: { d
               ? "clean exit"
               : `${left} HP left`}
       </span>
+      {!live && combos.length > 0 && <span className="pipeline-combos">★ {combos.join(" · ")}</span>}
     </div>
   );
 }
@@ -109,7 +111,14 @@ function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep |
       return next && next.runs > 1 ? { text: "×2 armed", tone: "flow" } : { text: "waiting", tone: "idle" };
     }
     if (card.type === "fork") return { text: "×2 next", tone: "flow" };
+    if (card.type === "try_catch") return { text: "catch", tone: "flow" };
+    if (card.type === "buffer") return { text: "→ buffer", tone: "flow" };
+    if (card.type === "flush") return step.dealt > 0 ? { text: `${step.dealt} out`, tone: "damage" } : { text: "empty", tone: "idle" };
     return { text: "flow", tone: "flow" };
+  }
+  // a buffered action: its damage waits for a Flush
+  if (step.dealt === 0 && before.at(-1)?.type === "buffer" && card.type !== "block" && card.type !== "heal") {
+    return { text: "stored", tone: "flow" };
   }
   if (step.dealt > 0) return { text: step.runs > 1 ? `${step.runs}× = ${step.dealt}` : `${step.dealt}`, tone: "damage" };
   if (step.block > 0) return { text: `+${step.block}`, tone: "block" };
@@ -321,6 +330,11 @@ export function ProgramLines({
                 className={`program-line${line === hotLine ? " is-hot" : ""}${running === line ? " is-running" : ""}${spentLines.includes(line) ? " is-spent" : ""}`}
               >
                 <span className={`line-chip${chip ? ` is-${chip.tone}` : " is-none"}`}>{chip?.text}</span>
+                {card && at >= 0 && steps[at].combo && (
+                  <span className="line-combo" data-tip-term="Combo" data-tip="A named combo: card types run back to back pay out once per run.">
+                    ★ {steps[at].combo}
+                  </span>
+                )}
                 {renderAction(card, line)}
                 {line < combat.program.length - 1 && (
                   <span className={`line-link is-${linkKind(combat, line, cutLines)}`} aria-hidden="true" />

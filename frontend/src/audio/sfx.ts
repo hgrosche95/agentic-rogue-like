@@ -345,6 +345,9 @@ export function cardSound(type: CardType, banishes = false): SfxName {
     case "if_wounded":
     case "pipe":
     case "batch":
+    case "try_catch":
+    case "buffer":
+    case "flush":
       return "draw";
     case "amplifier":
     case "armor":

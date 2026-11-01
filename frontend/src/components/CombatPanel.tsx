@@ -411,6 +411,7 @@ export function CombatPanel({
           block: step.block,
           heal: step.heal,
           weight: step.damage / combat.enemy_max_hp,
+          combo: step.combo,
         });
         if (step.damage > 0) {
           sequence.after(tempoMs(ENEMY_HIT_MS), () => setProgramHp({ on: combat, hp: step.enemy_hp }));

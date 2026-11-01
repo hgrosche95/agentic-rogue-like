@@ -35,7 +35,11 @@ export type CardType =
   | "if_wounded"
   // the Vibe-Coder's control flow
   | "pipe"
-  | "batch";
+  | "batch"
+  // registers and exceptions
+  | "try_catch"
+  | "buffer"
+  | "flush";
 
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
@@ -52,7 +56,16 @@ export const PERMANENT_CARD_TYPES: readonly CardType[] = [
 
 // Program mode: what queues into the program instead of resolving on the
 // spot (combat.QUEUED_TYPES), and the control flow among it.
-export const CONTROL_FLOW_TYPES: readonly CardType[] = ["fork", "loop", "if_wounded", "pipe", "batch"];
+export const CONTROL_FLOW_TYPES: readonly CardType[] = [
+  "fork",
+  "loop",
+  "if_wounded",
+  "pipe",
+  "batch",
+  "try_catch",
+  "buffer",
+  "flush",
+];
 export const QUEUED_TYPES: readonly CardType[] = [
   "attack",
   "block",
@@ -279,6 +292,8 @@ export interface ProgramStep {
   hurt: number;
   enemy_hp: number;
   enemy_block: number;
+  // the named combo it completed (combat.COMBOS)
+  combo: string | null;
 }
 
 export interface ShopCard {
