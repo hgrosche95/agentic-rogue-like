@@ -2532,3 +2532,37 @@ button.field-slot.is-queued:hover:not(:disabled) {
     animation: none;
   }
 }
+
+/* a named combo, under the line that completed it */
+.line-combo {
+  position: absolute;
+  left: 50%;
+  bottom: -11px;
+  z-index: 2;
+  padding: 1px 8px;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--gold) 16%, var(--panel-solid));
+  font-family: var(--font-head);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--gold);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--gold) 45%, transparent);
+  transform: translateX(-50%);
+  animation: pipeline-pop var(--dur) var(--ease-pop) both;
+}
+
+.pipeline-combos {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--font-head);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--gold);
+}

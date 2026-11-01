@@ -587,6 +587,33 @@ PROGRAM_REWARD_POOL: list[Card] = [
         rarity=Rarity.RARE,
         description="Control flow. The next action to its right runs twice.",
     ),
+    # Registers and exceptions: Buffer holds the next action's damage back,
+    # Flush lets everything held back out at once - more than it went in -
+    # and Try/Catch is the answer to an interrupting enemy.
+    Card(
+        id="try-catch",
+        name="Try/Catch",
+        type=CardType.TRY_CATCH,
+        value=0,
+        rarity=Rarity.COMMON,
+        description="Control flow. The lines after it can't be interrupted.",
+    ),
+    Card(
+        id="buffer",
+        name="Buffer",
+        type=CardType.BUFFER,
+        value=1,
+        rarity=Rarity.UNCOMMON,
+        description="Control flow. The next action stores its damage instead of dealing it.",
+    ),
+    Card(
+        id="flush",
+        name="Flush",
+        type=CardType.FLUSH,
+        value=50,
+        rarity=Rarity.UNCOMMON,
+        description="Control flow. Deals all stored damage, +50%.",
+    ),
 ]
 
 # The Vibe-Coder's control flow, on top of PROGRAM_REWARD_POOL in his
@@ -817,6 +844,15 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
         "draw": 1,
         "description": "Control flow. The next action to its right runs twice. Draw 1 card.",
     },
+    "Try/Catch": {
+        "draw": 1,
+        "description": "Control flow. The lines after it can't be interrupted. Draw 1 card.",
+    },
+    "Buffer": {
+        "value": 2,
+        "description": "Control flow. The next 2 actions store their damage instead of dealing it.",
+    },
+    "Flush": {"value": 100, "description": "Control flow. Deals all stored damage, doubled."},
 }
 
 

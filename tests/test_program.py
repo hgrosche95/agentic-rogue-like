@@ -276,7 +276,8 @@ def test_hot_path_runs_its_line_upgraded() -> None:
 
 
 def test_branch_predictor_boosts_what_runs_after_half_hp() -> None:
-    names = ("Exploit", "Exploit", "Exploit")
+    # (a Firewall between them, or three attacks in a row would be a Burst)
+    names = ("Exploit", "Firewall", "Exploit", "Exploit")
     assert _damage_dealt(*names, hp=20) == 15
     assert _damage_dealt(*names, hp=20, artifact="Branch Predictor") == 18
 
@@ -327,7 +328,7 @@ def test_the_preview_shows_what_the_program_will_do() -> None:
 
 def test_ship_it_counts_every_card_played_this_turn() -> None:
     # Queued first, it still runs after two other cards were played.
-    assert _damage_dealt("Ship It", "Exploit", "Exploit") == 20
+    assert _damage_dealt("Ship It", "Exploit", "Exploit") == 20 + 5  # and a Burst
 
 
 def test_the_bot_stops_once_the_program_is_lethal() -> None:
@@ -476,7 +477,7 @@ def test_only_bosses_against_a_program_refactor() -> None:
 
 def test_pipe_pays_for_the_actions_before_it() -> None:
     assert _damage_dealt("Exploit", "Exploit", "Pipe", "Exploit") == 5 + 5 + (5 + 4)
-    assert _damage_dealt("Pipe", "Exploit", "Exploit", "Exploit") == 15
+    assert _damage_dealt("Pipe", "Exploit", "Exploit", "Exploit") == 15 + 5  # and a Burst
 
 
 def test_batch_frees_tokens_for_the_actions_after_it() -> None:
@@ -566,3 +567,42 @@ def test_api_purges_the_chosen_card() -> None:
     response = client.post(url, json={"hand_index": 0, "slot_index": 0, "banish_indices": [2]})
     assert response.json()["pending_combat"]["banished_count"] == 2
     assert [c.name for c in get_session(run_id).combat.banished_pile] == ["Firewall", "Purge"]
+
+
+# ---- registers, exceptions and named combos
+
+
+def test_try_catch_keeps_an_interrupt_from_cutting_the_lines_after_it() -> None:
+    state, player = _interrupting()
+    _queue(state, player, "Try/Catch", "Exploit", "Firewall", "Exploit")
+    end_turn(state, player, random.Random(2))
+    assert state.enemy_hp == 90  # both Exploits ran, past the cut after line 2
+
+
+def test_buffer_holds_damage_back_until_a_flush_lets_it_out() -> None:
+    # the Exploit stores its 5; the Flush deals them +50%
+    assert _damage_dealt("Buffer", "Exploit", "Flush") == 7
+    # stored and never flushed: lost
+    assert _damage_dealt("Buffer", "Exploit") == 0
+    # a fork doubles what goes into the buffer
+    assert _damage_dealt("Buffer", "Fork", "Exploit", "Flush") == 15
+
+
+def test_named_combos_pay_out_once_per_run() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", "Exploit", "Exploit")
+    steps = program_preview(state, player).steps
+    assert [s.combo for s in steps] == [None, None, "Burst"]
+    assert state.enemy.hp - program_preview(state, player).enemy_hp == 15 + 5
+    # a block, an attack, a block: block on top
+    state, player = _fight()
+    _queue(state, player, "Firewall", "Exploit", "Firewall")
+    assert program_preview(state, player).player_block == 5 + 5 + 6
+
+
+def test_a_program_that_gets_five_lines_through_is_a_clean_run() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", "Firewall", "Exploit", "Firewall", "Exploit")
+    steps = program_preview(state, player).steps
+    assert steps[-1].combo == "Clean Run"
+    assert state.enemy.hp - program_preview(state, player).enemy_hp == 15 + 5

@@ -56,6 +56,8 @@ export interface ProgramHit {
   weight: number;
   // an interrupt cut the program off here
   cut?: boolean;
+  // the named combo the line completed
+  combo?: string | null;
 }
 
 // What CombatPanel tells the arena as things happen; HP changes it works out
@@ -268,6 +270,13 @@ export function CombatArena({
         showFx("cut", "Interrupt");
         scene?.trigger("enemy_brace");
         return;
+      }
+      if (hit.combo) {
+        const name = hit.combo;
+        window.setTimeout(() => {
+          showFx("combo", `★ ${name}`);
+          sfx.play("rare_reveal");
+        }, tempoMs(ENEMY_HIT_MS));
       }
       if (hit.block > 0) showFx("block", `+${hit.block}`);
       if (hit.heal > 0) showFx("heal", `+${hit.heal}`);

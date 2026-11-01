@@ -117,6 +117,31 @@ export const KEYWORDS: Keyword[] = [
     text: "Control flow (Vibe-Coder): frees used tokens for every action still to run.",
   },
   {
+    id: "try-catch",
+    term: "Try/Catch",
+    pattern: /\btry\/catch\b/,
+    text: "Control flow: the lines after it can't be interrupted - an enemy's Interrupt no longer cuts them.",
+  },
+  {
+    id: "buffer",
+    term: "Buffer",
+    pattern: /\bbuffer\b|\bstored? (its |their )?damage\b/,
+    text: "Control flow: the next action's damage is stored instead of dealt - a Flush later in the program lets it all out, and more. Not flushed this run, it is lost.",
+  },
+  {
+    id: "flush",
+    term: "Flush",
+    // not a Glitch's "flush it out"
+    pattern: /\bflush\b(?! it\b)/,
+    text: "Control flow: deals everything the Buffers stored this run, plus a bonus.",
+  },
+  {
+    id: "combo",
+    term: "Combos",
+    pattern: /\bcombos?\b/,
+    text: "Program mode: card types run back to back pay out once per run - Fork, attack, Loop: Fork Bomb (+6 damage). Three attacks: Burst (+5). Block, attack, block: Sandwich (+6 block). Five lines through: Clean Run (+5).",
+  },
+  {
     id: "hot-path",
     term: "Hot Path",
     pattern: /\bhot path\b/,

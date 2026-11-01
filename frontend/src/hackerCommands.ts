@@ -80,6 +80,12 @@ export function commandFor(card: Card, enemyName: string, banished: string[] = [
       return `cat ./queue | xargs`;
     case "batch":
       return `parallel --jobs ${card.value} ./run`;
+    case "try_catch":
+      return `try { ./program } catch { continue }`;
+    case "buffer":
+      return `exec 3>./buffer`;
+    case "flush":
+      return `cat ./buffer >&2 && sync`;
     case "if_wounded":
       return `[ $${slug(enemyName) || "target"}_hp -le 50 ] &&`;
   }
