@@ -112,12 +112,25 @@ class CardType(StrEnum):
     # the Vibe-Coder's control flow
     PIPE = "pipe"  # the next action +value per action already run
     BATCH = "batch"  # frees `value` used tokens per action still to run after it
+    # registers and exceptions (combat.run_program)
+    TRY_CATCH = "try_catch"  # the lines after it can't be interrupted
+    BUFFER = "buffer"  # the next `value` actions store their damage instead of dealing it
+    FLUSH = "flush"  # deals the stored damage, +value percent
 
 
 # Control flow (program mode, combat.run_program): steers the actions around
 # it instead of doing anything itself.
 CONTROL_FLOW_TYPES = frozenset(
-    {CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED, CardType.PIPE, CardType.BATCH}
+    {
+        CardType.FORK,
+        CardType.LOOP,
+        CardType.IF_WOUNDED,
+        CardType.PIPE,
+        CardType.BATCH,
+        CardType.TRY_CATCH,
+        CardType.BUFFER,
+        CardType.FLUSH,
+    }
 )
 
 PERMANENT_CARD_TYPES = frozenset(

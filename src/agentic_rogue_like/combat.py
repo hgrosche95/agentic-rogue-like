@@ -165,6 +165,17 @@ QUEUED_TYPES = CONTROL_FLOW_TYPES | {
     CardType.FINAL_STRIKE,
 }
 
+# Named combos (run_program): card types run back to back in a program, in
+# the order they run, pay out once per run as the pattern's last line runs.
+COMBOS: tuple[tuple[str, tuple[CardType, ...], str, int], ...] = (
+    ("Fork Bomb", (CardType.FORK, CardType.ATTACK, CardType.LOOP), "damage", 6),
+    ("Burst", (CardType.ATTACK, CardType.ATTACK, CardType.ATTACK), "damage", 5),
+    ("Sandwich", (CardType.BLOCK, CardType.ATTACK, CardType.BLOCK), "block", 6),
+)
+# ... and a program that gets this many lines through in one run
+CLEAN_RUN_LINES = 5
+CLEAN_RUN_DAMAGE = 5
+
 
 # Statuses (models.Status).
 EXPOSED_FACTOR = 1.5  # attack cards against an exposed enemy
@@ -773,6 +784,7 @@ class ProgramStep(BaseModel):
     hurt: int  # HP the player lost (a hallucination, thorns)
     enemy_hp: int  # after it
     enemy_block: int
+    combo: str | None = None  # the named combo it completed (COMBOS)
 
 
 def run_program(
@@ -817,6 +829,12 @@ def run_program(
     # For the run summary's best combo: the damage this run deals, and what ran.
     dealt_before, ran_names = state.tally.damage_dealt, []
     piped = 0  # Pipe's bonus for the next action
+    # Buffer and Flush: how many actions still store their damage, and how
+    # much is stored - lost if no Flush lets it out this run.
+    buffering, stored = 0, 0
+    # the types run so far, in order (None for a hallucination), for the combos
+    run_types: list[CardType | None] = []
+    combos_done: set[str] = set()
     # A refactoring boss runs it right to left: control flow then steers the
     # actions run after it, now the ones to its left.
     order = list(range(len(state.program)))
@@ -828,6 +846,7 @@ def run_program(
             continue
         before = (state.enemy_hp, state.enemy_block, player.hp, state.player_block, ran)
         outcome = "ran"
+        combo: str | None = None
         try:
             glitched = state.program_glitched[slot]
             state.program[slot], state.program_glitched[slot] = None, False
@@ -873,6 +892,22 @@ def run_program(
                 log.append(
                     line + f"{run.name} batches {actions} action(s): {freed} token(s) free up."
                 )
+            elif run.type is CardType.TRY_CATCH:
+                cut_after = None
+                log.append(line + f"{run.name}: the lines after it can't be interrupted.")
+            elif run.type is CardType.BUFFER:
+                buffering += run.value
+                log.append(line + f"{run.name}: the next {run.value} action(s) store their damage.")
+            elif run.type is CardType.FLUSH:
+                amount = stored * (100 + run.value) // 100
+                stored = 0
+                if amount > 0:
+                    _, dealt = _damage_enemy(state, amount)
+                    log.append(
+                        line + f"{run.name} lets the buffer out: {amount} damage ({dealt} through)."
+                    )
+                else:
+                    log.append(line + f"{run.name}: the buffer is empty.")
             elif run.type is CardType.LOOP:
                 repeats = run.value + (tail_call if slot == last_line else 0)
                 if last is None:
@@ -894,6 +929,8 @@ def run_program(
                 if slot == last_line:
                     bonus += compiler * len(types - {run.type})
                     forks += tail_call
+                # a buffered action hits, then the enemy gets back what it took
+                held = (state.enemy_hp, state.enemy_block, state.tally.damage_dealt)
                 for _ in range(1 + forks):
                     state.plays_this_turn = max(played - 1, ran)
                     wounded = predictor if _wounded(state) else 0
@@ -904,10 +941,20 @@ def run_program(
                     ran += 1
                     if state.enemy_hp <= 0:
                         break
+                if buffering and not glitched:
+                    taken = held[0] + held[1] - state.enemy_hp - state.enemy_block
+                    state.enemy_hp, state.enemy_block, state.tally.damage_dealt = held
+                    stored += taken
+                    buffering -= 1
+                    log.append(line + f"{taken} damage go into the buffer ({stored} stored).")
                 forks = 0
                 last = None if glitched else run
             after_flow = run.type in CONTROL_FLOW_TYPES
             types.add(run.type)
+            run_types.append(None if glitched else run.type)
+            combo = _combo(state, run_types, lines_run, combos_done)
+            if combo:
+                log.append(line + f"Combo: {combo}!")
             if run.type in CONTROL_FLOW_TYPES and run.draw:
                 log.append(line + f"You draw {_draw(state, run.draw, rng)} card(s).")
             if card.exhaust and card.type not in CONTROL_FLOW_TYPES:
@@ -932,12 +979,35 @@ def run_program(
                         hurt=max(0, before[2] - player.hp),
                         enemy_hp=state.enemy_hp,
                         enemy_block=state.enemy_block,
+                        combo=combo,
                     )
                 )
 
     combo = Combo(damage=state.tally.damage_dealt - dealt_before, runs=ran, cards=ran_names)
     state.tally.best_combo = offer_combo(state.tally.best_combo, combo)
     return log
+
+
+def _combo(
+    state: CombatState, run_types: list[CardType | None], lines_run: int, done: set[str]
+) -> str | None:
+    """The named combo (COMBOS, or a clean run) the line just run completes,
+    paid out at once - each once per program run, and only on a standing enemy."""
+    if state.enemy_hp <= 0:
+        return None
+    for name, pattern, kind, amount in COMBOS:
+        if name not in done and tuple(run_types[-len(pattern) :]) == pattern:
+            done.add(name)
+            if kind == "block":
+                state.player_block += amount
+            else:
+                _damage_enemy(state, amount)
+            return name
+    if "Clean Run" not in done and lines_run == CLEAN_RUN_LINES:
+        done.add("Clean Run")
+        _damage_enemy(state, CLEAN_RUN_DAMAGE)
+        return "Clean Run"
+    return None
 
 
 class ProgramPreview(BaseModel):
