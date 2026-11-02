@@ -32,6 +32,90 @@ const KIND_LABEL: Record<Kind, string> = {
   control: "Control flow",
 };
 
+// The line under a card's name: what kind of card it is, so the effect text
+// can start with what the card does. Permanents add when they act.
+const TYPE_LINE: Record<Kind, string> = {
+  strike: "Attack",
+  shield: "Block",
+  repair: "Heal",
+  purge: "Purge",
+  flow: "Card flow",
+  module: "Permanent",
+  control: "Control flow",
+};
+
+// (a one-shot says so with its 1× tag at the card's foot; a permanent with
+// the turning arrows in front of its line - it works every turn)
+function typeLine(card: Card): { label: string; repeats: boolean } {
+  if (card.type === "glitch") return { label: "Junk", repeats: false };
+  const kind = kindOf(card.type);
+  return { label: TYPE_LINE[kind], repeats: kind === "module" };
+}
+
+// The number a card without a readout (card flow, permanents, control
+// flow) is about, big, with what it counts - from the card's own value, so
+// an upgrade shows up here too. Types whose value is no count are left out.
+type StatIcon = "cards" | "percent" | "shield" | "damage" | "token" | "clock";
+const STAT: Partial<Record<CardType, { icon: StatIcon; unit: string; sign?: "+" | "−"; percent?: boolean }>> = {
+  draw: { icon: "cards", unit: "draw" },
+  retrieve: { icon: "cards", unit: "back" },
+  restore: { icon: "cards", unit: "back" },
+  amplifier: { icon: "percent", unit: "boost", sign: "+", percent: true },
+  armor: { icon: "shield", unit: "dmg taken", sign: "−" },
+  draw_bonus: { icon: "cards", unit: "per turn", sign: "+" },
+  damage_boost: { icon: "damage", unit: "per permanent", sign: "+" },
+  turret: { icon: "damage", unit: "per turn" },
+  fortify: { icon: "shield", unit: "per permanent", sign: "+" },
+  compact: { icon: "token", unit: "tokens back" },
+  free_play: { icon: "token", unit: "free cards" },
+  chain: { icon: "damage", unit: "per card", sign: "+" },
+  token_regen: { icon: "token", unit: "per turn", sign: "+" },
+  opener: { icon: "token", unit: "free / turn" },
+  pipe: { icon: "damage", unit: "per action", sign: "+" },
+  batch: { icon: "token", unit: "per action" },
+  buffer: { icon: "clock", unit: "stored" },
+  flush: { icon: "damage", unit: "stored dmg", sign: "+", percent: true },
+};
+
+function StatGlyph({ icon }: { icon: StatIcon }) {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true" className="card-stat-icon">
+      {icon === "cards" && (
+        <>
+          <rect x="7.5" y="2.5" width="9" height="12" rx="1.5" />
+          <rect x="3.5" y="5.5" width="9" height="12" rx="1.5" className="cut" />
+        </>
+      )}
+      {icon === "percent" && (
+        <>
+          <circle cx="6" cy="6" r="2.4" />
+          <circle cx="14" cy="14" r="2.4" />
+          <path d="M15.5 4.5 4.5 15.5" />
+        </>
+      )}
+      {icon === "shield" && <path d="M10 2.4 16 4.8v4.6c0 4-2.7 6.8-6 8.2-3.3-1.4-6-4.2-6-8.2V4.8Z" />}
+      {icon === "damage" && (
+        <>
+          <circle cx="10" cy="10" r="5.2" />
+          <path d="M10 1.8v4M10 14.2v4M1.8 10h4M14.2 10h4" />
+        </>
+      )}
+      {icon === "token" && (
+        <>
+          <path d="M6 4h8l3 6-3 6H6l-3-6Z" />
+          <path d="M8 10h4" />
+        </>
+      )}
+      {icon === "clock" && (
+        <>
+          <circle cx="10" cy="10" r="7" />
+          <path d="M10 6v4l3 2" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 export function CardTypeIcon({ type }: { type: CardType }) {
   const kind = kindOf(type);
   return (
@@ -260,11 +344,14 @@ export function CardFace({
   changedFrom?: Card;
 }) {
   const showTokens = useContext(ShowTokensContext);
-  const strip = (text: string) =>
-    text.replace(onField ? /^(Permanent|One-shot|Control flow)\.\s*/ : /^One-shot\.\s*/, "");
+  // the type line (or, on the field, the module icon) says what kind of
+  // card it is - the effect text starts with what it does
+  const strip = (text: string) => text.replace(/^(Permanent|One-shot|Control flow)\.\s*/, "");
   const description = strip(useCardText(card));
   const before = strip(useCardText(changedFrom ?? card));
   const unit = unitOf(card.type);
+  const line = typeLine(card);
+  const stat = STAT[card.type];
   const { headerRef, bodyRef } = useFitText(
     `${card.name}|${description}|${readout ? 1 : 0}|${showTokens}|${changedFrom ? before : ""}`,
   );
@@ -286,14 +373,41 @@ export function CardFace({
           1×
         </span>
       )}
-      {readout && unit && (
-        <div className={`card-readout${readout.boosted ? " is-boosted" : ""}`}>
+      {!onField && (
+        <div className="card-typeline" title={line.repeats ? "Stays on the field and works every turn" : undefined}>
+          {line.repeats && (
+            <svg viewBox="0 0 20 20" aria-hidden="true" className="card-typeline-icon">
+              <path d="M15.6 7.4A6 6 0 0 0 4.6 7M4.4 12.6A6 6 0 0 0 15.4 13" />
+              <path d="M4.2 3.6v3.6h3.6M15.8 16.4v-3.6h-3.6" />
+            </svg>
+          )}
+          <b>{line.label}</b>
+        </div>
+      )}
+      {/* the number the card comes out with: in a fight its real value
+          (ATK and the slot included), elsewhere its own */}
+      {!onField && unit && (readout || card.value > 0) && (
+        <div className={`card-readout${readout?.boosted ? " is-boosted" : ""}${readout ? "" : " is-base"}`}>
+          <span className="card-readout-icon">
+            <CardTypeIcon type={card.type} />
+          </span>
           <b>
             {card.hits > 1 && <small>{card.hits}×</small>}
-            {readout.value}
+            {readout ? readout.value : card.value}
           </b>
           <span className="card-unit">{unit}</span>
-          {readout.best > readout.value && <span className="card-best">max {readout.best}</span>}
+          {readout && readout.best > readout.value && <span className="card-best">max {readout.best}</span>}
+        </div>
+      )}
+      {!onField && !unit && stat && card.value > 0 && (
+        <div className="card-readout card-stat">
+          <StatGlyph icon={stat.icon} />
+          <b>
+            {stat.sign ?? ""}
+            {card.value}
+            {stat.percent ? "%" : ""}
+          </b>
+          <span className="card-unit">{stat.unit}</span>
         </div>
       )}
       {/* what is left of the effect where a narrow slot hides the text */}
