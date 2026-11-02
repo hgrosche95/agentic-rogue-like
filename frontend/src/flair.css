@@ -755,3 +755,41 @@ button.is-primary:disabled {
   opacity: 1;
   color: var(--text-dim);
 }
+
+/* ---------- the piles: real stacks of card backs ---------- */
+.pile {
+  --pile: #b78bff;
+}
+.pile-graveyard {
+  --pile: #7f9bff;
+}
+.pile-banished {
+  --pile: var(--danger);
+}
+
+/* the AGI's weave on the back, the cards under it showing as edges */
+.pile .pile-face {
+  background:
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--pile) 13%, transparent) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(-45deg, color-mix(in srgb, var(--pile) 8%, transparent) 0 2px, transparent 2px 9px),
+    #10102a;
+  border-color: var(--pile);
+  box-shadow:
+    inset 0 0 0 4px #10102a,
+    inset 0 0 0 5px color-mix(in srgb, var(--pile) 30%, transparent),
+    3px 3px 0 -1px #0b0b20,
+    3px 3px 0 0 color-mix(in srgb, var(--pile) 55%, transparent),
+    6px 6px 0 -1px #0b0b20,
+    6px 6px 0 0 color-mix(in srgb, var(--pile) 30%, transparent),
+    0 12px 20px -10px rgba(0, 0, 0, 0.9);
+}
+
+/* the count on a dark plate, so it reads over the weave */
+.pile .pile-count {
+  min-width: 1.7em;
+  padding: 2px 4px;
+  text-align: center;
+  background: #08081a;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pile) 45%, transparent);
+}
