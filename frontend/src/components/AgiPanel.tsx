@@ -26,7 +26,8 @@ export function AgiPanel({
     <section className="panel agi-panel" aria-label="AGI analysis">
       <div className="panel-head">
         <h2 className="panel-title">AGI analysis</h2>
-        <span className="panel-sub">{style ? "adapting" : "watching"}</span>
+        {/* the AGI's eye on the player: a recording light */}
+        <span className="panel-sub agi-rec">{style ? "adapting" : "watching"}</span>
       </div>
       <p className="muted">
         {style
