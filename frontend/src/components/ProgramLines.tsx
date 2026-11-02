@@ -162,6 +162,8 @@ function linkKind(combat: PendingCombatView, line: number, cutLines: number[]): 
   const card = combat.program[line];
   const next = combat.program[line + 1];
   if (cutLines.includes(line + 1) && !cutLines.includes(line)) return "cut";
+  // Segfault: the program ends after it
+  if (card?.halts && combat.program.slice(line + 1).some((c) => c !== null)) return "cut";
   if (next?.type === "loop") return "loop";
   if (card && ["fork", "if_wounded"].includes(card.type)) return "fork";
   return "plain";

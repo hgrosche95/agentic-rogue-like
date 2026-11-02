@@ -155,6 +155,8 @@ class CardView(BaseModel):
     applies_amount: int
     upgraded: bool
     token_cost: int
+    # Program mode: the program ends after its line (Segfault).
+    halts: bool = False
 
     @classmethod
     def of(cls, card: Card) -> CardView:
@@ -173,6 +175,7 @@ class CardView(BaseModel):
             applies_amount=card.applies_amount,
             upgraded=card.upgraded,
             token_cost=card.token_cost,
+            halts=card.halts,
         )
 
 

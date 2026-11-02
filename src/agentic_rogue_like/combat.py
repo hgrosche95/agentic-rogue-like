@@ -264,6 +264,10 @@ class CombatState(BaseModel):
     program_glitched: list[bool] = Field(default_factory=lambda: [False] * FIELD_SIZE)
     # cards left this turn that cost no tokens (Tab-Tab-Tab, Pair Programming)
     free_plays: int = 0
+    # While a program line resolves (or is previewed): its place among the
+    # queued lines in run order, and how many there are - what the
+    # position scalings (LINES, FIRST_LINE, LAST_LINE) read. None otherwise.
+    line_position: tuple[int, int] | None = None
     tally: FightTally = Field(default_factory=FightTally)
 
 
@@ -869,9 +873,10 @@ def run_program(
     combos_done: set[str] = set()
     # A refactoring boss runs it right to left: control flow then steers the
     # actions run after it, now the ones to its left.
-    order = list(range(len(state.program)))
-    if state.enemy_intent is EnemyIntentType.REFACTOR:
-        order.reverse()
+    order = _run_order(state)
+    # the queued lines in run order, for the position scalings
+    queued = [s for s in order if state.program[s] is not None]
+    halted_by: str | None = None  # a halting card (Segfault) ended the program
     for step, slot in enumerate(order):
         card = state.program[slot]
         if card is None:
@@ -887,6 +892,10 @@ def run_program(
                 state.discard_pile.append(card)  # never ran, so never used up
                 outcome = "skipped"
                 continue
+            if halted_by is not None:
+                state.discard_pile.append(card)  # never ran, so never used up
+                outcome = "cut"
+                continue
             if cut_after is not None and lines_run >= cut_after:
                 if lines_run == cut_after:
                     log.append(
@@ -898,6 +907,7 @@ def run_program(
                 continue
             lines_run += 1
             ran_names.append(card.name)
+            state.line_position = (queued.index(slot), len(queued))
             line = f"[{slot + 1}] "
             # Hot Path: the card runs as its upgrade, the deck keeps the original.
             run = card
@@ -985,6 +995,9 @@ def run_program(
                     log.append(line + f"{taken} damage go into the buffer ({stored} stored).")
                 forks = 0
                 last = None if glitched else run
+                if run.halts and not glitched:
+                    halted_by = run.name
+                    log.append(line + f"{run.name} ends the program here.")
             after_flow = run.type in CONTROL_FLOW_TYPES
             types.add(run.type)
             run_types.append(None if glitched else run.type)
@@ -1000,6 +1013,7 @@ def run_program(
             if line := _check_boss_phase(state):
                 log.append(line.strip())
         finally:
+            state.line_position = None
             if trace is not None:
                 trace.append(
                     ProgramStep(
@@ -1251,7 +1265,7 @@ def attack_damage(
     `bonus` is flat damage on top, before the multiplier (Copilot)."""
     base = card.value + player.attack + bonus + _scaling_bonus(state, card)
     boost = sum(c.value for c in state.field if c and c.type is CardType.DAMAGE_BOOST)
-    base += boost * permanent_count(state)
+    base = max(0, base + boost * permanent_count(state))  # a long program can't heal it
     if Status.EXPOSED in state.enemy_status:
         multiplier *= EXPOSED_FACTOR
     return round(base * multiplier)
@@ -1273,8 +1287,31 @@ def _scaling_bonus(state: CombatState, card: Card) -> int:
         Scaling.PLAYED: state.plays_this_turn,
         Scaling.EMPTY_SLOT: max(0, FIELD_SIZE - permanent_count(state)),
         Scaling.MALWARE: state.enemy_status.get(Status.MALWARE, 0),
+        **_position_counts(state),
     }[card.scaling]
     return card.scale_value * count
+
+
+def _position_counts(state: CombatState) -> dict[Scaling, int]:
+    """What the position scalings count for the line resolving now - all 0
+    outside a program."""
+    if state.line_position is None:
+        return {Scaling.LINES: 0, Scaling.FIRST_LINE: 0, Scaling.LAST_LINE: 0}
+    rank, lines = state.line_position
+    return {
+        Scaling.LINES: lines - 1,
+        Scaling.FIRST_LINE: int(rank == 0),
+        Scaling.LAST_LINE: int(rank == lines - 1),
+    }
+
+
+def _run_order(state: CombatState) -> list[int]:
+    """The program's lines in the order they run: left to right, or right to
+    left against a refactoring boss."""
+    order = list(range(len(state.program)))
+    if state.enemy_intent is EnemyIntentType.REFACTOR:
+        order.reverse()
+    return order
 
 
 def action_preview(
@@ -1293,6 +1330,19 @@ def action_preview(
     hot = total(state.artifacts, "hot_path") - 1
     if queues(state, card) and slot_index == hot and can_upgrade(card):
         card = upgrade_card(card)  # Hot Path runs it upgraded
+    if queues(state, card):
+        # where the line would stand among the queued ones, once played
+        lines = [s for s in _run_order(state) if s == slot_index or state.program[s] is not None]
+        state.line_position = (lines.index(slot_index), len(lines))
+    try:
+        return _action_number(state, card, player, slot_index)
+    finally:
+        state.line_position = None
+
+
+def _action_number(
+    state: CombatState, card: Card, player: PlayerState, slot_index: int
+) -> int | None:
     multiplier = _amplifier_multiplier(state, slot_index)
     bonus = _chain_bonus(state, slot_index)
     if card.type is CardType.ATTACK:

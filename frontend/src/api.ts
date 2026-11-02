@@ -100,6 +100,8 @@ export interface Card {
   upgraded: boolean;
   // what it takes from a context window - only the Vibe-Coder has one
   token_cost: number;
+  // program mode: the program ends after its line (Segfault)
+  halts: boolean;
 }
 
 // Who a run is played as - see characters.py.
