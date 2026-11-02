@@ -11,6 +11,7 @@ import { cardSound, hitsOf, sfx } from "../audio";
 import { splitTaunt, useBanners } from "../banners";
 import { flyCard } from "../cardFlight";
 import { ArtifactBar } from "./ArtifactBar";
+import { activeArtifactsLine } from "../artifactTimers";
 import { HERO } from "../characters";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useCardDrag } from "../hooks/useCardDrag";
@@ -288,9 +289,21 @@ export function CombatPanel({
   // boss's line for it.
   const { banner, show: showBanner } = useBanners();
   const [bossIntro, setBossIntro] = useState(() => combat.boss && combat.turn === 1 && !enemySlain);
+  // the turn banner names the artifacts that only work on this turn - read
+  // through a ref, so a new player object doesn't make a new callback (and
+  // re-run the effects that show the banner)
+  const artifactsRef = useRef(player.artifacts);
+  useEffect(() => {
+    artifactsRef.current = player.artifacts;
+  });
   const yourTurn = useCallback(
-    (turn: number, delayMs: number) =>
-      showBanner({ kind: "player", title: "Your turn", sub: `Turn ${turn}`, ms: TURN_BANNER_MS }, delayMs),
+    (turn: number, delayMs: number) => {
+      const active = activeArtifactsLine(artifactsRef.current, turn);
+      showBanner(
+        { kind: "player", title: "Your turn", sub: active ? `Turn ${turn} · ${active}` : `Turn ${turn}`, ms: TURN_BANNER_MS },
+        delayMs,
+      );
+    },
     [showBanner],
   );
   // the table as the fight opened, and the turn and phase last called out
@@ -763,7 +776,7 @@ export function CombatPanel({
               {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
               <StatusBadges statuses={combat.player_status} />
               {combat.token_limit !== null && <TokenMeter combat={combat} />}
-              <ArtifactBar artifacts={player.artifacts} compact />
+              <ArtifactBar artifacts={player.artifacts} compact turn={combat.turn} />
             </div>
           </div>
         </div>

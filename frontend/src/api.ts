@@ -123,6 +123,13 @@ export interface Artifact {
   description: string;
   // program mode: the line (1-based) whose card runs upgraded - 0 if none
   hot_path: number;
+  // the effects that work every Nth turn only (models.Artifact, artifactTimers.ts)
+  extra_draw?: number;
+  extra_draw_every?: number;
+  turn_block?: number;
+  turn_block_every?: number;
+  tail_call?: number;
+  tail_call_every?: number;
 }
 
 export interface PlayerState {

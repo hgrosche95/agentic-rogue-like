@@ -110,8 +110,8 @@ function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep |
   if (CONTROL_FLOW_TYPES.includes(card.type)) {
     if (card.type === "loop") {
       // a loop repeats the last action run before it - with none, it idles
-      const repeats = before.some((s) => s.outcome === "ran" && !CONTROL_FLOW_TYPES.includes(s.type));
-      return repeats ? { text: "↺ again", tone: "flow" } : { text: "nothing to repeat", tone: "idle" };
+      const target = loopTarget(before);
+      return target ? { text: `↺ ${target.name}`, tone: "flow" } : { text: "nothing to repeat", tone: "idle" };
     }
     if (card.type === "if_wounded") {
       return next && next.runs > 1 ? { text: "×2 armed", tone: "flow" } : { text: "waiting", tone: "idle" };
@@ -130,6 +130,30 @@ function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep |
   if (step.block > 0) return { text: `+${step.block}`, tone: "block" };
   if (step.heal > 0) return { text: `+${step.heal} HP`, tone: "heal" };
   return null;
+}
+
+// The action a loop repeats: the last one that ran before it.
+function loopTarget(before: ProgramStep[]): ProgramStep | undefined {
+  return before.findLast((s) => s.outcome === "ran" && !CONTROL_FLOW_TYPES.includes(s.type));
+}
+
+// The lines control flow works on, for a badge on their card: run more than
+// once (a Fork, If Wounded, Tail Call in front of it) and repeated by a Loop.
+function boostsOf(steps: ProgramStep[]): Map<number, { times: number; looped: boolean }> {
+  const boosts = new Map<number, { times: number; looped: boolean }>();
+  steps.forEach((step, i) => {
+    if (step.outcome !== "ran") return;
+    if (step.type === "loop") {
+      const target = loopTarget(steps.slice(0, i));
+      if (target) {
+        const b = boosts.get(target.slot) ?? { times: target.runs, looped: false };
+        boosts.set(target.slot, { ...b, looped: true });
+      }
+    } else if (!CONTROL_FLOW_TYPES.includes(step.type) && step.runs > 1) {
+      boosts.set(step.slot, { times: step.runs, looped: boosts.get(step.slot)?.looped ?? false });
+    }
+  });
+  return boosts;
 }
 
 // The link on the rail from a line to the next: a fork doubling it, a loop
@@ -349,6 +373,7 @@ export function ProgramLines({
   }
 
   const steps = combat.program_preview?.steps ?? [];
+  const boosts = boostsOf(steps);
   return (
     <div
       className={`program-board${reversed ? " is-reversed" : ""}`}
@@ -363,11 +388,21 @@ export function ProgramLines({
           {combat.program.map((card, line) => {
             const at = steps.findIndex((s) => s.slot === line);
             const chip = card && at >= 0 ? lineChip(card, steps[at], steps[at + 1], steps.slice(0, at)) : null;
+            const boost = card ? boosts.get(line) : undefined;
             return (
               <div
                 key={line}
-                className={`program-line${line === hotLine ? " is-hot" : ""}${running === line ? " is-running" : ""}${spentLines.includes(line) ? " is-spent" : ""}`}
+                className={`program-line${line === hotLine ? " is-hot" : ""}${running === line ? " is-running" : ""}${spentLines.includes(line) ? " is-spent" : ""}${boost ? " is-boosted" : ""}`}
               >
+                {boost && (
+                  <span
+                    className="line-boost"
+                    title={`${boost.times > 1 ? `Runs ${boost.times} times` : ""}${boost.times > 1 && boost.looped ? ", and " : ""}${boost.looped ? "a Loop repeats it" : ""}`}
+                  >
+                    {boost.times > 1 && `×${boost.times}`}
+                    {boost.looped && "↺"}
+                  </span>
+                )}
                 <span className={`line-chip${chip ? ` is-${chip.tone}` : " is-none"}`}>{chip?.text}</span>
                 {card && at >= 0 && steps[at].combo && (
                   <span className="line-combo" data-tip-term="Combo" data-tip="A named combo: card types run back to back pay out once per run.">

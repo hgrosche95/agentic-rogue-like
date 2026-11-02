@@ -2805,3 +2805,90 @@ button.field-slot.is-queued:hover:not(:disabled) {
 .event-result-continue {
   min-width: 180px;
 }
+
+/* ---------- control flow at work: the line a Fork doubles or a Loop repeats ---------- */
+.program-line.is-boosted .field-slot.is-queued {
+  box-shadow:
+    0 0 0 2px #b78bff,
+    0 0 18px color-mix(in srgb, #b78bff 55%, transparent);
+}
+
+.line-boost {
+  position: absolute;
+  z-index: 4;
+  top: 20px;
+  left: -12px;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #b78bff;
+  font-family: var(--font-head);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 18px;
+  color: var(--panel-solid);
+  box-shadow: 0 0 12px color-mix(in srgb, #b78bff 70%, transparent);
+  animation: boost-pop var(--dur-slow) var(--ease-out) both;
+  pointer-events: none;
+}
+
+@keyframes boost-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+}
+
+/* the links that carry control flow stand out on the quiet rail */
+.line-link.is-fork,
+.line-link.is-loop {
+  font-size: 19px;
+  text-shadow: 0 0 10px #b78bff;
+}
+
+/* ---------- artifacts that work every Nth turn ---------- */
+.artifact-timer {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.artifact-chip.is-timed:not(.is-firing) {
+  opacity: 0.75;
+}
+
+.artifact-chip.is-firing {
+  --chip: var(--gold);
+  animation: artifact-firing 1.6s ease-in-out infinite;
+}
+
+.artifact-chip.is-firing.is-bad {
+  --chip: var(--danger);
+}
+
+.artifact-chip.is-firing .artifact-timer {
+  background: var(--chip);
+  color: var(--panel-solid);
+}
+
+@keyframes artifact-firing {
+  50% {
+    box-shadow: 0 0 18px color-mix(in srgb, var(--chip) 80%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .artifact-chip.is-firing,
+  .line-boost {
+    animation: none;
+  }
+}
