@@ -273,3 +273,39 @@
     transition: none;
   }
 }
+
+/* ---------- the hero's portrait: their pixel head, live from the scene ---------- */
+.vs-body.has-portrait {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  column-gap: 12px;
+  align-items: start;
+}
+
+.vs-body.has-portrait > :not(.hero-portrait) {
+  grid-column: 2;
+}
+
+.hero-portrait {
+  grid-row: 1 / span 3;
+  width: 58px;
+  height: 58px;
+  border-radius: 10px;
+  image-rendering: pixelated;
+  background: #1a1022;
+  box-shadow:
+    0 0 0 2px var(--human),
+    0 0 14px -2px color-mix(in srgb, var(--human) 60%, transparent);
+}
+
+/* on a phone the plate is half the screen wide and the scene sits right
+   above it: the portrait would only squeeze the name and badges */
+@media (max-width: 600px) {
+  .vs-body.has-portrait {
+    display: flex;
+    align-items: stretch;
+  }
+  .hero-portrait {
+    display: none;
+  }
+}

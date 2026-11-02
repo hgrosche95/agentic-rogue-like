@@ -24,6 +24,7 @@ import { tempoMs } from "../tempo";
 import { CardFace, type Readout } from "./CardFace";
 import { CombatHelp, HelpButton } from "./CombatHelp";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
+import { HeroPortrait } from "./HeroPortrait";
 import { BossIntro, TurnBanner } from "./CombatBanners";
 import { banishCount, programPlan, queues } from "../program";
 import { hasSeenTutorial } from "../tutorial";
@@ -760,7 +761,8 @@ export function CombatPanel({
         </CombatArena>
 
         <div className="vs-hud is-player">
-          <div className="vs-body">
+          <div className="vs-body has-portrait">
+            <HeroPortrait arena={arenaRef} />
             <span className="hud-name">
               {HERO[player.character].name} <small>Human · {era}</small>
             </span>
