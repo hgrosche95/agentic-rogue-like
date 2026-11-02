@@ -164,7 +164,7 @@ interface ProgramFx {
   stack: number;
 }
 
-const PROGRAM_FX_MS = 1100;
+const PROGRAM_FX_MS = 2000;
 
 // Numbers on Dr. Chronos' side go on his body, like the enemy's on its own:
 // over his head they would float up into the HUD plate hanging there.
