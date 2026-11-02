@@ -176,15 +176,18 @@ function useFitText(key: string) {
     observer.observe(card);
     // the web fonts may arrive after the first fit, and change every width
     document.fonts?.addEventListener("loadingdone", fit);
-    // a card dealt or flipped in (rewards, shop) is measured while it is
-    // still turned, which reads every line as too wide - fit it again once
-    // the animation on it or its slot is over (both bubble to the slot)
-    const slot = card.parentElement;
-    slot?.addEventListener("animationend", fit);
+    // a card dealt, flipped or popped in (rewards, shop, a window opening)
+    // is measured while it is still turned or scaled, which reads every line
+    // as too wide - fit it again once an animation on it or any box around
+    // it is over
+    const settle = (event: AnimationEvent) => {
+      if (event.target instanceof Node && event.target.contains(card)) fit();
+    };
+    document.addEventListener("animationend", settle, true);
     return () => {
       observer.disconnect();
       document.fonts?.removeEventListener("loadingdone", fit);
-      slot?.removeEventListener("animationend", fit);
+      document.removeEventListener("animationend", settle, true);
     };
   }, [key]);
   return { headerRef: header, bodyRef: body };
@@ -316,6 +319,9 @@ export function CardFace({
         </span>
       )}
       {card.rarity !== "starter" && <span className={`card-gem rarity-${card.rarity}`} />}
+      {/* a permanent is built like a chip - contacts down both sides - so it
+          reads apart from the one-time cards at a glance (see faces.css) */}
+      {!onField && PERMANENT_CARD_TYPES.includes(card.type) && <span className="card-pins" aria-hidden="true" />}
       {/* the card's "art": its type glyph, large and faint behind the text */}
       {!onField && (
         <span className="card-watermark" aria-hidden="true">

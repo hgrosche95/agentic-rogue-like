@@ -9,6 +9,7 @@ import "./neon.css";
 import "./flair.css";
 import "./juice.css";
 import "./sockets.css";
+import "./faces.css";
 import {
   buyShopArtifact,
   removeShopCard,

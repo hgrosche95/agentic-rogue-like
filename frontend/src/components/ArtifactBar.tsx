@@ -58,15 +58,17 @@ export function ArtifactBar({
       {artifacts.length === 0 ? (
         <p className="muted">None installed yet.</p>
       ) : (
-        <ul className="artifact-list">
+        // relics on a shelf: icon and name; what each does opens over it on
+        // hover or focus (the text stays in the item for screen readers)
+        <ul className="artifact-list artifact-shelf">
           {artifacts.map((artifact) => (
-            <li key={artifact.id}>
+            <li key={artifact.id} tabIndex={0}>
               <span className="artifact-badge">
-                <ArtifactIcon id={artifact.id} size={18} />
+                <ArtifactIcon id={artifact.id} size={26} />
               </span>
               <div>
                 <b>{artifact.name}</b>
-                <span>
+                <span className="artifact-shelf-tip">
                   <RichText text={artifact.description} />
                 </span>
               </div>
