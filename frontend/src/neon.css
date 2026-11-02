@@ -2706,3 +2706,102 @@ button.field-slot.is-queued:hover:not(:disabled) {
 .line-socket > .take-back:not(:disabled) {
   opacity: 0.85;
 }
+
+/* ---------- an event's result: its own moment, not a line in the log ---------- */
+.event-result {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 1.6rem 1.6rem 1.5rem;
+  text-align: center;
+}
+
+.event-result.is-good::before {
+  background: var(--safe);
+}
+
+.event-result.is-bad::before {
+  background: var(--danger);
+}
+
+.event-result-kicker {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.event-result-choice {
+  margin: 0;
+  font-family: var(--font-head);
+  font-size: clamp(1.25rem, 3vw, 1.7rem);
+  letter-spacing: 0.04em;
+  color: var(--gold);
+}
+
+.event-prompt p.event-result-text {
+  max-width: 46ch;
+  margin: 2px 0 6px;
+  font-size: 1.3rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.event-result-changes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 4px 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+/* each change lands one after the other, like loot dropping */
+.event-change {
+  padding: 6px 12px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  background: color-mix(in srgb, currentColor 12%, var(--panel-solid));
+  font-family: var(--font-head);
+  font-size: 15px;
+  font-weight: 700;
+  animation: event-change-in var(--dur-slow) var(--ease-out) both;
+}
+
+.event-change.is-gain {
+  color: var(--safe);
+}
+
+.event-change.is-loss {
+  color: var(--danger);
+}
+
+.event-change.is-card {
+  color: var(--cyan);
+}
+
+@keyframes event-change-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.85);
+  }
+  60% {
+    transform: translateY(-2px) scale(1.06);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .event-change {
+    animation: none;
+  }
+}
+
+.event-result-continue {
+  min-width: 180px;
+}
