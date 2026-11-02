@@ -273,6 +273,13 @@ button.is-primary:disabled {
 .event-prompt {
   --tone: #b78bff;
 }
+/* an event's result (EventResult) takes the tone of how it went */
+.event-result.is-good {
+  --tone: var(--safe);
+}
+.event-result.is-bad {
+  --tone: var(--danger);
+}
 
 .overlay-window > .reward-screen,
 .overlay-window > .event-prompt {
@@ -706,7 +713,7 @@ button.is-primary:disabled {
 }
 
 /* ---------- anomaly: numbered replies, like a comms log ---------- */
-.event-prompt > p {
+.event-prompt:not(.event-result) > p {
   padding-right: 1.4rem;
 }
 
