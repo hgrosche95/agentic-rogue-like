@@ -11,6 +11,7 @@ import "./juice.css";
 import "./sockets.css";
 import "./faces.css";
 import "./table.css";
+import "./cardread.css";
 import {
   buyShopArtifact,
   removeShopCard,

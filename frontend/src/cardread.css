@@ -1,0 +1,109 @@
+/* "Card reading": a card says what kind it is in a line under its name and
+   shows the number it is about, big and with what it counts, before its
+   text has to be read (CardFace). Loaded last. */
+
+/* what kind of card: Attack, Block, Permanent · every turn, ... */
+.card-typeline {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 6px 8px 0;
+  padding: 2px 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--font-body);
+  font-size: 10px;
+  line-height: 1.3;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--card) 80%, #fff);
+  background: color-mix(in srgb, var(--card) 12%, transparent);
+  border-radius: 4px;
+}
+
+.card-typeline b {
+  font-weight: 700;
+  color: var(--card);
+}
+
+.card-typeline-icon {
+  flex: none;
+  align-self: center;
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* a permanent's line is a solid band in its colour, like its name's */
+.hand-card:has(> .card-pins) .card-typeline,
+.hand-card:has(> .card-pins) .card-typeline b {
+  color: #07071a;
+}
+
+.hand-card:has(> .card-pins) .card-typeline {
+  background: color-mix(in srgb, var(--card) 85%, #fff);
+}
+
+/* the readout under it: the card's icon in front of its number */
+.card-typeline + .card-readout {
+  margin-top: 5px;
+}
+
+.card-readout {
+  align-items: center;
+}
+
+.card-readout-icon,
+.card-stat-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  color: var(--card);
+}
+
+.card-readout-icon .card-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.card-stat-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card-stat-icon .cut {
+  fill: #08081a;
+}
+
+/* a permanent's or card flow's number, and a card's own value outside a
+   fight, sit a little quieter than a fight's live readout */
+.card-readout.is-base b,
+.card-stat b {
+  font-size: 1.25rem;
+}
+
+.card-stat .card-unit {
+  white-space: nowrap;
+}
+
+/* small cards (the kit picker, a phone's hand) keep only name and number */
+.kit-cards .card-typeline {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .hand .hand-card .card-typeline {
+    display: none;
+  }
+}
