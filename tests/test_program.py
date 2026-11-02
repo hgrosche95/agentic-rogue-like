@@ -26,6 +26,7 @@ from agentic_rogue_like.combat import (
     play_card,
     program_preview,
     start_combat,
+    take_back,
 )
 from agentic_rogue_like.enemies import ENEMY_POOL, with_interrupt
 from agentic_rogue_like.engine import _room_enemy, available_choices, move_to, new_run, resolve_node
@@ -227,6 +228,86 @@ def test_the_bot_finds_the_better_order() -> None:
     assert names == ["Fork", "Exploit"]
 
 
+def test_undo_runs_as_a_line_and_fetches_what_ran_before_it() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", "Undo")
+    # queued, not played on the spot
+    assert [c and c.name for c in state.program[:2]] == ["Exploit", "Undo"]
+    preview = program_preview(state, player)
+    assert preview.steps[1].retrieved == ["Exploit"]
+
+    end_turn(state, player, random.Random(2))
+    assert state.enemy.hp - state.enemy_hp == 5
+    assert "Exploit" in [c.name for c in state.hand]
+    # one-shot: used up once it ran
+    assert any(c.name == "Undo" for c in state.banished_pile)
+
+
+def test_first_and_last_line_cards_pay_off_in_their_place() -> None:
+    # Bootstrap: +7 as the first line to run, Return: +7 as the last
+    assert _damage_dealt("Bootstrap", "Exploit") == 10 + 5
+    assert _damage_dealt("Exploit", "Bootstrap") == 5 + 3
+    assert _damage_dealt("Exploit", "Return") == 5 + 10
+    assert _damage_dealt("Return", "Exploit") == 3 + 5
+    # alone in the program it is both first and last
+    assert _damage_dealt("Return", slots=[2]) == 10
+
+
+def test_line_count_cards_scale_with_the_programs_length() -> None:
+    assert _damage_dealt("Monolith") == 1
+    assert _damage_dealt("Monolith", "Firewall", "Firewall") == 1 + 6
+    assert _damage_dealt("Microservice") == 11
+    assert _damage_dealt("Microservice", "Firewall", "Firewall") == 11 - 4
+
+
+def test_segfault_ends_the_program() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", "Segfault", "Exploit")
+    steps = program_preview(state, player).steps
+    assert [s.outcome for s in steps] == ["ran", "ran", "cut"]
+    end_turn(state, player, random.Random(2))
+    assert state.enemy.hp - state.enemy_hp == 5 + 16
+    # the line it cut never ran, so it isn't used up
+    assert sum(c.name == "Exploit" for c in state.discard_pile) == 2
+
+
+def test_the_hand_preview_knows_where_the_line_will_stand() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", slots=[2])
+    bootstrap = _card("Bootstrap")
+    assert action_preview(state, bootstrap, player, 0) == 10  # first
+    assert action_preview(state, bootstrap, player, 4) == 3  # after the Exploit
+    assert state.line_position is None
+
+
+def test_take_back_returns_a_queued_line_or_a_permanent() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", "Overclock", slots=[2, 0])
+    plays = state.plays_this_turn
+
+    take_back(state, "program", 2)
+    assert state.program == [None] * 5
+    take_back(state, "field", 0)
+    assert state.field == []
+    assert sorted(c.name for c in state.hand) == ["Exploit", "Overclock"]
+    # taken back, they no longer count as played (Copilot)
+    assert state.plays_this_turn == plays - 2
+
+    with pytest.raises(ValueError, match="no queued card"):
+        take_back(state, "program", 2)
+    with pytest.raises(ValueError, match="no card on the field"):
+        take_back(state, "field", 0)
+
+
+def test_take_back_frees_a_classic_slot() -> None:
+    state, player = _fight(program_mode=False)
+    _queue(state, player, "Overclock", slots=[3])
+    take_back(state, "field", 3)
+    assert state.field == [None] * 5
+    with pytest.raises(ValueError, match="only a program"):
+        take_back(state, "program", 0)
+
+
 def test_api_runs_a_program() -> None:
     client = TestClient(app)
     run_id = client.post("/runs", json={"seed": 3, "program_mode": True}).json()["run_id"]
@@ -246,6 +327,12 @@ def test_api_runs_a_program() -> None:
     assert preview["enemy_hp"] < get_session(run_id).combat.enemy_hp
     bad = client.post(f"/runs/{run_id}/combat/move-queued", json={"from_slot": 0, "to_slot": 2})
     assert bad.status_code == 400
+
+    back = client.post(f"/runs/{run_id}/combat/take-back", json={"zone": "program", "index": 3})
+    assert back.json()["pending_combat"]["program"] == [None] * 5
+    assert [c["name"] for c in back.json()["pending_combat"]["hand"]] == ["Exploit"]
+    again = client.post(f"/runs/{run_id}/combat/take-back", json={"zone": "program", "index": 3})
+    assert again.status_code == 400
 
 
 def test_a_program_run_plays_out_on_its_own() -> None:

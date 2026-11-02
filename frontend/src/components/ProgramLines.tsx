@@ -101,11 +101,17 @@ function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep |
   if (!step) return null;
   if (step.outcome === "cut") return { text: "cut", tone: "cut" };
   if (step.outcome === "skipped") return { text: "–", tone: "idle" };
+  if (card.type === "retrieve") {
+    // Undo, Rollback: what the lines before it leave in the graveyard comes back
+    return step.retrieved.length > 0
+      ? { text: `↩ ${step.retrieved.join(", ")}`, tone: "fetch" }
+      : { text: "nothing to fetch", tone: "idle" };
+  }
   if (CONTROL_FLOW_TYPES.includes(card.type)) {
     if (card.type === "loop") {
       // a loop repeats the last action run before it - with none, it idles
-      const repeats = before.some((s) => s.outcome === "ran" && !CONTROL_FLOW_TYPES.includes(s.type));
-      return repeats ? { text: "↺ again", tone: "flow" } : { text: "nothing to repeat", tone: "idle" };
+      const target = loopTarget(before);
+      return target ? { text: `↺ ${target.name}`, tone: "flow" } : { text: "nothing to repeat", tone: "idle" };
     }
     if (card.type === "if_wounded") {
       return next && next.runs > 1 ? { text: "×2 armed", tone: "flow" } : { text: "waiting", tone: "idle" };
@@ -126,15 +132,62 @@ function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep |
   return null;
 }
 
+// The action a loop repeats: the last one that ran before it.
+function loopTarget(before: ProgramStep[]): ProgramStep | undefined {
+  return before.findLast((s) => s.outcome === "ran" && !CONTROL_FLOW_TYPES.includes(s.type));
+}
+
+// The lines control flow works on, for a badge on their card: run more than
+// once (a Fork, If Wounded, Tail Call in front of it) and repeated by a Loop.
+function boostsOf(steps: ProgramStep[]): Map<number, { times: number; looped: boolean }> {
+  const boosts = new Map<number, { times: number; looped: boolean }>();
+  steps.forEach((step, i) => {
+    if (step.outcome !== "ran") return;
+    if (step.type === "loop") {
+      const target = loopTarget(steps.slice(0, i));
+      if (target) {
+        const b = boosts.get(target.slot) ?? { times: target.runs, looped: false };
+        boosts.set(target.slot, { ...b, looped: true });
+      }
+    } else if (!CONTROL_FLOW_TYPES.includes(step.type) && step.runs > 1) {
+      boosts.set(step.slot, { times: step.runs, looped: boosts.get(step.slot)?.looped ?? false });
+    }
+  });
+  return boosts;
+}
+
 // The link on the rail from a line to the next: a fork doubling it, a loop
 // reaching back, or the interrupt's cut.
 function linkKind(combat: PendingCombatView, line: number, cutLines: number[]): string {
   const card = combat.program[line];
   const next = combat.program[line + 1];
   if (cutLines.includes(line + 1) && !cutLines.includes(line)) return "cut";
+  // Segfault: the program ends after it
+  if (card?.halts && combat.program.slice(line + 1).some((c) => c !== null)) return "cut";
   if (next?.type === "loop") return "loop";
   if (card && ["fork", "if_wounded"].includes(card.type)) return "fork";
   return "plain";
+}
+
+// The small "back to hand" button on a card lying on the field - a queued
+// line or an installed permanent. Shared with CombatPanel's classic slots.
+export function TakeBack({ name, disabled, onClick }: { name: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="take-back"
+      disabled={disabled}
+      title={`Take ${name} back into your hand`}
+      aria-label={`Take ${name} back into your hand`}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+    >
+      ↩
+    </button>
+  );
 }
 
 // What CombatPanel's drag of queued cards between lines looks like from here
@@ -163,6 +216,7 @@ export function ProgramLines({
   live,
   reversed,
   onPickLine,
+  onTakeBack,
   onPlay,
   onPoint,
 }: {
@@ -190,6 +244,8 @@ export function ProgramLines({
   // a refactor runs it right to left
   reversed: boolean;
   onPickLine: (line: number) => void;
+  // take a queued line ("program") or a permanent ("field") back into the hand
+  onTakeBack: (zone: "program" | "field", index: number) => void;
   onPlay: (line: number, slot: HTMLElement) => void;
   // the pointer entering (over) or leaving a line
   onPoint: (line: number, over: boolean) => void;
@@ -272,16 +328,22 @@ export function ProgramLines({
       : null;
     const aims = aimedCard !== undefined && !queues(combat, aimedCard);
     const running = [...combat.field.filter((card) => card !== null), ...(landing ? [landing] : [])];
+    // a div, not a button: the installed permanents carry their own
+    // take-back buttons, and the drop target sits under them
     return (
-      <button
-        type="button"
+      <div
         data-slot-index={aims ? 0 : undefined}
         className={`program-background${aims ? " is-targetable" : ""}${aims && handHoverSlot === 0 ? " is-drop-target" : ""}`}
-        disabled={locked || !cardSelected || !aims}
-        onClick={(event) => onPlay(0, event.currentTarget)}
         onPointerEnter={() => aims && onPoint(0, true)}
         onPointerLeave={() => aims && onPoint(0, false)}
       >
+        <button
+          type="button"
+          className="background-drop"
+          aria-label="Program background"
+          disabled={locked || !cardSelected || !aims}
+          onClick={(event) => onPlay(0, event.currentTarget.parentElement ?? event.currentTarget)}
+        />
         <span className="background-label">bg bus</span>
         {running.map((card, i) => (
           <span
@@ -291,6 +353,9 @@ export function ProgramLines({
           >
             <CardTypeIcon type={card.type} />
             <span>{card.name}</span>
+            {card !== landing && (
+              <TakeBack name={card.name} disabled={locked} onClick={() => onTakeBack("field", i)} />
+            )}
           </span>
         ))}
         {aims ? (
@@ -305,11 +370,12 @@ export function ProgramLines({
         ) : (
           running.length === 0 && <span className="background-hint">Permanents run here</span>
         )}
-      </button>
+      </div>
     );
   }
 
   const steps = combat.program_preview?.steps ?? [];
+  const boosts = boostsOf(steps);
   return (
     <div
       className={`program-board${reversed ? " is-reversed" : ""}`}
@@ -324,11 +390,21 @@ export function ProgramLines({
           {combat.program.map((card, line) => {
             const at = steps.findIndex((s) => s.slot === line);
             const chip = card && at >= 0 ? lineChip(card, steps[at], steps[at + 1], steps.slice(0, at)) : null;
+            const boost = card ? boosts.get(line) : undefined;
             return (
               <div
                 key={line}
-                className={`program-line${line === hotLine ? " is-hot" : ""}${running === line ? " is-running" : ""}${spentLines.includes(line) ? " is-spent" : ""}`}
+                className={`program-line${line === hotLine ? " is-hot" : ""}${running === line ? " is-running" : ""}${spentLines.includes(line) ? " is-spent" : ""}${boost ? " is-boosted" : ""}`}
               >
+                {boost && (
+                  <span
+                    className="line-boost"
+                    title={`${boost.times > 1 ? `Runs ${boost.times} times` : ""}${boost.times > 1 && boost.looped ? ", and " : ""}${boost.looped ? "a Loop repeats it" : ""}`}
+                  >
+                    {boost.times > 1 && `×${boost.times}`}
+                    {boost.looped && "↺"}
+                  </span>
+                )}
                 <span className={`line-chip${chip ? ` is-${chip.tone}` : " is-none"}`}>{chip?.text}</span>
                 {card && at >= 0 && steps[at].combo && (
                   <span className="line-combo" data-tip-term="Combo" data-tip="A named combo: card types run back to back pay out once per run.">
@@ -336,6 +412,9 @@ export function ProgramLines({
                   </span>
                 )}
                 {renderAction(card, line)}
+                {card && (
+                  <TakeBack name={card.name} disabled={locked} onClick={() => onTakeBack("program", line)} />
+                )}
                 {line < combat.program.length - 1 && (
                   <span className={`line-link is-${linkKind(combat, line, cutLines)}`} aria-hidden="true" />
                 )}
