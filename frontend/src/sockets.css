@@ -166,4 +166,7 @@
   .combat-panel:not(.is-program) {
     --stage-h: min(calc(100vw / 2.4), 62vh, calc(100vh - 470px));
   }
+  .combat-panel.is-program {
+    --stage-h: min(calc(100vw / 2.4), 50vh, calc(100vh - 610px));
+  }
 }
