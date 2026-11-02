@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode, type Ref } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type Ref,
+} from "react";
 import { ATTACKING_INTENTS, type CardType, type EnemyIntentType } from "../api";
 import { sfx } from "../audio";
 import type { HackerCommand } from "../hackerCommands";
 import type { HpExchange } from "../hooks/useHpExchange";
+import { useCountUp } from "../hooks/useCountUp";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS } from "../hooks/useLagged";
 import { enemySprite } from "../pixel/enemySprite";
 import { FINAL_BOSS_INTENT_X } from "../pixel/finalBoss";
@@ -162,6 +172,8 @@ interface ProgramFx {
   text: string;
   // how many of its kind are up already - they stack instead of overlapping
   stack: number;
+  // the share of the enemy's HP a hit took: bigger hits, bigger numbers
+  weight?: number;
 }
 
 const PROGRAM_FX_MS = 1100;
@@ -179,24 +191,55 @@ function ProgramFxPopup({ fx, enemyTop }: { fx: ProgramFx; enemyTop: number }) {
   const top = onEnemy ? enemyTop + 14 - (fx.kind === "combo" ? 14 : 0) - fx.stack * 9 : PLAYER_FX_TOP - fx.stack * 9;
   return (
     <span
-      className={`arena-popup arena-program-fx is-${fx.kind}`}
-      style={{ left: pct.x(onEnemy ? ENEMY_X : PLAYER_X), top: pct.y(top) }}
+      className={`arena-popup arena-program-fx is-${fx.kind}${heavyClass(fx.weight)}`}
+      style={{ left: pct.x(onEnemy ? ENEMY_X : PLAYER_X), top: pct.y(top), "--w": fx.weight ?? 0 } as CSSProperties}
     >
-      {fx.text}
+      {fx.kind === "damage" ? <RollingNumber text={fx.text} /> : fx.text}
     </span>
   );
 }
 
-function DamagePopup({ side, delta, top }: { side: "player" | "enemy"; delta: number; top: number }) {
+// "-12" or "+5" rolled up from zero, sign kept
+function RollingNumber({ text, delayMs = 0 }: { text: string; delayMs?: number }) {
+  const match = /^([+-]?)(\d+)$/.exec(text);
+  const value = useCountUp(match ? Number(match[2]) : 0, { delayMs, durationMs: 340 });
+  return <>{match ? `${match[1]}${value}` : text}</>;
+}
+
+// a hit that took a big share of the enemy's HP gets a heavier popup
+function heavyClass(weight = 0): string {
+  return weight >= 0.25 ? " is-heavy" : weight >= 0.12 ? " is-solid" : "";
+}
+
+function DamagePopup({
+  side,
+  delta,
+  top,
+  weight = 0,
+}: {
+  side: "player" | "enemy";
+  delta: number;
+  top: number;
+  weight?: number;
+}) {
   const isHeal = delta > 0;
   return (
     <span
-      className={`arena-popup is-${side} ${isHeal ? "is-heal" : "is-damage"}`}
-      style={{ left: pct.x(side === "player" ? PLAYER_X : ENEMY_X), top: pct.y(top) }}
+      className={`arena-popup is-${side} ${isHeal ? "is-heal" : "is-damage"}${heavyClass(weight)}`}
+      style={{ left: pct.x(side === "player" ? PLAYER_X : ENEMY_X), top: pct.y(top), "--w": weight } as CSSProperties}
     >
-      {isHeal ? `+${delta}` : delta}
+      {/* the enemy's number rolls up as the pulse lands (see .arena-popup) */}
+      <RollingNumber text={isHeal ? `+${delta}` : `${delta}`} delayMs={side === "enemy" && !isHeal ? 550 : 200} />
     </span>
   );
+}
+
+// A hit felt on the whole stage: a flash in the colour of the side that took
+// it, as strong as the hit was heavy (`weight`, 0..1).
+interface Jolt {
+  id: number;
+  side: "player" | "enemy";
+  weight: number;
 }
 
 export function CombatArena({
@@ -210,6 +253,7 @@ export function CombatArena({
   onContinue,
   hero = "chronos",
   contextFull = false,
+  playerMaxHp = 50,
   children,
   ref,
 }: {
@@ -224,19 +268,26 @@ export function CombatArena({
   // who stands at the keyboard, and whether the Vibe-Coder's window is full
   hero?: Hero;
   contextFull?: boolean;
+  // scales how hard a hit on Dr. Chronos lands on the stage
+  playerMaxHp?: number;
   children?: ReactNode;
   ref?: Ref<ArenaHandle>;
 }) {
   const sceneRef = useRef<PixelScene | null>(null);
   const [programFx, setProgramFx] = useState<ProgramFx[]>([]);
   const fxId = useRef(0);
-  const showFx = useCallback((kind: ProgramFx["kind"], text: string) => {
+  const showFx = useCallback((kind: ProgramFx["kind"], text: string, weight?: number) => {
     const id = ++fxId.current;
     setProgramFx((shown) => [
       ...shown,
-      { id, kind, text, stack: shown.filter((f) => f.kind === kind).length },
+      { id, kind, text, weight, stack: shown.filter((f) => f.kind === kind).length },
     ]);
     window.setTimeout(() => setProgramFx((shown) => shown.filter((f) => f.id !== id)), PROGRAM_FX_MS);
+  }, []);
+  const [jolt, setJolt] = useState<Jolt | null>(null);
+  const joltId = useRef(0);
+  const shake = useCallback((side: Jolt["side"], weight: number) => {
+    setJolt({ id: ++joltId.current, side, weight: Math.max(0, Math.min(1, weight)) });
   }, []);
   const onScene = useCallback((scene: PixelScene) => {
     sceneRef.current = scene;
@@ -286,7 +337,8 @@ export function CombatArena({
         scene?.trigger("enemy_hurt");
         scene?.impact(hit.weight);
         sfx.play("impact");
-        showFx("damage", `-${hit.dealt}`);
+        shake("enemy", hit.weight);
+        showFx("damage", `-${hit.dealt}`, hit.weight);
         if (hit.runs > 1) showFx("combo", `×${hit.runs}`);
       }, tempoMs(ENEMY_HIT_MS));
     },
@@ -307,10 +359,26 @@ export function CombatArena({
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene || !exchange) return;
-    if (exchange.enemyDelta < 0) scene.trigger("enemy_hurt", ENEMY_HIT_MS);
-    if (exchange.playerDelta < 0) scene.trigger("player_hurt", PLAYER_HIT_MS);
+    const timers: number[] = [];
+    if (exchange.enemyDelta < 0) {
+      scene.trigger("enemy_hurt", ENEMY_HIT_MS);
+      // the heavier the hit, the harder the stage takes it
+      const weight = -exchange.enemyDelta / Math.max(1, maxHp);
+      timers.push(
+        window.setTimeout(() => {
+          scene.impact(weight);
+          shake("enemy", weight);
+        }, tempoMs(ENEMY_HIT_MS)),
+      );
+    }
+    if (exchange.playerDelta < 0) {
+      scene.trigger("player_hurt", PLAYER_HIT_MS);
+      const weight = -exchange.playerDelta / Math.max(1, playerMaxHp);
+      timers.push(window.setTimeout(() => shake("player", weight * 2), tempoMs(PLAYER_HIT_MS)));
+    }
     if (exchange.playerDelta > 0) scene.trigger("player_healed", 350);
-  }, [exchange]);
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, [exchange, maxHp, playerMaxHp, shake]);
 
   // The enemy comes apart once the killing blow has landed.
   useEffect(() => {
@@ -328,7 +396,14 @@ export function CombatArena({
         <CombatMonitor lines={log} commands={commands} />
         {exchange && (
           <div key={exchange.id} className="arena-fx" aria-hidden="true">
-            {exchange.enemyDelta !== 0 && <DamagePopup side="enemy" delta={exchange.enemyDelta} top={top - 6} />}
+            {exchange.enemyDelta !== 0 && (
+              <DamagePopup
+                side="enemy"
+                delta={exchange.enemyDelta}
+                top={top - 6}
+                weight={-exchange.enemyDelta / Math.max(1, maxHp)}
+              />
+            )}
             {exchange.playerDelta !== 0 && <DamagePopup side="player" delta={exchange.playerDelta} top={PLAYER_FX_TOP} />}
           </div>
         )}
@@ -336,9 +411,21 @@ export function CombatArena({
           <ProgramFxPopup key={fx.id} fx={fx} enemyTop={top} />
         ))}
         {children}
+        {jolt && (
+          <span
+            key={jolt.id}
+            className={`arena-jolt is-${jolt.side}`}
+            style={{ "--w": jolt.weight } as CSSProperties}
+            aria-hidden="true"
+          />
+        )}
+        {slain && <span className="arena-terminated" aria-hidden="true" />}
         {slain && (
           <div className="arena-victory">
-            <span className="arena-victory-title">{enemy.name} defeated</span>
+            <span className="arena-victory-title" data-text="Process terminated">
+              Process terminated
+            </span>
+            <span className="arena-victory-sub">{enemy.name} deleted</span>
             <button
               type="button"
               className="is-primary arena-continue"

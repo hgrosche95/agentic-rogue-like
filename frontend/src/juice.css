@@ -1,0 +1,743 @@
+/* "Juice": motion and feedback for the moments that matter - who travels,
+   the jump to the next layer, how a hit lands, what the next hit will leave
+   of you, and the win. Loaded after flair.css. Every effect here stands
+   still under prefers-reduced-motion (bottom of file). */
+
+/* ---------- title: the travellers, drawn ---------- */
+.title-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  /* calm in the middle, where the console sits */
+  mask-image: radial-gradient(ellipse 60% 55% at 50% 50%, rgba(0, 0, 0, 0.25), #000 80%);
+}
+
+.game.is-title .brand-name {
+  animation: logo-glitch 7.5s steps(1) 2s infinite;
+}
+
+@keyframes logo-glitch {
+  0%,
+  91%,
+  100% {
+    transform: none;
+  }
+  92% {
+    transform: translateX(3px) skewX(-6deg);
+    text-shadow:
+      -4px 0 rgba(255, 61, 139, 0.8),
+      4px 0 rgba(52, 231, 255, 0.7);
+  }
+  93% {
+    transform: translateX(-2px);
+    clip-path: inset(30% 0 35% 0);
+  }
+  94% {
+    transform: translateX(1px) skewX(4deg);
+    clip-path: none;
+  }
+}
+
+.character-cards {
+  gap: 0.75rem;
+}
+
+.setting-picker .character-card {
+  display: flex;
+  flex-direction: column;
+  width: 152px;
+  padding: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  background: #0b0b20;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    translate var(--dur) var(--ease-pop);
+}
+
+.setting-picker .character-card.is-selected {
+  color: var(--accent);
+  background: #0b0b20;
+  border-color: var(--accent);
+  box-shadow:
+    0 14px 26px -14px rgba(0, 0, 0, 0.9),
+    0 0 18px -4px rgba(52, 231, 255, 0.6);
+  translate: 0 -3px;
+}
+
+.setting-picker .character-card:hover:not(:disabled):not(.is-selected) {
+  color: var(--text);
+  background: #0b0b20;
+}
+
+/* the lab, cropped to the figure at the keyboard: the scene is 240 x 100
+   logical px, the crop x 26..82, y 44..90 */
+.character-portrait {
+  position: relative;
+  display: block;
+  aspect-ratio: 56 / 46;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line-strong);
+  filter: grayscale(0.75) brightness(0.5);
+  transition: filter var(--dur-slow) var(--ease-out);
+}
+
+.character-card.is-selected .character-portrait,
+.character-card:hover:not(:disabled) .character-portrait {
+  filter: none;
+}
+
+.character-card.is-selected .character-portrait {
+  border-bottom-color: var(--accent);
+}
+
+/* a scanline over the picked one, as if on a monitor */
+.character-card.is-selected .character-portrait::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0 45%, rgba(159, 246, 255, 0.18) 50%, transparent 55% 100%) 0 0 / 100% 220%;
+  animation: portrait-scan 2.6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes portrait-scan {
+  from {
+    background-position: 0 120%;
+  }
+  to {
+    background-position: 0 -120%;
+  }
+}
+
+.character-portrait-crop {
+  position: absolute;
+  left: -46.43%;
+  top: -95.65%;
+  width: 428.57%;
+  height: 217.39%;
+}
+
+.character-card-name {
+  padding: 0.5rem 0.6rem 0.55rem;
+  font-family: var(--font-head);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.boot-panel .character-picker .setting-picker-label {
+  grid-row: 1 / span 2;
+}
+
+@media (max-width: 640px) {
+  .setting-picker .character-card {
+    width: calc(50% - 0.4rem);
+  }
+}
+
+/* ---------- the jump to the next layer ---------- */
+.jump-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* the screen dims under the streaks and comes back as they pass */
+.jump-transition::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #05050f;
+  animation: jump-dim 1150ms var(--ease-in-out) both;
+}
+
+/* light streaks rushing out from the middle */
+.jump-streaks {
+  position: absolute;
+  inset: -40%;
+  background:
+    repeating-conic-gradient(from 3deg at 50% 50%, transparent 0deg 5.5deg, rgba(159, 246, 255, 0.75) 5.5deg 6deg, transparent 6deg 11deg),
+    repeating-conic-gradient(from 0deg at 50% 50%, transparent 0deg 8deg, rgba(255, 61, 139, 0.45) 8deg 8.4deg, transparent 8.4deg 17deg);
+  mask-image: radial-gradient(circle at 50% 50%, transparent 6%, #000 22%, #000 45%, transparent 70%);
+  animation: jump-streaks 1150ms cubic-bezier(0.55, 0, 0.3, 1) both;
+}
+
+/* a glitch band wiping down the screen as the jump lands */
+.jump-wipe {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, transparent 0 46%, rgba(52, 231, 255, 0.5) 47%, #fff 49.5%, rgba(255, 61, 139, 0.5) 52%, transparent 53% 100%) 0 0 / 100% 300%,
+    repeating-linear-gradient(0deg, rgba(52, 231, 255, 0.12) 0 2px, transparent 2px 7px);
+  mix-blend-mode: screen;
+  animation: jump-wipe 1150ms linear both;
+}
+
+.jump-label {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
+  animation: jump-label 1150ms var(--ease-out) both;
+}
+
+.jump-label b {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: clamp(2.2rem, 7vw, 4.4rem);
+  letter-spacing: 0.08em;
+  color: var(--cyan-bright);
+  text-shadow:
+    -3px 0 rgba(255, 61, 139, 0.75),
+    3px 0 rgba(52, 231, 255, 0.75),
+    0 0 30px rgba(52, 231, 255, 0.6);
+  /* the path types itself in */
+  clip-path: inset(0 100% 0 0);
+  animation: jump-type 1150ms steps(7, end) both;
+}
+
+.jump-label small {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+@keyframes jump-dim {
+  0% {
+    opacity: 0;
+  }
+  25%,
+  60% {
+    opacity: 0.88;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes jump-streaks {
+  0% {
+    opacity: 0;
+    transform: scale(0.35) rotate(0deg);
+  }
+  20% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.4) rotate(6deg);
+  }
+}
+
+@keyframes jump-wipe {
+  0%,
+  45% {
+    opacity: 0;
+    background-position: 0 100%, 0 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+    background-position: 0 0%, 0 0;
+  }
+  100% {
+    opacity: 0;
+    background-position: 0 0%, 0 0;
+  }
+}
+
+@keyframes jump-type {
+  0%,
+  22% {
+    clip-path: inset(0 100% 0 0);
+  }
+  50%,
+  100% {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes jump-label {
+  0%,
+  18% {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+  30%,
+  72% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+/* ---------- the HP bars tell what the next hit leaves ---------- */
+.hud-forecast {
+  margin-left: 0.35em;
+  font-weight: 700;
+  color: #ffe0ea;
+}
+
+.hud-bar.is-enemy .hud-forecast {
+  color: #d9fbff;
+}
+
+/* nothing left: the bar pulses and the forecast turns into a warning */
+.hud-bar.is-lethal {
+  animation: lethal-pulse 0.9s var(--ease-in-out) infinite alternate;
+}
+
+.hud-bar.is-player.is-lethal {
+  --lethal: var(--danger);
+}
+
+.hud-bar.is-enemy.is-lethal {
+  --lethal: var(--cyan);
+}
+
+.hud-bar.is-lethal .hud-forecast {
+  padding: 0 5px;
+  border-radius: 3px;
+  color: var(--px-ink);
+  background: var(--lethal);
+  text-shadow: none;
+}
+
+@keyframes lethal-pulse {
+  from {
+    box-shadow: 0 0 0 1px var(--lethal);
+  }
+  to {
+    box-shadow:
+      0 0 0 1px var(--lethal),
+      0 0 16px var(--lethal);
+  }
+}
+
+.incoming-badge.is-lethal {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+  animation: lethal-badge 0.9s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes lethal-badge {
+  to {
+    box-shadow: 0 0 14px rgba(255, 61, 139, 0.85);
+  }
+}
+
+/* ---------- hits: a flash as heavy as the blow, bigger numbers ---------- */
+.arena-jolt {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  animation: jolt 420ms var(--ease-out) both;
+}
+
+/* light bursting where the enemy stands (ENEMY_X, pixel/layout.ts) */
+.arena-jolt.is-enemy {
+  background: radial-gradient(
+    ellipse 38% 70% at 76.7% 62%,
+    rgba(200, 250, 255, calc(0.12 + var(--w) * 0.9)),
+    transparent 70%
+  );
+  mix-blend-mode: screen;
+}
+
+/* a hit on Dr. Chronos reddens the edges of the stage */
+.arena-jolt.is-player {
+  background: radial-gradient(
+    ellipse 75% 75% at 50% 50%,
+    transparent 45%,
+    rgba(255, 61, 139, calc(0.25 + var(--w) * 0.6)) 100%
+  );
+}
+
+@keyframes jolt {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.arena-popup.is-solid {
+  font-size: 5.6cqw;
+}
+
+.arena-popup.is-heavy {
+  font-size: 7.4cqw;
+  color: #fff;
+}
+
+.arena-popup.is-heavy.is-enemy,
+.arena-program-fx.is-damage.is-heavy {
+  text-shadow:
+    0 0 3px var(--px-ink),
+    0 0 3px var(--px-ink),
+    -2px 0 rgba(255, 61, 139, 0.9),
+    2px 0 rgba(52, 231, 255, 0.9),
+    0 0 22px var(--cyan);
+}
+
+/* ---------- the win: process terminated ---------- */
+/* the stage dims and a scan runs down it as the enemy comes apart */
+.arena-terminated {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, transparent 0 46%, rgba(159, 246, 255, 0.45) 49%, #fff 50%, transparent 51% 100%) 0 0 / 100% 300%,
+    rgba(5, 5, 15, 0.5);
+  animation: terminated 900ms var(--ease-out) 1.6s both;
+}
+
+@keyframes terminated {
+  from {
+    opacity: 0;
+    background-position: 0 100%, 0 0;
+  }
+  to {
+    opacity: 1;
+    background-position: 0 -100%, 0 0;
+  }
+}
+
+.arena-victory {
+  z-index: 6;
+  gap: 0.35rem;
+}
+
+.arena-victory-title {
+  position: relative;
+  font-size: max(16px, 4.6cqw);
+  letter-spacing: 0.1em;
+  color: var(--cyan-bright);
+  text-shadow: 0 0 22px rgba(52, 231, 255, 0.7);
+}
+
+/* two torn copies of the title, glitching before they settle */
+.arena-victory-title::before,
+.arena-victory-title::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.arena-victory-title::before {
+  color: var(--ai-red);
+  animation: victory-tear-a 900ms steps(1) 2.1s both;
+}
+
+.arena-victory-title::after {
+  color: var(--cyan);
+  animation: victory-tear-b 900ms steps(1) 2.1s both;
+}
+
+@keyframes victory-tear-a {
+  0% {
+    opacity: 1;
+    transform: translateX(-6px);
+    clip-path: inset(0 0 60% 0);
+  }
+  25% {
+    transform: translateX(5px);
+    clip-path: inset(40% 0 20% 0);
+  }
+  50% {
+    transform: translateX(-3px);
+    clip-path: inset(70% 0 0 0);
+  }
+  75%,
+  100% {
+    opacity: 0;
+    transform: none;
+  }
+}
+
+@keyframes victory-tear-b {
+  0% {
+    opacity: 1;
+    transform: translateX(6px);
+    clip-path: inset(55% 0 0 0);
+  }
+  25% {
+    transform: translateX(-4px);
+    clip-path: inset(10% 0 55% 0);
+  }
+  50% {
+    transform: translateX(2px);
+    clip-path: inset(0 0 75% 0);
+  }
+  75%,
+  100% {
+    opacity: 0;
+    transform: none;
+  }
+}
+
+.arena-victory-sub {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: max(12px, 1.7cqw);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .arena-victory-title {
+    display: block;
+    font-size: 15px;
+  }
+  .arena-victory-sub {
+    display: none;
+  }
+}
+
+/* ---------- credits: the loot rolls in ---------- */
+.credits-val {
+  position: relative;
+  font-variant-numeric: tabular-nums;
+}
+
+.credits-gain {
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  margin-left: 3px;
+  font-size: 14px;
+  color: var(--gold);
+  text-shadow: 0 0 10px rgba(255, 216, 74, 0.8);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: credits-gain 1.6s var(--ease-out) both;
+}
+
+@keyframes credits-gain {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  18% {
+    opacity: 1;
+    transform: none;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+/* ---------- reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .game.is-title .brand-name,
+  .character-card.is-selected .character-portrait::after,
+  .hud-bar.is-lethal,
+  .incoming-badge.is-lethal,
+  .arena-victory-title::before,
+  .arena-victory-title::after {
+    animation: none;
+  }
+  .arena-victory-title::before,
+  .arena-victory-title::after {
+    display: none;
+  }
+  .jump-streaks,
+  .jump-wipe,
+  .arena-jolt {
+    display: none;
+  }
+  .jump-transition::before {
+    animation: jump-dim 1150ms linear both;
+  }
+  .jump-label,
+  .jump-label b {
+    animation: none;
+    clip-path: none;
+  }
+  .jump-label {
+    animation: jump-dim-label 1150ms linear both;
+  }
+  .arena-terminated {
+    animation: none;
+    background: rgba(5, 5, 15, 0.5);
+  }
+  .credits-gain {
+    animation: credits-gain-still 1.6s linear both;
+  }
+}
+
+@keyframes jump-dim-label {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  25%,
+  70% {
+    opacity: 1;
+  }
+}
+
+@keyframes credits-gain-still {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  15%,
+  75% {
+    opacity: 1;
+  }
+}
+
+/* ---------- classic combat: the arena is the whole stage ----------
+   On wide screens the pixel scene runs edge to edge under the top bar; the
+   HUD plates hang in its corners as glass, the scene fades out at its foot
+   and the stack and the hand stand on its floor between the two fighters.
+   (Program mode keeps its framed screen: its rail needs the full width.)
+   Only where the screen has room for it: on a small one the stack would
+   stand on the fighters, so the framed scene stays. */
+@media (min-width: 1200px) and (min-height: 820px) {
+  .game.is-combat {
+    overflow-x: clip;
+  }
+
+  .combat-panel:not(.is-program) {
+    /* as tall as the width allows, but leaving room for stack and hand */
+    --stage-h: min(calc(100vw / 2.4), 64vh, calc(100vh - 420px));
+  }
+
+  .combat-panel:not(.is-program) > .arena-wrap {
+    width: 100vw;
+    height: var(--stage-h);
+    margin-top: 0;
+  }
+
+  .combat-panel:not(.is-program) > .arena-wrap > .arena-stage {
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  /* no frame: the scene melts into the ground at its sides and its foot */
+  .combat-panel:not(.is-program) .arena-stage .pixel-frame {
+    outline: 0;
+    box-shadow: none;
+    background: transparent;
+    mask-image:
+      linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%),
+      linear-gradient(180deg, transparent 0, #000 5%, #000 74%, transparent 100%);
+    mask-composite: intersect;
+  }
+
+  /* the plates: glass in the scene's top corners, in line with the top bar */
+  .combat-panel:not(.is-program) > .arena-wrap > .vs-hud {
+    top: 14px;
+    width: 300px;
+    background: rgba(12, 12, 32, 0.74);
+    backdrop-filter: blur(6px);
+  }
+
+  .combat-panel:not(.is-program) > .arena-wrap > .vs-hud.is-player {
+    left: max(24px, calc(50vw - 680px));
+    right: auto;
+  }
+
+  .combat-panel:not(.is-program) > .arena-wrap > .vs-hud.is-enemy {
+    right: max(24px, calc(50vw - 680px));
+    left: auto;
+  }
+
+  /* the stack stands on the floor, between the fighters */
+  .combat-panel:not(.is-program) > .combat-row {
+    margin-top: calc(var(--stage-h) * -0.24);
+  }
+
+  .combat-panel:not(.is-program) .field-zone {
+    background: rgba(8, 8, 26, 0.55);
+    backdrop-filter: blur(4px);
+    border-color: color-mix(in srgb, var(--cyan) 35%, var(--line-strong));
+    box-shadow: 0 24px 40px -24px #000;
+  }
+
+  /* once the enemy is down, the win (and its Continue) sits over the stack */
+  .combat-panel:not(.is-program):has(.arena-victory) > .arena-wrap {
+    z-index: 3;
+  }
+
+  .combat-panel:not(.is-program) > .battlefield {
+    position: relative;
+    z-index: 3;
+  }
+
+  /* the scene is wider than it was: its overlays keep their size */
+  .combat-panel:not(.is-program) .arena-monitor {
+    font-size: clamp(12px, 1cqw, 15px);
+  }
+  .combat-panel:not(.is-program) .monitor-title {
+    font-size: clamp(10px, 0.8cqw, 12px);
+  }
+  .combat-panel:not(.is-program) .arena-intent {
+    font-size: clamp(15px, 1.6cqw, 22px);
+  }
+  .combat-panel:not(.is-program) .arena-intent .intent-icon {
+    width: clamp(18px, 1.7cqw, 24px);
+    height: clamp(18px, 1.7cqw, 24px);
+  }
+  .combat-panel:not(.is-program) .arena-popup {
+    font-size: min(4.4cqw, 46px);
+  }
+  .combat-panel:not(.is-program) .arena-popup.is-solid {
+    font-size: min(5.6cqw, 58px);
+  }
+  .combat-panel:not(.is-program) .arena-popup.is-heavy {
+    font-size: min(7.4cqw, 76px);
+  }
+  /* above the scene's fading foot */
+  .combat-panel:not(.is-program) .arena-victory {
+    top: 36%;
+  }
+  .combat-panel:not(.is-program) .arena-victory-title {
+    font-size: clamp(16px, 3.6cqw, 52px);
+  }
+  .combat-panel:not(.is-program) .arena-victory-sub {
+    font-size: clamp(12px, 1.2cqw, 16px);
+  }
+}
