@@ -79,6 +79,8 @@ export interface ArenaHandle {
   cardPlayed(type: CardType, value: number): void;
   // the server answered an end of turn
   enemyTurn(turn: { attacked: boolean; blocked: boolean; braced: boolean; daemon: boolean }): void;
+  // the pixel scene itself - the HUD cuts the hero's portrait out of it
+  scene(): PixelScene | null;
 }
 
 // a blade for an attack, a shield for bracing - and a mark for each boss move
@@ -315,6 +317,7 @@ export function CombatArena({
   }, [typing, block, armor, enemyBlock, turrets, amplifiers, fortify]);
 
   useImperativeHandle(ref, () => ({
+    scene: () => sceneRef.current,
     programHit(hit) {
       const scene = sceneRef.current;
       if (hit.cut) {
