@@ -1,0 +1,802 @@
+/* "Flair": detail on top of neon.css - texture, ornament and a little
+   play, after the way card roguelikes dress their tables (a card's name on
+   a banner in its colour, a faint glyph as its art, rare foil that catches
+   the light, price tags that hang, a mat the rewards are dealt onto).
+   Loaded last; it only adds and re-dresses, the layout stays App.css's.
+   Every effect is static under prefers-reduced-motion (bottom of file). */
+
+:root {
+  /* the soft, offset depth of something lifted off the table */
+  --lift-shadow: 0 14px 26px -14px rgba(0, 0, 0, 0.9), 0 4px 10px -6px rgba(0, 0, 0, 0.7);
+  /* a fine scanline weave for surfaces */
+  --weave: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 3px);
+}
+
+::selection {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+
+/* ---------- the ground: a faint solder-dot grid under a cold top light ---------- */
+html {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -8%, rgba(52, 231, 255, 0.07), transparent 70%),
+    radial-gradient(ellipse 70% 60% at 50% 120%, rgba(255, 61, 139, 0.045), transparent 70%),
+    radial-gradient(circle, rgba(167, 169, 207, 0.075) 1px, transparent 1.4px) 0 0 / 24px 24px,
+    color-mix(in srgb, var(--bg-deep), #000 calc(var(--depth, 0) * 70%));
+  background-attachment: fixed;
+  transition: background-color 1.2s ease;
+}
+
+body {
+  background: transparent;
+}
+
+html {
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+/* ---------- panels: bracketed corners instead of a soft glow ---------- */
+.panel {
+  --tick: color-mix(in srgb, var(--accent) 45%, transparent);
+  background:
+    linear-gradient(var(--tick), var(--tick)) left 7px top 7px / 12px 1px no-repeat,
+    linear-gradient(var(--tick), var(--tick)) left 7px top 7px / 1px 12px no-repeat,
+    linear-gradient(var(--tick), var(--tick)) right 7px bottom 7px / 12px 1px no-repeat,
+    linear-gradient(var(--tick), var(--tick)) right 7px bottom 7px / 1px 12px no-repeat,
+    var(--weave),
+    var(--panel);
+  box-shadow: var(--lift-shadow);
+}
+
+/* ---------- buttons ---------- */
+/* a quiet button lifts and takes the accent edge; no halo */
+button:hover:not(:disabled) {
+  box-shadow: 0 8px 16px -10px rgba(52, 231, 255, 0.6);
+}
+
+/* the main action is a keycap: a darker ledge under its face, which it
+   sinks into when pressed (border, not shadow, so the glow animations on
+   it keep the ledge) */
+button.is-primary {
+  border-radius: 8px;
+  border-bottom: 4px solid #b38b12;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+button.is-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+button.is-primary:active:not(:disabled) {
+  margin-top: 3px;
+  border-bottom-width: 1px;
+  transform: none;
+}
+
+button.is-primary:disabled {
+  border-bottom-color: #4a4a6a;
+}
+
+/* ---------- cards ---------- */
+/* stock: a scanline weave and a solder-dot field in the card's colour, lit
+   from where the pointer is (--glare-*, tilt.ts) */
+.hand-card {
+  --card-stock:
+    radial-gradient(
+      140% 70% at var(--glare-x, 50%) var(--glare-y, 0%),
+      color-mix(in srgb, var(--card) 15%, transparent),
+      transparent 70%
+    ),
+    var(--weave),
+    radial-gradient(circle, color-mix(in srgb, var(--card) 14%, transparent) 0.8px, transparent 1.2px) 3px 3px / 9px 9px,
+    var(--panel);
+  background: var(--card-stock);
+}
+
+.hand .hand-card:hover:not(:disabled),
+.hand-card.reward-card:hover:not(:disabled),
+.hand-card.deck-card:hover:not(:disabled) {
+  background: var(--card-stock);
+}
+
+/* the name on a banner in the card's colour, its corner cut like a tab */
+.hand-card .card-header {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--card) 24%, transparent),
+    color-mix(in srgb, var(--card) 12%, transparent)
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--card) 55%, transparent);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+
+.hand-card .card-socket {
+  background: #08081a;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card) 55%, transparent);
+}
+
+/* the card's art: its type glyph, big and faint, behind the text */
+.card-watermark {
+  position: absolute;
+  right: -14%;
+  bottom: -8%;
+  z-index: 0;
+  width: 66%;
+  aspect-ratio: 1;
+  color: var(--card);
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+.card-watermark .card-icon {
+  width: 100%;
+  height: 100%;
+  stroke-width: 1.3;
+}
+
+.card-header,
+.card-body,
+.card-readout {
+  z-index: 1;
+}
+
+/* rarity: a cut gem instead of a dot - plain, cyan, gold with a glint */
+.card-gem {
+  right: 9px;
+  bottom: 9px;
+  z-index: 1;
+  width: 8px;
+  height: 8px;
+  outline: none;
+  rotate: 45deg;
+  border-radius: 1px;
+  box-shadow:
+    0 0 0 1.5px #05050f,
+    inset 1px 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.card-gem.rarity-uncommon {
+  box-shadow:
+    0 0 0 1.5px #05050f,
+    inset 1px 1px 0 rgba(255, 255, 255, 0.65),
+    0 0 6px rgba(52, 231, 255, 0.7);
+}
+
+.card-gem.rarity-rare {
+  box-shadow:
+    0 0 0 1.5px #05050f,
+    inset 1px 1px 0 rgba(255, 255, 255, 0.75),
+    0 0 8px rgba(255, 216, 74, 0.9);
+}
+
+/* rare foil: a band of colour drifting over the face, which follows the
+   pointer once the card is tilted */
+.card-foil {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 28%,
+    rgba(255, 236, 160, 0.2) 40%,
+    rgba(159, 246, 255, 0.18) 48%,
+    rgba(255, 122, 224, 0.16) 56%,
+    transparent 68%
+  );
+  background-size: 260% 260%;
+  background-position: 0% 0%;
+  mix-blend-mode: screen;
+  animation: foil-drift 6s var(--ease-in-out) infinite alternate;
+}
+
+.is-tilted > .card-foil {
+  animation: none;
+  background-position: var(--glare-x, 50%) var(--glare-y, 50%);
+}
+
+@keyframes foil-drift {
+  to {
+    background-position: 100% 100%;
+  }
+}
+
+/* rare cards carry a gold double rule inside their edge */
+.hand-card.rarity-rare {
+  outline: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  outline-offset: -5px;
+}
+
+/* field slots show only name and number: no art, no foil */
+.field-slot .card-watermark,
+.field-slot .card-foil {
+  display: none;
+}
+
+/* ---------- tilt (tilt.ts): offers lean towards the pointer ---------- */
+.reward-slot,
+.shop-item {
+  perspective: 800px;
+}
+
+.deck-grid,
+.artifact-offer,
+.kit-options {
+  perspective: 1400px;
+}
+
+.reward-card,
+.deck-card,
+.artifact-card,
+.kit-option {
+  rotate: var(--tilt, none);
+  transition:
+    transform var(--dur) var(--ease-out),
+    rotate 180ms var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    filter var(--dur-fast) var(--ease-out);
+}
+
+.reward-card.is-tilted,
+.deck-card.is-tilted,
+.artifact-card.is-tilted,
+.kit-option.is-tilted {
+  transition:
+    transform var(--dur) var(--ease-out),
+    rotate 60ms linear,
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+/* ---------- windows (reward, shop, safehouse, artifact, kit, anomaly) ----------
+   each room has its own tone: the band on top, the corner brackets and the
+   heading take it */
+.reward-screen {
+  --tone: var(--accent);
+}
+.artifact-screen {
+  --tone: var(--gold);
+}
+.shop-screen {
+  --tone: #ffb547;
+}
+.rest-screen {
+  --tone: var(--safe);
+}
+.kit-screen {
+  --tone: var(--human);
+}
+.event-prompt {
+  --tone: #b78bff;
+}
+/* an event's result (EventResult) takes the tone of how it went */
+.event-result.is-good {
+  --tone: var(--safe);
+}
+.event-result.is-bad {
+  --tone: var(--danger);
+}
+
+.overlay-window > .reward-screen,
+.overlay-window > .event-prompt {
+  --c: color-mix(in srgb, var(--tone) 70%, transparent);
+  background:
+    linear-gradient(var(--c), var(--c)) left 10px top 14px / 18px 2px no-repeat,
+    linear-gradient(var(--c), var(--c)) left 10px top 14px / 2px 18px no-repeat,
+    linear-gradient(var(--c), var(--c)) right 10px top 14px / 18px 2px no-repeat,
+    linear-gradient(var(--c), var(--c)) right 10px top 14px / 2px 18px no-repeat,
+    linear-gradient(var(--c), var(--c)) left 10px bottom 10px / 18px 2px no-repeat,
+    linear-gradient(var(--c), var(--c)) left 10px bottom 10px / 2px 18px no-repeat,
+    linear-gradient(var(--c), var(--c)) right 10px bottom 10px / 18px 2px no-repeat,
+    linear-gradient(var(--c), var(--c)) right 10px bottom 10px / 2px 18px no-repeat,
+    radial-gradient(ellipse 70% 40% at 50% 0%, color-mix(in srgb, var(--tone) 10%, transparent), transparent 75%),
+    var(--weave),
+    #10102a;
+  border-color: color-mix(in srgb, var(--tone) 35%, var(--line-strong));
+  box-shadow: 0 30px 60px -24px rgba(0, 0, 0, 0.95);
+  overflow: hidden;
+}
+
+/* the band: a thin rule with a tab in the middle, instead of a slab */
+.reward-screen::before,
+.event-prompt::before {
+  height: 2px;
+  background: var(--tone);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--tone) 70%, transparent);
+}
+
+.reward-screen::after,
+.event-prompt::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 132px;
+  height: 7px;
+  translate: -50% 0;
+  background: var(--tone);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 7px) 100%, 7px 100%);
+  pointer-events: none;
+}
+
+.reward-screen h2 {
+  margin-top: 0.4rem;
+  color: var(--tone);
+  /* a hair of chromatic split, like a signal through a cheap cable */
+  text-shadow:
+    -1.5px 0 rgba(255, 61, 139, 0.55),
+    1.5px 0 rgba(52, 231, 255, 0.45);
+}
+
+.artifact-screen h2,
+.shop-screen h2 {
+  text-shadow:
+    -1.5px 0 rgba(255, 61, 139, 0.6),
+    1.5px 0 rgba(52, 231, 255, 0.5);
+}
+
+/* ---------- card reward: the cards are dealt onto a lit mat ---------- */
+.reward-screen > .reward-cards:not(.shop-cards) {
+  --m: color-mix(in srgb, var(--tone) 9%, transparent);
+  gap: 1.4rem;
+  margin: 0 auto 1.3rem;
+  padding: 1.6rem 1.2rem 1.8rem;
+  max-width: 640px;
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse 60% 70% at 50% 100%, color-mix(in srgb, var(--tone) 16%, transparent), transparent 75%),
+    linear-gradient(90deg, var(--m) 1px, transparent 1px) center / 28px 100%,
+    linear-gradient(var(--m) 1px, transparent 1px) center / 100% 28px,
+    #09091c;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tone) 22%, transparent),
+    inset 0 18px 30px -12px rgba(0, 0, 0, 0.8);
+}
+
+.reward-skip {
+  min-width: 8rem;
+}
+
+/* ---------- black market: shelves and hanging price tags ---------- */
+.shop-section {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0.4rem 0 0.9rem;
+  color: var(--tone);
+}
+
+.shop-section::after {
+  content: "";
+  flex: 1;
+  border-top: 1px dashed color-mix(in srgb, var(--tone) 35%, transparent);
+}
+
+.shop-cards {
+  gap: 1.3rem;
+}
+
+.price-tag {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0.3rem 0.75rem 0.3rem 1.15rem;
+  border: 0;
+  border-radius: 0 4px 4px 0;
+  /* a tag: pointed end, punched hole */
+  clip-path: polygon(11px 0, 100% 0, 100% 100%, 11px 100%, 0 50%);
+  background:
+    radial-gradient(circle at 10px 50%, #10102a 0 2.6px, transparent 3.1px),
+    var(--brass);
+  rotate: -3deg;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  line-height: 1.1;
+  transition: rotate var(--dur) var(--ease-pop);
+}
+
+.shop-item:nth-child(even) > .price-tag {
+  rotate: 2.5deg;
+}
+
+.shop-item:hover > .price-tag:not(.is-sold, .is-short) {
+  rotate: 0deg;
+}
+
+.price-tag small {
+  font-size: 0.72em;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+.price-coin {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+}
+
+.price-tag.is-short {
+  background:
+    radial-gradient(circle at 10px 50%, #10102a 0 2.6px, transparent 3.1px),
+    #8a1030;
+}
+
+.price-tag.is-short::after {
+  content: "";
+  position: absolute;
+  left: 1.05rem;
+  right: 0.55rem;
+  top: 50%;
+  border-top: 2px solid rgba(255, 255, 255, 0.7);
+  rotate: -8deg;
+}
+
+.price-tag.is-sold {
+  clip-path: none;
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  border-radius: 4px;
+  padding-left: 0.75rem;
+  rotate: 0deg;
+}
+
+/* ---------- artifacts and safehouse choices: a relic on its plate ---------- */
+.artifact-card {
+  --tone: var(--gold);
+  align-items: center;
+  text-align: center;
+  padding-top: 0;
+  border: 1px solid color-mix(in srgb, var(--tone) 55%, transparent);
+  background:
+    radial-gradient(140% 80% at var(--glare-x, 50%) var(--glare-y, 0%), color-mix(in srgb, var(--tone) 9%, transparent), transparent 70%),
+    var(--weave),
+    #12122a;
+  box-shadow: var(--lift-shadow);
+}
+
+/* the plate the relic sits on: a lit display bay across the top */
+.artifact-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5.1rem;
+  background:
+    radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--tone) 22%, transparent), transparent 55%),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--tone) 8%, transparent) 0 1px, transparent 1px 10px),
+    #0b0b20;
+  border-bottom: 1px dashed color-mix(in srgb, var(--tone) 35%, transparent);
+  pointer-events: none;
+}
+
+.artifact-card > * {
+  position: relative;
+}
+
+.artifact-card .artifact-badge.is-large {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0.75rem 0 0.95rem;
+  color: var(--tone);
+  border: 1px solid color-mix(in srgb, var(--tone) 70%, transparent);
+  border-radius: 12px;
+  background: #0d0d22;
+  box-shadow:
+    0 0 0 4px #0b0b20,
+    0 0 0 5px color-mix(in srgb, var(--tone) 25%, transparent),
+    0 10px 18px -8px color-mix(in srgb, var(--tone) 60%, transparent);
+  transition: translate var(--dur) var(--ease-pop);
+}
+
+.artifact-card:hover:not(:disabled) .artifact-badge.is-large {
+  translate: 0 -3px;
+}
+
+.artifact-card .artifact-name {
+  color: var(--tone);
+  text-shadow: none;
+}
+
+.artifact-card:hover:not(:disabled) {
+  border-color: var(--tone);
+  background:
+    radial-gradient(140% 80% at var(--glare-x, 50%) var(--glare-y, 0%), color-mix(in srgb, var(--tone) 14%, transparent), transparent 70%),
+    var(--weave),
+    #16163a;
+  box-shadow:
+    var(--lift-shadow),
+    0 0 18px -4px color-mix(in srgb, var(--tone) 55%, transparent);
+}
+
+/* the safehouse: one tone per choice, a drawn tool on the plate */
+.rest-option.is-heal {
+  --tone: var(--safe);
+}
+.rest-option.is-upgrade {
+  --tone: var(--gold);
+}
+.rest-option.is-remove {
+  --tone: var(--danger);
+}
+
+.rest-icon {
+  width: 44px;
+  height: 44px;
+  margin: 1.05rem 0 1.15rem;
+  fill: none;
+  stroke: var(--tone);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--tone) 55%, transparent));
+  transition: translate var(--dur) var(--ease-pop);
+}
+
+.rest-icon .fill {
+  fill: var(--tone);
+  stroke: none;
+}
+
+.rest-icon .dash {
+  stroke-dasharray: 2 3;
+  opacity: 0.7;
+}
+
+.rest-option:hover:not(:disabled) .rest-icon {
+  translate: 0 -3px;
+}
+
+.rest-option .rest-figure {
+  font-size: 1.3rem;
+  color: var(--tone);
+}
+
+/* ---------- title: the run's settings as one console ---------- */
+.boot-panel {
+  position: relative;
+  box-sizing: border-box;
+  width: min(780px, 100%);
+  margin: 0 0 1.6rem;
+  text-align: left;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    var(--weave),
+    #0d0d22;
+  box-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.95);
+}
+
+/* the console's title bar */
+.boot-panel::before {
+  content: "run.cfg" / "";
+  display: block;
+  padding: 0.5rem 1.1rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--text-dim);
+  background:
+    linear-gradient(90deg, var(--accent) 0 3px, transparent 3px),
+    #12122a;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.game.is-title .boot-panel .setting-picker {
+  display: grid;
+  grid-template-columns: 10.5rem minmax(0, 1fr);
+  align-items: start;
+  column-gap: 1.2rem;
+  margin: 0;
+  padding: 1rem 1.2rem 1.05rem;
+}
+
+.game.is-title .boot-panel .setting-picker + .setting-picker {
+  border-top: 1px dashed var(--line);
+}
+
+.boot-panel .setting-picker > * {
+  grid-column: 2;
+}
+
+.boot-panel .setting-picker-label {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  min-height: 42px;
+  color: var(--text);
+}
+
+/* a status lamp before each setting */
+.boot-panel .setting-picker-label::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+.game.is-title .boot-panel .choice-buttons {
+  justify-content: flex-start;
+  gap: 0.5rem;
+}
+
+.boot-panel .character-blurb,
+.boot-panel .mode-hint {
+  max-width: 34rem;
+  margin: 0.65rem 0 0;
+  text-align: left;
+}
+
+.boot-panel .character-blurb > span:first-child {
+  display: inline-block;
+  margin-bottom: 0.3rem;
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--human) 55%, transparent);
+  border-radius: 4px;
+}
+
+.boot-panel .custom-setting-input {
+  margin: 0.7rem 0 0;
+}
+
+@media (max-width: 640px) {
+  .game.is-title .boot-panel .setting-picker {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.9rem 0.9rem 1rem;
+  }
+  .boot-panel .setting-picker > *,
+  .boot-panel .setting-picker-label {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .boot-panel .setting-picker-label {
+    min-height: 0;
+    margin-bottom: 0.6rem;
+  }
+}
+
+/* ---------- reduced motion: everything holds still ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .card-foil {
+    animation: none;
+  }
+  .reward-card,
+  .deck-card,
+  .artifact-card,
+  .kit-option {
+    rotate: none;
+  }
+  .price-tag,
+  .artifact-card .artifact-badge.is-large,
+  .rest-icon {
+    transition: none;
+  }
+}
+
+/* ---------- run summary: a ledger of readouts, not a wall of boxes ---------- */
+.summary-tiles {
+  gap: 0 18px;
+}
+
+.summary-tile {
+  padding: 10px 2px 12px;
+  background: none;
+  border: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--tile) 40%, var(--line));
+  border-radius: 0;
+}
+
+/* Rajdhani for the figures: Orbitron's slashed zero reads like an icon */
+.summary-value {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  line-height: 1;
+  text-shadow: none;
+}
+
+/* ---------- anomaly: numbered replies, like a comms log ---------- */
+.event-prompt:not(.event-result) > p {
+  padding-right: 1.4rem;
+}
+
+.event-prompt .choice-buttons {
+  flex-direction: column;
+  align-items: stretch;
+  counter-reset: reply;
+}
+
+.event-prompt .event-option {
+  position: relative;
+  align-items: flex-start;
+  padding: 0.6rem 1rem 0.65rem 2.7rem;
+  text-align: left;
+  counter-increment: reply;
+}
+
+.event-prompt .event-option::before {
+  content: counter(reply);
+  position: absolute;
+  left: 0.75rem;
+  top: 0.62rem;
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: var(--on-accent);
+  background: var(--tone);
+  border-radius: 4px;
+}
+
+.event-prompt .event-option:hover:not(:disabled) {
+  border-color: var(--tone);
+  box-shadow: 0 8px 16px -10px color-mix(in srgb, var(--tone) 70%, transparent);
+}
+
+.event-prompt .event-option-label {
+  font-size: 1.02rem;
+}
+
+.event-prompt .event-option-effects {
+  font-size: 12px;
+  opacity: 1;
+  color: var(--text-dim);
+}
+
+/* ---------- the piles: real stacks of card backs ---------- */
+.pile {
+  --pile: #b78bff;
+}
+.pile-graveyard {
+  --pile: #7f9bff;
+}
+.pile-banished {
+  --pile: var(--danger);
+}
+
+/* the AGI's weave on the back, the cards under it showing as edges */
+.pile .pile-face {
+  background:
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--pile) 13%, transparent) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(-45deg, color-mix(in srgb, var(--pile) 8%, transparent) 0 2px, transparent 2px 9px),
+    #10102a;
+  border-color: var(--pile);
+  box-shadow:
+    inset 0 0 0 4px #10102a,
+    inset 0 0 0 5px color-mix(in srgb, var(--pile) 30%, transparent),
+    3px 3px 0 -1px #0b0b20,
+    3px 3px 0 0 color-mix(in srgb, var(--pile) 55%, transparent),
+    6px 6px 0 -1px #0b0b20,
+    6px 6px 0 0 color-mix(in srgb, var(--pile) 30%, transparent),
+    0 12px 20px -10px rgba(0, 0, 0, 0.9);
+}
+
+/* the count on a dark plate, so it reads over the weave */
+.pile .pile-count {
+  min-width: 1.7em;
+  padding: 2px 4px;
+  text-align: center;
+  background: #08081a;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pile) 45%, transparent);
+}
