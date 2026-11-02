@@ -1,0 +1,113 @@
+/* "Table": the fight on one ground. The scene's floor runs on towards the
+   player under the stack and the hand: the stack stands on it, the hand
+   lies on it, the source pile sits in a tray on the human side and
+   the end-turn key with the cache and purge trays on the machine side.
+   The floor takes the scene's two halves with it - the lab's planks on the
+   left, the machine's grid on the right, the rift's seam of light between
+   them - so stage and table read as one place instead of a picture above a
+   toolbar. Loaded last. */
+
+@media (min-width: 901px) {
+  /* the floor runs past the bottom of the screen; nothing scrolls for it */
+  .game.is-combat {
+    overflow: clip;
+  }
+
+  /* the floor, laid from the stack's foot towards the player: the lab's
+     planks on the left, the machine's grid on the right, tilted away in
+     perspective so it reads as the ground the stage stands on */
+  .combat-row::after {
+    content: "";
+    position: absolute;
+    /* from the scene's floor line, behind the stack's sockets */
+    top: 34px;
+    left: 50%;
+    z-index: -1;
+    width: 160vw;
+    height: 110vh;
+    translate: -50% 0;
+    transform-origin: 50% 0;
+    transform: perspective(700px) rotateX(58deg);
+    pointer-events: none;
+    background:
+      /* the rift's seam, running on across the floor */
+      linear-gradient(90deg, transparent calc(50% - 2px), rgba(159, 246, 255, 0.5) 50%, transparent calc(50% + 2px)),
+      /* planks: their seams run away from the player, a joint now and then */
+      repeating-linear-gradient(90deg, rgba(255, 154, 61, 0.16) 0 2px, transparent 2px 70px) 0 0 / 50% 100% no-repeat,
+      repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0 2px, transparent 2px 230px) 0 0 / 50% 100% no-repeat,
+      /* the grid on the machine side */
+      repeating-linear-gradient(90deg, rgba(52, 231, 255, 0.2) 0 2px, transparent 2px 70px) 100% 0 / 50% 100% no-repeat,
+      repeating-linear-gradient(180deg, rgba(52, 231, 255, 0.2) 0 2px, transparent 2px 70px) 100% 0 / 50% 100% no-repeat,
+      /* each half lit in its own colour */
+      linear-gradient(90deg, rgba(255, 154, 61, 0.07) 0 50%, rgba(52, 231, 255, 0.05) 50% 100%),
+      #0a0a1c;
+    /* the floor fades towards the player and out at the sides */
+    mask-image:
+      linear-gradient(180deg, #000 0, rgba(0, 0, 0, 0.6) 45%, transparent 80%),
+      linear-gradient(90deg, transparent 12%, #000 30%, #000 70%, transparent 88%);
+    mask-composite: intersect;
+  }
+
+  /* the stack's rack melts down into the desk instead of floating as a box */
+  .combat-panel:not(.is-program) .field-zone {
+    border-color: transparent;
+    background: linear-gradient(180deg, rgba(8, 8, 26, 0.5), rgba(8, 8, 26, 0.15));
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  /* program mode: no frame around screen and rail either - the scene's
+     own edges fade into the ground, and the rail stands on the floor */
+  .combat-panel.is-program .arena-wrap {
+    /* wider than the rail: with no frame to fill, the HUD plates get the
+       room beside the scene */
+    width: min(1720px, 100%);
+    border-color: transparent;
+    background: none;
+  }
+
+  /* the floor starts under the rail: the rift's seam doesn't cross it */
+  .combat-panel.is-program .combat-row::after {
+    top: calc(100% - 8px);
+  }
+
+  .combat-panel.is-program .arena-wrap > .arena-stage .pixel-frame {
+    outline: 0;
+    box-shadow: none;
+    mask-image:
+      linear-gradient(90deg, transparent 0, #000 6%, #000 94%, transparent 100%),
+      linear-gradient(180deg, #000 0, #000 80%, transparent 100%);
+    mask-composite: intersect;
+  }
+
+  .combat-panel.is-program .field-zone {
+    border-color: transparent;
+    border-radius: 0;
+    background: linear-gradient(180deg, rgba(8, 8, 26, 0.55), rgba(8, 8, 26, 0.2));
+    box-shadow: none;
+  }
+
+  /* the piles lie on the floor: a soft contact shadow under each, no box */
+  .battlefield .pile-face {
+    box-shadow:
+      inset 0 0 0 4px #10102a,
+      3px 3px 0 -1px #0b0b20,
+      3px 3px 0 0 color-mix(in srgb, var(--pile) 55%, transparent),
+      6px 6px 0 -1px #0b0b20,
+      6px 6px 0 0 color-mix(in srgb, var(--pile) 30%, transparent),
+      0 18px 18px -6px rgba(0, 0, 0, 0.85),
+      0 0 34px -6px color-mix(in srgb, var(--pile) 35%, transparent);
+  }
+
+  /* the end-turn key seated in a bezel */
+  .battlefield .end-turn-button {
+    box-shadow:
+      0 0 0 5px #06060f,
+      0 0 0 6px rgba(255, 216, 74, 0.25),
+      0 14px 24px -10px rgba(255, 216, 74, 0.45);
+  }
+
+  .field-hint {
+    color: color-mix(in srgb, var(--text-dim) 85%, #000);
+  }
+}
