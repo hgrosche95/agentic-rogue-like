@@ -861,7 +861,9 @@ export function CombatPanel({
 
       {/* the stack stands on the arena floor */}
       <div className="combat-row">
-        <div className="field-zone" ref={fieldRef}>
+        {/* a dragged card dropped anywhere on (or near) the zone goes to the
+            nearest slot that takes it - see useCardDrag */}
+        <div className="field-zone" ref={fieldRef} data-drop-zone="">
           <div className="zone-head">
             <span className="zone-label zone-title">
               {programMode ? `Program · runs ${reversed ? "right to left" : "left to right"}` : "Execution stack"}

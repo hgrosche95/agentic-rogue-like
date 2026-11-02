@@ -8,6 +8,7 @@ import "@fontsource/rajdhani/700.css";
 import "./neon.css";
 import "./flair.css";
 import "./juice.css";
+import "./sockets.css";
 import {
   buyShopArtifact,
   removeShopCard,
