@@ -192,8 +192,13 @@ def switch_choices(run: RunState) -> list[str]:
     """The other rooms the last jump could have gone to, while the room it
     went to is not entered yet - the jump only commits on entering."""
     node = run.nodes[run.current_node_id]
-    if node.visited or run.previous_node_id is None:
+    if node.visited:
         return []
+    if run.previous_node_id is None:
+        # the run's first room: any room on the first layer
+        if node.floor != 0:
+            return []
+        return [n.id for n in run.nodes.values() if n.floor == 0 and n.id != node.id]
     return [n for n in run.nodes[run.previous_node_id].connections if n != node.id]
 
 

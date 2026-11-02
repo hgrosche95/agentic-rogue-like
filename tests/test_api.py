@@ -204,9 +204,21 @@ def test_switch_only_goes_to_rooms_the_last_jump_could_reach() -> None:
     assert response.status_code == 409
 
 
-def test_a_fresh_run_has_nothing_to_switch_to() -> None:
+def test_the_first_room_can_be_any_room_on_the_first_layer() -> None:
     run = client.post("/runs", json={"seed": 1}).json()
-    assert run["switch_choices"] == []
+    run_id = run["run_id"]
+    first_layer = sorted(n["id"] for n in run["nodes"].values() if n["floor"] == 0)
+    assert len(first_layer) > 1
+    assert run["switch_choices"] == []  # not while the start of the run waits
+    client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0})
+    client.post(f"/runs/{run_id}/kit", json={"kit_index": 0})
+    run = client.post(f"/runs/{run_id}/agi-deal", json={"deal_index": None}).json()
+    assert sorted(n["id"] for n in run["switch_choices"]) == first_layer[1:]
+    run = client.post(f"/runs/{run_id}/choose-node", json={"node_id": first_layer[1]}).json()
+    assert run["current_node"]["id"] == first_layer[1]
+    run = _resolve(run_id).json()
+    assert run["nodes"][first_layer[1]]["visited"]
+    assert not run["nodes"]["0-0"]["visited"]
 
 
 def test_card_reward_can_be_skipped() -> None:
