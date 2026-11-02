@@ -104,13 +104,21 @@ function HpBar({ hp, max, side, ghost }: { hp: number; max: number; side: "playe
   const pct = (value: number) => Math.max(0, Math.min(100, (value / max) * 100));
   const percent = pct(hp);
   const after = ghost === undefined ? percent : pct(Math.min(ghost, hp));
+  // the HP left once it lands, in words - and whether nothing is left
+  const forecast = ghost === undefined ? null : Math.max(0, Math.min(ghost, hp));
+  const changes = forecast !== null && forecast < hp;
+  const lethal = changes && forecast === 0;
   return (
-    <span className={`hud-bar is-${side}`}>
+    <span className={`hud-bar is-${side}${lethal ? " is-lethal" : ""}`}>
       {/* slid along rather than resized, so the bar's motion stays off layout */}
       <span style={{ transform: `translateX(${percent - 100}%)` }} />
       {after < percent && <i className="hud-ghost" style={{ left: `${after}%`, width: `${percent - after}%` }} />}
       <em>
-        {hp} / {max}
+        {/* one run of text: em centres its content as a grid */}
+        <span>
+          {hp}
+          {changes && <b className="hud-forecast">→ {forecast}</b>} / {max}
+        </span>
       </em>
     </span>
   );
@@ -746,6 +754,7 @@ export function CombatPanel({
           onContinue={onContinue}
           hero={player.character}
           contextFull={combat.token_limit !== null && combat.tokens_used >= combat.token_limit}
+          playerMaxHp={player.max_hp}
         >
           {banner && <TurnBanner key={banner.id} banner={banner} />}
         </CombatArena>
@@ -764,12 +773,14 @@ export function CombatPanel({
             <div className="hud-meta">
               {attacking && !enemySlain && (
                 <span
-                  className={`incoming-badge${combat.incoming_max === 0 ? " is-safe" : ""}`}
+                  className={`incoming-badge${combat.incoming_max === 0 ? " is-safe" : combat.incoming_max >= player.hp ? " is-lethal" : ""}`}
                   title="What the enemy's attack does to you if you end the turn now - after block and armor"
                 >
                   {combat.incoming_max === 0
                     ? "Fully blocked"
-                    : `Incoming ${rangeText(combat.incoming_min, combat.incoming_max)}`}
+                    : combat.incoming_max >= player.hp
+                      ? `Lethal ${rangeText(combat.incoming_min, combat.incoming_max)}`
+                      : `Incoming ${rangeText(combat.incoming_min, combat.incoming_max)}`}
                 </span>
               )}
               {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}

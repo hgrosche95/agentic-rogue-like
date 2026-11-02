@@ -1,7 +1,29 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { PlayerState } from "../api";
 import { layerLabel } from "../layers";
+import { useCountUp } from "../hooks/useCountUp";
 import { PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
+
+// The credits roll up to a new total instead of jumping there, and what came
+// in floats off the counter ("+17") - loot is the moment after a fight.
+function Credits({ gold }: { gold: number }) {
+  // the total before the last change, kept beside it (see useHpExchange)
+  const [last, setLast] = useState({ gold, from: gold });
+  if (gold !== last.gold) setLast({ gold, from: last.gold });
+  const from = gold !== last.gold ? last.gold : last.from;
+  const shown = useCountUp(gold, { from, durationMs: 700, delayMs: 250 });
+  const gained = gold - from;
+  return (
+    <span className="stat-val credits-val">
+      {shown}
+      {gained > 0 && (
+        <span key={gold} className="credits-gain" aria-hidden="true">
+          +{gained}
+        </span>
+      )}
+    </span>
+  );
+}
 
 function BrandGlyph() {
   return (
@@ -83,7 +105,7 @@ export function TopBar({
         </div>
         <div className="stat stat-gold">
           <span className="stat-label">Credits</span>
-          <span className="stat-val">{player.gold}</span>
+          <Credits gold={player.gold} />
         </div>
         <div className="topbar-buttons">{children}</div>
       </div>

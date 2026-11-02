@@ -7,6 +7,7 @@ import "@fontsource/rajdhani/600.css";
 import "@fontsource/rajdhani/700.css";
 import "./neon.css";
 import "./flair.css";
+import "./juice.css";
 import {
   buyShopArtifact,
   removeShopCard,
@@ -57,6 +58,7 @@ import { IntroScreen } from "./components/IntroScreen";
 import { LoadingIndicator } from "./components/LoadingIndicator";
 import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
+import { JumpTransition } from "./components/JumpTransition";
 import { CloseButton, Overlay } from "./components/Overlay";
 import { OverlayStage } from "./components/OverlayStage";
 import { RUN_ID_KEY } from "./errors";
@@ -68,6 +70,7 @@ import { ModePicker } from "./components/ModePicker";
 import { SettingPicker } from "./components/SettingPicker";
 import { DealScreen, KitScreen } from "./components/StartScreens";
 import { ShopScreen } from "./components/ShopScreen";
+import { TitleBackdrop } from "./components/TitleBackdrop";
 import { Tooltips } from "./components/RichText";
 
 const FALLBACK_SETTINGS = ["dungeon"];
@@ -296,6 +299,7 @@ function App() {
       <main className="game is-title">
         <Tooltips />
         <AudioControls className="is-floating" />
+        <TitleBackdrop />
         <Brand />
         <p className="title-tagline">A deckbuilder: hack your way down into a rogue AGI's code</p>
         {/* the run's settings, as one console: who, where, how */}
@@ -435,6 +439,12 @@ function App() {
         )}
         <AudioControls />
       </TopBar>
+
+      <JumpTransition
+        stamp={`${run.act}:${run.current_node.floor}`}
+        layer={layerLabel(run.current_node.floor, numFloors, run.act)}
+        room={run.current_node.type}
+      />
 
       {combat && (ongoing || slainCombat) ? (
         <CombatPanel
