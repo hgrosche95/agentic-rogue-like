@@ -26,7 +26,7 @@ import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
 import { BossIntro, TurnBanner } from "./CombatBanners";
 import { banishCount, programPlan, queues } from "../program";
 import { hasSeenTutorial } from "../tutorial";
-import { ProgramLines, ProgramOutput } from "./ProgramLines";
+import { ProgramLines, ProgramOutput, TakeBack } from "./ProgramLines";
 import { SlotPreview } from "./SlotPreview";
 import { Tutorial } from "./Tutorial";
 
@@ -170,6 +170,7 @@ export function CombatPanel({
   onPlayCard,
   onEndTurn,
   onMoveQueued,
+  onTakeBack,
   onContinue,
 }: {
   combat: PendingCombatView;
@@ -182,6 +183,7 @@ export function CombatPanel({
   onPlayCard: (handIndex: number, slotIndex: number, banishIndices?: number[]) => void;
   onEndTurn: (discardIndices: number[]) => void;
   onMoveQueued?: (fromSlot: number, toSlot: number) => void;
+  onTakeBack?: (zone: "program" | "field", index: number) => void;
   onContinue?: () => void;
 }) {
   const [selectedHandIndex, setSelectedHandIndex] = useState<number | null>(null);
@@ -446,6 +448,14 @@ export function CombatPanel({
     if (movingLine !== line) onMoveQueued?.(movingLine, line);
   }
 
+  // A card on the field back into the hand: a queued line or a permanent.
+  function takeBack(zone: "program" | "field", index: number) {
+    sfx.play("select");
+    setSelectedHandIndex(null);
+    setMovingLine(null);
+    onTakeBack?.(zone, index);
+  }
+
   function selectCard(handIndex: number) {
     sfx.play("select");
     setMovingLine(null);
@@ -610,7 +620,7 @@ export function CombatPanel({
       }
       if (busy || enemySlain) return;
       if (key === "b" && programMode && selectedHandIndex !== null) {
-        const background = fieldRef.current?.querySelector<HTMLButtonElement>(".program-background");
+        const background = fieldRef.current?.querySelector<HTMLButtonElement>(".background-drop");
         if (background && !background.disabled) background.click();
         return;
       }
@@ -881,6 +891,7 @@ export function CombatPanel({
               }
               reversed={reversed}
               onPickLine={pickLine}
+              onTakeBack={takeBack}
               onPlay={(line, slot) => playIntoSlot(line, slot)}
               onPoint={(line, over) => setPointedSlot((s) => (over ? line : s === line ? null : s))}
             />
@@ -911,6 +922,11 @@ export function CombatPanel({
               ) : (
                 <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
                   <CardFace card={card} onField />
+                  <TakeBack
+                    name={card.name}
+                    disabled={busy || choosing || enemySlain}
+                    onClick={() => takeBack("field", slotIndex)}
+                  />
                 </div>
               );
             })}

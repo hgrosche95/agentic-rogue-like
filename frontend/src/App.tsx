@@ -18,6 +18,7 @@ import {
   chooseNextNode,
   createRun,
   moveQueued,
+  takeBack,
   endCombatTurn,
   leaveShop,
   listCharacters,
@@ -440,6 +441,7 @@ function App() {
           }
           onEndTurn={(discard) => runAction(() => endCombatTurn(run.run_id, discard))}
           onMoveQueued={(fromSlot, toSlot) => runAction(() => moveQueued(run.run_id, fromSlot, toSlot))}
+          onTakeBack={(zone, index) => runAction(() => takeBack(run.run_id, zone, index))}
         />
       ) : (
         <div className="map-layout">

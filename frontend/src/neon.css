@@ -2245,17 +2245,26 @@ button.field-slot.is-queued:hover:not(:disabled) {
   gap: 18px;
 }
 
-/* the rail, through the middle of the lines (under their chips) */
+/* the rail, through the middle of the lines (under their chips): a quiet
+   guide behind the cards, not a light source - the cards and the result
+   carry the colour */
 .pipeline .program-lines::before {
   content: "";
   position: absolute;
+  z-index: 0;
   left: -18px;
   right: -18px;
   top: calc(50% + 13px);
-  height: 3px;
+  height: 1px;
   background: linear-gradient(90deg, var(--cyan), #b78bff 50%, var(--danger));
-  box-shadow: 0 0 12px color-mix(in srgb, var(--cyan) 70%, transparent);
-  opacity: 0.75;
+  opacity: 0.3;
+}
+
+/* the lines sit on the rail, so it shows only in the gaps between them */
+.pipeline .program-line .field-slot {
+  position: relative;
+  z-index: 1;
+  background-color: var(--panel-solid);
 }
 
 .program-board.is-reversed .pipeline .program-lines::before {
@@ -2332,7 +2341,7 @@ button.field-slot.is-queued:hover:not(:disabled) {
   position: absolute;
   top: calc(50% + 13px);
   left: 100%;
-  z-index: 1;
+  z-index: 2;
   display: grid;
   place-items: center;
   width: 18px;
@@ -2565,4 +2574,135 @@ button.field-slot.is-queued:hover:not(:disabled) {
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--gold);
+}
+
+/* Undo / Rollback in a line: the card it will fetch back */
+.line-chip.is-fetch {
+  color: var(--cyan-bright);
+}
+
+/* back to the hand: a small tab on a card lying on the field */
+.take-back {
+  position: absolute;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--panel-solid);
+  box-shadow: none;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--text-dim);
+  opacity: 0;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.take-back:hover:not(:disabled),
+.take-back:focus-visible {
+  border-color: var(--cyan);
+  background: var(--panel-solid);
+  color: var(--cyan);
+}
+
+.take-back:active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+
+/* shown on the card under the pointer, always on touch screens */
+.program-line:hover > .take-back,
+.field-slot:hover > .take-back,
+.line-socket:hover > .take-back,
+.take-back:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .take-back {
+    opacity: 1;
+  }
+}
+
+.take-back:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* on a queued line: the top-right corner of its card, under the chip */
+.program-line > .take-back {
+  top: 34px;
+  right: -8px;
+}
+
+/* on a classic slot */
+.field-slot.is-occupied {
+  position: relative;
+}
+
+.field-slot > .take-back {
+  top: -9px;
+  right: -9px;
+}
+
+/* in the background: a socket's own small button, at its end */
+.line-socket > .take-back {
+  position: static;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-right: -3px;
+  font-size: 11px;
+}
+
+/* the background is a div: its drop target sits under the sockets */
+.program-background {
+  position: relative;
+}
+
+.background-drop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: none;
+}
+
+.background-drop:hover:not(:disabled),
+.background-drop:active:not(:disabled) {
+  background: transparent;
+  transform: none;
+  box-shadow: none;
+}
+
+.background-drop:disabled {
+  opacity: 0;
+  cursor: default;
+}
+
+.program-background > :not(.background-drop) {
+  position: relative;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.program-background .take-back {
+  pointer-events: auto;
+}
+
+/* a socket is small and takes no hover through the background: keep its
+   button in view */
+.line-socket > .take-back:not(:disabled) {
+  opacity: 0.85;
 }

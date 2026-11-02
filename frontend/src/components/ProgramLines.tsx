@@ -101,6 +101,12 @@ function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep |
   if (!step) return null;
   if (step.outcome === "cut") return { text: "cut", tone: "cut" };
   if (step.outcome === "skipped") return { text: "–", tone: "idle" };
+  if (card.type === "retrieve") {
+    // Undo, Rollback: what the lines before it leave in the graveyard comes back
+    return step.retrieved.length > 0
+      ? { text: `↩ ${step.retrieved.join(", ")}`, tone: "fetch" }
+      : { text: "nothing to fetch", tone: "idle" };
+  }
   if (CONTROL_FLOW_TYPES.includes(card.type)) {
     if (card.type === "loop") {
       // a loop repeats the last action run before it - with none, it idles
@@ -137,6 +143,27 @@ function linkKind(combat: PendingCombatView, line: number, cutLines: number[]): 
   return "plain";
 }
 
+// The small "back to hand" button on a card lying on the field - a queued
+// line or an installed permanent. Shared with CombatPanel's classic slots.
+export function TakeBack({ name, disabled, onClick }: { name: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="take-back"
+      disabled={disabled}
+      title={`Take ${name} back into your hand`}
+      aria-label={`Take ${name} back into your hand`}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick();
+      }}
+    >
+      ↩
+    </button>
+  );
+}
+
 // What CombatPanel's drag of queued cards between lines looks like from here
 // (hooks/useCardDrag, with the line as the "hand index").
 interface LineDrag {
@@ -163,6 +190,7 @@ export function ProgramLines({
   live,
   reversed,
   onPickLine,
+  onTakeBack,
   onPlay,
   onPoint,
 }: {
@@ -190,6 +218,8 @@ export function ProgramLines({
   // a refactor runs it right to left
   reversed: boolean;
   onPickLine: (line: number) => void;
+  // take a queued line ("program") or a permanent ("field") back into the hand
+  onTakeBack: (zone: "program" | "field", index: number) => void;
   onPlay: (line: number, slot: HTMLElement) => void;
   // the pointer entering (over) or leaving a line
   onPoint: (line: number, over: boolean) => void;
@@ -272,16 +302,22 @@ export function ProgramLines({
       : null;
     const aims = aimedCard !== undefined && !queues(combat, aimedCard);
     const running = [...combat.field.filter((card) => card !== null), ...(landing ? [landing] : [])];
+    // a div, not a button: the installed permanents carry their own
+    // take-back buttons, and the drop target sits under them
     return (
-      <button
-        type="button"
+      <div
         data-slot-index={aims ? 0 : undefined}
         className={`program-background${aims ? " is-targetable" : ""}${aims && handHoverSlot === 0 ? " is-drop-target" : ""}`}
-        disabled={locked || !cardSelected || !aims}
-        onClick={(event) => onPlay(0, event.currentTarget)}
         onPointerEnter={() => aims && onPoint(0, true)}
         onPointerLeave={() => aims && onPoint(0, false)}
       >
+        <button
+          type="button"
+          className="background-drop"
+          aria-label="Program background"
+          disabled={locked || !cardSelected || !aims}
+          onClick={(event) => onPlay(0, event.currentTarget.parentElement ?? event.currentTarget)}
+        />
         <span className="background-label">bg bus</span>
         {running.map((card, i) => (
           <span
@@ -291,6 +327,9 @@ export function ProgramLines({
           >
             <CardTypeIcon type={card.type} />
             <span>{card.name}</span>
+            {card !== landing && (
+              <TakeBack name={card.name} disabled={locked} onClick={() => onTakeBack("field", i)} />
+            )}
           </span>
         ))}
         {aims ? (
@@ -305,7 +344,7 @@ export function ProgramLines({
         ) : (
           running.length === 0 && <span className="background-hint">Permanents run here</span>
         )}
-      </button>
+      </div>
     );
   }
 
@@ -336,6 +375,9 @@ export function ProgramLines({
                   </span>
                 )}
                 {renderAction(card, line)}
+                {card && (
+                  <TakeBack name={card.name} disabled={locked} onClick={() => onTakeBack("program", line)} />
+                )}
                 {line < combat.program.length - 1 && (
                   <span className={`line-link is-${linkKind(combat, line, cutLines)}`} aria-hidden="true" />
                 )}

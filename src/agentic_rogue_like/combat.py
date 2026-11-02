@@ -156,13 +156,16 @@ _LIGHT_HIT_KINDS = {
 BOSS_REFACTOR_WEIGHT = 2
 
 # What program mode queues: the cards that act on the fight, and the control
-# flow steering them. Card flow (draw, retrieve, free plays, ...) still
-# resolves on the spot - at the end of the turn it would come too late.
+# flow steering them. Card flow (draw, free plays, ...) still resolves on the
+# spot - at the end of the turn it would come too late. Retrieve (Undo,
+# Rollback) is queued too: run as a line it fetches back what the lines
+# before it just ran, ready for the next turn.
 QUEUED_TYPES = CONTROL_FLOW_TYPES | {
     CardType.ATTACK,
     CardType.BLOCK,
     CardType.HEAL,
     CardType.FINAL_STRIKE,
+    CardType.RETRIEVE,
 }
 
 # Named combos (run_program): card types run back to back in a program, in
@@ -768,6 +771,34 @@ def move_queued(state: CombatState, from_slot: int, to_slot: int) -> None:
     g[from_slot], g[to_slot] = g[to_slot], g[from_slot]
 
 
+def take_back(state: CombatState, zone: str, index: int) -> str:
+    """Take a card off the field back into the hand: a queued program line
+    (zone "program") or a permanent (zone "field" - its slot in classic play,
+    its place in the background in program mode). What it cost to play stays
+    paid; it no longer counts as played this turn, so playing it again
+    doesn't feed Copilot twice."""
+    if zone == "program":
+        if not state.program_mode:
+            raise ValueError("only a program has lines")
+        if not 0 <= index < len(state.program) or state.program[index] is None:
+            raise ValueError(f"no queued card in line {index}")
+        card = state.program[index]
+        state.program[index], state.program_glitched[index] = None, False
+    elif zone == "field":
+        if not 0 <= index < len(state.field) or state.field[index] is None:
+            raise ValueError(f"no card on the field at {index}")
+        card = state.field[index]
+        if state.program_mode:
+            state.field.pop(index)
+        else:
+            state.field[index] = None
+    else:
+        raise ValueError(f"unknown zone {zone!r}")
+    state.hand.append(card)
+    state.plays_this_turn = max(0, state.plays_this_turn - 1)
+    return f"You take {card.name} back into your hand."
+
+
 class ProgramStep(BaseModel):
     """What one queued line did when the program ran (run_program's trace)."""
 
@@ -785,6 +816,7 @@ class ProgramStep(BaseModel):
     enemy_hp: int  # after it
     enemy_block: int
     combo: str | None = None  # the named combo it completed (COMBOS)
+    retrieved: list[str] = Field(default_factory=list)  # what a retrieve fetched back
 
 
 def run_program(
@@ -847,6 +879,7 @@ def run_program(
         before = (state.enemy_hp, state.enemy_block, player.hp, state.player_block, ran)
         outcome = "ran"
         combo: str | None = None
+        retrieved: list[str] = []
         try:
             glitched = state.program_glitched[slot]
             state.program[slot], state.program_glitched[slot] = None, False
@@ -931,6 +964,7 @@ def run_program(
                     forks += tail_call
                 # a buffered action hits, then the enemy gets back what it took
                 held = (state.enemy_hp, state.enemy_block, state.tally.damage_dealt)
+                hand_before = len(state.hand)
                 for _ in range(1 + forks):
                     state.plays_this_turn = max(played - 1, ran)
                     wounded = predictor if _wounded(state) else 0
@@ -941,6 +975,8 @@ def run_program(
                     ran += 1
                     if state.enemy_hp <= 0:
                         break
+                if run.type is CardType.RETRIEVE and not glitched:
+                    retrieved = [c.name for c in state.hand[hand_before:]]
                 if buffering and not glitched:
                     taken = held[0] + held[1] - state.enemy_hp - state.enemy_block
                     state.enemy_hp, state.enemy_block, state.tally.damage_dealt = held
@@ -980,6 +1016,7 @@ def run_program(
                         enemy_hp=state.enemy_hp,
                         enemy_block=state.enemy_block,
                         combo=combo,
+                        retrieved=retrieved,
                     )
                 )
 
