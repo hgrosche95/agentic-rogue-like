@@ -136,6 +136,18 @@ export const KEYWORDS: Keyword[] = [
     text: "Control flow: deals everything the Buffers stored this run, plus a bonus.",
   },
   {
+    id: "line-position",
+    term: "Line position",
+    pattern: /(?:first|last) to run|other queued lines?/,
+    text: "Program mode: where its line stands counts - the first or the last line to run, and how many other lines are queued with it. The preview over a line shows what it comes out with there.",
+  },
+  {
+    id: "program-ends",
+    term: "Program ends",
+    pattern: /program ends/,
+    text: "Program mode: the lines after it don't run this turn - their cards go to the graveyard unused.",
+  },
+  {
     id: "combo",
     term: "Combos",
     pattern: /\bcombos?\b/,

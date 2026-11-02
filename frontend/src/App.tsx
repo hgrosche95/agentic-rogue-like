@@ -19,6 +19,7 @@ import {
   chooseNextNode,
   createRun,
   moveQueued,
+  takeBack,
   endCombatTurn,
   leaveShop,
   listCharacters,
@@ -49,6 +50,8 @@ import { DeckButton, DeckView } from "./components/DeckView";
 import { DungeonMap } from "./components/DungeonMap";
 import { EndScreen } from "./components/EndScreen";
 import { EventPrompt } from "./components/EventPrompt";
+import { EventResult } from "./components/EventResult";
+import { eventOutcome, type EventOutcome } from "./eventOutcome";
 import { HistoryLog } from "./components/HistoryLog";
 import { IntroScreen } from "./components/IntroScreen";
 import { LoadingIndicator } from "./components/LoadingIndicator";
@@ -131,6 +134,8 @@ function App() {
   // Keep showing that fight - enemy at 0 HP - so the arena can play the enemy's
   // death and wait for the player to move on instead of cutting away at once.
   const [slainCombat, setSlainCombat] = useState<PendingCombatView | null>(null);
+  // what the event just chosen did, shown before the map comes back
+  const [eventDone, setEventDone] = useState<{ runId: string; outcome: EventOutcome } | null>(null);
   const combat = run?.pending_combat ?? slainCombat;
   const inCombat = Boolean(combat);
   // Entering or leaving a fight plays a jump through the rift (see
@@ -352,6 +357,8 @@ function App() {
   }
 
   const ongoing = run.status === "ongoing";
+  // the event just chosen in this run, until its result is dismissed
+  const eventResult = eventDone?.runId === run.run_id ? eventDone : null;
   const canJump = ongoing && !slainCombat && run.node_resolved && run.available_choices.length > 0;
   const needsEnter =
     ongoing &&
@@ -444,6 +451,7 @@ function App() {
           }
           onEndTurn={(discard) => runAction(() => endCombatTurn(run.run_id, discard))}
           onMoveQueued={(fromSlot, toSlot) => runAction(() => moveQueued(run.run_id, fromSlot, toSlot))}
+          onTakeBack={(zone, index) => runAction(() => takeBack(run.run_id, zone, index))}
         />
       ) : (
         <div className="map-layout">
@@ -495,11 +503,24 @@ function App() {
           <EventPrompt
             event={run.pending_event}
             disabled={isLoading}
-            onChoose={(optionIndex) => runAction(() => chooseEventOption(run.run_id, optionIndex))}
+            onChoose={(optionIndex) => {
+              const before = run;
+              const option = run.pending_event?.options.find((o) => o.index === optionIndex);
+              runAction(async () => {
+                const next = await chooseEventOption(before.run_id, optionIndex);
+                if (option) setEventDone({ runId: before.run_id, outcome: eventOutcome(before, next, option) });
+                return next;
+              });
+            }}
           />
         </Overlay>
       )}
-      {!combat && ongoing && run.card_reward && !run.artifact_offer && (
+      {!combat && ongoing && !run.pending_event && eventResult && (
+        <Overlay key="event-result" label="Anomaly resolved">
+          <EventResult outcome={eventResult.outcome} onContinue={() => setEventDone(null)} />
+        </Overlay>
+      )}
+      {!combat && ongoing && !eventResult && run.card_reward && !run.artifact_offer && (
         <Overlay key="card" label="Choose a card" className="is-wide">
           <RewardScreen
             offer={run.card_reward}
@@ -510,7 +531,7 @@ function App() {
         </Overlay>
       )}
       {/* at the start the artifact comes first, then the kit, then the AGI's deal */}
-      {!combat && ongoing && run.kit_offer && !run.artifact_offer && (
+      {!combat && ongoing && !eventResult && run.kit_offer && !run.artifact_offer && (
         <Overlay key="kit" label="Pack a starter kit" className="is-wide">
           <KitScreen
             offer={run.kit_offer}
@@ -519,7 +540,7 @@ function App() {
           />
         </Overlay>
       )}
-      {!combat && ongoing && run.agi_deals && (
+      {!combat && ongoing && !eventResult && run.agi_deals && (
         <Overlay key="deal" label="The AGI's offer" className="is-wide">
           <DealScreen
             deals={run.agi_deals}
@@ -528,7 +549,7 @@ function App() {
           />
         </Overlay>
       )}
-      {!combat && ongoing && run.shop && (
+      {!combat && ongoing && !eventResult && run.shop && (
         <Overlay key="shop" label="Black market" className="is-wide">
           <ShopScreen
             shop={run.shop}
@@ -542,7 +563,7 @@ function App() {
           />
         </Overlay>
       )}
-      {!combat && ongoing && run.rest && (
+      {!combat && ongoing && !eventResult && run.rest && (
         <Overlay key="rest" label="Safehouse" className="is-wide">
           <RestScreen
             rest={run.rest}
@@ -556,7 +577,7 @@ function App() {
           />
         </Overlay>
       )}
-      {!combat && ongoing && run.artifact_offer && (
+      {!combat && ongoing && !eventResult && run.artifact_offer && (
         <Overlay key="artifact" label="Choose an artifact" className="is-wide">
           <ArtifactScreen
             offer={run.artifact_offer}

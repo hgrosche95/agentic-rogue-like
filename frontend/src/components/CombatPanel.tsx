@@ -11,6 +11,7 @@ import { cardSound, hitsOf, sfx } from "../audio";
 import { splitTaunt, useBanners } from "../banners";
 import { flyCard } from "../cardFlight";
 import { ArtifactBar } from "./ArtifactBar";
+import { activeArtifactsLine } from "../artifactTimers";
 import { HERO } from "../characters";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useCardDrag } from "../hooks/useCardDrag";
@@ -26,7 +27,7 @@ import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
 import { BossIntro, TurnBanner } from "./CombatBanners";
 import { banishCount, programPlan, queues } from "../program";
 import { hasSeenTutorial } from "../tutorial";
-import { ProgramLines, ProgramOutput } from "./ProgramLines";
+import { ProgramLines, ProgramOutput, TakeBack } from "./ProgramLines";
 import { SlotPreview } from "./SlotPreview";
 import { Tutorial } from "./Tutorial";
 
@@ -170,6 +171,7 @@ export function CombatPanel({
   onPlayCard,
   onEndTurn,
   onMoveQueued,
+  onTakeBack,
   onContinue,
 }: {
   combat: PendingCombatView;
@@ -182,6 +184,7 @@ export function CombatPanel({
   onPlayCard: (handIndex: number, slotIndex: number, banishIndices?: number[]) => void;
   onEndTurn: (discardIndices: number[]) => void;
   onMoveQueued?: (fromSlot: number, toSlot: number) => void;
+  onTakeBack?: (zone: "program" | "field", index: number) => void;
   onContinue?: () => void;
 }) {
   const [selectedHandIndex, setSelectedHandIndex] = useState<number | null>(null);
@@ -286,9 +289,21 @@ export function CombatPanel({
   // boss's line for it.
   const { banner, show: showBanner } = useBanners();
   const [bossIntro, setBossIntro] = useState(() => combat.boss && combat.turn === 1 && !enemySlain);
+  // the turn banner names the artifacts that only work on this turn - read
+  // through a ref, so a new player object doesn't make a new callback (and
+  // re-run the effects that show the banner)
+  const artifactsRef = useRef(player.artifacts);
+  useEffect(() => {
+    artifactsRef.current = player.artifacts;
+  });
   const yourTurn = useCallback(
-    (turn: number, delayMs: number) =>
-      showBanner({ kind: "player", title: "Your turn", sub: `Turn ${turn}`, ms: TURN_BANNER_MS }, delayMs),
+    (turn: number, delayMs: number) => {
+      const active = activeArtifactsLine(artifactsRef.current, turn);
+      showBanner(
+        { kind: "player", title: "Your turn", sub: active ? `Turn ${turn} · ${active}` : `Turn ${turn}`, ms: TURN_BANNER_MS },
+        delayMs,
+      );
+    },
     [showBanner],
   );
   // the table as the fight opened, and the turn and phase last called out
@@ -444,6 +459,14 @@ export function CombatPanel({
     }
     setMovingLine(null);
     if (movingLine !== line) onMoveQueued?.(movingLine, line);
+  }
+
+  // A card on the field back into the hand: a queued line or a permanent.
+  function takeBack(zone: "program" | "field", index: number) {
+    sfx.play("select");
+    setSelectedHandIndex(null);
+    setMovingLine(null);
+    onTakeBack?.(zone, index);
   }
 
   function selectCard(handIndex: number) {
@@ -610,7 +633,7 @@ export function CombatPanel({
       }
       if (busy || enemySlain) return;
       if (key === "b" && programMode && selectedHandIndex !== null) {
-        const background = fieldRef.current?.querySelector<HTMLButtonElement>(".program-background");
+        const background = fieldRef.current?.querySelector<HTMLButtonElement>(".background-drop");
         if (background && !background.disabled) background.click();
         return;
       }
@@ -753,7 +776,7 @@ export function CombatPanel({
               {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
               <StatusBadges statuses={combat.player_status} />
               {combat.token_limit !== null && <TokenMeter combat={combat} />}
-              <ArtifactBar artifacts={player.artifacts} compact />
+              <ArtifactBar artifacts={player.artifacts} compact turn={combat.turn} />
             </div>
           </div>
         </div>
@@ -881,6 +904,7 @@ export function CombatPanel({
               }
               reversed={reversed}
               onPickLine={pickLine}
+              onTakeBack={takeBack}
               onPlay={(line, slot) => playIntoSlot(line, slot)}
               onPoint={(line, over) => setPointedSlot((s) => (over ? line : s === line ? null : s))}
             />
@@ -911,6 +935,11 @@ export function CombatPanel({
               ) : (
                 <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
                   <CardFace card={card} onField />
+                  <TakeBack
+                    name={card.name}
+                    disabled={busy || choosing || enemySlain}
+                    onClick={() => takeBack("field", slotIndex)}
+                  />
                 </div>
               );
             })}

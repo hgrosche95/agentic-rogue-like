@@ -560,7 +560,8 @@ VIBE_CODER_REWARD_POOL: list[Card] = [
 # they do nothing themselves but steer the queued actions to their right
 # when the program runs at the end of the turn (combat.run_program) - which
 # is what makes the order of a program matter. Reusable: none of them puts
-# a card into the hand on its own, so no loop can run away.
+# a card into the hand on its own, so no loop can run away. Next to them the
+# attacks that only make sense in a program, by where their line stands.
 PROGRAM_REWARD_POOL: list[Card] = [
     Card(
         id="if-wounded",
@@ -613,6 +614,58 @@ PROGRAM_REWARD_POOL: list[Card] = [
         value=50,
         rarity=Rarity.UNCOMMON,
         description="Control flow. Deals all stored damage, +50%.",
+    ),
+    # Attacks that care where their line stands (models.Scaling): first or
+    # last to run, in a long program or a short one - and Segfault, which
+    # hits hardest of all but ends the program on the spot.
+    Card(
+        id="bootstrap",
+        name="Bootstrap",
+        type=CardType.ATTACK,
+        value=3,
+        scaling=Scaling.FIRST_LINE,
+        scale_value=7,
+        rarity=Rarity.COMMON,
+        description="Deal 3 (+ATK) damage, +7 if its line is the first to run.",
+    ),
+    Card(
+        id="return",
+        name="Return",
+        type=CardType.ATTACK,
+        value=3,
+        scaling=Scaling.LAST_LINE,
+        scale_value=7,
+        rarity=Rarity.COMMON,
+        description="Deal 3 (+ATK) damage, +7 if its line is the last to run.",
+    ),
+    Card(
+        id="microservice",
+        name="Microservice",
+        type=CardType.ATTACK,
+        value=11,
+        scaling=Scaling.LINES,
+        scale_value=-2,
+        rarity=Rarity.COMMON,
+        description="Deal 11 (+ATK) damage, -2 for every other queued line.",
+    ),
+    Card(
+        id="monolith",
+        name="Monolith",
+        type=CardType.ATTACK,
+        value=1,
+        scaling=Scaling.LINES,
+        scale_value=3,
+        rarity=Rarity.UNCOMMON,
+        description="Deal 1 (+ATK) damage, +3 for every other queued line.",
+    ),
+    Card(
+        id="segfault",
+        name="Segfault",
+        type=CardType.ATTACK,
+        value=16,
+        halts=True,
+        rarity=Rarity.UNCOMMON,
+        description="Deal 16 (+ATK) damage. The program ends after its line.",
     ),
 ]
 
@@ -824,6 +877,26 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
         "description": (
             "Control flow. Enemy at half HP or less: the next action runs twice. Draw 1 card."
         ),
+    },
+    "Bootstrap": {
+        "scale_value": 10,
+        "description": "Deal 3 (+ATK) damage, +10 if its line is the first to run.",
+    },
+    "Return": {
+        "scale_value": 10,
+        "description": "Deal 3 (+ATK) damage, +10 if its line is the last to run.",
+    },
+    "Microservice": {
+        "value": 14,
+        "description": "Deal 14 (+ATK) damage, -2 for every other queued line.",
+    },
+    "Monolith": {
+        "scale_value": 4,
+        "description": "Deal 1 (+ATK) damage, +4 for every other queued line.",
+    },
+    "Segfault": {
+        "value": 22,
+        "description": "Deal 22 (+ATK) damage. The program ends after its line.",
     },
     "Loop": {
         "value": 2,

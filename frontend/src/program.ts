@@ -38,7 +38,9 @@ export function cardText(card: Card, program: boolean): string {
   if (!program) return card.description;
   return card.description
     .replace("Action cards played to its right are", "Every action in the program is")
-    .replace("Action cards played to its right get", "Every action in the program gets");
+    .replace("Action cards played to its right get", "Every action in the program gets")
+    // Undo, Rollback: a line - it fetches back once the program runs
+    .replace("Return the last", "When its line runs, return the last");
 }
 
 export function useCardText(card: Card): string {
