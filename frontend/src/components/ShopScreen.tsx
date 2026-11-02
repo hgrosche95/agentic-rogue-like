@@ -9,7 +9,18 @@ import { RichText } from "./RichText";
 function PriceTag({ price, sold, affordable }: { price: number; sold: boolean; affordable: boolean }) {
   return (
     <span className={`price-tag${sold ? " is-sold" : affordable ? "" : " is-short"}`}>
-      {sold ? "Sold" : `${price} cr`}
+      {sold ? (
+        "Sold"
+      ) : (
+        <>
+          <svg className="price-coin" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M6 1 10.3 3.5v5L6 11 1.7 8.5v-5Z" />
+            <path d="M7.6 4.6A2 2 0 1 0 7.6 7.4" />
+          </svg>
+          {price}
+          <small>cr</small>
+        </>
+      )}
     </span>
   );
 }

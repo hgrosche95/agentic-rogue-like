@@ -78,6 +78,35 @@ function useUpgradePreview() {
   return { shown, handlers, longPressed };
 }
 
+// The three safehouse choices, drawn: a recharging cell, a wrench, a cutter.
+function RestIcon({ kind }: { kind: "heal" | "upgrade" | "remove" }) {
+  return (
+    <svg className="rest-icon" viewBox="0 0 32 32" aria-hidden="true">
+      {kind === "heal" && (
+        <>
+          <rect x="6" y="9" width="18" height="16" rx="2" />
+          <path d="M12 6h6M24 14h2v6h-2" />
+          <path className="fill" d="M16.5 11.5 12 18h3.5l-1 4.5L19 16h-3.5Z" />
+        </>
+      )}
+      {kind === "upgrade" && (
+        <>
+          <path d="M19.5 5.5a5 5 0 0 0-5.6 6.9L5.5 20.8a2.2 2.2 0 0 0 3.1 3.1l8.4-8.4a5 5 0 0 0 6.9-5.6l-3 3-3.1-.8-.8-3.1Z" />
+          <path d="M23 21v6M20 24h6" />
+        </>
+      )}
+      {kind === "remove" && (
+        <>
+          <circle cx="9" cy="23" r="3.4" />
+          <circle cx="23" cy="23" r="3.4" />
+          <path d="M11.4 20.6 22 6M20.6 20.6 10 6" />
+          <path className="dash" d="M4 14h24" />
+        </>
+      )}
+    </svg>
+  );
+}
+
 // A safehouse between jumps: patch yourself up, rework one card for good,
 // or strip one out of the deck - one of the three, then the run moves on.
 // Both picks list every copy of a card on its own, since each is its own
@@ -128,7 +157,7 @@ export function RestScreen({
           <div className="artifact-offer rest-options">
             <button
               type="button"
-              className={`artifact-card rest-option${pickClass(picked, "heal")}`}
+              className={`artifact-card rest-option is-heal${pickClass(picked, "heal")}`}
               disabled={disabled}
               onMouseEnter={() => sfx.play("hover")}
               onClick={() => {
@@ -137,6 +166,7 @@ export function RestScreen({
                 onHeal();
               }}
             >
+              <RestIcon kind="heal" />
               <span className="artifact-name">Rest</span>
               <span className="rest-figure">+{rest.heal_amount} HP</span>
               <span className="artifact-description">
@@ -145,11 +175,12 @@ export function RestScreen({
             </button>
             <button
               type="button"
-              className="artifact-card rest-option"
+              className="artifact-card rest-option is-upgrade"
               disabled={disabled || rest.upgrades.length === 0}
               onMouseEnter={() => sfx.play("hover")}
               onClick={() => pick("upgrade")}
             >
+              <RestIcon kind="upgrade" />
               <span className="artifact-name">Rework</span>
               <span className="rest-figure">+ one card</span>
               <span className="artifact-description">
@@ -160,11 +191,12 @@ export function RestScreen({
             </button>
             <button
               type="button"
-              className="artifact-card rest-option"
+              className="artifact-card rest-option is-remove"
               disabled={disabled || !rest.can_remove}
               onMouseEnter={() => sfx.play("hover")}
               onClick={() => pick("remove")}
             >
+              <RestIcon kind="remove" />
               <span className="artifact-name">Strip out</span>
               <span className="rest-figure">− one card</span>
               <span className="artifact-description">

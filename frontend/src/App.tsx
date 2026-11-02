@@ -6,6 +6,7 @@ import "@fontsource/rajdhani/500.css";
 import "@fontsource/rajdhani/600.css";
 import "@fontsource/rajdhani/700.css";
 import "./neon.css";
+import "./flair.css";
 import {
   buyShopArtifact,
   removeShopCard,
@@ -292,29 +293,32 @@ function App() {
         <AudioControls className="is-floating" />
         <Brand />
         <p className="title-tagline">A deckbuilder: hack your way down into a rogue AGI's code</p>
-        <CharacterPicker
-          characters={characters}
-          selected={selectedCharacter}
-          onSelect={(character) => {
-            sfx.play("select");
-            setSelectedCharacter(character);
-          }}
-          disabled={isLoading}
-        />
-        <SettingPicker
-          settings={settings}
-          selected={selectedSetting}
-          onSelect={setSelectedSetting}
-          disabled={isLoading}
-        />
-        <ModePicker
-          program={programMode}
-          onSelect={(program) => {
-            sfx.play("select");
-            setProgramMode(program);
-          }}
-          disabled={isLoading}
-        />
+        {/* the run's settings, as one console: who, where, how */}
+        <section className="boot-panel" aria-label="Run setup">
+          <CharacterPicker
+            characters={characters}
+            selected={selectedCharacter}
+            onSelect={(character) => {
+              sfx.play("select");
+              setSelectedCharacter(character);
+            }}
+            disabled={isLoading}
+          />
+          <SettingPicker
+            settings={settings}
+            selected={selectedSetting}
+            onSelect={setSelectedSetting}
+            disabled={isLoading}
+          />
+          <ModePicker
+            program={programMode}
+            onSelect={(program) => {
+              sfx.play("select");
+              setProgramMode(program);
+            }}
+            disabled={isLoading}
+          />
+        </section>
         <button
           className="is-primary start-run"
           disabled={isLoading || selectedSetting.trim() === ""}

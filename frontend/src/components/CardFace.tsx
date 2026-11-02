@@ -176,9 +176,15 @@ function useFitText(key: string) {
     observer.observe(card);
     // the web fonts may arrive after the first fit, and change every width
     document.fonts?.addEventListener("loadingdone", fit);
+    // a card dealt or flipped in (rewards, shop) is measured while it is
+    // still turned, which reads every line as too wide - fit it again once
+    // the animation on it or its slot is over (both bubble to the slot)
+    const slot = card.parentElement;
+    slot?.addEventListener("animationend", fit);
     return () => {
       observer.disconnect();
       document.fonts?.removeEventListener("loadingdone", fit);
+      slot?.removeEventListener("animationend", fit);
     };
   }, [key]);
   return { headerRef: header, bodyRef: body };
@@ -310,6 +316,14 @@ export function CardFace({
         </span>
       )}
       {card.rarity !== "starter" && <span className={`card-gem rarity-${card.rarity}`} />}
+      {/* the card's "art": its type glyph, large and faint behind the text */}
+      {!onField && (
+        <span className="card-watermark" aria-hidden="true">
+          <CardTypeIcon type={card.type} />
+        </span>
+      )}
+      {/* a rare card's foil, which catches the light as the card tilts (tilt.ts) */}
+      {card.rarity === "rare" && !onField && <span className="card-foil" aria-hidden="true" />}
     </>
   );
 }
