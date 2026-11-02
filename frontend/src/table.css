@@ -111,3 +111,52 @@
     color: color-mix(in srgb, var(--text-dim) 85%, #000);
   }
 }
+
+/* ---------- program mode on the stage ----------
+   With room for it (as for classic play, juice.css), the program's scene is
+   the stage too: edge to edge, the HUD plates in its corners, the rail
+   standing on its floor. The rail is taller than the classic stack, so the
+   scene gives up more height and the rail stands lower on it. */
+@media (min-width: 1200px) and (min-height: 820px) {
+  .combat-panel.is-program {
+    --stage-h: min(calc(100vw / 2.4), 54vh, calc(100vh - 575px));
+  }
+
+  .combat-panel.is-program > .arena-wrap {
+    width: 100vw;
+    border: 0;
+  }
+
+  .combat-panel.is-program > .arena-wrap > .arena-stage {
+    width: 100%;
+    margin: 0;
+  }
+
+  .combat-panel.is-program .arena-stage .pixel-frame {
+    mask-image:
+      linear-gradient(90deg, transparent 0, #000 7%, #000 93%, transparent 100%),
+      linear-gradient(180deg, transparent 0, #000 5%, #000 74%, transparent 100%);
+  }
+
+  .combat-panel.is-program > .arena-wrap > .vs-hud {
+    width: 300px;
+  }
+
+  .combat-panel.is-program > .combat-row {
+    margin-top: calc(var(--stage-h) * -0.2);
+  }
+
+  /* the rail on the floor: glass, like the classic stack */
+  .combat-panel.is-program .field-zone {
+    border-radius: 16px;
+    background: rgba(8, 8, 26, 0.6);
+    backdrop-filter: blur(4px);
+  }
+
+  /* the floor from the scene's floor line, behind the rail - the seam
+     stays off it, the rail's glass covers it */
+  .combat-panel.is-program .combat-row::after {
+    top: 34px;
+  }
+}
+

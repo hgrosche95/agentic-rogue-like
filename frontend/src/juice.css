@@ -629,7 +629,8 @@
    On wide screens the pixel scene runs edge to edge under the top bar; the
    HUD plates hang in its corners as glass, the scene fades out at its foot
    and the stack and the hand stand on its floor between the two fighters.
-   (Program mode keeps its framed screen: its rail needs the full width.)
+   Program mode too: its rail stands where the stack would (see the end of
+   table.css for what differs).
    Only where the screen has room for it: on a small one the stack would
    stand on the fighters, so the framed scene stays. */
 @media (min-width: 1200px) and (min-height: 820px) {
@@ -637,18 +638,18 @@
     overflow-x: clip;
   }
 
-  .combat-panel:not(.is-program) {
+  .combat-panel {
     /* as tall as the width allows, but leaving room for stack and hand */
     --stage-h: min(calc(100vw / 2.4), 64vh, calc(100vh - 420px));
   }
 
-  .combat-panel:not(.is-program) > .arena-wrap {
+  .combat-panel > .arena-wrap {
     width: 100vw;
     height: var(--stage-h);
     margin-top: 0;
   }
 
-  .combat-panel:not(.is-program) > .arena-wrap > .arena-stage {
+  .combat-panel > .arena-wrap > .arena-stage {
     width: 100%;
     height: 100%;
     aspect-ratio: auto;
@@ -657,7 +658,7 @@
   }
 
   /* no frame: the scene melts into the ground at its sides and its foot */
-  .combat-panel:not(.is-program) .arena-stage .pixel-frame {
+  .combat-panel .arena-stage .pixel-frame {
     outline: 0;
     box-shadow: none;
     background: transparent;
@@ -668,29 +669,29 @@
   }
 
   /* the plates: glass in the scene's top corners, in line with the top bar */
-  .combat-panel:not(.is-program) > .arena-wrap > .vs-hud {
+  .combat-panel > .arena-wrap > .vs-hud {
     top: 14px;
     width: 300px;
     background: rgba(12, 12, 32, 0.74);
     backdrop-filter: blur(6px);
   }
 
-  .combat-panel:not(.is-program) > .arena-wrap > .vs-hud.is-player {
+  .combat-panel > .arena-wrap > .vs-hud.is-player {
     left: max(24px, calc(50vw - 680px));
     right: auto;
   }
 
-  .combat-panel:not(.is-program) > .arena-wrap > .vs-hud.is-enemy {
+  .combat-panel > .arena-wrap > .vs-hud.is-enemy {
     right: max(24px, calc(50vw - 680px));
     left: auto;
   }
 
   /* the stack stands on the floor, between the fighters */
-  .combat-panel:not(.is-program) > .combat-row {
+  .combat-panel > .combat-row {
     margin-top: calc(var(--stage-h) * -0.24);
   }
 
-  .combat-panel:not(.is-program) .field-zone {
+  .combat-panel .field-zone {
     background: rgba(8, 8, 26, 0.55);
     backdrop-filter: blur(4px);
     border-color: color-mix(in srgb, var(--cyan) 35%, var(--line-strong));
@@ -698,46 +699,46 @@
   }
 
   /* once the enemy is down, the win (and its Continue) sits over the stack */
-  .combat-panel:not(.is-program):has(.arena-victory) > .arena-wrap {
+  .combat-panel:has(.arena-victory) > .arena-wrap {
     z-index: 3;
   }
 
-  .combat-panel:not(.is-program) > .battlefield {
+  .combat-panel > .battlefield {
     position: relative;
     z-index: 3;
   }
 
   /* the scene is wider than it was: its overlays keep their size */
-  .combat-panel:not(.is-program) .arena-monitor {
+  .combat-panel .arena-monitor {
     font-size: clamp(12px, 1cqw, 15px);
   }
-  .combat-panel:not(.is-program) .monitor-title {
+  .combat-panel .monitor-title {
     font-size: clamp(10px, 0.8cqw, 12px);
   }
-  .combat-panel:not(.is-program) .arena-intent {
+  .combat-panel .arena-intent {
     font-size: clamp(15px, 1.6cqw, 22px);
   }
-  .combat-panel:not(.is-program) .arena-intent .intent-icon {
+  .combat-panel .arena-intent .intent-icon {
     width: clamp(18px, 1.7cqw, 24px);
     height: clamp(18px, 1.7cqw, 24px);
   }
-  .combat-panel:not(.is-program) .arena-popup {
+  .combat-panel .arena-popup {
     font-size: min(4.4cqw, 46px);
   }
-  .combat-panel:not(.is-program) .arena-popup.is-solid {
+  .combat-panel .arena-popup.is-solid {
     font-size: min(5.6cqw, 58px);
   }
-  .combat-panel:not(.is-program) .arena-popup.is-heavy {
+  .combat-panel .arena-popup.is-heavy {
     font-size: min(7.4cqw, 76px);
   }
   /* above the scene's fading foot */
-  .combat-panel:not(.is-program) .arena-victory {
+  .combat-panel .arena-victory {
     top: 36%;
   }
-  .combat-panel:not(.is-program) .arena-victory-title {
+  .combat-panel .arena-victory-title {
     font-size: clamp(16px, 3.6cqw, 52px);
   }
-  .combat-panel:not(.is-program) .arena-victory-sub {
+  .combat-panel .arena-victory-sub {
     font-size: clamp(12px, 1.2cqw, 16px);
   }
 }
