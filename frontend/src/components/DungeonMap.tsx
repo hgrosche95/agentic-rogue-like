@@ -148,6 +148,7 @@ export function DungeonMap({
   onEnter,
   disabled,
   act = 1,
+  numActs = 2,
 }: {
   nodes: Record<string, MapNode>;
   currentNodeId: string;
@@ -158,6 +159,8 @@ export function DungeonMap({
   onEnter?: () => void;
   disabled: boolean;
   act?: number;
+  // the act whose boss is the last - its fight ends the run, no artifact
+  numActs?: number;
 }) {
   const isHorizontal = useIsHorizontal();
   // the room under the pointer, for the route to it
@@ -367,6 +370,13 @@ export function DungeonMap({
                 <g transform={node.type === "boss" ? "scale(1.3)" : undefined}>
                   {isVisited ? <path className="map-node-check" d="M -6 0 L -1.5 5 L 7 -6" /> : <NodeIcon type={node.type} />}
                 </g>
+                {/* the harder fights pay an artifact: a gem on their corner */}
+                {!node.visited && (node.type === "elite" || (node.type === "boss" && act < numActs)) && (
+                  <g className="map-node-loot" transform={`translate(${r - 1} ${-r + 1})`}>
+                    <title>Drops an artifact</title>
+                    <path d="M0 -5.5 L4.5 0 L0 5.5 L-4.5 0 Z" />
+                  </g>
+                )}
               </g>
             </g>
           );
@@ -393,6 +403,12 @@ export function DungeonMap({
             {NODE_STYLE[type].label}
           </span>
         ))}
+        <span className="legend-item">
+          <svg className="legend-loot" viewBox="-6 -6 12 12" width={12} height={12} aria-hidden="true">
+            <path d="M0 -5.5 L4.5 0 L0 5.5 L-4.5 0 Z" />
+          </svg>
+          Artifact
+        </span>
       </div>
     </div>
   );

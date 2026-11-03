@@ -66,6 +66,10 @@ def _play_full_run(seed: int, character: str = "chronos") -> dict:
         if run["card_reward"] is not None:
             run = client.post(f"/runs/{run_id}/card-reward", json={"card_index": 0}).json()
 
+        # an elite or an act's boss leaves an artifact behind
+        if run["artifact_offer"] is not None:
+            run = client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0}).json()
+
         if run["shop"] is not None:
             run = client.post(f"/runs/{run_id}/shop/leave").json()
 

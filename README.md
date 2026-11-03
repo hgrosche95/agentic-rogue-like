@@ -101,8 +101,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       (`/runs/{id}/card-reward`); 24 Belohnungskarten mit Abwurfkosten,
       Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
 - [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
-      drei wählen, danach alle 3 Schritte auf der Map ein weiteres
-      (`/runs/{id}/artifact`). 20 Stück in `artifacts.py`, siehe *Artefakte* unten.
+      drei wählen, danach eins für jeden Sieg über einen Elite-Gegner oder
+      den Boss eines Akts (`/runs/{id}/artifact`). 24 Stück in `artifacts.py`, siehe *Artefakte* unten.
 - [x] **Rastplatz mit Wahl** — ein Safehouse heilt nicht mehr automatisch,
       man wählt eins von dreien: heilen (15 HP, mit Artefakten mehr), eine
       Karte dauerhaft verbessern oder eine Karte kostenlos aus dem Deck
@@ -329,8 +329,9 @@ pro Hälfte der Karte um 10 % stärker an Leben und Angriff (und damit
 Block) — Akt 1 ×1,0 / ×1,1, Akt 2 ×1,21 / ×1,331 — aufgeschlagen erst
 *nach* der Erzeugung (`enemies.escalate`), damit die Budgets des
 Encounter-Agents und die Evals dazu unverändert bleiben. Nach jedem
-gewonnenen Kampf kommt eine Karte ins Deck, am Start und alle 3 Schritte ein
-Artefakt (die Bots wählen es zufällig). Ziel: schwer machbar und über den
+gewonnenen Kampf kommt eine Karte ins Deck, am Start und nach jedem Elite-
+oder Aktboss-Sieg ein Artefakt (der Smart-Bot nimmt Brücken nur passend zum
+Deck, sonst zufällig). Ziel: schwer machbar und über den
 ganzen Run immer schwerer — der Spieler wird mit Deck und Artefakten stärker,
 deshalb hat Akt 2 außer den +10 %-Stufen auch mehr Elites, weniger
 Rastplätze, nur 40 % Heilung beim Aktwechsel und einen Boss mit drei Phasen.
@@ -460,8 +461,10 @@ Modell-Antworten.
 ## Artefakte
 
 Artefakte wirken passiv für den Rest des Runs. Zu Beginn wählt man eins aus
-drei, danach alle 3 Schritte auf der Map ein weiteres, wieder aus drei
-(`ARTIFACT_EVERY_STEPS` in `artifacts.py`). Jedes Artefakt ist nur ein Satz
+drei, danach eins für jeden Sieg über einen Elite-Gegner oder den Boss eines
+Akts, wieder aus drei (`engine._finish_combat`) – wer härtere Kämpfe auf
+seinem Weg sucht, bekommt mehr Artefakte. Die Map markiert Elite-Räume
+deshalb mit einem kleinen Artefakt-Symbol. Jedes Artefakt ist nur ein Satz
 Zahlen (`models.Artifact`), den Engine und Kampf an festen Stellen
 aufsummieren: Starthand, Rundenende, gegnerischer Angriff, nach dem Kampf,
 am Rastplatz. Ein neues Artefakt ist deshalb ein Eintrag in `ARTIFACT_POOL`,

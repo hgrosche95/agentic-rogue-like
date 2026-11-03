@@ -62,7 +62,6 @@ from pathlib import Path
 from .agent.budgets import _BUDGETS
 from .agent.encounter_schema import EnemyBudget
 from .artifacts import (
-    ARTIFACT_EVERY_STEPS,
     PROGRAM_ARTIFACT_POOL,
     gain_artifact,
     heal,
@@ -839,7 +838,9 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
         apply_deal(player, rng.choice(deals))
 
     while True:
-        if cfg.artifacts and steps % ARTIFACT_EVERY_STEPS == 0:
+        # mirrors the engine: an artifact at the start, then one for every
+        # won elite or act boss (below)
+        if cfg.artifacts and steps == 0:
             offer = roll_artifact_offer(rng, player.artifacts, pool=cfg.artifact_pool())
             if offer:
                 gain_artifact(player, pick_artifact(offer, bot_name, rng, player.deck))
@@ -871,6 +872,10 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
             if node.type is NodeType.BOSS and act >= NUM_ACTS:
                 return RunResult(True, node.floor, fights, act)
             heal(player, total(player.artifacts, "heal_after_combat"))
+            if cfg.artifacts and node.type in (NodeType.ELITE, NodeType.BOSS):
+                offer = roll_artifact_offer(rng, player.artifacts, pool=cfg.artifact_pool())
+                if offer:
+                    gain_artifact(player, pick_artifact(offer, bot_name, rng, player.deck))
             if cfg.rewards:
                 offer = roll_card_reward(rng, elite=node.type is not NodeType.COMBAT, pool=pool)
                 pick = offer[pick_reward(offer, bot_name, rng, player.deck)]

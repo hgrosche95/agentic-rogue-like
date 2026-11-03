@@ -766,3 +766,19 @@ button.is-busy:disabled {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* ---------- the map: which fights pay an artifact ---------- */
+.map-node-loot path,
+.legend-loot path {
+  fill: var(--gold);
+  stroke: #0b0a1e;
+  stroke-width: 1.5;
+}
+
+.map-node-loot {
+  filter: drop-shadow(0 0 3px var(--gold));
+}
+
+.map-node.is-cut .map-node-loot {
+  filter: none;
+}

@@ -399,6 +399,7 @@ function App() {
     reachableIds: (needsEnter ? switchChoices : run.available_choices).map((n) => n.id),
     disabled: isLoading,
     act: run.act,
+    numActs: run.num_acts,
     onChoose: jumpTo,
   };
 
