@@ -57,7 +57,7 @@ button:hover:not(:disabled) {
 }
 
 /* the main action is a keycap: a darker ledge under its face, which it
-   sinks into when pressed (border, not shadow, so the glow animations on
+   sinks onto when pressed (border, not shadow, so the glow animations on
    it keep the ledge) */
 button.is-primary {
   border-radius: 8px;
@@ -69,10 +69,12 @@ button.is-primary:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
+/* pressed: the face sinks onto its ledge - moved down by transform and
+   its foot clipped, so the ledge looks shorter while the box keeps its
+   size and margins: nothing around the key moves */
 button.is-primary:active:not(:disabled) {
-  margin-top: 3px;
-  border-bottom-width: 1px;
-  transform: none;
+  transform: translateY(3px);
+  clip-path: inset(0 0 3px 0 round 8px);
 }
 
 button.is-primary:disabled {
