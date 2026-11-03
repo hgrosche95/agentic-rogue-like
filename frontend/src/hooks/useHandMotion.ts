@@ -45,7 +45,7 @@ export function useStableHandKeys(hand: HandCardView[]): string[] {
 }
 
 const SLIDE_MS = 320;
-const DEAL_MS = 380;
+const DEAL_MS = 460;
 const DEAL_STAGGER_MS = 70;
 const EASE_OUT = "cubic-bezier(0.22, 1, 0.36, 1)";
 
@@ -64,6 +64,8 @@ export function useHandFlip(container: RefObject<HTMLElement | null>, layout: st
     const before = last.current;
     const now = new Map<string, { x: number; y: number }>();
     let dealt = 0;
+    // new cards come off the Source pile: its face, in the card's terms
+    const source = document.querySelector<HTMLElement>(".pile-deck .pile-face")?.getBoundingClientRect();
     root.querySelectorAll<HTMLElement>("[data-flip-key]").forEach((card) => {
       // hidden (a played card on its way out) - not part of the layout
       if (card.offsetParent === null) return;
@@ -83,13 +85,31 @@ export function useHandFlip(container: RefObject<HTMLElement | null>, layout: st
           composite: "add",
         });
       } else {
+        const box = card.getBoundingClientRect();
+        const from = source
+          ? `${source.left + source.width / 2 - (box.left + box.width / 2)}px ${source.top + source.height / 2 - (box.top + box.height / 2)}px`
+          : "-160px 40px";
+        const delay = dealt++ * DEAL_STAGGER_MS;
         card.animate(
           [
-            { translate: "-160px 40px", opacity: 0, scale: "0.85" },
+            { translate: from, opacity: 0.6, scale: "0.4" },
             { translate: "0 0", opacity: 1, scale: "1" },
           ],
-          { duration: DEAL_MS, delay: dealt++ * DEAL_STAGGER_MS, easing: EASE_OUT, fill: "backwards" },
+          { duration: DEAL_MS, delay, easing: EASE_OUT, fill: "backwards" },
         );
+        // dealt face down: a card back over it turns away as it lands
+        const back = document.createElement("span");
+        back.className = "card-dealt-back";
+        back.setAttribute("aria-hidden", "true");
+        card.appendChild(back);
+        const turn = back.animate([{ opacity: 1 }, { opacity: 1, offset: 0.55 }, { opacity: 0 }], {
+          duration: DEAL_MS,
+          delay,
+          easing: "linear",
+          fill: "both",
+        });
+        turn.onfinish = () => back.remove();
+        turn.oncancel = () => back.remove();
       }
     });
     last.current = now;

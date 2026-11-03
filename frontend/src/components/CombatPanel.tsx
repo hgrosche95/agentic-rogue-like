@@ -9,7 +9,7 @@ import {
 } from "../api";
 import { cardSound, hitsOf, sfx } from "../audio";
 import { splitTaunt, useBanners } from "../banners";
-import { flyCard } from "../cardFlight";
+import { dissolveToPurged, flyCard } from "../cardFlight";
 import { ArtifactBar } from "./ArtifactBar";
 import { activeArtifactsLine } from "../artifactTimers";
 import { HERO } from "../characters";
@@ -87,11 +87,25 @@ function KeyHint({ children, className = "" }: { children: ReactNode; className?
 }
 
 // `term`: the keyword (keywords.ts) the pile's tooltip explains
+// A pile with its count. When the count changes it bumps and shows by how
+// much ("+1", "−2") for a moment - cards visibly arriving or leaving.
 function Pile({ label, count, kind, term }: { label: string; count: number; kind: string; term: string }) {
+  const [last, setLast] = useState(count);
+  const [delta, setDelta] = useState<{ n: number; id: number } | null>(null);
+  if (count !== last) {
+    // derived during render, React's pattern for state that follows a prop
+    setLast(count);
+    setDelta({ n: count - last, id: (delta?.id ?? 0) + 1 });
+  }
   return (
     <div className={`pile pile-${kind}`} data-keyword={term} tabIndex={0}>
-      <div className="pile-face">
+      <div key={delta?.id ?? 0} className={`pile-face${delta ? " is-bumped" : ""}`}>
         <span className="pile-count">{count}</span>
+        {delta && (
+          <b className={`pile-delta${delta.n < 0 ? " is-minus" : ""}`} aria-hidden="true">
+            {delta.n > 0 ? `+${delta.n}` : `−${-delta.n}`}
+          </b>
+        )}
       </div>
       <span className="pile-label">{label}</span>
     </div>
@@ -287,6 +301,29 @@ export function CombatPanel({
   useHandFlip(handRef, laidOut.map((card) => handKeys[combat.hand.indexOf(card)]).join(" "));
   const arenaRef = useRef<ArenaHandle>(null);
   const fieldRef = useRef<HTMLDivElement>(null);
+  // The permanents' last pictures, so one that leaves the field without
+  // coming back to the hand (destroyed, purged, uninstalled) can be shown
+  // coming apart on its way to the Purged pile (cardFlight.dissolveToPurged).
+  const fieldShots = useRef(new Map<string, { ghost: HTMLElement; rect: DOMRect }>());
+  const purgedBefore = useRef(combat.banished_count);
+  useLayoutEffect(() => {
+    const root = fieldRef.current;
+    if (!root) return;
+    const now = new Map<string, { ghost: HTMLElement; rect: DOMRect }>();
+    root.querySelectorAll<HTMLElement>("[data-field-card]").forEach((el) => {
+      const id = el.dataset.fieldCard;
+      if (id) now.set(id, { ghost: el.cloneNode(true) as HTMLElement, rect: el.getBoundingClientRect() });
+    });
+    // only while the Purged pile grew - a fight that ends clears the field too
+    if (combat.banished_count > purgedBefore.current) {
+      const inHand = new Set(combat.hand.map((card) => card.id));
+      for (const [id, shot] of fieldShots.current) {
+        if (!now.has(id) && !inHand.has(id)) dissolveToPurged(shot.ghost, shot.rect);
+      }
+    }
+    purgedBefore.current = combat.banished_count;
+    fieldShots.current = now;
+  }, [combat]);
   // Dr. Chronos typing a card in, the program running: skippable
   const sequence = useSequence();
   // What the table looked like when the turn was ended, to tell once the
@@ -553,7 +590,9 @@ export function CombatPanel({
     // a queued line or a permanent stays where it lands; an action burns out there
     const stays = played !== undefined && (queues(combat, played) || PERMANENT_CARD_TYPES.includes(played.type));
     // into the program's background: to the hint, where its socket shows up
-    if (card) flyCard(card, slot.querySelector<HTMLElement>(".background-hint") ?? slot, stays);
+    // an action goes on into its pile once it has burnt out in the slot
+    const pile = stays || !played ? undefined : played.exhaust ? "purged" : "cache";
+    if (card) flyCard(card, slot.querySelector<HTMLElement>(".background-hint") ?? slot, stays, pile);
     setSelectedHandIndex(null);
     setPlayed({ on: combat, handIndex, slotIndex });
     setMoves((m) => ({ ...m, plays: m.plays + 1 }));
@@ -949,7 +988,7 @@ export function CombatPanel({
                   <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} />
                 </button>
               ) : (
-                <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
+                <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`} data-field-card={card.id}>
                   <CardFace card={card} onField />
                   <TakeBack
                     name={card.name}

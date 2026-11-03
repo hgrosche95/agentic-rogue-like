@@ -14,7 +14,7 @@ type LineKind = "hit" | "hurt" | "block" | "heal" | "malware" | "banish" | "foe"
 // What a history line is about, read from combat.py's wording - for its
 // icon and colour. The player's own losses come first: "You block 3 and
 // take 5 damage" is a hurt, not a block.
-export function lineKind(text: string, isCommand = false): LineKind {
+function lineKind(text: string, isCommand = false): LineKind {
   if (isCommand) return "command";
   if (/You are at \d+ HP|You take \d+|of your HP|cost you \d+ HP/.test(text)) return "hurt";
   if (/banish|uninstall|purges/i.test(text)) return "banish";
