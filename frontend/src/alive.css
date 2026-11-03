@@ -550,3 +550,75 @@ button:disabled {
 button.is-busy:disabled {
   cursor: progress;
 }
+
+/* ---------- idle life: the log's screen flickers now and then ---------- */
+.arena-monitor .monitor-lines {
+  animation: monitor-flicker 9s steps(1) infinite;
+}
+
+@keyframes monitor-flicker {
+  0%,
+  96.4%,
+  97.4%,
+  100% {
+    opacity: 1;
+  }
+  96.6% {
+    opacity: 0.55;
+  }
+  97% {
+    opacity: 0.85;
+    transform: translateX(1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-monitor .monitor-lines {
+    animation: none;
+  }
+}
+
+/* ---------- between screens: a scanline sweeps over the new one ---------- */
+.screen-wipe {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent 0,
+    transparent calc(var(--wipe) - 9%),
+    color-mix(in srgb, var(--cyan) 18%, transparent) calc(var(--wipe) - 1.5%),
+    rgba(230, 252, 255, 0.85) var(--wipe),
+    rgba(10, 9, 28, 0.92) calc(var(--wipe) + 0.4%),
+    rgba(10, 9, 28, 0.92) 100%
+  );
+  animation: screen-wipe 0.5s cubic-bezier(0.45, 0, 0.3, 1) forwards;
+}
+
+@property --wipe {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+@keyframes screen-wipe {
+  from {
+    --wipe: 0%;
+    opacity: 1;
+  }
+  85% {
+    --wipe: 104%;
+    opacity: 1;
+  }
+  to {
+    --wipe: 110%;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-wipe {
+    display: none;
+  }
+}
