@@ -7,14 +7,18 @@ import { RichText } from "./RichText";
 // in the combat HUD they shrink to chips with the effect in the tooltip.
 // `turn` (in a fight): the artifacts that work every Nth turn light up on
 // their turn and count down to it otherwise.
+// `pulse` (in a fight): the artifacts that just did something, flashed once
+// - `id` tells one flash from the next.
 export function ArtifactBar({
   artifacts,
   compact = false,
   turn,
+  pulse,
 }: {
   artifacts: Artifact[];
   compact?: boolean;
   turn?: number;
+  pulse?: { ids: string[]; id: number };
 }) {
   if (compact) {
     if (artifacts.length === 0) return null;
@@ -29,8 +33,8 @@ export function ArtifactBar({
             : "";
           return (
             <li
-              key={artifact.id}
-              className={`artifact-chip${timer ? " is-timed" : ""}${timer?.active ? ` is-firing is-${timer.tone}` : ""}`}
+              key={pulse?.ids.includes(artifact.id) ? `${artifact.id}-${pulse.id}` : artifact.id}
+              className={`artifact-chip${timer ? " is-timed" : ""}${timer?.active ? ` is-firing is-${timer.tone}` : ""}${pulse?.ids.includes(artifact.id) ? " is-pulsed" : ""}`}
               data-tip-term={artifact.name}
               data-tip={artifact.description + state}
               tabIndex={0}

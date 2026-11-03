@@ -389,3 +389,134 @@
     animation: none;
   }
 }
+
+/* ---------- status chips: an icon, and they react to their number ---------- */
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.stat-chip > b {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip-icon {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* grown: it pops; shrunk: it ticks down */
+.stat-chip.is-up {
+  animation: chip-up 0.45s var(--ease-out, ease-out);
+}
+
+.stat-chip.is-down {
+  animation: chip-down 0.4s var(--ease-out, ease-out);
+}
+
+@keyframes chip-up {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.4;
+  }
+  45% {
+    transform: scale(1.15);
+    box-shadow: 0 0 18px var(--chip);
+  }
+}
+
+@keyframes chip-down {
+  30% {
+    transform: translateY(2px) scale(0.94);
+    filter: brightness(1.6);
+  }
+}
+
+/* Malware ticking: its icon turns a notch with every stack it loses */
+.status-badge.is-malware.is-down .chip-icon {
+  animation: chip-spin 0.4s var(--ease-out, ease-out);
+}
+
+@keyframes chip-spin {
+  from {
+    rotate: -45deg;
+  }
+}
+
+/* block raised: the shield builds up */
+.block-badge.is-up .chip-icon {
+  animation: shield-build 0.5s var(--ease-out, ease-out);
+}
+
+@keyframes shield-build {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* gone to zero: it cracks and falls apart */
+.stat-chip.is-breaking {
+  pointer-events: none;
+  animation: chip-break 0.52s var(--ease-in, ease-in) forwards;
+}
+
+@keyframes chip-break {
+  0% {
+    transform: none;
+  }
+  20% {
+    transform: translateX(-2px) rotate(-3deg);
+    filter: brightness(1.8);
+  }
+  40% {
+    transform: translateX(2px) rotate(2deg);
+    clip-path: polygon(0 0, 55% 0, 45% 100%, 0 100%, 0 0, 100% 0, 100% 100%, 50% 100%, 60% 0);
+  }
+  100% {
+    transform: translateY(8px) rotate(4deg) scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* ---------- an artifact at work flashes once ---------- */
+.artifact-chip.is-pulsed {
+  --chip: var(--gold);
+  animation: artifact-pulse 0.9s var(--ease-out, ease-out);
+}
+
+@keyframes artifact-pulse {
+  0% {
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(1.12);
+    color: var(--on-accent, #12102a);
+    background: var(--gold);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--gold) 40%, transparent),
+      0 0 26px var(--gold);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-chip.is-up,
+  .stat-chip.is-down,
+  .stat-chip.is-breaking,
+  .stat-chip .chip-icon,
+  .artifact-chip.is-pulsed {
+    animation: none;
+  }
+}

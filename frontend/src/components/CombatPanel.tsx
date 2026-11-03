@@ -20,6 +20,8 @@ import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { useSequence } from "../hooks/useSequence";
 import { describeIntent, rangeText, STATUS_TEXT } from "../readouts";
+import { StatChip } from "./StatChip";
+import { firingArtifacts } from "../artifactPulse";
 import { tempoMs } from "../tempo";
 import { CardFace, type Readout } from "./CardFace";
 import { CombatHelp, HelpButton } from "./CombatHelp";
@@ -62,16 +64,16 @@ function TokenMeter({ combat }: { combat: PendingCombatView }) {
 function StatusBadges({ statuses }: { statuses: Partial<Record<Status, number>> }) {
   return (
     <>
-      {(Object.entries(statuses) as [Status, number][]).map(([status, left]) => (
-        <span
+      {(["malware", "exposed", "throttled"] as Status[]).map((status) => (
+        <StatChip
           key={status}
           className={`status-badge is-${status}`}
-          tabIndex={0}
-          data-tip-term={status}
-          data-tip={STATUS_TEXT[status]}
-        >
-          {status} {left}
-        </span>
+          icon={status}
+          label={status}
+          value={statuses[status] ?? 0}
+          tip={STATUS_TEXT[status]}
+          tipTerm={status}
+        />
       ))}
     </>
   );
@@ -759,6 +761,15 @@ export function CombatPanel({
     combat.enemy_intent_name,
   );
 
+  // the artifacts the newest log lines show at work flash once
+  const [logSeen, setLogSeen] = useState(log.length);
+  const [artifactPulse, setArtifactPulse] = useState<{ ids: string[]; id: number } | null>(null);
+  if (log.length !== logSeen) {
+    setLogSeen(log.length);
+    const ids = log.length > logSeen ? firingArtifacts(log.slice(logSeen), player.artifacts) : [];
+    if (ids.length > 0) setArtifactPulse({ ids, id: (artifactPulse?.id ?? 0) + 1 });
+  }
+
   // what ending the turn now leads to, under the button's label
   const endTurnNote = !attacking
     ? `next: ${intent.label.toLowerCase()}`
@@ -876,11 +887,11 @@ export function CombatPanel({
                       : `Incoming ${rangeText(combat.incoming_min, combat.incoming_max)}`}
                 </span>
               )}
-              {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
-              {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
+              <StatChip className="block-badge" icon="block" label="Block" value={combat.player_block} />
+              <StatChip className="armor-badge" icon="armor" label="Armor" value={combat.armor} />
               <StatusBadges statuses={combat.player_status} />
               {combat.token_limit !== null && <TokenMeter combat={combat} />}
-              <ArtifactBar artifacts={player.artifacts} compact turn={combat.turn} />
+              <ArtifactBar artifacts={player.artifacts} compact turn={combat.turn} pulse={artifactPulse ?? undefined} />
             </div>
           </div>
         </div>
