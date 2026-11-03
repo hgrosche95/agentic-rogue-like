@@ -668,16 +668,18 @@ PROGRAM_REWARD_POOL: list[Card] = [
     ),
     # Attacks that care where their line stands (models.Scaling): first or
     # last to run, in a long program or a short one - and Segfault, which
-    # hits hardest of all but ends the program on the spot.
+    # hits hard but ends the program on the spot. Their numbers come from
+    # balance-sim: two copies in the starter deck win as many boss fights
+    # as the deck without them (README, "Karten mit Position").
     Card(
         id="bootstrap",
         name="Bootstrap",
         type=CardType.ATTACK,
         value=3,
         scaling=Scaling.FIRST_LINE,
-        scale_value=7,
+        scale_value=5,
         rarity=Rarity.COMMON,
-        description="Deal 3 (+ATK) damage, +7 if its line is the first to run.",
+        description="Deal 3 (+ATK) damage, +5 if its line is the first to run.",
     ),
     Card(
         id="return",
@@ -693,11 +695,11 @@ PROGRAM_REWARD_POOL: list[Card] = [
         id="microservice",
         name="Microservice",
         type=CardType.ATTACK,
-        value=11,
+        value=13,
         scaling=Scaling.LINES,
         scale_value=-2,
         rarity=Rarity.COMMON,
-        description="Deal 11 (+ATK) damage, -2 for every other queued line.",
+        description="Deal 13 (+ATK) damage, -2 for every other queued line.",
     ),
     Card(
         id="monolith",
@@ -705,18 +707,18 @@ PROGRAM_REWARD_POOL: list[Card] = [
         type=CardType.ATTACK,
         value=1,
         scaling=Scaling.LINES,
-        scale_value=3,
+        scale_value=2,
         rarity=Rarity.UNCOMMON,
-        description="Deal 1 (+ATK) damage, +3 for every other queued line.",
+        description="Deal 1 (+ATK) damage, +2 for every other queued line.",
     ),
     Card(
         id="segfault",
         name="Segfault",
         type=CardType.ATTACK,
-        value=16,
+        value=12,
         halts=True,
         rarity=Rarity.UNCOMMON,
-        description="Deal 16 (+ATK) damage. The program ends after its line.",
+        description="Deal 12 (+ATK) damage. The program ends after its line.",
     ),
     # a bridge to blocking (style.py): a program that raises block first
     # gets its next action twice
@@ -957,24 +959,24 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
         ),
     },
     "Bootstrap": {
-        "scale_value": 10,
-        "description": "Deal 3 (+ATK) damage, +10 if its line is the first to run.",
+        "scale_value": 8,
+        "description": "Deal 3 (+ATK) damage, +8 if its line is the first to run.",
     },
     "Return": {
         "scale_value": 10,
         "description": "Deal 3 (+ATK) damage, +10 if its line is the last to run.",
     },
     "Microservice": {
-        "value": 14,
-        "description": "Deal 14 (+ATK) damage, -2 for every other queued line.",
+        "value": 16,
+        "description": "Deal 16 (+ATK) damage, -2 for every other queued line.",
     },
     "Monolith": {
-        "scale_value": 4,
-        "description": "Deal 1 (+ATK) damage, +4 for every other queued line.",
+        "scale_value": 3,
+        "description": "Deal 1 (+ATK) damage, +3 for every other queued line.",
     },
     "Segfault": {
-        "value": 22,
-        "description": "Deal 22 (+ATK) damage. The program ends after its line.",
+        "value": 17,
+        "description": "Deal 17 (+ATK) damage. The program ends after its line.",
     },
     "Goto 1": {
         "value": 3,

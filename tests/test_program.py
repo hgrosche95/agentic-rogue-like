@@ -251,8 +251,8 @@ def test_undo_runs_as_a_line_and_fetches_what_ran_before_it() -> None:
 
 
 def test_first_and_last_line_cards_pay_off_in_their_place() -> None:
-    # Bootstrap: +7 as the first line to run, Return: +7 as the last
-    assert _damage_dealt("Bootstrap", "Exploit") == 10 + 5
+    # Bootstrap: +5 as the first line to run, Return: +7 as the last
+    assert _damage_dealt("Bootstrap", "Exploit") == 8 + 5
     assert _damage_dealt("Exploit", "Bootstrap") == 5 + 3
     assert _damage_dealt("Exploit", "Return") == 5 + 10
     assert _damage_dealt("Return", "Exploit") == 3 + 5
@@ -262,9 +262,9 @@ def test_first_and_last_line_cards_pay_off_in_their_place() -> None:
 
 def test_line_count_cards_scale_with_the_programs_length() -> None:
     assert _damage_dealt("Monolith") == 1
-    assert _damage_dealt("Monolith", "Firewall", "Firewall") == 1 + 6
-    assert _damage_dealt("Microservice") == 11
-    assert _damage_dealt("Microservice", "Firewall", "Firewall") == 11 - 4
+    assert _damage_dealt("Monolith", "Firewall", "Firewall") == 1 + 4
+    assert _damage_dealt("Microservice") == 13
+    assert _damage_dealt("Microservice", "Firewall", "Firewall") == 13 - 4
 
 
 def test_segfault_ends_the_program() -> None:
@@ -273,7 +273,7 @@ def test_segfault_ends_the_program() -> None:
     steps = program_preview(state, player).steps
     assert [s.outcome for s in steps] == ["ran", "ran", "cut"]
     end_turn(state, player, random.Random(2))
-    assert state.enemy.hp - state.enemy_hp == 5 + 16
+    assert state.enemy.hp - state.enemy_hp == 5 + 12
     # the line it cut never ran, so it isn't used up
     assert sum(c.name == "Exploit" for c in state.discard_pile) == 2
 
@@ -282,7 +282,7 @@ def test_the_hand_preview_knows_where_the_line_will_stand() -> None:
     state, player = _fight()
     _queue(state, player, "Exploit", slots=[2])
     bootstrap = _card("Bootstrap")
-    assert action_preview(state, bootstrap, player, 0) == 10  # first
+    assert action_preview(state, bootstrap, player, 0) == 8  # first
     assert action_preview(state, bootstrap, player, 4) == 3  # after the Exploit
     assert state.line_position is None
 
@@ -764,8 +764,8 @@ def test_the_agi_picks_the_program_move_that_hurts_the_deck() -> None:
 
 
 def test_goto_runs_the_first_actions_again_from_their_own_lines() -> None:
-    # Bootstrap is the first line both times: 10 + 5, then again 10 + 5
-    assert _damage_dealt("Bootstrap", "Exploit", "Goto 1") == 30
+    # Bootstrap is the first line both times: 8 + 5, then again 8 + 5
+    assert _damage_dealt("Bootstrap", "Exploit", "Goto 1") == 26
     # only the first 2 actions come back (and the three Exploits are a Burst: +5)
     assert _damage_dealt("Exploit", "Exploit", "Exploit", "Goto 1") == 15 + 5 + 10
     # with nothing before it, it idles
@@ -782,7 +782,7 @@ def test_main_thread_runs_the_first_line_twice() -> None:
 
 
 def test_garbage_free_softens_segfault_and_stops_the_collector() -> None:
-    assert _damage_dealt("Segfault", "Exploit", "Exploit", artifact="Garbage-Free") == 16 + 5
+    assert _damage_dealt("Segfault", "Exploit", "Exploit", artifact="Garbage-Free") == 12 + 5
     state, player = _fight(artifact="Garbage-Free")
     state.enemy_intent = EnemyIntentType.COLLECT
     _queue(state, player, "Exploit", "Exploit")
@@ -797,11 +797,11 @@ def test_a_line_spells_out_how_it_reaches_its_number() -> None:
     player.attack = 2
     _queue(state, player, "Overclock", "Bootstrap", "Firewall", "Return", slots=[0, 0, 1, 2])
     by_name = {s.name: s for s in program_preview(state, player).steps}
-    assert by_name["Bootstrap"].formula == "3 +2 ATK +7 first ×1.25 = 15"
+    assert by_name["Bootstrap"].formula == "3 +2 ATK +5 first ×1.25 = 12"
     assert by_name["Return"].formula == "3 +2 ATK +7 last ×1.25 = 15"
     assert by_name["Firewall"].formula == "5 ×1.25 = 6"
     # what it says is what it deals (no combo here)
-    assert by_name["Bootstrap"].dealt == 15
+    assert by_name["Bootstrap"].dealt == 12
 
 
 # ---- what-if: aiming a card shows what it does to the other lines
@@ -810,12 +810,12 @@ def test_a_line_spells_out_how_it_reaches_its_number() -> None:
 def test_what_if_shows_the_other_lines_change() -> None:
     state, player = _fight()
     _queue(state, player, "Monolith", "Exploit", slots=[0, 1])
-    # a third line: Monolith gets +3 more
-    assert program_what_if(state, player, _card("Firewall"), 2)[:3] == [7, 5, 5]
+    # a third line: Monolith gets +2 more
+    assert program_what_if(state, player, _card("Firewall"), 2)[:3] == [5, 5, 5]
     # a Fork in front of the Exploit doubles it - but line 1 is taken
     assert program_what_if(state, player, _card("Fork"), 0) is None
     # a permanent goes into the background: Overclock boosts every line
-    assert program_what_if(state, player, _card("Overclock"), 3)[:2] == [5, 6]
+    assert program_what_if(state, player, _card("Overclock"), 3)[:2] == [4, 6]
     # card flow changes no line
     assert program_what_if(state, player, _card("Phishing"), 2) is None
 

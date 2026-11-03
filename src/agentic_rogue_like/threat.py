@@ -145,12 +145,15 @@ GLITCH_DAMAGE = 2.5
 # (pool enemies with and without enemies.with_interrupt: 20.2 HP plain,
 # 20.4-20.5 armed at 4-4.5, within the noise).
 INTERRUPT_DAMAGE = 4.5
-# The other program moves, set like it: a garbage collector throws away one
-# line (the last, often the strongest), a race condition only reorders two,
-# a memory leak takes a line away for the next turn.
-COLLECT_DAMAGE = 4.0
-RACE_DAMAGE = 2.0
-LEAK_DAMAGE = 3.0
+# The other program moves cost less: they are telegraphed, and a player who
+# orders the program well mostly plays around them (a garbage collector
+# takes the last line, a race condition reorders two, a memory leak takes a
+# line for a turn). Set from balance-sim runs (best order, 300 runs): at the
+# first guess (4 / 2 / 3) the HP they took off made program runs easier
+# than with interrupts alone.
+COLLECT_DAMAGE = 2.5
+RACE_DAMAGE = 1.0
+LEAK_DAMAGE = 1.5
 _PROGRAM_MOVE_DAMAGE = {
     MoveKind.INTERRUPT: INTERRUPT_DAMAGE,
     MoveKind.COLLECT: COLLECT_DAMAGE,
