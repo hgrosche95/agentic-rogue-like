@@ -160,3 +160,23 @@
   }
 }
 
+
+/* ---------- a hand that empties keeps its place ----------
+   With the last card played the hand had no height left, and end turn,
+   the piles and the hint under them jumped up by a card's height. The hand
+   keeps one card's height (its cards' sizes: App.css, sockets.css). */
+.hand {
+  min-height: 182px;
+}
+
+@media (min-width: 1600px) and (min-height: 960px) {
+  .hand {
+    min-height: 212px;
+  }
+}
+
+@media (max-width: 600px) {
+  .hand {
+    min-height: 154px;
+  }
+}
