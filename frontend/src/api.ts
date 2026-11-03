@@ -71,6 +71,8 @@ export const QUEUED_TYPES: readonly CardType[] = [
   "block",
   "heal",
   "final_strike",
+  // Undo, Rollback: run as a line, they fetch back what ran before them
+  "retrieve",
   ...CONTROL_FLOW_TYPES,
 ];
 
@@ -98,6 +100,8 @@ export interface Card {
   upgraded: boolean;
   // what it takes from a context window - only the Vibe-Coder has one
   token_cost: number;
+  // program mode: the program ends after its line (Segfault)
+  halts: boolean;
 }
 
 // Who a run is played as - see characters.py.
@@ -121,6 +125,13 @@ export interface Artifact {
   description: string;
   // program mode: the line (1-based) whose card runs upgraded - 0 if none
   hot_path: number;
+  // the effects that work every Nth turn only (models.Artifact, artifactTimers.ts)
+  extra_draw?: number;
+  extra_draw_every?: number;
+  turn_block?: number;
+  turn_block_every?: number;
+  tail_call?: number;
+  tail_call_every?: number;
 }
 
 export interface PlayerState {
@@ -294,6 +305,8 @@ export interface ProgramStep {
   enemy_block: number;
   // the named combo it completed (combat.COMBOS)
   combo: string | null;
+  // a retrieve line (Undo): the cards it fetched back to the hand
+  retrieved: string[];
 }
 
 export interface ShopCard {
@@ -604,6 +617,15 @@ export function endCombatTurn(runId: string, discardIndices: number[] = []): Pro
   return request<RunView>(`/runs/${runId}/combat/end-turn`, {
     method: "POST",
     body: JSON.stringify({ discard_indices: discardIndices }),
+  });
+}
+
+// Take a card off the field back into the hand: a queued line ("program") or
+// a permanent ("field": its slot, or its place in the background).
+export function takeBack(runId: string, zone: "program" | "field", index: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/combat/take-back`, {
+    method: "POST",
+    body: JSON.stringify({ zone, index }),
   });
 }
 

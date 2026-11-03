@@ -10,6 +10,43 @@ const DRAG_THRESHOLD_PX = 8;
 // empty slot (any element with data-slot-index) plays it there. Program mode
 // reuses it to drag a queued card from one line to another - the "hand
 // index" is then the line it comes from.
+// How far beside and above a drop zone (data-drop-zone) a card still counts
+// as dropped into it - not below: the hand lies there, and a card let go
+// over the hand goes back to it.
+const ZONE_MARGIN_PX = 48;
+
+// A drop that misses every slot but lands in (or just beside) the zone the
+// slots sit in goes to the nearest one that takes the card - the stack and
+// the program's background bus are thin targets to hit with a dragged card.
+function nearSlot(x: number, y: number): HTMLElement | null {
+  for (const zone of document.querySelectorAll<HTMLElement>("[data-drop-zone]")) {
+    const box = zone.getBoundingClientRect();
+    if (
+      x < box.left - ZONE_MARGIN_PX ||
+      x > box.right + ZONE_MARGIN_PX ||
+      y < box.top - ZONE_MARGIN_PX ||
+      y > box.bottom
+    )
+      continue;
+    let best: HTMLElement | null = null;
+    let bestDistance = Infinity;
+    for (const slot of zone.querySelectorAll<HTMLElement>("[data-slot-index]")) {
+      const r = slot.getBoundingClientRect();
+      // distance to the slot's box, not its centre: a wide bus is as near
+      // along all of its length
+      const dx = Math.max(r.left - x, 0, x - r.right);
+      const dy = Math.max(r.top - y, 0, y - r.bottom);
+      const distance = Math.hypot(dx, dy);
+      if (distance < bestDistance) {
+        best = slot;
+        bestDistance = distance;
+      }
+    }
+    if (best) return best;
+  }
+  return null;
+}
+
 export function useCardDrag({
   enabled,
   onDrop,
@@ -24,7 +61,7 @@ export function useCardDrag({
   const justDragged = useRef(false);
 
   function slotAt(x: number, y: number): HTMLElement | null {
-    return document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-slot-index]") ?? null;
+    return document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-slot-index]") ?? nearSlot(x, y);
   }
 
   function onPointerDown(event: ReactPointerEvent<HTMLElement>, handIndex: number) {

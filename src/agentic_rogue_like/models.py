@@ -170,6 +170,11 @@ class Scaling(StrEnum):
     PLAYED = "played"  # cards already played this turn
     EMPTY_SLOT = "empty_slot"  # empty field slots
     MALWARE = "malware"  # Malware stacks on the enemy
+    # Program mode only, by where its line stands in the program as it runs
+    # (combat.run_program) - 0 outside a program:
+    LINES = "lines"  # the other queued lines (negative scale_value: fewer is better)
+    FIRST_LINE = "first_line"  # 1 if its line is the first to run
+    LAST_LINE = "last_line"  # 1 if its line is the last to run
 
 
 class Rarity(StrEnum):
@@ -203,6 +208,9 @@ class Card(BaseModel):
     # Tokens it takes from the context window - only characters with one
     # (the Vibe-Coder, see characters.py) pay it, everyone else ignores it.
     token_cost: int = 1
+    # Program mode: the program ends right after this card's line has run -
+    # the lines after it don't run this turn (combat.run_program).
+    halts: bool = False
 
 
 class Character(StrEnum):

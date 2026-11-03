@@ -5,10 +5,12 @@ import App from './App.tsx'
 import { unlockAudio } from './audio'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { reportUncaughtErrors } from './errors'
+import { enableCardTilt } from './tilt'
 
 // audio starts on the first click or key press (browser autoplay rules)
 unlockAudio()
 reportUncaughtErrors()
+enableCardTilt()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

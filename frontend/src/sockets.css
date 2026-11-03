@@ -1,0 +1,172 @@
+/* "Sockets": the stack and the program as hardware a card plugs into.
+   An empty slot is a recessed bay with a row of contacts along its foot
+   and a latch on each side - the contacts light up when a card can go in,
+   and the bay glows from below when one is about to. A card in a slot sits
+   in a dark bezel; permanents on the program's bus are chips on a rail.
+   Loaded last; it only re-dresses the slots App.css and neon.css lay out. */
+
+.field-slot.is-empty,
+.field-slot.is-locked {
+  --pin: #4a4466;
+  --latch: #2c2c55;
+  --bay-light: transparent;
+  border: 1px solid #262650;
+  border-radius: 8px;
+  background:
+    /* the edge connector: contacts along the foot */
+    repeating-linear-gradient(90deg, var(--pin) 0 3px, transparent 3px 7px) 50% calc(100% - 8px) / 62% 6px no-repeat,
+    /* a latch on each side, at mid height */
+    linear-gradient(var(--latch), var(--latch)) 3px 50% / 3px 24% no-repeat,
+    linear-gradient(var(--latch), var(--latch)) calc(100% - 3px) 50% / 3px 24% no-repeat,
+    /* the light rising from the contacts */
+    radial-gradient(ellipse 70% 55% at 50% 100%, var(--bay-light), transparent 75%),
+    linear-gradient(180deg, #04040c, #0b0b1e);
+  box-shadow:
+    inset 0 7px 14px rgba(0, 0, 0, 0.85),
+    inset 0 0 0 4px #0c0c22,
+    inset 0 0 0 5px rgba(120, 120, 200, 0.16),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+  color: #55558e;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+
+/* a card can go in: the contacts and latches come alive */
+.field-slot.is-empty.is-targetable {
+  --pin: var(--cyan);
+  --latch: color-mix(in srgb, var(--cyan) 60%, #1a1a3a);
+  --bay-light: rgba(52, 231, 255, 0.2);
+  border: 1px solid color-mix(in srgb, var(--cyan) 55%, #262650);
+  background-color: transparent;
+  box-shadow:
+    inset 0 7px 14px rgba(0, 0, 0, 0.85),
+    inset 0 0 0 4px #0c0c22,
+    inset 0 0 0 5px color-mix(in srgb, var(--cyan) 35%, transparent);
+}
+
+/* a slot an amplifier boosts glows gold from below */
+.field-slot.is-empty.is-targetable:has(.slot-preview.is-boosted) {
+  --pin: var(--boost);
+  --latch: color-mix(in srgb, var(--boost) 60%, #1a1a3a);
+  --bay-light: rgba(255, 216, 74, 0.22);
+  border-color: color-mix(in srgb, var(--boost) 60%, #262650);
+  box-shadow:
+    inset 0 7px 14px rgba(0, 0, 0, 0.85),
+    inset 0 0 0 4px #0c0c22,
+    inset 0 0 0 5px color-mix(in srgb, var(--boost) 40%, transparent);
+}
+
+/* about to take the card: the bay lights up, the contacts go white - the
+   socket stays where it is (a card goes into it, not the other way) */
+.field-slot.is-empty.is-targetable:hover,
+.field-slot.is-empty.is-drop-target {
+  --pin: #fff;
+  --bay-light: rgba(52, 231, 255, 0.42);
+  border-color: #fff;
+  transform: none;
+}
+
+.field-slot.is-locked {
+  --pin: var(--danger);
+  --latch: var(--danger);
+  border-color: var(--danger);
+  background-color: #12060e;
+}
+
+/* the slot's number, printed on the board in the bay */
+.field-slot.is-empty {
+  font-family: var(--font-body);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+/* a card in a slot sits in a dark bezel instead of a halo */
+.field-slot.is-occupied {
+  box-shadow:
+    0 0 0 3px #05050f,
+    0 0 0 4px #2a2a55,
+    0 10px 18px -10px #000;
+}
+
+/* ---------- the program's bus: a rail the permanents plug into ---------- */
+.program-background {
+  --pin: #3e3a5c;
+  border: 1px solid #262650;
+  border-radius: 8px;
+  background:
+    repeating-linear-gradient(90deg, var(--pin) 0 2px, transparent 2px 6px) 0 3px / 100% 3px no-repeat,
+    repeating-linear-gradient(90deg, var(--pin) 0 2px, transparent 2px 6px) 0 calc(100% - 3px) / 100% 3px no-repeat,
+    linear-gradient(180deg, #04040c, #0b0b1e);
+  box-shadow:
+    inset 0 5px 12px rgba(0, 0, 0, 0.8),
+    inset 0 0 0 1px rgba(120, 120, 200, 0.12);
+}
+
+/* (neon.css dashes the bus in program mode) */
+.combat-panel.is-program .program-background {
+  border-style: solid;
+}
+
+.program-background.is-targetable {
+  --pin: var(--cyan);
+  border: 1px solid color-mix(in srgb, var(--cyan) 55%, #262650);
+  background-color: transparent;
+  box-shadow:
+    inset 0 5px 12px rgba(0, 0, 0, 0.8),
+    inset 0 -14px 24px -12px rgba(52, 231, 255, 0.35);
+}
+
+.program-background.is-targetable:hover,
+.program-background.is-drop-target {
+  --pin: #fff;
+  border-color: #fff;
+  box-shadow:
+    inset 0 5px 12px rgba(0, 0, 0, 0.8),
+    inset 0 -18px 28px -12px rgba(52, 231, 255, 0.6);
+}
+
+/* a permanent on the bus: a chip, legs along its sides */
+.line-socket.is-installed {
+  border-radius: 4px;
+  background:
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--card) 70%, transparent) 0 2px, transparent 2px 5px) 6px 0 / calc(100% - 12px) 2px no-repeat,
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--card) 70%, transparent) 0 2px, transparent 2px 5px) 6px 100% / calc(100% - 12px) 2px no-repeat,
+    #0b0b20;
+  box-shadow: 0 4px 10px -4px #000;
+}
+
+/* ---------- big screens: bigger cards ---------- */
+@media (min-width: 1600px) and (min-height: 960px) {
+  .hand .hand-card {
+    --socket: 27px;
+    width: 154px;
+    height: 212px;
+  }
+  .hand .hand-card .card-header {
+    font-size: 0.8rem;
+  }
+  .hand .hand-card .card-body {
+    font-size: 0.95rem;
+  }
+  .hand .hand-card .card-readout b {
+    font-size: 1.6rem;
+  }
+  .hand .hand-card .card-icon {
+    width: 17px;
+    height: 17px;
+  }
+  .field .field-slot {
+    flex-basis: 112px;
+  }
+  .field {
+    gap: 14px;
+  }
+  /* the taller hand takes a little from the stage */
+  .combat-panel:not(.is-program) {
+    --stage-h: min(calc(100vw / 2.4), 62vh, calc(100vh - 470px));
+  }
+  .combat-panel.is-program {
+    --stage-h: min(calc(100vw / 2.4), 50vh, calc(100vh - 610px));
+  }
+}

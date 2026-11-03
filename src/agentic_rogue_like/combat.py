@@ -156,13 +156,16 @@ _LIGHT_HIT_KINDS = {
 BOSS_REFACTOR_WEIGHT = 2
 
 # What program mode queues: the cards that act on the fight, and the control
-# flow steering them. Card flow (draw, retrieve, free plays, ...) still
-# resolves on the spot - at the end of the turn it would come too late.
+# flow steering them. Card flow (draw, free plays, ...) still resolves on the
+# spot - at the end of the turn it would come too late. Retrieve (Undo,
+# Rollback) is queued too: run as a line it fetches back what the lines
+# before it just ran, ready for the next turn.
 QUEUED_TYPES = CONTROL_FLOW_TYPES | {
     CardType.ATTACK,
     CardType.BLOCK,
     CardType.HEAL,
     CardType.FINAL_STRIKE,
+    CardType.RETRIEVE,
 }
 
 # Named combos (run_program): card types run back to back in a program, in
@@ -261,6 +264,10 @@ class CombatState(BaseModel):
     program_glitched: list[bool] = Field(default_factory=lambda: [False] * FIELD_SIZE)
     # cards left this turn that cost no tokens (Tab-Tab-Tab, Pair Programming)
     free_plays: int = 0
+    # While a program line resolves (or is previewed): its place among the
+    # queued lines in run order, and how many there are - what the
+    # position scalings (LINES, FIRST_LINE, LAST_LINE) read. None otherwise.
+    line_position: tuple[int, int] | None = None
     tally: FightTally = Field(default_factory=FightTally)
 
 
@@ -768,6 +775,34 @@ def move_queued(state: CombatState, from_slot: int, to_slot: int) -> None:
     g[from_slot], g[to_slot] = g[to_slot], g[from_slot]
 
 
+def take_back(state: CombatState, zone: str, index: int) -> str:
+    """Take a card off the field back into the hand: a queued program line
+    (zone "program") or a permanent (zone "field" - its slot in classic play,
+    its place in the background in program mode). What it cost to play stays
+    paid; it no longer counts as played this turn, so playing it again
+    doesn't feed Copilot twice."""
+    if zone == "program":
+        if not state.program_mode:
+            raise ValueError("only a program has lines")
+        if not 0 <= index < len(state.program) or state.program[index] is None:
+            raise ValueError(f"no queued card in line {index}")
+        card = state.program[index]
+        state.program[index], state.program_glitched[index] = None, False
+    elif zone == "field":
+        if not 0 <= index < len(state.field) or state.field[index] is None:
+            raise ValueError(f"no card on the field at {index}")
+        card = state.field[index]
+        if state.program_mode:
+            state.field.pop(index)
+        else:
+            state.field[index] = None
+    else:
+        raise ValueError(f"unknown zone {zone!r}")
+    state.hand.append(card)
+    state.plays_this_turn = max(0, state.plays_this_turn - 1)
+    return f"You take {card.name} back into your hand."
+
+
 class ProgramStep(BaseModel):
     """What one queued line did when the program ran (run_program's trace)."""
 
@@ -785,6 +820,7 @@ class ProgramStep(BaseModel):
     enemy_hp: int  # after it
     enemy_block: int
     combo: str | None = None  # the named combo it completed (COMBOS)
+    retrieved: list[str] = Field(default_factory=list)  # what a retrieve fetched back
 
 
 def run_program(
@@ -837,9 +873,10 @@ def run_program(
     combos_done: set[str] = set()
     # A refactoring boss runs it right to left: control flow then steers the
     # actions run after it, now the ones to its left.
-    order = list(range(len(state.program)))
-    if state.enemy_intent is EnemyIntentType.REFACTOR:
-        order.reverse()
+    order = _run_order(state)
+    # the queued lines in run order, for the position scalings
+    queued = [s for s in order if state.program[s] is not None]
+    halted_by: str | None = None  # a halting card (Segfault) ended the program
     for step, slot in enumerate(order):
         card = state.program[slot]
         if card is None:
@@ -847,12 +884,17 @@ def run_program(
         before = (state.enemy_hp, state.enemy_block, player.hp, state.player_block, ran)
         outcome = "ran"
         combo: str | None = None
+        retrieved: list[str] = []
         try:
             glitched = state.program_glitched[slot]
             state.program[slot], state.program_glitched[slot] = None, False
             if state.enemy_hp <= 0 or player.hp <= 0:
                 state.discard_pile.append(card)  # never ran, so never used up
                 outcome = "skipped"
+                continue
+            if halted_by is not None:
+                state.discard_pile.append(card)  # never ran, so never used up
+                outcome = "cut"
                 continue
             if cut_after is not None and lines_run >= cut_after:
                 if lines_run == cut_after:
@@ -865,6 +907,7 @@ def run_program(
                 continue
             lines_run += 1
             ran_names.append(card.name)
+            state.line_position = (queued.index(slot), len(queued))
             line = f"[{slot + 1}] "
             # Hot Path: the card runs as its upgrade, the deck keeps the original.
             run = card
@@ -931,6 +974,7 @@ def run_program(
                     forks += tail_call
                 # a buffered action hits, then the enemy gets back what it took
                 held = (state.enemy_hp, state.enemy_block, state.tally.damage_dealt)
+                hand_before = len(state.hand)
                 for _ in range(1 + forks):
                     state.plays_this_turn = max(played - 1, ran)
                     wounded = predictor if _wounded(state) else 0
@@ -941,6 +985,8 @@ def run_program(
                     ran += 1
                     if state.enemy_hp <= 0:
                         break
+                if run.type is CardType.RETRIEVE and not glitched:
+                    retrieved = [c.name for c in state.hand[hand_before:]]
                 if buffering and not glitched:
                     taken = held[0] + held[1] - state.enemy_hp - state.enemy_block
                     state.enemy_hp, state.enemy_block, state.tally.damage_dealt = held
@@ -949,6 +995,9 @@ def run_program(
                     log.append(line + f"{taken} damage go into the buffer ({stored} stored).")
                 forks = 0
                 last = None if glitched else run
+                if run.halts and not glitched:
+                    halted_by = run.name
+                    log.append(line + f"{run.name} ends the program here.")
             after_flow = run.type in CONTROL_FLOW_TYPES
             types.add(run.type)
             run_types.append(None if glitched else run.type)
@@ -964,6 +1013,7 @@ def run_program(
             if line := _check_boss_phase(state):
                 log.append(line.strip())
         finally:
+            state.line_position = None
             if trace is not None:
                 trace.append(
                     ProgramStep(
@@ -980,6 +1030,7 @@ def run_program(
                         enemy_hp=state.enemy_hp,
                         enemy_block=state.enemy_block,
                         combo=combo,
+                        retrieved=retrieved,
                     )
                 )
 
@@ -1214,7 +1265,7 @@ def attack_damage(
     `bonus` is flat damage on top, before the multiplier (Copilot)."""
     base = card.value + player.attack + bonus + _scaling_bonus(state, card)
     boost = sum(c.value for c in state.field if c and c.type is CardType.DAMAGE_BOOST)
-    base += boost * permanent_count(state)
+    base = max(0, base + boost * permanent_count(state))  # a long program can't heal it
     if Status.EXPOSED in state.enemy_status:
         multiplier *= EXPOSED_FACTOR
     return round(base * multiplier)
@@ -1236,8 +1287,31 @@ def _scaling_bonus(state: CombatState, card: Card) -> int:
         Scaling.PLAYED: state.plays_this_turn,
         Scaling.EMPTY_SLOT: max(0, FIELD_SIZE - permanent_count(state)),
         Scaling.MALWARE: state.enemy_status.get(Status.MALWARE, 0),
+        **_position_counts(state),
     }[card.scaling]
     return card.scale_value * count
+
+
+def _position_counts(state: CombatState) -> dict[Scaling, int]:
+    """What the position scalings count for the line resolving now - all 0
+    outside a program."""
+    if state.line_position is None:
+        return {Scaling.LINES: 0, Scaling.FIRST_LINE: 0, Scaling.LAST_LINE: 0}
+    rank, lines = state.line_position
+    return {
+        Scaling.LINES: lines - 1,
+        Scaling.FIRST_LINE: int(rank == 0),
+        Scaling.LAST_LINE: int(rank == lines - 1),
+    }
+
+
+def _run_order(state: CombatState) -> list[int]:
+    """The program's lines in the order they run: left to right, or right to
+    left against a refactoring boss."""
+    order = list(range(len(state.program)))
+    if state.enemy_intent is EnemyIntentType.REFACTOR:
+        order.reverse()
+    return order
 
 
 def action_preview(
@@ -1256,6 +1330,19 @@ def action_preview(
     hot = total(state.artifacts, "hot_path") - 1
     if queues(state, card) and slot_index == hot and can_upgrade(card):
         card = upgrade_card(card)  # Hot Path runs it upgraded
+    if queues(state, card):
+        # where the line would stand among the queued ones, once played
+        lines = [s for s in _run_order(state) if s == slot_index or state.program[s] is not None]
+        state.line_position = (lines.index(slot_index), len(lines))
+    try:
+        return _action_number(state, card, player, slot_index)
+    finally:
+        state.line_position = None
+
+
+def _action_number(
+    state: CombatState, card: Card, player: PlayerState, slot_index: int
+) -> int | None:
     multiplier = _amplifier_multiplier(state, slot_index)
     bonus = _chain_bonus(state, slot_index)
     if card.type is CardType.ATTACK:

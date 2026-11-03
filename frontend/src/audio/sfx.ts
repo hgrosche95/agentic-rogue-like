@@ -42,6 +42,7 @@ export type SfxName =
   | "select"
   | "card_flight"
   | "map_select"
+  | "jump"
   | "click"
   | "error";
 
@@ -294,6 +295,12 @@ const SOUNDS: Record<SfxName, Sound> = {
     noise(g, t, { dur: 0.015, gain: 0.12, filter: "bandpass", freq: 3200, q: 3 });
     tone(g, t + 0.03, { type: "square", freq: 660, dur: 0.06, gain: 0.07, attack: 0.001 });
     tone(g, t + 0.1, { type: "square", freq: 990, dur: 0.1, gain: 0.07, attack: 0.001 });
+  },
+  jump(g, t) {
+    // dropping a layer deeper: a rising rush of air, a sub thump on arrival
+    noise(g, t, { dur: 0.55, gain: 0.12, filter: "bandpass", freq: 300, to: 4200, q: 1.1, attack: 0.25 });
+    tone(g, t, { type: "sawtooth", freq: 80, to: 640, dur: 0.5, gain: 0.05, filter: 1800, attack: 0.2 });
+    tone(g, t + 0.52, { type: "sine", freq: 120, to: 48, dur: 0.22, gain: 0.22, attack: 0.002 });
   },
   click(g, t) {
     tone(g, t, { type: "square", freq: 900, dur: 0.03, gain: 0.05, attack: 0.001 });

@@ -27,6 +27,7 @@ import logging
 import os
 import random
 import time
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,6 +50,7 @@ from .combat import (
     overflows,
     player_armor,
     program_preview,
+    take_back,
     token_regen,
 )
 from .enemies import FINAL_BOSS_ID
@@ -153,6 +155,8 @@ class CardView(BaseModel):
     applies_amount: int
     upgraded: bool
     token_cost: int
+    # Program mode: the program ends after its line (Segfault).
+    halts: bool = False
 
     @classmethod
     def of(cls, card: Card) -> CardView:
@@ -171,6 +175,7 @@ class CardView(BaseModel):
             applies_amount=card.applies_amount,
             upgraded=card.upgraded,
             token_cost=card.token_cost,
+            halts=card.halts,
         )
 
 
@@ -477,6 +482,13 @@ class PlayCardRequest(BaseModel):
 class MoveQueuedRequest(BaseModel):
     from_slot: int
     to_slot: int
+
+
+class TakeBackRequest(BaseModel):
+    # "program": a queued line; "field": a permanent (its slot, or its place
+    # in the background in program mode)
+    zone: Literal["program", "field"]
+    index: int
 
 
 class EndTurnRequest(BaseModel):
@@ -866,6 +878,19 @@ def move_queued_endpoint(run_id: str, request: MoveQueuedRequest) -> RunView:
         raise HTTPException(status_code=409, detail="no combat in progress")
     try:
         move_queued(session.combat, request.from_slot, request.to_slot)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _run_view(run_id, session)
+
+
+@app.post("/runs/{run_id}/combat/take-back")
+def take_back_endpoint(run_id: str, request: TakeBackRequest) -> RunView:
+    """Take a queued line or a permanent back into the hand (combat.take_back)."""
+    session = _get_session_or_404(run_id)
+    if session.combat is None:
+        raise HTTPException(status_code=409, detail="no combat in progress")
+    try:
+        session.run.history.append(take_back(session.combat, request.zone, request.index))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _run_view(run_id, session)
