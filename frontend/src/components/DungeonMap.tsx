@@ -164,6 +164,8 @@ export function DungeonMap({
   act?: number;
 }) {
   const isHorizontal = useIsHorizontal();
+  // the room under the pointer, for the route to it
+  const [pointed, setPointed] = useState<string | null>(null);
 
   const { byFloor, maxRows, numFloors } = useMemo(() => {
     const byFloor = new Map<number, MapNode[]>();
@@ -213,6 +215,39 @@ export function DungeonMap({
     ? allNodes.find((n) => n.visited && n.connections.includes(currentNodeId))?.id
     : currentNodeId;
 
+  // Everything still ahead: the rooms the trails lead to from where you
+  // stand (or from the room the pending pick left). The rest of the layers
+  // to come is out of reach and steps back, so the ways you can still go
+  // stand out.
+  const ahead = new Set<string>();
+  if (originId) {
+    const queue = [originId];
+    while (queue.length > 0) {
+      const id = queue.pop() as string;
+      for (const next of nodes[id]?.connections ?? []) {
+        if (!ahead.has(next)) {
+          ahead.add(next);
+          queue.push(next);
+        }
+      }
+    }
+  }
+  const onWay = (id: string) => id === originId || ahead.has(id);
+  // A room pointed at: every way there from here lights up.
+  const route = new Set<string>();
+  if (pointed && ahead.has(pointed) && originId) {
+    const leadsThere = (id: string, seen: Map<string, boolean>): boolean => {
+      if (id === pointed) return true;
+      if (seen.has(id)) return seen.get(id) as boolean;
+      seen.set(id, false);
+      const there = (nodes[id]?.connections ?? []).some((next) => ahead.has(next) && leadsThere(next, seen));
+      seen.set(id, there);
+      return there;
+    };
+    const seen = new Map<string, boolean>();
+    for (const id of [originId, ...ahead]) if (leadsThere(id, seen)) route.add(id);
+  }
+
   return (
     <div className={`dungeon-map${disabled ? " is-busy" : ""}`}>
       <svg className="dungeon-map-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Call stack map">
@@ -245,7 +280,18 @@ export function DungeonMap({
             if (!target) return null;
             const walked = node.visited && target.visited;
             const isNext = node.id === originId && reachable.has(targetId);
-            const classes = ["map-path", walked && "is-walked", isNext && "is-next"].filter(Boolean).join(" ");
+            const isAhead = onWay(node.id) && ahead.has(targetId);
+            const onRoute = route.has(node.id) && route.has(targetId);
+            const classes = [
+              "map-path",
+              walked && "is-walked",
+              isNext && "is-next",
+              isAhead && "is-ahead",
+              onRoute && "is-route",
+              !walked && !isAhead && "is-cut",
+            ]
+              .filter(Boolean)
+              .join(" ");
             return <path key={`${node.id}->${targetId}`} d={trail(from, pos(target), isHorizontal)} className={classes} />;
           });
         })}
@@ -273,6 +319,9 @@ export function DungeonMap({
             isPassed && "is-passed",
             isReachable && "is-reachable",
             isEnterable && "is-enterable",
+            // a later room no trail from here leads to
+            !isCurrent && !node.visited && node.floor > currentFloor && !ahead.has(node.id) && "is-cut",
+            route.has(node.id) && node.id !== originId && "is-on-route",
           ]
             .filter(Boolean)
             .join(" ");
@@ -294,11 +343,13 @@ export function DungeonMap({
               tabIndex={interactive ? 0 : undefined}
               aria-label={`${isEnterable ? "Enter " : ""}${style.label}, ${layerLabel(node.floor, numFloors, act)}`}
               onMouseEnter={() => {
+                if (ahead.has(node.id)) setPointed(node.id);
                 if (!interactive) return;
                 sfx.play("hover");
                 if (isReachable) onHover?.(node.id);
               }}
               onMouseLeave={() => {
+                setPointed((p) => (p === node.id ? null : p));
                 if (interactive && isReachable) onHover?.(null);
               }}
               onFocus={() => {

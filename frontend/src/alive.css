@@ -622,3 +622,36 @@ button.is-busy:disabled {
     display: none;
   }
 }
+
+/* ---------- the map: the ways still open stand out ---------- */
+/* rooms and trails no way from here leads to step back */
+.map-node.is-cut {
+  opacity: 0.22;
+  filter: grayscale(0.85);
+}
+
+.map-path.is-cut {
+  opacity: 0.18;
+}
+
+/* the trails still open: brighter than the old flat line */
+.map-path.is-ahead {
+  stroke: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+/* pointing at a room lights every way there */
+.map-path.is-route {
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 5px var(--accent));
+}
+
+.map-node.is-on-route .map-node-shape {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.map-node:not(.is-cut) {
+  transition:
+    opacity var(--dur, 0.3s) var(--ease-out, ease-out),
+    filter var(--dur, 0.3s) var(--ease-out, ease-out);
+}
