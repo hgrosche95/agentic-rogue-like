@@ -266,6 +266,11 @@ export interface PendingCombatView {
   // per field slot: taking it back banishes it (it has run since an earlier
   // turn) instead of returning it to the hand
   field_uninstalls: boolean[];
+  // the piles' cards by name: Cache and Purged in order (latest last), the
+  // Source pile sorted
+  draw_names: string[];
+  discard_names: string[];
+  banished_names: string[];
   player_block: number;
   armor: number;
   max_hand_size: number;

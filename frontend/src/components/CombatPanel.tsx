@@ -89,7 +89,33 @@ function KeyHint({ children, className = "" }: { children: ReactNode; className?
 // `term`: the keyword (keywords.ts) the pile's tooltip explains
 // A pile with its count. When the count changes it bumps and shows by how
 // much ("+1", "−2") for a moment - cards visibly arriving or leaving.
-function Pile({ label, count, kind, term }: { label: string; count: number; kind: string; term: string }) {
+// What a pile holds, for its tooltip: the Cache and Purged pile their latest
+// cards first, the Source pile what is left in it - counted, without its order.
+const PEEK_CARDS = 5;
+
+function peekLines(names: string[], ordered: boolean): string[] {
+  if (!ordered) {
+    const counts = new Map<string, number>();
+    for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
+    return [...counts].map(([name, n]) => (n > 1 ? `${n}× ${name}` : name));
+  }
+  const latest = names.slice(-PEEK_CARDS).reverse();
+  return names.length > PEEK_CARDS ? [...latest, `+${names.length - PEEK_CARDS} more`] : latest;
+}
+
+function Pile({
+  label,
+  count,
+  kind,
+  term,
+  names,
+}: {
+  label: string;
+  count: number;
+  kind: string;
+  term: string;
+  names?: string[];
+}) {
   const [last, setLast] = useState(count);
   const [delta, setDelta] = useState<{ n: number; id: number } | null>(null);
   if (count !== last) {
@@ -98,7 +124,13 @@ function Pile({ label, count, kind, term }: { label: string; count: number; kind
     setDelta({ n: count - last, id: (delta?.id ?? 0) + 1 });
   }
   return (
-    <div className={`pile pile-${kind}`} data-keyword={term} tabIndex={0}>
+    <div
+      className={`pile pile-${kind}`}
+      data-keyword={term}
+      data-tip-list={names ? peekLines(names, kind !== "deck").join("\n") : undefined}
+      data-tip-list-label={kind === "deck" ? "in it, shuffled" : "latest first"}
+      tabIndex={0}
+    >
       <div key={delta?.id ?? 0} className={`pile-face${delta ? " is-bumped" : ""}`}>
         <span className="pile-count">{count}</span>
         {delta && (
@@ -727,6 +759,25 @@ export function CombatPanel({
     combat.enemy_intent_name,
   );
 
+  // what ending the turn now leads to, under the button's label
+  const endTurnNote = !attacking
+    ? `next: ${intent.label.toLowerCase()}`
+    : combat.incoming_max === 0
+      ? "you block it all"
+      : combat.incoming_max >= player.hp
+        ? `lethal: ${rangeText(combat.incoming_min, combat.incoming_max)}`
+        : `you take ${rangeText(combat.incoming_min, combat.incoming_max)}`;
+  // nothing left that could go anywhere - the button calls, calmly
+  const turnDone =
+    !busy &&
+    !enemySlain &&
+    !choosing &&
+    (combat.hand.length === 0 ||
+      (programMode
+        ? combat.program.every((c, i) => c !== null || combat.locked_slots.includes(i)) &&
+          !combat.hand.some((c) => PERMANENT_CARD_TYPES.includes(c.type))
+        : combat.field.every((c, i) => c !== null || combat.locked_slots.includes(i))));
+
   return (
     <div className={`combat-panel${programMode ? " is-program" : ""}${choosing ? " is-discarding" : ""}`}>
       {helpOpen && (
@@ -1005,7 +1056,7 @@ export function CombatPanel({
       </div>
 
       <div className="battlefield">
-        <Pile label="Source" count={combat.draw_count} kind="deck" term="source" />
+        <Pile label="Source" count={combat.draw_count} kind="deck" term="source" names={combat.draw_names} />
 
         <div className="hand-zone">
           {/* over the hand limit: hard to miss, or the turn seems stuck */}
@@ -1070,7 +1121,7 @@ export function CombatPanel({
           ) : (
             // busy: still shown at work (a sweep of light), never just dead
             <button
-              className={`end-turn-button${busy ? " is-busy" : ""}${discarding !== null ? (discarding.length === excess ? " is-ready" : " is-waiting") : banishing !== null ? " is-waiting" : ""}`}
+              className={`end-turn-button${busy ? " is-busy" : ""}${turnDone ? " is-done" : ""}${discarding !== null ? (discarding.length === excess ? " is-ready" : " is-waiting") : banishing !== null ? " is-waiting" : ""}`}
               disabled={busy || banishing !== null || (discarding !== null && discarding.length !== excess)}
               aria-busy={busy}
               onClick={endTurn}
@@ -1081,6 +1132,7 @@ export function CombatPanel({
                   ? "Run program"
                   : "End turn"}
               <KeyHint>Space</KeyHint>
+              <small className="end-turn-note">{endTurnNote}</small>
             </button>
           )}
           {choosing && (
@@ -1098,8 +1150,20 @@ export function CombatPanel({
             </button>
           )}
           <div className="side-piles">
-            <Pile label="Cache" count={combat.discard_count} kind="graveyard" term="graveyard" />
-            <Pile label="Purged" count={combat.banished_count} kind="banished" term="banished" />
+            <Pile
+              label="Cache"
+              count={combat.discard_count}
+              kind="graveyard"
+              term="graveyard"
+              names={combat.discard_names}
+            />
+            <Pile
+              label="Purged"
+              count={combat.banished_count}
+              kind="banished"
+              term="banished"
+              names={combat.banished_names}
+            />
           </div>
         </div>
       </div>

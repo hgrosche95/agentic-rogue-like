@@ -654,6 +654,11 @@ def test_api_purges_the_chosen_card() -> None:
     response = client.post(url, json={"hand_index": 0, "slot_index": 0, "banish_indices": [2]})
     assert response.json()["pending_combat"]["banished_count"] == 2
     assert [c.name for c in get_session(run_id).combat.banished_pile] == ["Firewall", "Purge"]
+    # the piles' names, for the UI's peek at them
+    view = response.json()["pending_combat"]
+    assert view["banished_names"] == ["Firewall", "Purge"]
+    assert view["draw_names"] == sorted(view["draw_names"])
+    assert len(view["draw_names"]) == view["draw_count"]
 
 
 # ---- registers, exceptions and named combos

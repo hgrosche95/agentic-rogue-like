@@ -313,3 +313,79 @@
     opacity: 0;
   }
 }
+
+/* ---------- the hand: neighbours make room for the card under the pointer ---------- */
+@media (hover: hover) {
+  .hand .hand-card {
+    transition-property: transform, box-shadow, border-color, opacity, translate;
+  }
+  .hand .hand-card:hover:not(:disabled) + .hand-card {
+    translate: 16px 0;
+  }
+  .hand .hand-card:hover:not(:disabled) + .hand-card + .hand-card {
+    translate: 6px 0;
+  }
+  .hand .hand-card:has(+ .hand-card:hover:not(:disabled)) {
+    translate: -16px 0;
+  }
+  .hand .hand-card:has(+ .hand-card + .hand-card:hover:not(:disabled)) {
+    translate: -6px 0;
+  }
+}
+
+/* ---------- end turn: what it leads to, and a calm call once the turn is done ---------- */
+.end-turn-note {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
+}
+
+.end-turn-button.is-done:not(:disabled) {
+  animation: turn-done 2.4s var(--ease-in-out, ease-in-out) infinite;
+}
+
+@keyframes turn-done {
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(255, 216, 74, 0.35),
+      0 0 34px rgba(255, 216, 74, 0.85);
+  }
+}
+
+/* ---------- a peek into a pile: a list under its tooltip ---------- */
+.tooltip-list {
+  display: grid;
+  gap: 1px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line, #2c2960);
+}
+
+.tooltip-list em {
+  margin-bottom: 2px;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.tooltip-list > span {
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip-list .is-empty {
+  color: var(--text-dim, #8f8ac7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .end-turn-button.is-done:not(:disabled) {
+    animation: none;
+  }
+}
