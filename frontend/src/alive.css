@@ -729,3 +729,40 @@ button.is-busy:disabled {
   background: #6dffa8;
   box-shadow: 0 0 14px #6dffa8;
 }
+
+/* ---------- artifacts in a fight: a row of icons, the rest in the tooltip ---------- */
+.artifact-bar .artifact-chip {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 9px;
+}
+
+/* the timer of an every-Nth-turn artifact: a badge on its corner */
+.artifact-bar .artifact-timer {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  min-width: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  font-size: 9px;
+  line-height: 15px;
+  text-align: center;
+}
+
+.artifact-bar .artifact-chip.is-pulsed {
+  animation-name: artifact-pulse;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
