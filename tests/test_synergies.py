@@ -350,3 +350,19 @@ def test_every_upgrade_changes_more_than_its_text() -> None:
             for field, value in changes.items()
             if field != "description"
         ), name
+
+
+def test_bot_heads_for_elites_while_healthy_and_for_rest_when_hurt() -> None:
+    from agentic_rogue_like.balance_sim import pick_path
+    from agentic_rogue_like.models import MapNode, NodeType
+
+    nodes = {
+        "e": MapNode(id="e", floor=1, type=NodeType.ELITE, connections=[]),
+        "r": MapNode(id="r", floor=1, type=NodeType.REST, connections=[]),
+        "c": MapNode(id="c", floor=1, type=NodeType.COMBAT, connections=[]),
+    }
+    player = PlayerState(hp=60, max_hp=60, attack=0, deck=[])
+    assert pick_path(["c", "e", "r"], nodes, player, "smart", random.Random(0)) == "e"
+    player.hp = 20
+    assert pick_path(["c", "e", "r"], nodes, player, "smart", random.Random(0)) == "r"
+    assert pick_path(["c", "e"], nodes, player, "smart", random.Random(0)) == "c"

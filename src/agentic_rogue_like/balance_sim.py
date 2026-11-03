@@ -817,6 +817,34 @@ class RunResult:
     act_reached: int = 1
 
 
+# Above this share of max HP the smart bot goes looking for elites (an
+# artifact each); below REST_BELOW it heads for a safehouse instead.
+ELITE_HUNT_ABOVE = 0.65
+REST_BELOW = 0.45
+
+
+def pick_path(
+    connections: list[str], nodes: dict, player: PlayerState, bot_name: str, rng: random.Random
+) -> str:
+    """The next room. Naive: at random. Smart: like a player who knows that
+    elites pay an artifact - toward one while healthy, away from it and
+    toward a safehouse while hurt; otherwise at random."""
+    if bot_name == "naive":
+        return rng.choice(connections)
+    share = player.hp / max(player.max_hp, 1)
+
+    def worth(node_id: str) -> int:
+        kind = nodes[node_id].type
+        if kind is NodeType.ELITE:
+            return 2 if share >= ELITE_HUNT_ABOVE else -2
+        if kind is NodeType.REST:
+            return 2 if share < REST_BELOW else 0
+        return 0
+
+    best = max(worth(n) for n in connections)
+    return rng.choice([n for n in connections if worth(n) == best])
+
+
 def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -> RunResult:
     """A full run on a real generated map, picking a random path forward.
 
@@ -897,7 +925,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
             event = random_event(rng)
             option = pick_event_option(event, player, bot_name, rng)
             apply_option(option, player, pool, rng)
-        node = nodes[rng.choice(node.connections)]
+        node = nodes[pick_path(node.connections, nodes, player, bot_name, rng)]
         steps += 1
 
 
