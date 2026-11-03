@@ -253,6 +253,12 @@ class PendingCombatView(BaseModel):
     # (banished - it has run since an earlier turn) instead of returning it
     # to the hand (combat.take_back)
     field_uninstalls: list[bool] = Field(default_factory=list)
+    # The piles' cards by name, for a peek at them: the Cache and the Purged
+    # pile in the order they went there (the latest last), the Source pile
+    # sorted - its order is the draw's secret.
+    draw_names: list[str] = Field(default_factory=list)
+    discard_names: list[str] = Field(default_factory=list)
+    banished_names: list[str] = Field(default_factory=list)
     # Program mode (RunState.program_mode): the actions queued per line, run
     # left to right at the end of the turn, and which of them will
     # hallucinate. All null / false in a classic run.
@@ -683,6 +689,9 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             draw_count=len(combat.draw_pile),
             discard_count=len(combat.discard_pile),
             banished_count=len(combat.banished_pile),
+            draw_names=sorted(card.name for card in combat.draw_pile),
+            discard_names=[card.name for card in combat.discard_pile],
+            banished_names=[card.name for card in combat.banished_pile],
             token_limit=combat.token_limit,
             tokens_used=combat.tokens_used,
             token_regen=token_regen(combat) if combat.token_limit is not None else 0,

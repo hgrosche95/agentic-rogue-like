@@ -405,6 +405,7 @@ export function ProgramLines({
           <span
             key={i}
             className={`line-socket is-installed type-${card.type}${card === landing ? " is-landing" : ""}`}
+            data-field-card={card === landing ? undefined : card.id}
             title={`${card.name}: ${cardText(card, true)}`}
           >
             <CardTypeIcon type={card.type} />

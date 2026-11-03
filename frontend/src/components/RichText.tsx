@@ -32,12 +32,22 @@ const LONG_PRESS_SLOP_PX = 8;
 const EDGE_PX = 8;
 const GAP_PX = 8;
 
-function tipOf(el: Element): { term?: string; text: string } | null {
+// `data-tip-list` (lines) and `data-tip-list-label`: a short list under the
+// text - what a pile holds, say.
+interface Tip {
+  term?: string;
+  text: string;
+  list?: { label: string; items: string[] };
+}
+
+function tipOf(el: Element): Tip | null {
+  const lines = el.getAttribute("data-tip-list");
+  const list = lines !== null ? { label: el.getAttribute("data-tip-list-label") ?? "", items: lines ? lines.split("\n") : [] } : undefined;
   const id = el.getAttribute("data-keyword");
   const known = id ? keyword(id) : undefined;
-  if (known) return { term: known.term, text: known.text };
+  if (known) return { term: known.term, text: known.text, list };
   const text = el.getAttribute("data-tip");
-  return text ? { term: el.getAttribute("data-tip-term") ?? undefined, text } : null;
+  return text ? { term: el.getAttribute("data-tip-term") ?? undefined, text, list } : null;
 }
 
 // One tooltip for the whole page: whatever term or [data-tip] is hovered,
@@ -176,6 +186,12 @@ export function Tooltips() {
     <div ref={box} id={TOOLTIP_ID} className="tooltip" role="tooltip">
       {tip.term && <b className="tooltip-term">{tip.term}</b>}
       {tip.text}
+      {tip.list && (
+        <span className="tooltip-list">
+          <em>{tip.list.label}</em>
+          {tip.list.items.length === 0 ? <span className="is-empty">empty</span> : tip.list.items.map((item, i) => <span key={i}>{item}</span>)}
+        </span>
+      )}
     </div>,
     document.body,
   );

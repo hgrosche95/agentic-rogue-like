@@ -1305,8 +1305,14 @@ export class PixelScene {
     // goggles: strap and a glowing lens
     this.rect(hx - 4, oy - 31, 9, 1, C.cloth0);
     this.rect(hx + 1, oy - 32, 3, 3, C.brass);
-    const lens = this.rim > 0.5 ? C.white : C.amberHi;
+    // now and then the lens catches the light: a glint with a sparkle
+    const glint = !this.reducedMotion && this.tick % 420 < 8;
+    const lens = this.rim > 0.5 || glint ? C.white : C.amberHi;
     this.rect(hx + 2, oy - 31, 1, 1, lens);
+    if (glint && this.tick % 420 < 5) {
+      this.rect(hx + 4, oy - 34, 1, 1, C.white);
+      this.rect(hx + 5, oy - 35, 1, 1, C.amberHi);
+    }
     this.rect(hx + 4, oy - 32, 1, 2, C.brassDark);
     // moustache
     this.rect(hx + 2, oy - 28, 5, 1, C.white);

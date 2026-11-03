@@ -9,7 +9,7 @@ import {
 } from "../api";
 import { cardSound, hitsOf, sfx } from "../audio";
 import { splitTaunt, useBanners } from "../banners";
-import { flyCard } from "../cardFlight";
+import { dissolveToPurged, flyCard } from "../cardFlight";
 import { ArtifactBar } from "./ArtifactBar";
 import { activeArtifactsLine } from "../artifactTimers";
 import { HERO } from "../characters";
@@ -20,6 +20,8 @@ import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { useSequence } from "../hooks/useSequence";
 import { describeIntent, rangeText, STATUS_TEXT } from "../readouts";
+import { StatChip } from "./StatChip";
+import { firingArtifacts } from "../artifactPulse";
 import { tempoMs } from "../tempo";
 import { CardFace, type Readout } from "./CardFace";
 import { CombatHelp, HelpButton } from "./CombatHelp";
@@ -64,16 +66,16 @@ function TokenMeter({ combat }: { combat: PendingCombatView }) {
 function StatusBadges({ statuses }: { statuses: Partial<Record<Status, number>> }) {
   return (
     <>
-      {(Object.entries(statuses) as [Status, number][]).map(([status, left]) => (
-        <span
+      {(["malware", "exposed", "throttled"] as Status[]).map((status) => (
+        <StatChip
           key={status}
           className={`status-badge is-${status}`}
-          tabIndex={0}
-          data-tip-term={status}
-          data-tip={STATUS_TEXT[status]}
-        >
-          {status} {left}
-        </span>
+          icon={status}
+          label={status}
+          value={statuses[status] ?? 0}
+          tip={STATUS_TEXT[status]}
+          tipTerm={status}
+        />
       ))}
     </>
   );
@@ -89,11 +91,57 @@ function KeyHint({ children, className = "" }: { children: ReactNode; className?
 }
 
 // `term`: the keyword (keywords.ts) the pile's tooltip explains
-function Pile({ label, count, kind, term }: { label: string; count: number; kind: string; term: string }) {
+// A pile with its count. When the count changes it bumps and shows by how
+// much ("+1", "−2") for a moment - cards visibly arriving or leaving.
+// What a pile holds, for its tooltip: the Cache and Purged pile their latest
+// cards first, the Source pile what is left in it - counted, without its order.
+const PEEK_CARDS = 5;
+
+function peekLines(names: string[], ordered: boolean): string[] {
+  if (!ordered) {
+    const counts = new Map<string, number>();
+    for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
+    return [...counts].map(([name, n]) => (n > 1 ? `${n}× ${name}` : name));
+  }
+  const latest = names.slice(-PEEK_CARDS).reverse();
+  return names.length > PEEK_CARDS ? [...latest, `+${names.length - PEEK_CARDS} more`] : latest;
+}
+
+function Pile({
+  label,
+  count,
+  kind,
+  term,
+  names,
+}: {
+  label: string;
+  count: number;
+  kind: string;
+  term: string;
+  names?: string[];
+}) {
+  const [last, setLast] = useState(count);
+  const [delta, setDelta] = useState<{ n: number; id: number } | null>(null);
+  if (count !== last) {
+    // derived during render, React's pattern for state that follows a prop
+    setLast(count);
+    setDelta({ n: count - last, id: (delta?.id ?? 0) + 1 });
+  }
   return (
-    <div className={`pile pile-${kind}`} data-keyword={term} tabIndex={0}>
-      <div className="pile-face">
+    <div
+      className={`pile pile-${kind}`}
+      data-keyword={term}
+      data-tip-list={names ? peekLines(names, kind !== "deck").join("\n") : undefined}
+      data-tip-list-label={kind === "deck" ? "in it, shuffled" : "latest first"}
+      tabIndex={0}
+    >
+      <div key={delta?.id ?? 0} className={`pile-face${delta ? " is-bumped" : ""}`}>
         <span className="pile-count">{count}</span>
+        {delta && (
+          <b className={`pile-delta${delta.n < 0 ? " is-minus" : ""}`} aria-hidden="true">
+            {delta.n > 0 ? `+${delta.n}` : `−${-delta.n}`}
+          </b>
+        )}
       </div>
       <span className="pile-label">{label}</span>
     </div>
@@ -298,6 +346,29 @@ export function CombatPanel({
   useHandFlip(handRef, laidOut.map((card) => handKeys[combat.hand.indexOf(card)]).join(" "));
   const arenaRef = useRef<ArenaHandle>(null);
   const fieldRef = useRef<HTMLDivElement>(null);
+  // The permanents' last pictures, so one that leaves the field without
+  // coming back to the hand (destroyed, purged, uninstalled) can be shown
+  // coming apart on its way to the Purged pile (cardFlight.dissolveToPurged).
+  const fieldShots = useRef(new Map<string, { ghost: HTMLElement; rect: DOMRect }>());
+  const purgedBefore = useRef(combat.banished_count);
+  useLayoutEffect(() => {
+    const root = fieldRef.current;
+    if (!root) return;
+    const now = new Map<string, { ghost: HTMLElement; rect: DOMRect }>();
+    root.querySelectorAll<HTMLElement>("[data-field-card]").forEach((el) => {
+      const id = el.dataset.fieldCard;
+      if (id) now.set(id, { ghost: el.cloneNode(true) as HTMLElement, rect: el.getBoundingClientRect() });
+    });
+    // only while the Purged pile grew - a fight that ends clears the field too
+    if (combat.banished_count > purgedBefore.current) {
+      const inHand = new Set(combat.hand.map((card) => card.id));
+      for (const [id, shot] of fieldShots.current) {
+        if (!now.has(id) && !inHand.has(id)) dissolveToPurged(shot.ghost, shot.rect);
+      }
+    }
+    purgedBefore.current = combat.banished_count;
+    fieldShots.current = now;
+  }, [combat]);
   // Dr. Chronos typing a card in, the program running: skippable
   const sequence = useSequence();
   // What the table looked like when the turn was ended, to tell once the
@@ -567,7 +638,9 @@ export function CombatPanel({
     // a queued line or a permanent stays where it lands; an action burns out there
     const stays = played !== undefined && (queues(combat, played) || PERMANENT_CARD_TYPES.includes(played.type));
     // into the program's background: to the hint, where its socket shows up
-    if (card) flyCard(card, slot.querySelector<HTMLElement>(".background-hint") ?? slot, stays);
+    // an action goes on into its pile once it has burnt out in the slot
+    const pile = stays || !played ? undefined : played.exhaust ? "purged" : "cache";
+    if (card) flyCard(card, slot.querySelector<HTMLElement>(".background-hint") ?? slot, stays, pile);
     setSelectedHandIndex(null);
     setPlayed({ on: combat, handIndex, slotIndex });
     setMoves((m) => ({ ...m, plays: m.plays + 1 }));
@@ -705,6 +778,34 @@ export function CombatPanel({
     combat.enemy_intent_name,
   );
 
+  // the artifacts the newest log lines show at work flash once
+  const [logSeen, setLogSeen] = useState(log.length);
+  const [artifactPulse, setArtifactPulse] = useState<{ ids: string[]; id: number } | null>(null);
+  if (log.length !== logSeen) {
+    setLogSeen(log.length);
+    const ids = log.length > logSeen ? firingArtifacts(log.slice(logSeen), player.artifacts) : [];
+    if (ids.length > 0) setArtifactPulse({ ids, id: (artifactPulse?.id ?? 0) + 1 });
+  }
+
+  // what ending the turn now leads to, under the button's label
+  const endTurnNote = !attacking
+    ? `next: ${intent.label.toLowerCase()}`
+    : combat.incoming_max === 0
+      ? "you block it all"
+      : combat.incoming_max >= player.hp
+        ? `lethal: ${rangeText(combat.incoming_min, combat.incoming_max)}`
+        : `you take ${rangeText(combat.incoming_min, combat.incoming_max)}`;
+  // nothing left that could go anywhere - the button calls, calmly
+  const turnDone =
+    !busy &&
+    !enemySlain &&
+    !choosing &&
+    (combat.hand.length === 0 ||
+      (programMode
+        ? combat.program.every((c, i) => c !== null || combat.locked_slots.includes(i)) &&
+          !combat.hand.some((c) => PERMANENT_CARD_TYPES.includes(c.type))
+        : combat.field.every((c, i) => c !== null || combat.locked_slots.includes(i))));
+
   return (
     <div className={`combat-panel${programMode ? " is-program" : ""}${choosing ? " is-discarding" : ""}`}>
       {helpOpen && (
@@ -766,6 +867,7 @@ export function CombatPanel({
           }}
           exchange={exchange}
           log={log}
+          turn={combat.turn}
           commands={commands}
           typing={typing}
           slain={enemySlain}
@@ -802,11 +904,11 @@ export function CombatPanel({
                       : `Incoming ${rangeText(combat.incoming_min, combat.incoming_max)}`}
                 </span>
               )}
-              {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
-              {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
+              <StatChip className="block-badge" icon="block" label="Block" value={combat.player_block} />
+              <StatChip className="armor-badge" icon="armor" label="Armor" value={combat.armor} />
               <StatusBadges statuses={combat.player_status} />
               {combat.token_limit !== null && <TokenMeter combat={combat} />}
-              <ArtifactBar artifacts={player.artifacts} compact turn={combat.turn} />
+              <ArtifactBar artifacts={player.artifacts} compact turn={combat.turn} pulse={artifactPulse ?? undefined} />
             </div>
           </div>
         </div>
@@ -964,10 +1066,10 @@ export function CombatPanel({
                   onPointerEnter={() => setPointedSlot(slotIndex)}
                   onPointerLeave={() => setPointedSlot((s) => (s === slotIndex ? null : s))}
                 >
-                  <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} />
+                  <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} slots={combat.field.length} />
                 </button>
               ) : (
-                <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
+                <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`} data-field-card={card.id}>
                   <CardFace card={card} onField />
                   <TakeBack
                     name={card.name}
@@ -984,7 +1086,7 @@ export function CombatPanel({
       </div>
 
       <div className="battlefield">
-        <Pile label="Source" count={combat.draw_count} kind="deck" term="source" />
+        <Pile label="Source" count={combat.draw_count} kind="deck" term="source" names={combat.draw_names} />
 
         <div className="hand-zone">
           {/* over the hand limit: hard to miss, or the turn seems stuck */}
@@ -1049,7 +1151,7 @@ export function CombatPanel({
           ) : (
             // busy: still shown at work (a sweep of light), never just dead
             <button
-              className={`end-turn-button${busy ? " is-busy" : ""}${discarding !== null ? (discarding.length === excess ? " is-ready" : " is-waiting") : banishing !== null ? " is-waiting" : ""}`}
+              className={`end-turn-button${busy ? " is-busy" : ""}${turnDone ? " is-done" : ""}${discarding !== null ? (discarding.length === excess ? " is-ready" : " is-waiting") : banishing !== null ? " is-waiting" : ""}`}
               disabled={busy || banishing !== null || (discarding !== null && discarding.length !== excess)}
               aria-busy={busy}
               onClick={endTurn}
@@ -1060,6 +1162,7 @@ export function CombatPanel({
                   ? "Run program"
                   : "End turn"}
               <KeyHint>Space</KeyHint>
+              <small className="end-turn-note">{endTurnNote}</small>
             </button>
           )}
           {choosing && (
@@ -1077,8 +1180,20 @@ export function CombatPanel({
             </button>
           )}
           <div className="side-piles">
-            <Pile label="Cache" count={combat.discard_count} kind="graveyard" term="graveyard" />
-            <Pile label="Purged" count={combat.banished_count} kind="banished" term="banished" />
+            <Pile
+              label="Cache"
+              count={combat.discard_count}
+              kind="graveyard"
+              term="graveyard"
+              names={combat.discard_names}
+            />
+            <Pile
+              label="Purged"
+              count={combat.banished_count}
+              kind="banished"
+              term="banished"
+              names={combat.banished_names}
+            />
           </div>
         </div>
       </div>
