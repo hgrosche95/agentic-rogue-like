@@ -42,10 +42,10 @@ def _player(*artifacts: Artifact, hp: int = 30) -> PlayerState:
     return PlayerState(hp=hp, max_hp=50, attack=0, deck=[STRIKE] * 30, artifacts=list(artifacts))
 
 
-def test_pool_has_twenty_distinct_artifacts() -> None:
-    assert len(ARTIFACT_POOL) == 20
-    assert len({a.id for a in ARTIFACT_POOL}) == 20
-    assert len({a.name for a in ARTIFACT_POOL}) == 20
+def test_pool_has_twenty_four_distinct_artifacts() -> None:
+    assert len(ARTIFACT_POOL) == 24
+    assert len({a.id for a in ARTIFACT_POOL}) == 24
+    assert len({a.name for a in ARTIFACT_POOL}) == 24
     assert all(a.description for a in ARTIFACT_POOL)
 
 

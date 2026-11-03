@@ -70,6 +70,12 @@ export function commandFor(card: Card, enemyName: string, banished: string[] = [
       return `explain --to rubber-duck`;
     case "opener":
       return `pair --driver copilot`;
+    case "quarantine":
+      return `iptables -A INPUT -m malware -j QUARANTINE`;
+    case "recycle":
+      return `trash-restore --on-delete`;
+    case "guard":
+      return `[ $block -ge 5 ] || return`;
     case "glitch":
       return `rm -f ./glitch.tmp`;
     case "fork":

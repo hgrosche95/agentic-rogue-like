@@ -396,7 +396,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         ):
             # Control flow only steers - worth a line once there is
             # something for it to steer; arrange_program puts it in place.
-            order += [CardType.FORK, CardType.IF_WOUNDED]
+            order += [CardType.FORK, CardType.IF_WOUNDED, CardType.GUARD]
             order += [CardType.PIPE, CardType.BATCH]
             # Try/Catch only against an interrupt; a Buffer only with a Flush
             # in hand to let it out again

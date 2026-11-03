@@ -72,6 +72,11 @@ class Artifact(BaseModel):
     tail_call_every: int = 1  # ... on every Nth turn only
     pipeline: int = 0  # flat bonus for the action right after control flow
     compiler_bonus: int = 0  # the last line's action +this per card type that ran before it
+    # Bridges between two play styles (see style.py):
+    graveyard_attack: int = 0  # attacks +this per STACK_TRACE_CARDS cards in the graveyard
+    banish_malware: int = 0  # Malware on the enemy for every card that gets banished
+    turret_malware: int = 0  # Malware on the enemy per turret, every time it fires
+    retain_block: int = 0  # block kept at the end of a round, per permanent on the field
 
 
 class CardType(StrEnum):
@@ -102,6 +107,9 @@ class CardType(StrEnum):
     TOKEN_REGEN = "token_regen"  # frees `value` used tokens at the end of every turn
     SAFEGUARD = "safeguard"  # hallucinating cards fizzle instead of backfiring
     OPENER = "opener"  # the first `value` cards of every turn cost no tokens
+    # Bridges between play styles (style.py):
+    QUARANTINE = "quarantine"  # end of turn: +value block per 2 Malware on the enemy
+    RECYCLE = "recycle"  # draw `value` card(s) whenever a card is banished (capped per turn)
     # Junk an enemy's corrupt move shuffles in: does nothing, gone once played.
     GLITCH = "glitch"
     # Control flow - program mode only (combat.run_program): they steer the
@@ -116,6 +124,8 @@ class CardType(StrEnum):
     TRY_CATCH = "try_catch"  # the lines after it can't be interrupted
     BUFFER = "buffer"  # the next `value` actions store their damage instead of dealing it
     FLUSH = "flush"  # deals the stored damage, +value percent
+    # the next action runs `value` more time(s) if the player has GUARD_BLOCK block
+    GUARD = "guard"
 
 
 # Control flow (program mode, combat.run_program): steers the actions around
@@ -130,6 +140,7 @@ CONTROL_FLOW_TYPES = frozenset(
         CardType.TRY_CATCH,
         CardType.BUFFER,
         CardType.FLUSH,
+        CardType.GUARD,
     }
 )
 
@@ -145,6 +156,8 @@ PERMANENT_CARD_TYPES = frozenset(
         CardType.TOKEN_REGEN,
         CardType.SAFEGUARD,
         CardType.OPENER,
+        CardType.QUARANTINE,
+        CardType.RECYCLE,
     }
 )
 
@@ -170,6 +183,7 @@ class Scaling(StrEnum):
     PLAYED = "played"  # cards already played this turn
     EMPTY_SLOT = "empty_slot"  # empty field slots
     MALWARE = "malware"  # Malware stacks on the enemy
+    BLOCK = "block"  # the block the player has right now
     # Program mode only, by where its line stands in the program as it runs
     # (combat.run_program) - 0 outside a program:
     LINES = "lines"  # the other queued lines (negative scale_value: fewer is better)
@@ -211,6 +225,9 @@ class Card(BaseModel):
     # Program mode: the program ends right after this card's line has run -
     # the lines after it don't run this turn (combat.run_program).
     halts: bool = False
+    # Damage dealt to the enemy when this card gets banished - destroyed,
+    # purged, taken back from the field, or used up (combat._banish).
+    banish_damage: int = 0
 
 
 class Character(StrEnum):

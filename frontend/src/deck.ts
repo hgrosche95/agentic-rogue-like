@@ -23,6 +23,8 @@ const TYPE_ORDER: CardType[] = [
   "token_regen",
   "safeguard",
   "opener",
+  "quarantine",
+  "recycle",
 ];
 
 // How cards are listed: in TYPE_ORDER, then by name.

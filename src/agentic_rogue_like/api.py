@@ -52,6 +52,7 @@ from .combat import (
     program_preview,
     take_back,
     token_regen,
+    uninstalls,
 )
 from .enemies import FINAL_BOSS_ID
 from .engine import (
@@ -242,6 +243,10 @@ class PendingCombatView(BaseModel):
     locked_slots: list[int]
     hand: list[HandCardView]
     field: list[CardView | None]
+    # per field slot: whether taking that permanent back uninstalls it
+    # (banished - it has run since an earlier turn) instead of returning it
+    # to the hand (combat.take_back)
+    field_uninstalls: list[bool] = Field(default_factory=list)
     # Program mode (RunState.program_mode): the actions queued per line, run
     # left to right at the end of the turn, and which of them will
     # hallucinate. All null / false in a classic run.
@@ -648,6 +653,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
                 for i, card in enumerate(combat.hand)
             ],
             field=[None if card is None else CardView.of(card) for card in combat.field],
+            field_uninstalls=[uninstalls(combat, i) for i in range(len(combat.field))],
             program_mode=combat.program_mode,
             program=[None if card is None else CardView.of(card) for card in combat.program],
             program_glitched=combat.program_glitched,
@@ -890,9 +896,14 @@ def take_back_endpoint(run_id: str, request: TakeBackRequest) -> RunView:
     if session.combat is None:
         raise HTTPException(status_code=409, detail="no combat in progress")
     try:
-        session.run.history.append(take_back(session.combat, request.zone, request.index))
+        session.run.history.append(
+            take_back(session.combat, request.zone, request.index, session.rng)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # An uninstalled Failsafe can finish the enemy off.
+    if session.run.player.hp <= 0 or session.combat.enemy_hp <= 0:
+        _finish_fight(session)
     return _run_view(run_id, session)
 
 

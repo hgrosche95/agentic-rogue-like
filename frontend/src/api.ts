@@ -27,6 +27,9 @@ export type CardType =
   | "token_regen"
   | "safeguard"
   | "opener"
+  // bridges between play styles
+  | "quarantine"
+  | "recycle"
   // junk an enemy's corrupt move shuffles in
   | "glitch"
   // control flow - program mode only
@@ -39,7 +42,8 @@ export type CardType =
   // registers and exceptions
   | "try_catch"
   | "buffer"
-  | "flush";
+  | "flush"
+  | "guard";
 
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
@@ -52,6 +56,8 @@ export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "token_regen",
   "safeguard",
   "opener",
+  "quarantine",
+  "recycle",
 ];
 
 // Program mode: what queues into the program instead of resolving on the
@@ -65,6 +71,7 @@ export const CONTROL_FLOW_TYPES: readonly CardType[] = [
   "try_catch",
   "buffer",
   "flush",
+  "guard",
 ];
 export const QUEUED_TYPES: readonly CardType[] = [
   "attack",
@@ -256,6 +263,9 @@ export interface PendingCombatView {
   locked_slots: number[];
   hand: HandCardView[];
   field: (Card | null)[];
+  // per field slot: taking it back banishes it (it has run since an earlier
+  // turn) instead of returning it to the hand
+  field_uninstalls: boolean[];
   player_block: number;
   armor: number;
   max_hand_size: number;

@@ -71,6 +71,8 @@ const STAT: Partial<Record<CardType, { icon: StatIcon; unit: string; sign?: "+" 
   chain: { icon: "damage", unit: "per card", sign: "+" },
   token_regen: { icon: "token", unit: "per turn", sign: "+" },
   opener: { icon: "token", unit: "free / turn" },
+  quarantine: { icon: "shield", unit: "per 2 malware", sign: "+" },
+  recycle: { icon: "cards", unit: "per banish" },
   pipe: { icon: "damage", unit: "per action", sign: "+" },
   batch: { icon: "token", unit: "per action" },
   buffer: { icon: "clock", unit: "stored" },

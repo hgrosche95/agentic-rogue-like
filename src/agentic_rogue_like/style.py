@@ -79,7 +79,8 @@ COUNTER_AFFIX: dict[PlayStyle, Affix | None] = {
 
 def card_styles(card: Card) -> set[PlayStyle]:
     """Every style a card feeds - one card can feed several specific ones,
-    and only a card with none of those counts as aggro or turtle."""
+    and only a card with none of those counts as aggro or turtle (unless it
+    is a bridge that names them)."""
     styles: set[PlayStyle] = set()
     if card.type in PERMANENT_CARD_TYPES or card.scaling in (Scaling.PERMANENT, Scaling.EMPTY_SLOT):
         styles.add(PlayStyle.PERMANENTS)
@@ -91,6 +92,17 @@ def card_styles(card: Card) -> set[PlayStyle]:
         styles.add(PlayStyle.MALWARE)
     if card.type in CONTROL_FLOW_TYPES:
         styles.add(PlayStyle.PROGRAM)
+    # The bridges (cards.py) feed both styles they join.
+    if card.banish_damage or card.type is CardType.RECYCLE:
+        styles.add(PlayStyle.ONE_SHOT)
+    if card.type is CardType.RECYCLE:
+        styles.add(PlayStyle.GRAVEYARD)
+    if card.type is CardType.QUARANTINE:
+        styles |= {PlayStyle.MALWARE, PlayStyle.TURTLE}
+    if card.scaling is Scaling.BLOCK:
+        styles |= {PlayStyle.AGGRO, PlayStyle.TURTLE}
+    if card.type is CardType.GUARD:
+        styles.add(PlayStyle.TURTLE)
     # Plain attacks and plain defence only - a Trojan is a malware card that
     # happens to hit, not an aggro one, or every specific style would tie.
     if not styles and card.type is CardType.ATTACK:

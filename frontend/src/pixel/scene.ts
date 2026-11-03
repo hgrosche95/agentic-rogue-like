@@ -58,6 +58,8 @@ const EV: Record<ArenaEvent, number> = {
   free_play: 8, // draw
   safeguard: 6, // armor
   opener: 5, // amplifier
+  quarantine: 14, // fortify - block off the enemy's malware
+  recycle: 7, // draw_bonus
   glitch: 8, // draw - flushing junk out of the hand
   // control flow borrows the amplifier's (it boosts what follows it)
   fork: 5,
@@ -68,6 +70,7 @@ const EV: Record<ArenaEvent, number> = {
   try_catch: 5,
   buffer: 5,
   flush: 5,
+  guard: 5,
   enemy_attack: 20,
   enemy_attack_blocked: 21,
   enemy_brace: 22,

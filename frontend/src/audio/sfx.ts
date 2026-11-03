@@ -355,6 +355,7 @@ export function cardSound(type: CardType, banishes = false): SfxName {
     case "try_catch":
     case "buffer":
     case "flush":
+    case "guard":
       return "draw";
     case "amplifier":
     case "armor":
@@ -366,6 +367,8 @@ export function cardSound(type: CardType, banishes = false): SfxName {
     case "token_regen":
     case "safeguard":
     case "opener":
+    case "quarantine":
+    case "recycle":
       return "permanent";
   }
 }
