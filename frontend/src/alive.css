@@ -1,0 +1,624 @@
+/* ---------- alive.css: the details that make the table feel alive ----------
+   Loaded last. Rarity on a card's edge, cards travelling to their piles,
+   the log's colours, status chips, idle life and screen wipes - all of it
+   off the layout (transform, opacity, glow) and off for reduced motion. */
+
+/* ---------- rarity on the card's edge ---------- */
+.card-edge {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  padding: 2.5px;
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.card-edge.is-uncommon {
+  background: linear-gradient(135deg, #f4f8ff, #7d8fb5 26%, #ffffff 44%, #5d6b8f 64%, #dfe7f7);
+}
+
+.card-edge.is-rare {
+  padding: 3px;
+  background: linear-gradient(135deg, #fff3b0, #e0a020 24%, #fffbe0 42%, #b9780a 62%, #ffe27a 82%, #c98a10);
+}
+
+/* the gold rule's corner marks */
+.card-corners {
+  position: absolute;
+  inset: 6px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.card-corners::before,
+.card-corners::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #ffd54d;
+}
+
+.card-corners::before {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.card-corners::after {
+  right: 0;
+  bottom: 0;
+  border-left: 0;
+  border-top: 0;
+}
+
+.hand-card:has(> .card-edge.is-uncommon) {
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.5),
+    0 0 14px rgba(200, 214, 255, 0.28);
+}
+
+.hand-card:has(> .card-edge.is-rare) {
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.5),
+    0 0 22px rgba(255, 207, 77, 0.45);
+}
+
+/* the older gold double rule gives way to the edge */
+.hand-card.rarity-rare {
+  outline: none;
+}
+
+/* the tag at the card's foot */
+.card-rarity {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  z-index: 4;
+  translate: -50% 0;
+  padding: 0 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: #0b0a1e;
+  font: 700 8.5px/1.5 var(--font-head);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.card-rarity.is-starter {
+  color: #8f8ac7;
+}
+.card-rarity.is-common {
+  color: #c9c6ef;
+}
+.card-rarity.is-uncommon {
+  color: #c8d6f5;
+}
+.card-rarity.is-rare {
+  color: #ffd54d;
+}
+
+/* small cards (deck lists, narrow phones) keep their foot free */
+@media (max-width: 600px) {
+  .card-rarity {
+    display: none;
+  }
+}
+
+/* ---------- the combat log: an icon and a colour per kind of line ---------- */
+.monitor-line {
+  display: grid;
+  grid-template-columns: 1.15em 1fr;
+  gap: 0.45em;
+  align-items: start;
+  padding: 0.08em 0.3em 0.08em 0.15em;
+  border-radius: 4px;
+  transition: opacity var(--dur, 0.3s) var(--ease-out, ease-out);
+}
+
+.monitor-icon {
+  width: 1.05em;
+  height: 1.05em;
+  margin-top: 0.12em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.monitor-icon .fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+.monitor-line.is-hit .monitor-icon {
+  color: #ff5c8a;
+}
+.monitor-line.is-hurt .monitor-icon {
+  color: #ff9a3d;
+}
+.monitor-line.is-block .monitor-icon {
+  color: var(--cyan);
+}
+.monitor-line.is-heal .monitor-icon {
+  color: #6dffa8;
+}
+.monitor-line.is-malware .monitor-icon {
+  color: #5dff9b;
+}
+.monitor-line.is-banish .monitor-icon {
+  color: #ff4f8b;
+}
+.monitor-line.is-foe .monitor-icon {
+  color: #b9f26b;
+}
+.monitor-line.is-command .monitor-icon,
+.monitor-line.is-plain .monitor-icon {
+  color: #8f8ac7;
+}
+
+.monitor-line b {
+  font-weight: 700;
+}
+.monitor-line .tok-dmg {
+  color: #ff5c8a;
+}
+.monitor-line .tok-hurt {
+  color: #ff9a3d;
+}
+.monitor-line .tok-block {
+  color: var(--cyan);
+}
+.monitor-line .tok-malware {
+  color: #5dff9b;
+}
+.monitor-line .tok-hp {
+  color: #e8e6ff;
+}
+.monitor-line .tok-card {
+  color: var(--gold);
+}
+
+/* older lines step back, the newest one is lit */
+.monitor-line.is-old {
+  opacity: 0.45;
+}
+
+.monitor-line:last-child {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 13%, transparent), transparent 80%);
+  box-shadow: inset 2px 0 0 var(--cyan);
+  color: #f2f0ff;
+}
+
+.monitor-line.is-command:last-child {
+  color: var(--gold);
+}
+
+/* a round's divider */
+.monitor-turn {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  margin: 0.1em 0;
+  font-family: var(--font-head);
+  font-size: 0.66em;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #6f6aa6;
+}
+
+.monitor-turn::before,
+.monitor-turn::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #3a3670;
+}
+
+/* ---------- cards travelling to and from the piles ---------- */
+.pile-face {
+  position: relative;
+}
+
+.pile-face.is-bumped {
+  animation: pile-bump 0.42s var(--ease-out, ease-out);
+}
+
+@keyframes pile-bump {
+  35% {
+    transform: translateY(-4px) scale(1.07);
+    box-shadow: 0 0 0 2px var(--pile-glow), 0 0 22px var(--pile-glow);
+  }
+}
+
+.pile-deck {
+  --pile-glow: #b57bff;
+}
+.pile-graveyard {
+  --pile-glow: var(--cyan);
+}
+.pile-banished {
+  --pile-glow: var(--danger);
+}
+
+.pile-delta {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  z-index: 2;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--pile-glow);
+  color: #0b0a1e;
+  font: 800 12px/1.35 var(--font-head);
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 12px var(--pile-glow);
+  pointer-events: none;
+  animation: pile-delta 1.1s var(--ease-out, ease-out) forwards;
+}
+
+@keyframes pile-delta {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.6);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(0) scale(1.1);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(1);
+  }
+}
+
+.pile-spark {
+  position: fixed;
+  z-index: 51;
+  width: 5px;
+  height: 5px;
+  pointer-events: none;
+}
+
+/* a card dealt from the Source pile shows its back until it turns over */
+.card-dealt-back {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  border-radius: inherit;
+  background: repeating-linear-gradient(45deg, #2a1f5c 0 6px, #1d1646 6px 12px);
+  box-shadow: inset 0 0 0 2px #b57bff;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pile-face.is-bumped,
+  .pile-delta {
+    animation: none;
+  }
+  .pile-delta {
+    opacity: 0;
+  }
+}
+
+/* ---------- the hand: neighbours make room for the card under the pointer ---------- */
+@media (hover: hover) {
+  .hand .hand-card {
+    transition-property: transform, box-shadow, border-color, opacity, translate;
+  }
+  .hand .hand-card:hover:not(:disabled) + .hand-card {
+    translate: 16px 0;
+  }
+  .hand .hand-card:hover:not(:disabled) + .hand-card + .hand-card {
+    translate: 6px 0;
+  }
+  .hand .hand-card:has(+ .hand-card:hover:not(:disabled)) {
+    translate: -16px 0;
+  }
+  .hand .hand-card:has(+ .hand-card + .hand-card:hover:not(:disabled)) {
+    translate: -6px 0;
+  }
+}
+
+/* ---------- end turn: what it leads to, and a calm call once the turn is done ---------- */
+.end-turn-note {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
+}
+
+.end-turn-button.is-done:not(:disabled) {
+  animation: turn-done 2.4s var(--ease-in-out, ease-in-out) infinite;
+}
+
+@keyframes turn-done {
+  50% {
+    box-shadow:
+      0 0 0 3px rgba(255, 216, 74, 0.35),
+      0 0 34px rgba(255, 216, 74, 0.85);
+  }
+}
+
+/* ---------- a peek into a pile: a list under its tooltip ---------- */
+.tooltip-list {
+  display: grid;
+  gap: 1px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line, #2c2960);
+}
+
+.tooltip-list em {
+  margin-bottom: 2px;
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.tooltip-list > span {
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip-list .is-empty {
+  color: var(--text-dim, #8f8ac7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .end-turn-button.is-done:not(:disabled) {
+    animation: none;
+  }
+}
+
+/* ---------- status chips: an icon, and they react to their number ---------- */
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.stat-chip > b {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip-icon {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* grown: it pops; shrunk: it ticks down */
+.stat-chip.is-up {
+  animation: chip-up 0.45s var(--ease-out, ease-out);
+}
+
+.stat-chip.is-down {
+  animation: chip-down 0.4s var(--ease-out, ease-out);
+}
+
+@keyframes chip-up {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.4;
+  }
+  45% {
+    transform: scale(1.15);
+    box-shadow: 0 0 18px var(--chip);
+  }
+}
+
+@keyframes chip-down {
+  30% {
+    transform: translateY(2px) scale(0.94);
+    filter: brightness(1.6);
+  }
+}
+
+/* Malware ticking: its icon turns a notch with every stack it loses */
+.status-badge.is-malware.is-down .chip-icon {
+  animation: chip-spin 0.4s var(--ease-out, ease-out);
+}
+
+@keyframes chip-spin {
+  from {
+    rotate: -45deg;
+  }
+}
+
+/* block raised: the shield builds up */
+.block-badge.is-up .chip-icon {
+  animation: shield-build 0.5s var(--ease-out, ease-out);
+}
+
+@keyframes shield-build {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* gone to zero: it cracks and falls apart */
+.stat-chip.is-breaking {
+  pointer-events: none;
+  animation: chip-break 0.52s var(--ease-in, ease-in) forwards;
+}
+
+@keyframes chip-break {
+  0% {
+    transform: none;
+  }
+  20% {
+    transform: translateX(-2px) rotate(-3deg);
+    filter: brightness(1.8);
+  }
+  40% {
+    transform: translateX(2px) rotate(2deg);
+    clip-path: polygon(0 0, 55% 0, 45% 100%, 0 100%, 0 0, 100% 0, 100% 100%, 50% 100%, 60% 0);
+  }
+  100% {
+    transform: translateY(8px) rotate(4deg) scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* ---------- an artifact at work flashes once ---------- */
+.artifact-chip.is-pulsed {
+  --chip: var(--gold);
+  animation: artifact-pulse 0.9s var(--ease-out, ease-out);
+}
+
+@keyframes artifact-pulse {
+  0% {
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(1.12);
+    color: var(--on-accent, #12102a);
+    background: var(--gold);
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--gold) 40%, transparent),
+      0 0 26px var(--gold);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-chip.is-up,
+  .stat-chip.is-down,
+  .stat-chip.is-breaking,
+  .stat-chip .chip-icon,
+  .artifact-chip.is-pulsed {
+    animation: none;
+  }
+}
+
+/* ---------- consistency ---------- */
+/* numbers keep their width, so counting ones (HP, credits, piles) don't
+   jitter as their digits change */
+body {
+  font-variant-numeric: tabular-nums;
+}
+
+/* one focus ring for everything the keyboard can reach, not just buttons */
+a:focus-visible,
+[tabindex]:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* nothing to do: say so with the pointer too */
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* a permanent aimed at the stack: what it does from that slot */
+.slot-preview.is-permanent b {
+  font-size: 1.3rem;
+}
+
+button.is-busy:disabled {
+  cursor: progress;
+}
+
+/* ---------- idle life: the log's screen flickers now and then ---------- */
+.arena-monitor .monitor-lines {
+  animation: monitor-flicker 9s steps(1) infinite;
+}
+
+@keyframes monitor-flicker {
+  0%,
+  96.4%,
+  97.4%,
+  100% {
+    opacity: 1;
+  }
+  96.6% {
+    opacity: 0.55;
+  }
+  97% {
+    opacity: 0.85;
+    transform: translateX(1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-monitor .monitor-lines {
+    animation: none;
+  }
+}
+
+/* ---------- between screens: a scanline sweeps over the new one ---------- */
+.screen-wipe {
+  position: fixed;
+  inset: 0;
+  z-index: 44;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent 0,
+    transparent calc(var(--wipe) - 9%),
+    color-mix(in srgb, var(--cyan) 18%, transparent) calc(var(--wipe) - 1.5%),
+    rgba(230, 252, 255, 0.85) var(--wipe),
+    rgba(10, 9, 28, 0.92) calc(var(--wipe) + 0.4%),
+    rgba(10, 9, 28, 0.92) 100%
+  );
+  animation: screen-wipe 0.5s cubic-bezier(0.45, 0, 0.3, 1) forwards;
+}
+
+@property --wipe {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+@keyframes screen-wipe {
+  from {
+    --wipe: 0%;
+    opacity: 1;
+  }
+  85% {
+    --wipe: 104%;
+    opacity: 1;
+  }
+  to {
+    --wipe: 110%;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen-wipe {
+    display: none;
+  }
+}

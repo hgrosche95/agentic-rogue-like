@@ -12,6 +12,7 @@ import "./sockets.css";
 import "./faces.css";
 import "./table.css";
 import "./cardread.css";
+import "./alive.css";
 import {
   buyShopArtifact,
   removeShopCard,
@@ -63,6 +64,7 @@ import { LoadingIndicator } from "./components/LoadingIndicator";
 import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
 import { JumpTransition } from "./components/JumpTransition";
+import { ScreenWipe } from "./components/ScreenWipe";
 import { CloseButton, Overlay } from "./components/Overlay";
 import { OverlayStage } from "./components/OverlayStage";
 import { RUN_ID_KEY } from "./errors";
@@ -403,8 +405,27 @@ function App() {
   // cards show their token cost only to a character with a context window
   const showTokens = characters.some((c) => c.id === run.player.character && c.token_limit !== null);
 
+  // what fills the screen, for the wipe between screens
+  const screenKind =
+    run.status !== "ongoing"
+      ? "end"
+      : run.shop
+        ? "shop"
+        : run.rest
+          ? "rest"
+          : run.pending_event
+            ? "event"
+            : run.card_reward
+              ? "reward"
+              : run.artifact_offer
+                ? "artifact"
+                : inCombat
+                  ? "combat"
+                  : "map";
+
   const screen = (
     <main className={`game${inCombat ? " is-combat" : ""}`}>
+      <ScreenWipe kind={screenKind} />
       <TopBar
         player={run.player}
         floor={run.floor}
