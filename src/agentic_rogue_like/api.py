@@ -50,6 +50,7 @@ from .combat import (
     overflows,
     player_armor,
     program_preview,
+    program_what_if,
     take_back,
     token_regen,
     uninstalls,
@@ -83,6 +84,7 @@ from .engine import (
 from .events import describe_option
 from .models import (
     MAX_CUSTOM_SETTING_LENGTH,
+    PERMANENT_CARD_TYPES,
     SETTING_PRESETS,
     AgiDeal,
     Artifact,
@@ -189,6 +191,10 @@ class HandCardView(CardView):
     # Playing it now would push past the context window - it may
     # hallucinate. Always false for characters without one.
     overflows: bool
+    # Program mode: per line it could go into, what every line would then
+    # come out with (combat.program_what_if) - null where it can't go, and
+    # for cards that change no line.
+    what_if: list[list[int | None] | None] = []
 
 
 class PendingCombatView(BaseModel):
@@ -563,6 +569,18 @@ class ChooseNodeRequest(BaseModel):
     node_id: str
 
 
+def _what_if(combat, player, card) -> list[list[int | None] | None]:
+    """HandCardView.what_if: a permanent lands in the background wherever it
+    is aimed, so its one answer goes to every line."""
+    if not combat.program_mode:
+        return []
+    lines = range(len(combat.program))
+    if card.type in PERMANENT_CARD_TYPES:
+        once = program_what_if(combat, player, card, 0)
+        return [once for _ in lines]
+    return [program_what_if(combat, player, card, line) for line in lines]
+
+
 def _run_view(run_id: str, session: RunSession) -> RunView:
     run = session.run
     # Every request answers with this view, so it is where the run summary
@@ -648,6 +666,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
                         for slot in range(len(combat.program))
                     ],
                     overflows=overflows(combat, card),
+                    what_if=_what_if(combat, run.player, card),
                     **CardView.of(card).model_dump(),
                 )
                 for i, card in enumerate(combat.hand)

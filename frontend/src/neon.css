@@ -3016,3 +3016,29 @@ button.field-slot.is-queued:hover:not(:disabled) {
     animation: none;
   }
 }
+
+/* ---------- aiming a card: how the other lines' numbers would change ---------- */
+.line-chip.is-shift {
+  font-weight: 900;
+  animation: chip-shift var(--dur) var(--ease-out) both;
+}
+
+.line-chip.is-shift.is-up {
+  color: var(--safe);
+}
+
+.line-chip.is-shift.is-down {
+  color: var(--danger);
+}
+
+@keyframes chip-shift {
+  from {
+    transform: scale(0.85);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line-chip.is-shift {
+    animation: none;
+  }
+}

@@ -270,6 +270,7 @@ export function ProgramLines({
   reversed,
   onPickLine,
   onTakeBack,
+  whatIf,
   onPlay,
   onPoint,
 }: {
@@ -299,6 +300,8 @@ export function ProgramLines({
   onPickLine: (line: number) => void;
   // take a queued line ("program") or a permanent ("field") back into the hand
   onTakeBack: (zone: "program" | "field", index: number) => void;
+  // while a hand card is aimed at a line: what every line would come out with
+  whatIf: (number | null)[] | null;
   onPlay: (line: number, slot: HTMLElement) => void;
   // the pointer entering (over) or leaving a line
   onPoint: (line: number, over: boolean) => void;
@@ -451,6 +454,10 @@ export function ProgramLines({
             const at = steps.findIndex((s) => s.slot === line);
             const chip = card && at >= 0 ? lineChip(card, steps[at], steps[at + 1], steps.slice(0, at)) : null;
             const step = card && at >= 0 ? steps[at] : undefined;
+            // aiming a card elsewhere: how this line's number would change
+            const now = step ? step.dealt || step.block || step.heal : null;
+            const then = card && whatIf ? whatIf[line] : null;
+            const shift = now !== null && then !== null && then !== now ? { now, then } : null;
             const boost = card ? boosts.get(line) : undefined;
             return (
               <div
@@ -472,10 +479,10 @@ export function ProgramLines({
                   </span>
                 )}
                 <span
-                  className={`line-chip${chip ? ` is-${chip.tone}` : " is-none"}`}
+                  className={`line-chip${shift ? ` is-shift ${shift.then > shift.now ? "is-up" : "is-down"}` : chip ? ` is-${chip.tone}` : " is-none"}`}
                   title={step?.formula ? `${step.formula}${step.runs > 1 ? `, ${step.runs} times` : ""}` : undefined}
                 >
-                  {chip?.text}
+                  {shift ? `${shift.now} → ${shift.then}` : chip?.text}
                 </span>
                 {running === line && step?.formula && (
                   // the running line spells out how it gets there

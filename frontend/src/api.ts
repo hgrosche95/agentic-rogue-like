@@ -180,6 +180,9 @@ export interface HandCardView extends Card {
   preview: (number | null)[];
   // playing it now would push past the context window - it may hallucinate
   overflows: boolean;
+  // program mode, per line it could go into: what every line would then come
+  // out with (combat.program_what_if) - null where it can't go
+  what_if: ((number | null)[] | null)[];
 }
 
 // attack/defend for every enemy, the rest only for bosses

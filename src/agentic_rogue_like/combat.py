@@ -1257,6 +1257,36 @@ def program_preview(state: CombatState, player: PlayerState) -> ProgramPreview:
     )
 
 
+def program_what_if(
+    state: CombatState, player: PlayerState, card: Card, slot: int
+) -> list[int | None] | None:
+    """Program mode: what every line would come out with if `card` went into
+    `slot` - a queued card into that line, a permanent into the background
+    (any slot) - so aiming a card can show how it changes the other lines
+    (Monolith grows with every line, an Overclock boosts them all, a Fork
+    doubles the next). Per line: the damage it deals, else the block or HP
+    it raises; None for empty lines. None where the card can't go, and for
+    cards that change no line."""
+    if not state.program_mode:
+        return None
+    trial = state.model_copy(deep=True)
+    if queues(state, card):
+        if slot_taken(state, slot, card) or slot in state.locked_slots:
+            return None
+        trial.program[slot] = card
+        trial.program_glitched[slot] = False
+    elif card.type in PERMANENT_CARD_TYPES:
+        trial.field.append(card)
+    else:
+        return None
+    steps: list[ProgramStep] = []
+    run_program(trial, player.model_copy(deep=True), random.Random(0), steps)
+    values: list[int | None] = [None] * len(state.program)
+    for step in steps:
+        values[step.slot] = step.dealt or step.block or step.heal
+    return values
+
+
 def interrupt_after(state: CombatState) -> int | None:
     """How many queued lines run before an interrupting enemy cuts the
     program off - None unless its intent is an interrupt."""

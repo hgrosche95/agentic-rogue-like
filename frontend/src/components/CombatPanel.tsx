@@ -681,6 +681,9 @@ export function CombatPanel({
   const aimedCard = aimedIndex === null ? undefined : combat.hand.find((c) => c.hand_index === aimedIndex);
   const aimedSlot = drag.dragging !== null ? drag.hoverSlot : pointedSlot;
   const aimedLow = aimedCard && readoutOf(aimedCard, null);
+  // program mode: the lines as they'd come out with the aimed card in the
+  // line (or the background) pointed at
+  const whatIf = aimedCard && aimedSlot !== null ? (aimedCard.what_if?.[aimedSlot] ?? null) : null;
   const attacking = ATTACKING_INTENTS.includes(combat.enemy_intent);
   const intent = describeIntent(
     combat.enemy_intent,
@@ -922,6 +925,7 @@ export function CombatPanel({
               reversed={reversed}
               onPickLine={pickLine}
               onTakeBack={takeBack}
+              whatIf={whatIf}
               onPlay={(line, slot) => playIntoSlot(line, slot)}
               onPoint={(line, over) => setPointedSlot((s) => (over ? line : s === line ? null : s))}
             />
