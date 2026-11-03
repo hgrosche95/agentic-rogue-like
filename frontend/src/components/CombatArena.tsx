@@ -64,8 +64,10 @@ export interface ProgramHit {
   block: number;
   heal: number;
   weight: number;
-  // an interrupt cut the program off here
+  // an interrupt cut the program off here - or, named, what else stopped
+  // the line (a Segfault before it, the enemy's garbage collector)
   cut?: boolean;
+  cutBy?: string;
   // the named combo the line completed
   combo?: string | null;
 }
@@ -126,6 +128,24 @@ export function IntentIcon({ intent }: { intent: EnemyIntentType }) {
       {intent === "interrupt" && (
         // a line of code, slashed through
         <path d="M2.5 10h5M12.5 10h5M7 16.5 13 3.5" />
+      )}
+      {intent === "collect" && (
+        // a bin with a line going into it
+        <>
+          <path d="M5 7h10l-1 10H6Z" />
+          <path d="M3.5 7h13M8 4.5h4" />
+        </>
+      )}
+      {intent === "race" && (
+        // two lines crossing over each other
+        <path d="M3 5h4l6 10h4M3 15h4l6-10h4" />
+      )}
+      {intent === "leak" && (
+        // a drop falling out of a line
+        <>
+          <path d="M3 5h14" />
+          <path className="fill" d="M10 8.5c2.4 3 3.4 4.8 3.4 6.3a3.4 3.4 0 0 1-6.8 0c0-1.5 1-3.3 3.4-6.3Z" />
+        </>
       )}
       {intent === "purge" && (
         <>
@@ -324,7 +344,7 @@ export function CombatArena({
     programHit(hit) {
       const scene = sceneRef.current;
       if (hit.cut) {
-        showFx("cut", "Interrupt");
+        showFx("cut", hit.cutBy ?? "Interrupt");
         scene?.trigger("enemy_brace");
         return;
       }

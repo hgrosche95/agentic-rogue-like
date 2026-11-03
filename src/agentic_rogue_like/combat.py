@@ -129,6 +129,9 @@ class EnemyIntentType(StrEnum):
     CORRUPT = "corrupt"  # a light hit that shuffles Glitch cards into the draw pile
     INTERRUPT = "interrupt"  # a light hit; the program is cut off after a few lines
     REFACTOR = "refactor"  # bosses: a light hit; the program runs right to left
+    COLLECT = "collect"  # a light hit; the program's last line is thrown away unrun
+    RACE = "race"  # a light hit; the program's first two lines swap places
+    LEAK = "leak"  # a light hit; the program's first line stays locked next turn
 
 
 # Intents that hit the player - everything else deals no damage.
@@ -143,6 +146,9 @@ ATTACKING_INTENTS = frozenset(
         EnemyIntentType.CORRUPT,
         EnemyIntentType.INTERRUPT,
         EnemyIntentType.REFACTOR,
+        EnemyIntentType.COLLECT,
+        EnemyIntentType.RACE,
+        EnemyIntentType.LEAK,
     }
 )
 
@@ -153,6 +159,9 @@ _LIGHT_HIT_KINDS = {
     EnemyIntentType.CORRUPT: MoveKind.CORRUPT,
     EnemyIntentType.INTERRUPT: MoveKind.INTERRUPT,
     EnemyIntentType.REFACTOR: MoveKind.REFACTOR,
+    EnemyIntentType.COLLECT: MoveKind.COLLECT,
+    EnemyIntentType.RACE: MoveKind.RACE,
+    EnemyIntentType.LEAK: MoveKind.LEAK,
 }
 
 # How often a boss refactors a program, against its other moves' weights
@@ -277,6 +286,9 @@ class CombatState(BaseModel):
     # queued lines in run order, and how many there are - what the
     # position scalings (LINES, FIRST_LINE, LAST_LINE) read. None otherwise.
     line_position: tuple[int, int] | None = None
+    # Memory Leak: the line that ran first this turn, locked by the enemy's
+    # move for the player's next turn.
+    leaked_line: int | None = None
     tally: FightTally = Field(default_factory=FightTally)
 
 
@@ -898,7 +910,8 @@ class ProgramStep(BaseModel):
     slot: int
     name: str
     type: CardType
-    # "ran", "cut" (an interrupt stopped it) or "skipped" (the enemy was down)
+    # "ran", "cut" (an interrupt or a Segfault stopped it), "collected" (a
+    # garbage collector threw it away) or "skipped" (the enemy was down)
     outcome: str
     runs: int  # how often its action ran - a fork's target twice, a loop its repeats
     damage: int  # the enemy's HP lost
@@ -910,6 +923,8 @@ class ProgramStep(BaseModel):
     enemy_block: int
     combo: str | None = None  # the named combo it completed (COMBOS)
     retrieved: list[str] = Field(default_factory=list)  # what a retrieve fetched back
+    # how its first run came to its number (action_formula) - attacks and blocks
+    formula: str | None = None
 
 
 def run_program(
@@ -965,7 +980,22 @@ def run_program(
     order = _run_order(state)
     # the queued lines in run order, for the position scalings
     queued = [s for s in order if state.program[s] is not None]
+    # The enemy's program moves: a race condition swaps the first two lines
+    # to run, a garbage collector throws the last one away unrun.
+    if state.enemy_intent is EnemyIntentType.RACE and len(queued) >= 2:
+        a, b = order.index(queued[0]), order.index(queued[1])
+        order[a], order[b] = order[b], order[a]
+        queued[0], queued[1] = queued[1], queued[0]
+    garbage_free = total(state.artifacts, "garbage_free") > 0
+    collected = None
+    if state.enemy_intent is EnemyIntentType.COLLECT and len(queued) >= 2 and not garbage_free:
+        collected = queued.pop()
+    main_thread = total(state.artifacts, "main_thread")
+    skip_next = False  # Garbage-Free: a Segfault skips only the line after it
+    state.leaked_line = None
     halted_by: str | None = None  # a halting card (Segfault) ended the program
+    # the actions that ran so far, each once, with their lines - what a Goto replays
+    ran_actions: list[tuple[Card, int]] = []
     for step, slot in enumerate(order):
         card = state.program[slot]
         if card is None:
@@ -974,6 +1004,7 @@ def run_program(
         outcome = "ran"
         combo: str | None = None
         retrieved: list[str] = []
+        formula: str | None = None
         try:
             glitched = state.program_glitched[slot]
             state.program[slot], state.program_glitched[slot] = None, False
@@ -981,8 +1012,14 @@ def run_program(
                 state.discard_pile.append(card)  # never ran, so never used up
                 outcome = "skipped"
                 continue
-            if halted_by is not None:
+            if slot == collected:
                 state.discard_pile.append(card)  # never ran, so never used up
+                log.append(f"{state.enemy.name} garbage-collects line {slot + 1}: {card.name}.")
+                outcome = "collected"
+                continue
+            if halted_by is not None or skip_next:
+                state.discard_pile.append(card)  # never ran, so never used up
+                skip_next = False
                 outcome = "cut"
                 continue
             if cut_after is not None and lines_run >= cut_after:
@@ -995,6 +1032,8 @@ def run_program(
                 outcome = "cut"
                 continue
             lines_run += 1
+            if lines_run == 1 and state.enemy_intent is EnemyIntentType.LEAK:
+                state.leaked_line = slot
             ran_names.append(card.name)
             state.line_position = (queued.index(slot), len(queued))
             line = f"[{slot + 1}] "
@@ -1049,6 +1088,24 @@ def run_program(
                     )
                 else:
                     log.append(line + f"{run.name}: the buffer is empty.")
+            elif run.type is CardType.GOTO:
+                replay = ran_actions[: run.value]
+                if not replay:
+                    log.append(line + f"{run.name}: nothing has run yet to jump back to.")
+                for action, action_slot in replay:
+                    state.plays_this_turn = max(played - 1, ran)
+                    # it runs from its own line again: Bootstrap is first once more
+                    state.line_position = (queued.index(action_slot), len(queued))
+                    wounded = predictor if _wounded(state) else 0
+                    log.append(
+                        line
+                        + f"{run.name} -> line {action_slot + 1}: "
+                        + _run_line(state, action, action_slot, player, rng, wounded)
+                    )
+                    ran += 1
+                    if state.enemy_hp <= 0:
+                        break
+                state.line_position = (queued.index(slot), len(queued))
             elif run.type is CardType.LOOP:
                 repeats = run.value + (tail_call if slot == last_line else 0)
                 if last is None:
@@ -1070,6 +1127,21 @@ def run_program(
                 if slot == last_line:
                     bonus += compiler * len(types - {run.type})
                     forks += tail_call
+                if slot == queued[0]:
+                    forks += main_thread
+                if not glitched:
+                    state.plays_this_turn = max(played - 1, ran)
+                    extras = [
+                        ("pipeline", pipeline if after_flow else 0),
+                        ("pipe", bonus - (pipeline if after_flow else 0)),
+                        ("predictor", predictor if _wounded(state) else 0),
+                    ]
+                    if slot == last_line:
+                        # Compiler: part of `bonus`, named on its own
+                        compiled = compiler * len(types - {run.type})
+                        extras[1] = ("pipe", extras[1][1] - compiled)
+                        extras.append(("compiler", compiled))
+                    formula = action_formula(state, run, player, slot, extras)
                 # a buffered action hits, then the enemy gets back what it took
                 held = (state.enemy_hp, state.enemy_block, state.tally.damage_dealt)
                 hand_before = len(state.hand)
@@ -1093,7 +1165,12 @@ def run_program(
                     log.append(line + f"{taken} damage go into the buffer ({stored} stored).")
                 forks = 0
                 last = None if glitched else run
-                if run.halts and not glitched:
+                if not glitched:
+                    ran_actions.append((run, slot))
+                if run.halts and not glitched and garbage_free:
+                    skip_next = True
+                    log.append(line + f"{run.name} crashes - the next line is skipped.")
+                elif run.halts and not glitched:
                     halted_by = run.name
                     log.append(line + f"{run.name} ends the program here.")
             after_flow = run.type in CONTROL_FLOW_TYPES
@@ -1130,6 +1207,7 @@ def run_program(
                         enemy_block=state.enemy_block,
                         combo=combo,
                         retrieved=retrieved,
+                        formula=formula,
                     )
                 )
 
@@ -1195,6 +1273,36 @@ def program_preview(state: CombatState, player: PlayerState) -> ProgramPreview:
         player_block=trial.player_block,
         steps=steps,
     )
+
+
+def program_what_if(
+    state: CombatState, player: PlayerState, card: Card, slot: int
+) -> list[int | None] | None:
+    """Program mode: what every line would come out with if `card` went into
+    `slot` - a queued card into that line, a permanent into the background
+    (any slot) - so aiming a card can show how it changes the other lines
+    (Monolith grows with every line, an Overclock boosts them all, a Fork
+    doubles the next). Per line: the damage it deals, else the block or HP
+    it raises; None for empty lines. None where the card can't go, and for
+    cards that change no line."""
+    if not state.program_mode:
+        return None
+    trial = state.model_copy(deep=True)
+    if queues(state, card):
+        if slot_taken(state, slot, card) or slot in state.locked_slots:
+            return None
+        trial.program[slot] = card
+        trial.program_glitched[slot] = False
+    elif card.type in PERMANENT_CARD_TYPES:
+        trial.field.append(card)
+    else:
+        return None
+    steps: list[ProgramStep] = []
+    run_program(trial, player.model_copy(deep=True), random.Random(0), steps)
+    values: list[int | None] = [None] * len(state.program)
+    for step in steps:
+        values[step.slot] = step.dealt or step.block or step.heal
+    return values
 
 
 def interrupt_after(state: CombatState) -> int | None:
@@ -1370,6 +1478,76 @@ def attack_damage(
     if Status.EXPOSED in state.enemy_status:
         multiplier *= EXPOSED_FACTOR
     return round(base * multiplier)
+
+
+# How a scaling's bonus is named in a line's formula (action_formula).
+_SCALING_LABELS = {
+    Scaling.PERMANENT: "permanents",
+    Scaling.GRAVEYARD: "graveyard",
+    Scaling.BANISHED: "banished",
+    Scaling.PLAYED: "played",
+    Scaling.EMPTY_SLOT: "empty slots",
+    Scaling.MALWARE: "malware",
+    Scaling.BLOCK: "block",
+    Scaling.LINES: "lines",
+    Scaling.FIRST_LINE: "first",
+    Scaling.LAST_LINE: "last",
+}
+
+
+def action_formula(
+    state: CombatState,
+    card: Card,
+    player: PlayerState,
+    slot: int,
+    extras: list[tuple[str, int]],
+) -> str | None:
+    """How an attack or block line comes to its number, for the player to
+    follow as the program runs - e.g. "3 +2 ATK +7 first ×1.25 = 15". Built
+    from the same helpers that work the number out; `extras` are the flat
+    bonuses run_program adds (Pipeline, Pipe, Compiler, ...), by name. None
+    for every other card."""
+    if card.type not in (CardType.ATTACK, CardType.BLOCK):
+        return None
+    attack = card.type is CardType.ATTACK
+    parts: list[tuple[str, int]] = [("", card.value)]
+    if attack:
+        parts.append(("ATK", player.attack))
+        traced = len(state.discard_pile) // STACK_TRACE_CARDS
+        parts.append(("stack trace", total(state.artifacts, "graveyard_attack") * traced))
+        boost = sum(c.value for c in state.field if c and c.type is CardType.DAMAGE_BOOST)
+        parts.append(("boost", boost * permanent_count(state)))
+    else:
+        parts.append(("artifacts", total(state.artifacts, "block_bonus")))
+    if card.scaling is not None:
+        parts.append(
+            (_SCALING_LABELS.get(card.scaling, card.scaling.value), _scaling_bonus(state, card))
+        )
+    parts += extras
+    chain = _chain_bonus(state, slot)
+    parts.append(("copilot", chain))
+    multiplier = _amplifier_multiplier(state, slot)
+    bonus = sum(n for _, n in extras) + chain
+    if attack:
+        result = attack_damage(state, card, player, multiplier, bonus)
+        if Status.EXPOSED in state.enemy_status:
+            multiplier *= EXPOSED_FACTOR
+    else:
+        result = block_amount(state, card, multiplier, bonus)
+    # anything the helpers count that has no name here still adds up
+    base = sum(n for _, n in parts)
+    if round(max(0, base) * multiplier) != result and multiplier == 1:
+        parts.append(("other", result - max(0, base)))
+    text = str(card.value)
+    for label, n in parts[1:]:
+        if n:
+            text += f" {'+' if n > 0 else '-'}{abs(n)}{' ' + label if label else ''}"
+    if multiplier != 1:
+        text += f" ×{multiplier:g}"
+    text += f" = {result}"
+    if attack and card.hits > 1:
+        text += f" ×{card.hits} hits"
+    return text
 
 
 def block_amount(state: CombatState, card: Card, multiplier: float = 1.0, bonus: int = 0) -> int:
@@ -1797,6 +1975,9 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
         EnemyIntentType.CORRUPT: "corrupts your code" if own else "strikes",
         EnemyIntentType.INTERRUPT: "strikes",
         EnemyIntentType.REFACTOR: "strikes",
+        EnemyIntentType.COLLECT: "strikes",
+        EnemyIntentType.RACE: "strikes",
+        EnemyIntentType.LEAK: "strikes",
     }[intent]
     rolled = " + ".join(str(h) for h in hits)
     log.append(
@@ -1814,6 +1995,10 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
             state.locked_slots = [slot]
             kind = "Line" if state.program_mode else "Slot"
             log.append(f"{kind} {slot + 1} is locked for your next turn.")
+    if intent is EnemyIntentType.LEAK and state.leaked_line is not None:
+        state.locked_slots = [state.leaked_line]
+        log.append(f"Line {state.leaked_line + 1} leaks memory - it is locked for your next turn.")
+        state.leaked_line = None
     if intent is EnemyIntentType.CORRUPT:
         glitches = [_glitch(state, i) for i in range(current_move(state).stacks)]
         for glitch in glitches:

@@ -71,6 +71,7 @@ const EV: Record<ArenaEvent, number> = {
   buffer: 5,
   flush: 5,
   guard: 5,
+  goto: 5,
   enemy_attack: 20,
   enemy_attack_blocked: 21,
   enemy_brace: 22,

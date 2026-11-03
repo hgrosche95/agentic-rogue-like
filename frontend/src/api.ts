@@ -43,7 +43,8 @@ export type CardType =
   | "try_catch"
   | "buffer"
   | "flush"
-  | "guard";
+  | "guard"
+  | "goto";
 
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
@@ -72,6 +73,7 @@ export const CONTROL_FLOW_TYPES: readonly CardType[] = [
   "buffer",
   "flush",
   "guard",
+  "goto",
 ];
 export const QUEUED_TYPES: readonly CardType[] = [
   "attack",
@@ -178,6 +180,9 @@ export interface HandCardView extends Card {
   preview: (number | null)[];
   // playing it now would push past the context window - it may hallucinate
   overflows: boolean;
+  // program mode, per line it could go into: what every line would then come
+  // out with (combat.program_what_if) - null where it can't go
+  what_if: ((number | null)[] | null)[];
 }
 
 // attack/defend for every enemy, the rest only for bosses
@@ -194,7 +199,13 @@ export type EnemyIntentType =
   // program mode: cuts the program off after a few lines
   | "interrupt"
   // program mode, bosses: the program runs right to left
-  | "refactor";
+  | "refactor"
+  // program mode: the last line is thrown away unrun
+  | "collect"
+  // program mode: the first two lines to run swap places
+  | "race"
+  // program mode: the first line to run stays locked next turn
+  | "leak";
 
 // How the player plays, read from their chosen cards - see style.py.
 export type PlayStyle = "permanents" | "graveyard" | "one_shot" | "aggro" | "turtle" | "malware" | "program";
@@ -213,6 +224,9 @@ export const ATTACKING_INTENTS: EnemyIntentType[] = [
   "corrupt",
   "interrupt",
   "refactor",
+  "collect",
+  "race",
+  "leak",
 ];
 
 export interface PendingCombatView {
@@ -308,7 +322,7 @@ export interface ProgramStep {
   slot: number;
   name: string;
   type: CardType;
-  outcome: "ran" | "cut" | "skipped";
+  outcome: "ran" | "cut" | "collected" | "skipped";
   // how often its action ran - a fork's target twice, a loop its repeats
   runs: number;
   damage: number;
@@ -322,6 +336,9 @@ export interface ProgramStep {
   combo: string | null;
   // a retrieve line (Undo): the cards it fetched back to the hand
   retrieved: string[];
+  // attacks and blocks: how its first run reaches its number, e.g.
+  // "3 +2 ATK +7 first = 12" (combat.action_formula)
+  formula: string | null;
 }
 
 export interface ShopCard {
@@ -448,11 +465,15 @@ export interface StarterKit {
 // One of the AGI's opening deals; `cards` is what taking it adds to the deck,
 // `mentions` every card its description names (an upgrade as it will be).
 export interface AgiDeal {
-  kind: "strip" | "mutate" | "forbidden" | "trojan" | "hotfix" | "bribe";
+  // "forged": mid-run, a card the AGI compiled for the player's style (forge.py)
+  kind: "strip" | "mutate" | "forbidden" | "trojan" | "hotfix" | "bribe" | "forged";
   name: string;
   description: string;
   cards: Card[];
   mentions: Card[];
+  // a forged deal's own opening lines, empty for the opening offer
+  greeting: string;
+  pitch: string;
 }
 
 // The server's answer never arrived (or the network dropped it). The move

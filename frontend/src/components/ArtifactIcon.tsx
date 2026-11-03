@@ -267,6 +267,22 @@ const ICONS: Record<string, ReactNode> = {
       <circle cx="0" cy="2" r="0.8" />
     </>
   ),
+  // a thread running twice along the first line
+  "main-thread": (
+    <>
+      <path d="M-6.5 -3 H6.5" />
+      <path d="M-6.5 1 H3 M3 1 L1 -1 M3 1 L1 3" />
+      <path d="M-6.5 5 H3 M3 5 L1 3 M3 5 L1 7" />
+    </>
+  ),
+  // a bin with a check mark: nothing left to collect
+  "garbage-free": (
+    <>
+      <path d="M-4.5 -3 H4.5 L3.5 6.5 H-3.5 Z" />
+      <path d="M-6 -3 H6 M-2 -5.5 H2" />
+      <path d="M-2 1.5 L-0.5 3 L2.5 0" />
+    </>
+  ),
 };
 
 // Anything the frontend doesn't know yet (a newer server) gets a plain gem.

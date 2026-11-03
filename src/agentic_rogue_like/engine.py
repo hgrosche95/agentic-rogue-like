@@ -10,6 +10,7 @@ from __future__ import annotations
 import random
 from collections.abc import Callable
 
+from .agent.card_agent import card_for_style
 from .agent.encounter_agent import enemy_for_node
 from .agent.event_agent import event_for_room
 from .agent.narrator import narrate
@@ -20,8 +21,9 @@ from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
-from .enemies import escalate, with_affix, with_interrupt
+from .enemies import escalate, with_affix, with_program_move
 from .events import EventOption, GameEvent, apply_option
+from .forge import forged_deal
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
     DEFAULT_SETTING,
@@ -39,7 +41,7 @@ from .models import (
 from .shop import MIN_DECK_SIZE, leave_shop, roll_shop
 from .starts import apply_deal, apply_kit, roll_deals, roll_kits
 from .stats import begin, close_turn, record_fight, record_play
-from .style import answers, play_style, taunt
+from .style import answers, key_cards, play_style, taunt
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
 # Index into the offered cards, or None to skip the reward.
@@ -168,7 +170,8 @@ def choose_deal(run: RunState, index: int | None) -> None:
 
 
 def start_pending(run: RunState) -> bool:
-    """Whether the start of the run (artifact, kit, deal) still waits on the player."""
+    """Whether the start of the run (artifact, kit, deal) - or a forged deal
+    mid-run - still waits on the player."""
     return run.artifact_offer is not None or run.kit_offer is not None or run.agi_deals is not None
 
 
@@ -416,6 +419,31 @@ def choose_card_reward(run: RunState, index: int | None) -> None:
         run.player.deck.append(card)
         run.history.append(f"You add {card.name} to your deck.")
     run.card_reward = None
+    offer_forged_card(run)
+
+
+def offer_forged_card(run: RunState) -> None:
+    """Once per act, as soon as the deck shows a clear style (after a card
+    reward - the moment the deck changes), the AGI offers a card compiled
+    for that style, for a price (forge.py). It waits like the opening deal:
+    taken or refused before the next room."""
+    if run.status is not RunStatus.ONGOING or run.agi_deals is not None:
+        return
+    if run.act in run.forged_acts:
+        return
+    style = play_style(run.player.deck)
+    if style is None:
+        return
+    card, by_agent = card_for_style(
+        style, key_cards(run.player.deck, style), run.program_mode, run.setting
+    )
+    rng = random.Random(f"{run.seed}-forge-{run.act}")
+    run.agi_deals = [forged_deal(card, style, rng)]
+    run.forged_acts.append(run.act)
+    run.history.append(
+        f"The AGI has analysed your deck and compiled {card.name}"
+        + (" just for you." if by_agent else ".")
+    )
 
 
 def _room_enemy(
@@ -446,14 +474,15 @@ def _room_enemy(
         act=run.act,
         style=style,
         final=is_final_boss(run, node),
+        deck=run.player.deck,
     )
     if node.type is NodeType.ELITE:
         affix_rng = random.Random(f"{run.seed}-affix-{run.act}-{node.id}")
         enemy = with_affix(enemy, affix_rng, style)
     if run.program_mode and not boss:
-        enemy = with_interrupt(enemy, style)
+        enemy = with_program_move(enemy, style, run.player.deck)
     if style is not None and answers(enemy, style):
-        enemy = enemy.model_copy(update={"taunt": taunt(style)})
+        enemy = enemy.model_copy(update={"taunt": taunt(style, enemy)})
     return escalate(enemy, node.floor, NUM_FLOORS, run.act)
 
 

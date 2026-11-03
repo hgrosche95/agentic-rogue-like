@@ -72,6 +72,10 @@ class Artifact(BaseModel):
     tail_call_every: int = 1  # ... on every Nth turn only
     pipeline: int = 0  # flat bonus for the action right after control flow
     compiler_bonus: int = 0  # the last line's action +this per card type that ran before it
+    main_thread: int = 0  # extra runs of the action in the first line to run
+    # a halting card (Segfault) only skips the line after it, and the enemy's
+    # garbage collector finds nothing to collect
+    garbage_free: int = 0
     # Bridges between two play styles (see style.py):
     graveyard_attack: int = 0  # attacks +this per STACK_TRACE_CARDS cards in the graveyard
     banish_malware: int = 0  # Malware on the enemy for every card that gets banished
@@ -126,6 +130,9 @@ class CardType(StrEnum):
     FLUSH = "flush"  # deals the stored damage, +value percent
     # the next action runs `value` more time(s) if the player has GUARD_BLOCK block
     GUARD = "guard"
+    # jumps back to the first line once: the first `value` actions that ran
+    # before it run again, each from its own line
+    GOTO = "goto"
 
 
 # Control flow (program mode, combat.run_program): steers the actions around
@@ -141,6 +148,7 @@ CONTROL_FLOW_TYPES = frozenset(
         CardType.BUFFER,
         CardType.FLUSH,
         CardType.GUARD,
+        CardType.GOTO,
     }
 )
 
@@ -294,12 +302,18 @@ class MoveKind(StrEnum):
     # Program mode, bosses only (combat._roll_boss_intent): a light hit, and
     # the player's program runs right to left this turn.
     REFACTOR = "refactor"
+    # Program mode only, each with a light hit (combat.run_program):
+    COLLECT = "collect"  # garbage collector: the last line to run is thrown away unrun
+    RACE = "race"  # race condition: the first two lines to run swap places
+    LEAK = "leak"  # memory leak: the first line to run stays locked next turn
 
 
 # Moves only the game hands out - enemies get them in program runs
 # (enemies.with_interrupt, the boss move set); move sets from the pool or
 # the agent never have them.
-PROGRAM_ONLY_MOVES = frozenset({MoveKind.INTERRUPT, MoveKind.REFACTOR})
+PROGRAM_ONLY_MOVES = frozenset(
+    {MoveKind.INTERRUPT, MoveKind.REFACTOR, MoveKind.COLLECT, MoveKind.RACE, MoveKind.LEAK}
+)
 
 
 # Default power (percent of the enemy's attack stat) per move kind - the
@@ -316,6 +330,9 @@ DEFAULT_MOVE_POWER: dict[MoveKind, int] = {
     MoveKind.CORRUPT: 50,
     MoveKind.INTERRUPT: 50,
     MoveKind.REFACTOR: 100,
+    MoveKind.COLLECT: 50,
+    MoveKind.RACE: 50,
+    MoveKind.LEAK: 50,
 }
 DEFAULT_BARRAGE_HITS = 3
 DEFAULT_INFECT_STACKS = 3
@@ -464,6 +481,7 @@ class DealKind(StrEnum):
     TROJAN = "trojan"  # an artifact, and a Glitch in the deck
     HOTFIX = "hotfix"  # upgrade basic cards
     BRIBE = "bribe"  # credits, and a Glitch in the deck
+    FORGED = "forged"  # mid-run: a card compiled for the player's style, for a price (forge.py)
 
 
 class AgiDeal(BaseModel):
@@ -479,6 +497,10 @@ class AgiDeal(BaseModel):
     artifact: Artifact | None = None
     max_hp: int = 0
     gold: int = 0
+    # A forged deal's own opening lines - empty for the opening offer, whose
+    # window has its own.
+    greeting: str = ""
+    pitch: str = ""
 
 
 class Combo(BaseModel):
@@ -568,5 +590,7 @@ class RunState(BaseModel):
     # then the AGI's opening deal to take or turn down (starts.py).
     kit_offer: list[StarterKit] | None = None
     agi_deals: list[AgiDeal] | None = None
+    # The acts the AGI has already forged a card in (forge.py) - once per act.
+    forged_acts: list[int] = Field(default_factory=list)
     # For the summary at the end of the run (stats.py) - never read by play.
     stats: RunStats = Field(default_factory=RunStats)

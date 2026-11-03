@@ -613,7 +613,7 @@ und wenn er vor allen anderen liegt. Dann antwortet sie darauf:
 | Angriffe | starker Block (≥120 %) | Thorny |
 | Block | infect (Malware ignoriert Block) | Enraged |
 | Malware | – | Regenerating |
-| Kontrollfluss (Programm-Modus) | häufigere Interrupts (40 % statt 25 % der Züge) | – |
+| Kontrollfluss (Programm-Modus) | der Programm-Angriff, der das Deck am härtesten trifft, in 40 % statt 25 % der Züge (siehe unten) | – |
 
 Gegner aus dem Pool und Elite-Zusätze, die antworten, sind 3× so
 wahrscheinlich (nie erzwungen, Bosse ausgenommen). Der Encounter-Agent
@@ -623,6 +623,28 @@ schwerer: Im Simulator bleibt die Run-Siegquote mit und ohne Anpassung gleich
 (Chronos 11 %, Vibe-Coder 10 %; Vergleich mit `"adaptive": false`). Ein
 antwortender Gegner eröffnet den Kampf mit einer Zeile der AGI, und auf der
 Karte zeigt das Panel „AGI analysis“, was sie bisher gelesen hat.
+
+## Die AGI kompiliert dir eine Karte
+
+Einmal pro Akt, sobald das Deck nach einer Kartenbelohnung einen klaren Stil
+zeigt, meldet sich die AGI: „Your reliance on … has been analysed.“ Sie bietet
+eine Karte an, die genau zu diesem Stil passt – stark, aber als Köder: Wer sie
+nimmt, zahlt 6 max HP oder bekommt einen Glitch ins Deck. Wie der Deal am
+Run-Start wird das Angebot angenommen oder abgelehnt, bevor es weitergeht
+(`engine.offer_forged_card`, `forge.py`).
+
+Entworfen wird die Karte vom Karten-Agenten (`agent/card_agent.py`, gleicher
+Aufbau wie der Event-Agent): Er bekommt Stil, Schlüsselkarten und Setting und
+wählt nur Bausteine (`forge.CardSpec`) – Name, Angriff oder Block, Werte,
+eine bekannte Skalierung, Nachteile. Den Regeltext schreibt das Spiel selbst
+(`forge.describe`), und `forge.validate_spec` prüft die Stärke gegen ein
+Budget: Wert plus Skalierung mal typischer Anzahl, mal Treffer, plus Malware,
+minus Nachteile, mal 0,65 für Einmal-Karten muss zwischen 12 und 16 liegen –
+über einer normalen seltenen Karte (10–12), unter einer Einmal-Karte wie
+Zero-Day (16), den Rest bezahlt der Preis des Deals. Ein Entwurf außerhalb
+geht mit dem Grund zurück (höchstens 3 Versuche). Ist der Agent aus oder
+scheitert er, kommt ein fester Entwurf pro Stil (Core Dump für den Friedhof,
+Hot Loop für Kontrollfluss, …), der dasselbe Budget einhält.
 
 ## Programm-Modus (Prototyp)
 
@@ -706,6 +728,71 @@ Reihenfolge ignoriert: wie gespielt Chronos 7 → 6 %, Vibe-Coder 8 → 5 %
 (er reiht mehr Zeilen ein, also schneidet ein Interrupt mehr ab), zufällig
 5 → 4 % und 6 → 3 %.
 
+### Weitere Programm-Angriffe
+
+Interrupt ist einer von vier Moves, mit denen das Spiel Gegner in
+Programm-Runs bewaffnet (`enemies.with_program_move`, je Gegner einer). Alle
+kommen mit einem leichten Treffer und werden angekündigt; das Frontend
+markiert die betroffenen Zeilen:
+
+| Move | Wirkung | kontert |
+| --- | --- | --- |
+| Interrupt | nur die ersten 2 Zeilen laufen | lange Kontrollfluss-Ketten (Loop, Buffer, …) |
+| Garbage Collector | die letzte Zeile wird ungenutzt verworfen (ab 2 Zeilen) | lange Programme, Return, Monolith, Segfault |
+| Race Condition | die ersten zwei Zeilen tauschen die Plätze | Fork, If Wounded, Pipe |
+| Memory Leak | die zuerst gelaufene Zeile ist nächsten Zug gesperrt | Bootstrap |
+
+Ohne erkennbaren Programm-Stil hängt der Move am Namen des Gegners (für
+Abwechslung). Spielt der Spieler Kontrollfluss, wählt die AGI den, der sein
+Deck am härtesten trifft (`style.program_counter`), und kündigt ihn an
+(„Your programs run long. Garbage collection scheduled.“). Der
+Encounter-Agent kann diese Moves nicht vergeben, bekommt aber gesagt, als
+was das Spiel seinen Gegner bewaffnet, und gestaltet Name und Beschreibung
+danach; dazu nennt ihm der Hinweis die Schlüsselkarten des Spielers
+(`style.key_cards`). `threat.py` bewertet die neuen Moves wie Interrupt
+(Garbage Collector 2,5, Memory Leak 1,5, Race Condition 1 HP – sie sind
+angekündigt und mit guter Reihenfolge meist umspielbar), die HP werden
+entsprechend angepasst.
+
+### Karten mit Position
+
+Einige Programm-Karten fragen, *wo* ihre Zeile steht (`models.Scaling`
+`LINES`, `FIRST_LINE`, `LAST_LINE`, und `Card.halts`). Die Vorschau beim
+Zielen kennt die Position schon:
+
+| Karte | Wirkung |
+| --- | --- |
+| Bootstrap | 3 Schaden, +5, wenn die Zeile als erste läuft |
+| Return | 3 Schaden, +7, wenn die Zeile als letzte läuft |
+| Monolith | 1 Schaden, +2 pro weiterer Zeile |
+| Microservice | 13 Schaden, −2 pro weiterer Zeile |
+| Segfault | 12 Schaden, danach endet das Programm |
+| Goto 1 | Kontrollfluss (selten): die ersten 2 Aktionen davor laufen noch einmal, jede aus ihrer eigenen Zeile – Bootstrap ist also wieder die erste |
+
+Dazu: Undo und Rollback werden im Programm-Modus eingereiht und holen beim
+Laufen zurück, was die Zeilen davor gerade in den Friedhof gelegt haben (die
+Zeile zeigt, welche Karte). Gelegte Zeilen und installierte Permanente lassen
+sich zurück auf die Hand nehmen (`POST /runs/{id}/combat/take-back`); was
+sie gekostet haben, bleibt bezahlt, und sie zählen nicht mehr als gespielt.
+
+Die Werte kommen aus dem Simulator: zwei Kopien im Startdeck, 300
+Einzelkämpfe pro Stufe, beste Reihenfolge, ohne Belohnungen und Artefakte.
+Gemessen an der Boss-Siegquote (Startdeck allein 79 %, mit zwei zusätzlichen
+Exploits 68 %) waren die ersten Entwürfe zu stark – Bootstrap +7 (86 %),
+Monolith +3 pro Zeile (85 %), Segfault 16 (88 %) – und Microservice mit 11
+zu schwach (69 %). Mit den Werten oben liegen alle bei 76–79 %: Sie tragen
+ein Deck, ohne es zu dominieren. Goto 1 (85 %) ist als seltene Karte bewusst
+stärker.
+
+### Was das Frontend dazu zeigt
+
+- Läuft das Programm, steht über jeder Zeile ihre Rechnung
+  (`combat.action_formula`, z. B. „3 +2 ATK +7 first ×1.25 = 15“).
+- Zielt man mit einer Handkarte auf eine Zeile, zeigen die anderen Zeilen,
+  wie sich ihr Wert ändern würde („6 → 9“, `combat.program_what_if`).
+- Nach dem Lauf fasst eine Karte den Zug zusammen: Schaden, Block, beste
+  Zeile, Combos, verlorene Zeilen und aktive Artefakte.
+
 ### Refactor (Bosse)
 
 Gegen ein Programm hat jeder Boss einen weiteren Move, „Refactor“
@@ -746,7 +833,7 @@ kostet ihn davon einen Prozentpunkt (in gleichen Runs 7,6 % mit, 8,6 % ohne).
 
 ### Programm-Artefakte
 
-Sechs Artefakte gibt es nur in Programm-Runs (`artifacts.PROGRAM_ARTIFACT_POOL`,
+Acht Artefakte gibt es nur in Programm-Runs (`artifacts.PROGRAM_ARTIFACT_POOL`,
 zusätzlich zum Pool des Charakters). Sie belohnen, *wo* etwas im Programm
 steht und *was neben was* läuft, keine reinen Werte:
 
@@ -758,6 +845,8 @@ steht und *was neben was* läuft, keine reinen Werte:
 | Pipeline | die Aktion direkt nach einer Kontrollfluss-Karte bekommt +3 |
 | Compiler | die Aktion in der letzten Zeile bekommt +1 pro anderem Kartentyp, der vorher lief |
 | Extra Line | eine 6. Zeile (ohne Permanent darunter), jeden 2. Zug 1 Karte mehr |
+| Main Thread | die Aktion in der ersten laufenden Zeile läuft doppelt, aber Gegner haben 15 % mehr HP |
+| Garbage-Free | ein Segfault überspringt nur die nächste Zeile, und Garbage Collectors finden nichts |
 
 Ein längeres Feld für alle bringt wenig: Chronos füllt nur in 10 % der Züge
 alle 5 Zeilen (der Vibe-Coder in 29 %), ihm fehlen Karten, nicht Platz. Darum

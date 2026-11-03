@@ -100,6 +100,7 @@ function PipelineResult({ combat, live }: { combat: PendingCombatView; live: { d
 function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep | undefined, before: ProgramStep[]) {
   if (!step) return null;
   if (step.outcome === "cut") return { text: "cut", tone: "cut" };
+  if (step.outcome === "collected") return { text: "collected", tone: "cut" };
   if (step.outcome === "skipped") return { text: "–", tone: "idle" };
   if (card.type === "retrieve") {
     // Undo, Rollback: what the lines before it leave in the graveyard comes back
@@ -108,6 +109,12 @@ function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep |
       : { text: "nothing to fetch", tone: "idle" };
   }
   if (CONTROL_FLOW_TYPES.includes(card.type)) {
+    if (card.type === "goto") {
+      const replayed = before.filter((s) => s.outcome === "ran" && !CONTROL_FLOW_TYPES.includes(s.type)).slice(0, card.value);
+      return replayed.length > 0
+        ? { text: `↑ 1 · ${replayed.length} again`, tone: "flow" }
+        : { text: "nothing to jump to", tone: "idle" };
+    }
     if (card.type === "loop") {
       // a loop repeats the last action run before it - with none, it idles
       const target = loopTarget(before);
@@ -138,12 +145,25 @@ function loopTarget(before: ProgramStep[]): ProgramStep | undefined {
 }
 
 // The lines control flow works on, for a badge on their card: run more than
-// once (a Fork, If Wounded, Tail Call in front of it) and repeated by a Loop.
-function boostsOf(steps: ProgramStep[]): Map<number, { times: number; looped: boolean }> {
+// once (a Fork, If Wounded, Tail Call in front of it) and repeated by a
+// Loop or a Goto.
+function boostsOf(
+  steps: ProgramStep[],
+  program: (Card | null)[],
+): Map<number, { times: number; looped: boolean }> {
   const boosts = new Map<number, { times: number; looped: boolean }>();
   steps.forEach((step, i) => {
     if (step.outcome !== "ran") return;
-    if (step.type === "loop") {
+    if (step.type === "goto") {
+      const replayed = steps
+        .slice(0, i)
+        .filter((s) => s.outcome === "ran" && !CONTROL_FLOW_TYPES.includes(s.type))
+        .slice(0, program[step.slot]?.value ?? 0);
+      for (const target of replayed) {
+        const b = boosts.get(target.slot) ?? { times: target.runs, looped: false };
+        boosts.set(target.slot, { ...b, looped: true });
+      }
+    } else if (step.type === "loop") {
       const target = loopTarget(steps.slice(0, i));
       if (target) {
         const b = boosts.get(target.slot) ?? { times: target.runs, looped: false };
@@ -154,6 +174,24 @@ function boostsOf(steps: ProgramStep[]): Map<number, { times: number; looped: bo
     }
   });
   return boosts;
+}
+
+// The lines the enemy's program move hits: the two a race condition swaps
+// (they run in the order of the preview's steps) and the first line to
+// run, which a memory leak locks for the next turn. A garbage collector's
+// line already says "collected" in its chip.
+function threatsOf(combat: PendingCombatView, steps: ProgramStep[]): Map<number, { text: string; title: string }> {
+  const threats = new Map<number, { text: string; title: string }>();
+  const ran = steps.filter((s) => s.outcome === "ran");
+  if (combat.enemy_intent === "race") {
+    for (const step of steps.slice(0, 2)) {
+      if (steps.length >= 2) threats.set(step.slot, { text: "⇄", title: "Race Condition: swapped with the other marked line" });
+    }
+  }
+  if (combat.enemy_intent === "leak" && ran[0]) {
+    threats.set(ran[0].slot, { text: "leak", title: "Memory Leak: this line is locked for your next turn" });
+  }
+  return threats;
 }
 
 // The link on the rail from a line to the next: a fork doubling it, a loop
@@ -232,6 +270,7 @@ export function ProgramLines({
   reversed,
   onPickLine,
   onTakeBack,
+  whatIf,
   onPlay,
   onPoint,
 }: {
@@ -261,6 +300,8 @@ export function ProgramLines({
   onPickLine: (line: number) => void;
   // take a queued line ("program") or a permanent ("field") back into the hand
   onTakeBack: (zone: "program" | "field", index: number) => void;
+  // while a hand card is aimed at a line: what every line would come out with
+  whatIf: (number | null)[] | null;
   onPlay: (line: number, slot: HTMLElement) => void;
   // the pointer entering (over) or leaving a line
   onPoint: (line: number, over: boolean) => void;
@@ -396,7 +437,9 @@ export function ProgramLines({
   }
 
   const steps = combat.program_preview?.steps ?? [];
-  const boosts = boostsOf(steps);
+  const boosts = boostsOf(steps, combat.program);
+  // what the enemy's program move does to which line, marked on it
+  const threats = threatsOf(combat, steps);
   return (
     <div
       className={`program-board${reversed ? " is-reversed" : ""}`}
@@ -411,12 +454,22 @@ export function ProgramLines({
           {combat.program.map((card, line) => {
             const at = steps.findIndex((s) => s.slot === line);
             const chip = card && at >= 0 ? lineChip(card, steps[at], steps[at + 1], steps.slice(0, at)) : null;
+            const step = card && at >= 0 ? steps[at] : undefined;
+            // aiming a card elsewhere: how this line's number would change
+            const now = step ? step.dealt || step.block || step.heal : null;
+            const then = card && whatIf ? whatIf[line] : null;
+            const shift = now !== null && then !== null && then !== now ? { now, then } : null;
             const boost = card ? boosts.get(line) : undefined;
             return (
               <div
                 key={line}
                 className={`program-line${line === hotLine ? " is-hot" : ""}${running === line ? " is-running" : ""}${spentLines.includes(line) ? " is-spent" : ""}${boost ? " is-boosted" : ""}`}
               >
+                {card && threats.get(line) && (
+                  <span className="line-threat" title={threats.get(line)!.title}>
+                    {threats.get(line)!.text}
+                  </span>
+                )}
                 {boost && (
                   <span
                     className="line-boost"
@@ -426,7 +479,19 @@ export function ProgramLines({
                     {boost.looped && "↺"}
                   </span>
                 )}
-                <span className={`line-chip${chip ? ` is-${chip.tone}` : " is-none"}`}>{chip?.text}</span>
+                <span
+                  className={`line-chip${shift ? ` is-shift ${shift.then > shift.now ? "is-up" : "is-down"}` : chip ? ` is-${chip.tone}` : " is-none"}`}
+                  title={step?.formula ? `${step.formula}${step.runs > 1 ? `, ${step.runs} times` : ""}` : undefined}
+                >
+                  {shift ? `${shift.now} → ${shift.then}` : chip?.text}
+                </span>
+                {running === line && step?.formula && (
+                  // the running line spells out how it gets there
+                  <span className="line-formula" role="status">
+                    {step.formula}
+                    {step.runs > 1 && <b> ×{step.runs}</b>}
+                  </span>
+                )}
                 {card && at >= 0 && steps[at].combo && (
                   <span className="line-combo" data-tip-term="Combo" data-tip="A named combo: card types run back to back pay out once per run.">
                     ★ {steps[at].combo}

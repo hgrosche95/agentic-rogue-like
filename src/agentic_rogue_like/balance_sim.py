@@ -94,7 +94,14 @@ from .combat import (
     take_back,
     uninstalls,
 )
-from .enemies import ENEMY_POOL, escalate, pick_enemy, tier_floor, with_affix, with_interrupt
+from .enemies import (
+    ENEMY_POOL,
+    escalate,
+    pick_enemy,
+    tier_floor,
+    with_affix,
+    with_program_move,
+)
 from .engine import ACT_HEAL_PERCENT, NUM_ACTS, boss_phases
 from .events import GameEvent, apply_option, option_value, random_event
 from .map_gen import NUM_FLOORS, generate_map
@@ -447,6 +454,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
             c is not None and c.type in _PROGRAM_TARGETS for c in state.program
         ):
             order.append(CardType.LOOP)
+            order.append(CardType.GOTO)  # like a Loop: after what it replays
             if any(c is not None and c.type is CardType.BUFFER for c in state.program):
                 order.append(CardType.FLUSH)
         if state.enemy_intent in ATTACKING_INTENTS:
@@ -803,7 +811,7 @@ def fresh_fights(cfg: SimConfig, bot: Bot, n: int, seed: int) -> dict[str, list[
             if tier == "elite" and cfg.affixes:
                 base = with_affix(base, rng)
             if cfg.program and tier != "boss":
-                base = with_interrupt(base)
+                base = with_program_move(base)
             enemy = escalate(base, _TIER_FLOOR[tier], NUM_FLOORS)
             results[tier].append(fight(player, enemy, tier, bot, rng, program=cfg.program))
     return results
@@ -891,7 +899,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
             if node.type is NodeType.ELITE and cfg.affixes:
                 base = with_affix(base, rng, style)
             if cfg.program and node.type is not NodeType.BOSS:
-                base = with_interrupt(base, style)
+                base = with_program_move(base, style, player.deck)
             enemy = escalate(base, node.floor, NUM_FLOORS, act)
             result = fight(player, enemy, tier, bot, rng, act, cfg.program)
             fights.append(result)

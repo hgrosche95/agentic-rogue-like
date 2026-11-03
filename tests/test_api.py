@@ -70,6 +70,10 @@ def _play_full_run(seed: int, character: str = "chronos") -> dict:
         if run["artifact_offer"] is not None:
             run = client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0}).json()
 
+        # the AGI's forged card, once per act once the deck has a style - taken
+        if run["agi_deals"] is not None:
+            run = client.post(f"/runs/{run_id}/agi-deal", json={"deal_index": 0}).json()
+
         if run["shop"] is not None:
             run = client.post(f"/runs/{run_id}/shop/leave").json()
 

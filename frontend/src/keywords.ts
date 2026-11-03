@@ -99,6 +99,12 @@ export const KEYWORDS: Keyword[] = [
     text: "Control flow: the last action to its left runs once more.",
   },
   {
+    id: "goto",
+    term: "Goto 1",
+    pattern: /\bgoto 1\b|\bjumps back to line 1\b/,
+    text: "Control flow: once it runs, the program jumps back to line 1 and the first actions that ran before it run again - each from its own line, so a Bootstrap is the first line once more.",
+  },
+  {
     id: "if-wounded",
     term: "If Wounded",
     pattern: /\bif wounded\b/,
@@ -170,6 +176,24 @@ export const KEYWORDS: Keyword[] = [
     term: "Refactor",
     pattern: /\brefactor(?:s|ed)?\b/,
     text: "Boss move: your program runs right to left this turn - Fork and Loop then steer the lines to their left.",
+  },
+  {
+    id: "garbage-collector",
+    term: "Garbage Collector",
+    pattern: /\bgarbage collector\b/,
+    text: "Enemy move: the last line of your program is thrown away before it runs and goes to the graveyard unused. Don't save your best for last.",
+  },
+  {
+    id: "race-condition",
+    term: "Race Condition",
+    pattern: /\brace condition\b/,
+    text: "Enemy move: the first two lines of your program swap places - a Fork or If Wounded may end up behind what it was meant to steer.",
+  },
+  {
+    id: "memory-leak",
+    term: "Memory Leak",
+    pattern: /\bmemory leak\b/,
+    text: "Enemy move: the first line that runs stays locked for your next turn.",
   },
   {
     id: "malware",

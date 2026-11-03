@@ -576,7 +576,7 @@ function App() {
           />
         </Overlay>
       )}
-      {!combat && ongoing && !eventResult && run.agi_deals && (
+      {!combat && ongoing && !eventResult && run.agi_deals && !run.card_reward && !run.artifact_offer && (
         <Overlay key="deal" label="The AGI's offer" className="is-wide">
           <DealScreen
             deals={run.agi_deals}

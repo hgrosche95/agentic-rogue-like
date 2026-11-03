@@ -94,6 +94,24 @@ function describeKind(
         amount: range,
         title: `Hits for ${range} and runs your program right to left this turn - control flow steers the lines to its left`,
       };
+    case "collect":
+      return {
+        label: "Garbage Collector",
+        amount: range,
+        title: `Hits for ${range} and throws your program's last line away before it runs - it goes to the graveyard unused`,
+      };
+    case "race":
+      return {
+        label: "Race Condition",
+        amount: range,
+        title: `Hits for ${range} and swaps the first two lines of your program - what steers the next line may miss it`,
+      };
+    case "leak":
+      return {
+        label: "Memory Leak",
+        amount: range,
+        title: `Hits for ${range} and locks the first line that runs for your next turn`,
+      };
   }
 }
 

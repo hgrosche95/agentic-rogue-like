@@ -80,6 +80,7 @@ const STAT: Partial<
   batch: { icon: "token", unit: "per action" },
   buffer: { icon: "clock", unit: "stored" },
   flush: { icon: "damage", unit: "stored dmg", sign: "+", percent: true },
+  goto: { icon: "cards", unit: "replayed" },
 };
 
 function StatGlyph({ icon }: { icon: StatIcon }) {

@@ -72,18 +72,28 @@ export function DealScreen({
   useEffect(() => {
     sfx.play("reward_open");
   }, []);
+  const forged = deals.find((deal) => deal.kind === "forged");
 
   return (
-    <div className="deal-screen">
+    <div className={`deal-screen${forged ? " is-forged" : ""}`}>
       <div className="intro-terminal-head">
         <span>Incoming transmission · AGI</span>
         <i aria-hidden="true" />
       </div>
-      <p className="deal-greeting">I SEE YOU HAVE PACKED YOUR TOOLS, HUMAN.</p>
+      {/* a forged deal (mid-run) brings its own lines; the opening offer has these */}
+      <p className="deal-greeting">{forged?.greeting || "I SEE YOU HAVE PACKED YOUR TOOLS, HUMAN."}</p>
       <p className="deal-pitch">
-        Before you enter my code, a deal. Take one - every gift of mine comes with a price. Or refuse, and come
-        in as you are.
+        {forged?.pitch ||
+          "Before you enter my code, a deal. Take one - every gift of mine comes with a price. Or refuse, and come in as you are."}
       </p>
+      {forged && forged.cards[0] && (
+        // the card it compiled, up front: the whole point of the offer
+        <div className="deal-forged-card">
+          <span className={`hand-card reward-card type-${forged.cards[0].type} rarity-${forged.cards[0].rarity}`}>
+            <CardFace card={forged.cards[0]} />
+          </span>
+        </div>
+      )}
       <div className="deal-options">
         {deals.map((deal, index) => (
           <button

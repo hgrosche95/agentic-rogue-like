@@ -151,7 +151,7 @@ def apply_kit(player: PlayerState, kit: StarterKit, program_mode: bool = False) 
     return removed
 
 
-def _glitch(deck: list[Card]) -> Card:
+def glitch_card(deck: list[Card]) -> Card:
     """A dead card for good: it does nothing and is used up for the fight
     when played, but comes back every fight. STARTER, so the AGI's style
     reading (style.py) never counts it as a choice."""
@@ -230,7 +230,7 @@ def roll_deals(
                 description=f"Install {artifact.name} ({artifact.description}) - "
                 "but a Glitch hides in your deck.",
                 artifact=artifact,
-                add=[_glitch(deck)],
+                add=[glitch_card(deck)],
             )
         )
     if len(upgradable) >= 2:
@@ -249,7 +249,7 @@ def roll_deals(
             name="Bribe",
             description=f"Take {BRIBE_GOLD} credits - but a Glitch hides in your deck.",
             gold=BRIBE_GOLD,
-            add=[_glitch(deck)],
+            add=[glitch_card(deck)],
         )
     )
     return rng.sample(deals, min(DEAL_CHOICES, len(deals)))

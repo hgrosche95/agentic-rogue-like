@@ -107,7 +107,8 @@ class Prefetch:
                     # The deck is as it will be on entering: warm() runs after
                     # every reward, on the step onto the map.
                     counter_hint=agent_hint(
-                        None if node.type is NodeType.BOSS else play_style(run.player.deck)
+                        None if node.type is NodeType.BOSS else play_style(run.player.deck),
+                        run.player.deck,
                     ),
                 )
             if node.type is NodeType.EVENT and event_agent_enabled() and node.id not in self.events:
