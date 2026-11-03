@@ -2616,6 +2616,18 @@ button.field-slot.is-queued:hover:not(:disabled) {
   box-shadow: none;
 }
 
+/* a permanent from an earlier turn: taking it off banishes it */
+.take-back.is-uninstall {
+  font-size: 11px;
+  color: var(--danger);
+}
+
+.take-back.is-uninstall:hover:not(:disabled),
+.take-back.is-uninstall:focus-visible {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 /* shown on the card under the pointer, always on touch screens */
 .program-line:hover > .take-back,
 .field-slot:hover > .take-back,

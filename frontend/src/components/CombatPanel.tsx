@@ -952,6 +952,7 @@ export function CombatPanel({
                   <CardFace card={card} onField />
                   <TakeBack
                     name={card.name}
+                    uninstall={combat.field_uninstalls?.[slotIndex] ?? false}
                     disabled={busy || choosing || enemySlain}
                     onClick={() => takeBack("field", slotIndex)}
                   />

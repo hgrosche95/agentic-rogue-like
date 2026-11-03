@@ -471,6 +471,46 @@ REWARD_POOL: list[Card] = [
         rarity=Rarity.COMMON,
         description="Discard 2 random cards. Hit twice for 3 (+ATK) damage.",
     ),
+    # ---- bridges: each one pays off for two styles at once (style.py), so
+    # a deck that mixes them is rewarded instead of diluted.
+    Card(
+        id="failsafe",
+        name="Failsafe",
+        type=CardType.ARMOR,
+        value=1,
+        banish_damage=14,
+        rarity=Rarity.UNCOMMON,
+        description=(
+            "Permanent. Reduce incoming damage by 1. When it is banished, deal 14 damage."
+        ),
+    ),
+    Card(
+        id="counterstrike",
+        name="Counterstrike",
+        type=CardType.ATTACK,
+        value=3,
+        scaling=Scaling.BLOCK,
+        scale_value=1,
+        rarity=Rarity.UNCOMMON,
+        description="Deal 3 (+ATK) damage, +1 per block you have.",
+    ),
+    Card(
+        id="quarantine",
+        name="Quarantine",
+        type=CardType.QUARANTINE,
+        value=2,
+        rarity=Rarity.UNCOMMON,
+        description="Permanent. End of turn: gain 1 block per Malware on the enemy.",
+    ),
+    Card(
+        id="recycle-bin",
+        name="Recycle Bin",
+        type=CardType.RECYCLE,
+        value=1,
+        token_cost=2,
+        rarity=Rarity.RARE,
+        description="Permanent. Whenever a card is banished, draw 1 card (at most 3 per turn).",
+    ),
 ]
 
 # The Vibe-Coder's own cards (see characters.py), offered to him on top of
@@ -667,6 +707,16 @@ PROGRAM_REWARD_POOL: list[Card] = [
         rarity=Rarity.UNCOMMON,
         description="Deal 16 (+ATK) damage. The program ends after its line.",
     ),
+    # a bridge to blocking (style.py): a program that raises block first
+    # gets its next action twice
+    Card(
+        id="guard-clause",
+        name="Guard Clause",
+        type=CardType.GUARD,
+        value=1,
+        rarity=Rarity.UNCOMMON,
+        description="Control flow. You have 5+ block: the next action runs twice.",
+    ),
 ]
 
 # The Vibe-Coder's control flow, on top of PROGRAM_REWARD_POOL in his
@@ -822,6 +872,23 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Ransomware": {
         "applies_amount": 9,
         "description": "One-shot. Deal 0 (+ATK) damage. Infect it with 9 Malware.",
+    },
+    "Failsafe": {
+        "banish_damage": 20,
+        "description": (
+            "Permanent. Reduce incoming damage by 1. When it is banished, deal 20 damage."
+        ),
+    },
+    "Counterstrike": {"value": 7, "description": "Deal 7 (+ATK) damage, +1 per block you have."},
+    "Quarantine": {
+        "value": 2,
+        "description": "Permanent. End of turn: gain 3 block per 2 Malware on the enemy.",
+    },
+    "Guard Clause": {
+        "draw": 1,
+        "description": (
+            "Control flow. You have 5+ block: the next action runs twice. Draw 1 card."
+        ),
     },
     # ---- the Vibe-Coder's cards (characters.py). Where tokens are the
     # bottleneck, an upgrade may make a card cheaper instead of stronger.

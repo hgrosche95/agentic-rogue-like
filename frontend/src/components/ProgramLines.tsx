@@ -113,7 +113,7 @@ function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep |
       const target = loopTarget(before);
       return target ? { text: `↺ ${target.name}`, tone: "flow" } : { text: "nothing to repeat", tone: "idle" };
     }
-    if (card.type === "if_wounded") {
+    if (card.type === "if_wounded" || card.type === "guard") {
       return next && next.runs > 1 ? { text: "×2 armed", tone: "flow" } : { text: "waiting", tone: "idle" };
     }
     if (card.type === "fork") return { text: "×2 next", tone: "flow" };
@@ -165,27 +165,42 @@ function linkKind(combat: PendingCombatView, line: number, cutLines: number[]): 
   // Segfault: the program ends after it
   if (card?.halts && combat.program.slice(line + 1).some((c) => c !== null)) return "cut";
   if (next?.type === "loop") return "loop";
-  if (card && ["fork", "if_wounded"].includes(card.type)) return "fork";
+  if (card && ["fork", "if_wounded", "guard"].includes(card.type)) return "fork";
   return "plain";
 }
 
 // The small "back to hand" button on a card lying on the field - a queued
 // line or an installed permanent. Shared with CombatPanel's classic slots.
-export function TakeBack({ name, disabled, onClick }: { name: string; disabled: boolean; onClick: () => void }) {
+// A permanent that has run since an earlier turn isn't taken back but
+// uninstalled - banished for the rest of the fight (`uninstall`).
+export function TakeBack({
+  name,
+  disabled,
+  onClick,
+  uninstall = false,
+}: {
+  name: string;
+  disabled: boolean;
+  onClick: () => void;
+  uninstall?: boolean;
+}) {
+  const label = uninstall
+    ? `Uninstall ${name} - it is banished for the rest of the fight`
+    : `Take ${name} back into your hand`;
   return (
     <button
       type="button"
-      className="take-back"
+      className={`take-back${uninstall ? " is-uninstall" : ""}`}
       disabled={disabled}
-      title={`Take ${name} back into your hand`}
-      aria-label={`Take ${name} back into your hand`}
+      title={label}
+      aria-label={label}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
         onClick();
       }}
     >
-      ↩
+      {uninstall ? "✕" : "↩"}
     </button>
   );
 }
@@ -354,7 +369,12 @@ export function ProgramLines({
             <CardTypeIcon type={card.type} />
             <span>{card.name}</span>
             {card !== landing && (
-              <TakeBack name={card.name} disabled={locked} onClick={() => onTakeBack("field", i)} />
+              <TakeBack
+                name={card.name}
+                disabled={locked}
+                uninstall={combat.field_uninstalls?.[i] ?? false}
+                onClick={() => onTakeBack("field", i)}
+              />
             )}
           </span>
         ))}

@@ -89,6 +89,10 @@ MAX_AUTO_PLAYS_PER_TURN = 30
 HALLUCINATION_CHANCE = 0.5
 # Copilot (CHAIN) counts at most this many cards played before it in a turn.
 CHAIN_MAX_PLAYS = 3
+# Bridges between play styles (style.py):
+GUARD_BLOCK = 5  # Guard Clause: the block the player needs for its extra run
+RECYCLE_MAX_PER_TURN = 3  # cards the Recycle Bins draw per turn, all together
+STACK_TRACE_CARDS = 4  # Stack Trace: +graveyard_attack per this many graveyard cards
 
 # Move strength scales off the attack stat (plus a boss's phase strength).
 # How hard each kind hits by default is models.DEFAULT_MOVE_POWER; a move in
@@ -251,6 +255,11 @@ class CombatState(BaseModel):
     draw_on_play: int = 0
     turn_draw_modifier: int = 0
     plays_this_turn: int = 0  # what Copilot (CHAIN) counts
+    # ids of the permanents played this turn - taking one of those back is a
+    # correction and returns it to the hand; any other one gets banished
+    # (take_back).
+    fresh_permanents: list[str] = Field(default_factory=list)
+    recycled_this_turn: int = 0  # cards the Recycle Bins drew this turn
     # Statuses and their stacks / turns left (models.Status).
     enemy_status: dict[Status, int] = Field(default_factory=dict)
     player_status: dict[Status, int] = Field(default_factory=dict)
@@ -430,6 +439,19 @@ def fortify_block(state: CombatState) -> int:
     return fortify * permanent_count(state)
 
 
+def retained_block(state: CombatState) -> int:
+    """Block that Retained State carries over into the next round: its
+    value per permanent on the field."""
+    return total(state.artifacts, "retain_block") * permanent_count(state)
+
+
+def quarantine_block(state: CombatState) -> int:
+    """Block the Quarantines raise at the end of the turn: their value per 2
+    Malware on the enemy, before the enemy acts (and before Malware ticks)."""
+    quarantine = sum(c.value for c in state.field if c and c.type is CardType.QUARANTINE)
+    return quarantine * state.enemy_status.get(Status.MALWARE, 0) // 2
+
+
 def turn_block(state: CombatState) -> int:
     """Block the artifacts raise at the end of this turn, before the enemy acts."""
     return every_nth_turn(state.artifacts, "turn_block", "turn_block_every", state.turn)
@@ -444,7 +466,7 @@ def incoming_damage(state: CombatState) -> tuple[int, int]:
     hits = intent_hits(state)
     if not hits:
         return 0, 0
-    block = state.player_block + fortify_block(state) + turn_block(state)
+    block = state.player_block + fortify_block(state) + quarantine_block(state) + turn_block(state)
     armor = player_armor(state)
     return (
         _damage_taken([low for low, _ in hits], block, armor),
@@ -713,7 +735,7 @@ def play_card(
         state.free_plays -= 1
     # The cost is paid before anything else, so a card like Memory Dump can't
     # throw away the very cards it is about to draw - and Purge can't banish them.
-    cost_line = _pay_banish(state, banished) + _pay_discard_cost(state, card, rng)
+    cost_line = _pay_banish(state, banished, rng) + _pay_discard_cost(state, card, rng)
 
     if queues(state, card):
         # Paid for now, run at the end of the turn (run_program).
@@ -722,12 +744,17 @@ def play_card(
         line = cost_line + f"You queue {card.name} in line {slot_index + 1}."
     elif hallucinates:
         line = cost_line + _hallucinate(state, card, slot_index, player)
-        (state.banished_pile if card.exhaust else state.discard_pile).append(card)
+        if card.exhaust:
+            line += _banish(state, [card], rng)
+        else:
+            state.discard_pile.append(card)
     elif card.type in PERMANENT_CARD_TYPES and state.program_mode:
         state.field.append(card)
+        state.fresh_permanents.append(card.id)
         line = cost_line + f"You start {card.name} - it keeps running in the background."
     elif card.type in PERMANENT_CARD_TYPES:
         state.field[slot_index] = card
+        state.fresh_permanents.append(card.id)
         line = cost_line + f"You play {card.name} in slot {slot_index + 1} - it stays on the field."
     else:
         # Action card: the multiplier is read from the field *before* the
@@ -740,8 +767,8 @@ def play_card(
             line += " " + _afflict(state, card.applies, card.applies_amount)
 
         if card.exhaust:
-            state.banished_pile.append(card)
             line += " It's used up and banished for the rest of the fight."
+            line += _banish(state, [card], rng)
         else:
             state.discard_pile.append(card)
 
@@ -775,12 +802,16 @@ def move_queued(state: CombatState, from_slot: int, to_slot: int) -> None:
     g[from_slot], g[to_slot] = g[to_slot], g[from_slot]
 
 
-def take_back(state: CombatState, zone: str, index: int) -> str:
-    """Take a card off the field back into the hand: a queued program line
-    (zone "program") or a permanent (zone "field" - its slot in classic play,
-    its place in the background in program mode). What it cost to play stays
-    paid; it no longer counts as played this turn, so playing it again
-    doesn't feed Copilot twice."""
+def take_back(state: CombatState, zone: str, index: int, rng: random.Random | None = None) -> str:
+    """Take a card off the field: a queued program line (zone "program") or a
+    permanent (zone "field" - its slot in classic play, its place in the
+    background in program mode). What it cost to play stays paid.
+
+    A queued line, or a permanent played this very turn, goes back into the
+    hand - a correction; it no longer counts as played this turn, so playing
+    it again doesn't feed Copilot twice. A permanent that has been running
+    since an earlier turn gets uninstalled instead: banished for the rest of
+    the fight (and whatever reacts to a banish fires - see _banish)."""
     if zone == "program":
         if not state.program_mode:
             raise ValueError("only a program has lines")
@@ -796,11 +827,51 @@ def take_back(state: CombatState, zone: str, index: int) -> str:
             state.field.pop(index)
         else:
             state.field[index] = None
+        if card.id not in state.fresh_permanents:
+            line = f"You uninstall {card.name} - it is banished for the rest of the fight."
+            return line + _banish(state, [card], rng or random.Random())
+        state.fresh_permanents.remove(card.id)
     else:
         raise ValueError(f"unknown zone {zone!r}")
     state.hand.append(card)
     state.plays_this_turn = max(0, state.plays_this_turn - 1)
     return f"You take {card.name} back into your hand."
+
+
+def uninstalls(state: CombatState, index: int) -> bool:
+    """Whether taking the permanent at field `index` back banishes it (it was
+    played before this turn) rather than returning it to the hand."""
+    card = state.field[index] if 0 <= index < len(state.field) else None
+    return card is not None and card.id not in state.fresh_permanents
+
+
+def _banish(state: CombatState, cards: list[Card], rng: random.Random) -> str:
+    """Put `cards` on the banished pile, then fire what reacts to a banish:
+    a card's own banish_damage (Failsafe), Logic Bomb's Malware and the
+    Recycle Bins' draw (RECYCLE_MAX_PER_TURN a turn). Junk (Glitch) feeds
+    none of it - flushing it out is no reward. Returns the log, with a
+    leading space, or "" if nothing reacted."""
+    state.banished_pile.extend(cards)
+    counted = [c for c in cards if c.type is not CardType.GLITCH]
+    parts: list[str] = []
+    for card in counted:
+        if card.banish_damage and state.enemy_hp > 0:
+            _, dealt = _damage_enemy(state, card.banish_damage)
+            parts.append(
+                f"{card.name} goes off for {dealt} damage. "
+                f"{state.enemy.name} at {state.enemy_hp} HP."
+            )
+    if (malware := total(state.artifacts, "banish_malware") * len(counted)) and state.enemy_hp > 0:
+        parts.append("Logic Bomb: " + _afflict(state, Status.MALWARE, malware))
+    recycle = sum(c.value for c in state.field if c and c.type is CardType.RECYCLE)
+    if recycle and counted:
+        room = max(0, RECYCLE_MAX_PER_TURN - state.recycled_this_turn)
+        want = min(room, recycle * len(counted))
+        if want:
+            drawn = _draw(state, want, rng)
+            state.recycled_this_turn += drawn
+            parts.append(f"Your Recycle Bin draws {drawn} card(s).")
+    return "".join(" " + p for p in parts)
 
 
 class ProgramStep(BaseModel):
@@ -921,6 +992,15 @@ def run_program(
                 forks += run.value if _wounded(state) else 0
                 state_line = "at half HP or less" if _wounded(state) else "still above half HP"
                 log.append(line + f"{run.name}: the enemy is {state_line}.")
+            elif run.type is CardType.GUARD:
+                guarded = state.player_block >= GUARD_BLOCK
+                forks += run.value if guarded else 0
+                state_line = (
+                    f"you hold {state.player_block} block - the next action runs twice"
+                    if guarded
+                    else f"only {state.player_block} block, under {GUARD_BLOCK}"
+                )
+                log.append(line + f"{run.name}: {state_line}.")
             elif run.type is CardType.PIPE:
                 piped += run.value * ran
                 log.append(line + f"{run.name}: the next action gets +{piped} ({ran} ran before).")
@@ -1007,7 +1087,8 @@ def run_program(
             if run.type in CONTROL_FLOW_TYPES and run.draw:
                 log.append(line + f"You draw {_draw(state, run.draw, rng)} card(s).")
             if card.exhaust and card.type not in CONTROL_FLOW_TYPES:
-                state.banished_pile.append(card)
+                if reacted := _banish(state, [card], rng).strip():
+                    log.append(line + reacted)
             else:
                 state.discard_pile.append(card)
             if line := _check_boss_phase(state):
@@ -1209,14 +1290,14 @@ def _banish_choice(state: CombatState, hand_index: int, banish: list[int] | None
     return [state.hand[i] for i in sorted(banish)]
 
 
-def _pay_banish(state: CombatState, cards: list[Card]) -> str:
+def _pay_banish(state: CombatState, cards: list[Card], rng: random.Random) -> str:
     if not cards:
         return ""
     for c in cards:
         # by identity - two copies of a card compare equal
         state.hand.pop(next(i for i, h in enumerate(state.hand) if h is c))
-        state.banished_pile.append(c)
-    return f"You banish {_names(cards)} for the rest of the fight. "
+    reacted = _banish(state, cards, rng)
+    return f"You banish {_names(cards)} for the rest of the fight.{reacted} "
 
 
 def queues(state: CombatState, card: Card) -> bool:
@@ -1264,6 +1345,8 @@ def attack_damage(
     """Damage of one hit of an ATTACK card - also what the UI/bots preview.
     `bonus` is flat damage on top, before the multiplier (Copilot)."""
     base = card.value + player.attack + bonus + _scaling_bonus(state, card)
+    traced = len(state.discard_pile) // STACK_TRACE_CARDS  # Stack Trace
+    base += total(state.artifacts, "graveyard_attack") * traced
     boost = sum(c.value for c in state.field if c and c.type is CardType.DAMAGE_BOOST)
     base = max(0, base + boost * permanent_count(state))  # a long program can't heal it
     if Status.EXPOSED in state.enemy_status:
@@ -1287,6 +1370,7 @@ def _scaling_bonus(state: CombatState, card: Card) -> int:
         Scaling.PLAYED: state.plays_this_turn,
         Scaling.EMPTY_SLOT: max(0, FIELD_SIZE - permanent_count(state)),
         Scaling.MALWARE: state.enemy_status.get(Status.MALWARE, 0),
+        Scaling.BLOCK: state.player_block,
         **_position_counts(state),
     }[card.scaling]
     return card.scale_value * count
@@ -1419,12 +1503,12 @@ def _apply_action_effect(
         for c in returning:
             state.banished_pile.remove(c)
         destroyed = [c for c in state.field if c is not None]
-        state.banished_pile.extend(destroyed)
         state.field = _empty_field(state)
         state.hand.extend(returning)
         return (
             f"You play {card.name}, wiping {len(destroyed)} permanent card(s) and "
             f"restoring {_names(returning)} from the banished pile."
+            + _banish(state, destroyed, rng)
         )
 
     if card.type is CardType.COMPACT:
@@ -1454,13 +1538,13 @@ def _apply_action_effect(
 
     # FINAL_STRIKE
     destroyed = [c for c in state.field if c is not None]
-    state.banished_pile.extend(destroyed)
     state.field = _empty_field(state)
     damage = round(card.value * len(destroyed) * multiplier)
     absorbed, dealt = _damage_enemy(state, damage)
     return (
         f"You play {card.name}, destroying {len(destroyed)} permanent card(s) for "
         f"{damage} damage. {state.enemy.name} at {state.enemy_hp} HP."
+        + _banish(state, destroyed, rng)
     )
 
 
@@ -1509,9 +1593,15 @@ def end_turn(
         )
         if state.enemy_hp <= 0:
             return log
+        turrets = sum(1 for c in state.field if c and c.type is CardType.TURRET)
+        if malware := total(state.artifacts, "turret_malware") * turrets:
+            log.append("Your daemons spread: " + _afflict(state, Status.MALWARE, malware))
     if gained := fortify_block(state):
         state.player_block += gained
         log.append(f"Your mainframe raises {gained} block.")
+    if gained := quarantine_block(state):
+        state.player_block += gained
+        log.append(f"Your quarantine raises {gained} block off the enemy's Malware.")
     if gained := turn_block(state):
         state.player_block += gained
         log.append(f"Your artifacts raise {gained} block.")
@@ -1563,10 +1653,16 @@ def end_turn(
     log.extend(_tick_statuses(state, player))
     if state.enemy_hp <= 0 or player.hp <= 0:
         return log
-    state.player_block = 0
+    # Retained State keeps some block per permanent; the rest is gone.
+    kept = min(state.player_block, retained_block(state))
+    state.player_block = kept
+    if kept:
+        log.append(f"Your permanents hold {kept} block over.")
     _roll_next_intent(state, rng)
     state.turn += 1
     state.plays_this_turn = 0
+    state.fresh_permanents = []
+    state.recycled_this_turn = 0
     state.free_plays = sum(c.value for c in state.field if c and c.type is CardType.OPENER)
     if state.token_limit is not None:
         _free_tokens(state, token_regen(state))
@@ -1655,13 +1751,17 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
         slot = next((i for i in slots if state.field[i] is not None), None)
         if slot is not None and state.program_mode:
             purged = state.field.pop(slot)
-            state.banished_pile.append(purged)
-            log.append(f"{name} purges your {purged.name} - your newest background process!")
+            log.append(
+                f"{name} purges your {purged.name} - your newest background process!"
+                + _banish(state, [purged], rng)
+            )
         elif slot is not None:
             purged = state.field[slot]
             state.field[slot] = None
-            state.banished_pile.append(purged)
-            log.append(f"{name} purges your {purged.name} from slot {slot + 1}!")
+            log.append(
+                f"{name} purges your {purged.name} from slot {slot + 1}!"
+                + _banish(state, [purged], rng)
+            )
 
     hits = [rng.randint(low, high) for low, high in intent_hits(state)]
     armor = player_armor(state)

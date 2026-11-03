@@ -154,6 +154,31 @@ ARTIFACT_POOL: list[Artifact] = [
         description="Every attack card you play heals you 1 HP.",
         lifesteal=1,
     ),
+    # ---- bridges between two styles (style.py)
+    Artifact(
+        id="stack-trace",
+        name="Stack Trace",
+        description="Attacks deal +1 damage for every 4 cards in your graveyard.",
+        graveyard_attack=1,
+    ),
+    Artifact(
+        id="logic-bomb",
+        name="Logic Bomb",
+        description="Whenever a card is banished, infect the enemy with 3 Malware.",
+        banish_malware=3,
+    ),
+    Artifact(
+        id="daemon-worm",
+        name="Daemon Worm",
+        description="Every time a Daemon fires, it also infects the enemy with 2 Malware.",
+        turret_malware=2,
+    ),
+    Artifact(
+        id="retained-state",
+        name="Retained State",
+        description="At the end of a round, keep up to 3 block per permanent on the field.",
+        retain_block=3,
+    ),
 ]
 
 

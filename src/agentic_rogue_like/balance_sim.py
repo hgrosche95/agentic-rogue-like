@@ -92,6 +92,8 @@ from .combat import (
     program_preview,
     run_program,
     start_combat,
+    take_back,
+    uninstalls,
 )
 from .enemies import ENEMY_POOL, escalate, pick_enemy, tier_floor, with_affix, with_interrupt
 from .engine import ACT_HEAL_PERCENT, NUM_ACTS, boss_phases
@@ -111,9 +113,10 @@ from .models import (
     PlayerState,
     Rarity,
     Scaling,
+    Status,
 )
 from .starts import apply_deal, apply_kit, roll_deals, roll_kits
-from .style import play_style
+from .style import PlayStyle, card_styles, play_style, style_counts
 from .threat import DEFAULT_MODEL, ThreatModel, threat
 
 TIERS = ("early", "mid", "elite", "boss")
@@ -297,7 +300,34 @@ SHIP_IT_MIN_PLAYS = 3
 
 
 def _hold_back(state: CombatState, card: Card) -> bool:
-    return card.scaling is Scaling.PLAYED and state.plays_this_turn < SHIP_IT_MIN_PLAYS
+    if card.scaling is Scaling.PLAYED:
+        return state.plays_this_turn < SHIP_IT_MIN_PLAYS
+    # Counterstrike waits for the block the bot is about to raise anyway -
+    # in a program the order is arranged afterwards (arrange_program).
+    if card.scaling is Scaling.BLOCK and not state.program_mode:
+        return state.enemy_intent in ATTACKING_INTENTS and any(
+            c.type is CardType.BLOCK and not overflows(state, c) for c in state.hand
+        )
+    return False
+
+
+def _banish_payoff(state: CombatState, cards: list[Card]) -> int:
+    """Damage banishing `cards` deals on its own (Failsafe)."""
+    return sum(c.banish_damage for c in cards if c is not None)
+
+
+def _uninstall_for_lethal(state: CombatState, ahead_hp: int, ahead_block: int) -> int | None:
+    """A field slot whose permanent, uninstalled, finishes the enemy (a
+    Failsafe going off) - or None."""
+    for i, card in enumerate(state.field):
+        if (
+            card is not None
+            and card.banish_damage
+            and uninstalls(state, i)
+            and card.banish_damage >= ahead_hp + ahead_block
+        ):
+            return i
+    return None
 
 
 def _junk(state: CombatState, card: Card) -> bool:
@@ -344,12 +374,19 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
     field is clogged, otherwise hit as hard as possible. Never plays past the
     context window: cards that would overflow it stay in hand."""
     for _ in range(MAX_AUTO_PLAYS_PER_TURN):
-        if not state.hand or state.enemy_hp <= 0 or player.hp <= 0:
+        if state.enemy_hp <= 0 or player.hp <= 0:
             return
         # Program mode: plan with what the queued program will have done -
         # the enemy's HP only drops once it runs.
         ahead = program_preview(state, player)
         if ahead.enemy_hp <= 0:
+            return
+        # An uninstalled Failsafe that kills is free damage.
+        slot = _uninstall_for_lethal(state, ahead.enemy_hp, ahead.enemy_block)
+        if slot is not None:
+            take_back(state, "field", slot, rng)
+            continue
+        if not state.hand:
             return
         played = False
         # 0. Flush Glitch cards first - free, and they only clog the hand.
@@ -396,7 +433,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
         ):
             # Control flow only steers - worth a line once there is
             # something for it to steer; arrange_program puts it in place.
-            order += [CardType.FORK, CardType.IF_WOUNDED]
+            order += [CardType.FORK, CardType.IF_WOUNDED, CardType.GUARD]
             order += [CardType.PIPE, CardType.BATCH]
             # Try/Catch only against an interrupt; a Buffer only with a Flush
             # in hand to let it out again
@@ -419,7 +456,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
             order.append(CardType.HEAL)
         for idx, card in enumerate(state.hand):
             if card.type is CardType.FINAL_STRIKE and not overflows(state, card):
-                dmg = card.value * permanents
+                dmg = card.value * permanents + _banish_payoff(state, state.field)
                 if permanents and (
                     dmg >= ahead.enemy_hp + ahead.enemy_block or len(_empty_slots(state)) <= 1
                 ):
@@ -568,12 +605,90 @@ def with_order(bot: Bot, order: str) -> Bot:
 _RARITY_RANK = {Rarity.RARE: 3, Rarity.UNCOMMON: 2, Rarity.COMMON: 1, Rarity.STARTER: 0}
 
 
-def pick_reward(offer: list[Card], bot_name: str, rng: random.Random) -> int:
-    """Smart takes the rarest card on offer, naive a random one."""
+# How much a card's fit with the deck counts next to its rarity: a card for a
+# style the deck already leans on beats one rarity step, a bridge between two
+# of the deck's styles counts on top.
+SYNERGY_WEIGHT = 1.0
+BRIDGE_WEIGHT = 0.5
+
+
+def _enabled(card: Card, deck: list[Card]) -> bool:
+    """Whether the deck has what `card` needs to do anything: Quarantine
+    Malware cards, Recycle Bin one-shots."""
+    if card.type is CardType.QUARANTINE:
+        return any(c.applies is Status.MALWARE for c in deck)
+    if card.type is CardType.RECYCLE:
+        return sum(1 for c in deck if c.exhaust or c.banish) >= 2
+    return True
+
+
+def card_fit(card: Card, deck: list[Card]) -> float:
+    """How well `card` fits the deck the smart bot is building - its styles
+    against the ones the deck's chosen cards already feed (style.py)."""
+    if not _enabled(card, deck):
+        return -1.0
+    counts = style_counts(deck)
+    lead = max(counts.values())
+    styles = card_styles(card)
+    fit = 0.0
+    if lead and any(counts[s] == lead for s in styles):
+        fit += SYNERGY_WEIGHT
+    if len([s for s in styles if counts[s] > 0]) >= 2:
+        fit += BRIDGE_WEIGHT
+    return fit
+
+
+def pick_reward(
+    offer: list[Card], bot_name: str, rng: random.Random, deck: list[Card] | None = None
+) -> int:
+    """Naive takes a random card. Smart takes the rarest - and, given the
+    `deck`, weighs in how well each card fits the styles the deck already
+    leans on (card_fit)."""
     if bot_name == "naive":
         return rng.randrange(len(offer))
-    best = max(_RARITY_RANK[c.rarity] for c in offer)
-    return rng.choice([i for i, c in enumerate(offer) if _RARITY_RANK[c.rarity] == best])
+    scores = [_RARITY_RANK[c.rarity] + (card_fit(c, deck) if deck else 0.0) for c in offer]
+    best = max(scores)
+    return rng.choice([i for i, score in enumerate(scores) if score == best])
+
+
+# Artifacts that only pay off with a certain deck (the bridges), and what the
+# deck needs for them: the styles it must already feed (style.py), or a card.
+def _artifact_enabled(artifact: Artifact, deck: list[Card]) -> bool:
+    counts = style_counts(deck)
+    if artifact.graveyard_attack:
+        return counts[PlayStyle.GRAVEYARD] >= 2
+    if artifact.banish_malware:
+        return counts[PlayStyle.ONE_SHOT] >= 2
+    if artifact.turret_malware:
+        return any(c.type is CardType.TURRET for c in deck)
+    if artifact.retain_block:
+        return counts[PlayStyle.PERMANENTS] >= 2
+    return True
+
+
+def _is_bridge(artifact: Artifact) -> bool:
+    return bool(
+        artifact.graveyard_attack
+        or artifact.banish_malware
+        or artifact.turret_malware
+        or artifact.retain_block
+    )
+
+
+def pick_artifact(
+    offer: list[Artifact], bot_name: str, rng: random.Random, deck: list[Card]
+) -> Artifact:
+    """Naive picks at random. Smart takes a bridge its deck is built for,
+    never one it isn't, and otherwise picks at random - there's no obvious
+    "best" plain artifact to hard-code, and a random pick keeps the numbers
+    an average over them."""
+    if bot_name == "naive":
+        return rng.choice(offer)
+    fitting = [a for a in offer if _is_bridge(a) and _artifact_enabled(a, deck)]
+    if fitting:
+        return rng.choice(fitting)
+    plain = [a for a in offer if not _is_bridge(a)]
+    return rng.choice(plain or offer)
 
 
 # Below this share of max HP the smart bot heals at a rest site; above it, it
@@ -706,8 +821,8 @@ class RunResult:
 def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -> RunResult:
     """A full run on a real generated map, picking a random path forward.
 
-    Both bots pick artifacts at random - there's no obvious "best" one to
-    hard-code, and a random pick keeps the numbers an average over all of them.
+    Artifacts: the naive bot picks at random, the smart one takes a bridge
+    its deck is built for and otherwise picks at random (pick_artifact).
     """
     rng = random.Random(seed)
     act = 1
@@ -727,7 +842,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
         if cfg.artifacts and steps % ARTIFACT_EVERY_STEPS == 0:
             offer = roll_artifact_offer(rng, player.artifacts, pool=cfg.artifact_pool())
             if offer:
-                gain_artifact(player, rng.choice(offer))
+                gain_artifact(player, pick_artifact(offer, bot_name, rng, player.deck))
         if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
             tier = tier_for(node.floor, node.type, act)
             style = play_style(player.deck) if cfg.adaptive else None
@@ -758,7 +873,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
             heal(player, total(player.artifacts, "heal_after_combat"))
             if cfg.rewards:
                 offer = roll_card_reward(rng, elite=node.type is not NodeType.COMBAT, pool=pool)
-                pick = offer[pick_reward(offer, bot_name, rng)]
+                pick = offer[pick_reward(offer, bot_name, rng, player.deck)]
                 player.deck.append(reward_card(pick, player.deck))
             if node.type is NodeType.BOSS:
                 # mirrors engine.advance_act - the new act starts on its camp
