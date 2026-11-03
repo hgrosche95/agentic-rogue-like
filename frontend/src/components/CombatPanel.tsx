@@ -1047,7 +1047,7 @@ export function CombatPanel({
                   onPointerEnter={() => setPointedSlot(slotIndex)}
                   onPointerLeave={() => setPointedSlot((s) => (s === slotIndex ? null : s))}
                 >
-                  <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} />
+                  <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} slots={combat.field.length} />
                 </button>
               ) : (
                 <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`} data-field-card={card.id}>

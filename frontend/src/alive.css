@@ -520,3 +520,33 @@
     animation: none;
   }
 }
+
+/* ---------- consistency ---------- */
+/* numbers keep their width, so counting ones (HP, credits, piles) don't
+   jitter as their digits change */
+body {
+  font-variant-numeric: tabular-nums;
+}
+
+/* one focus ring for everything the keyboard can reach, not just buttons */
+a:focus-visible,
+[tabindex]:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* nothing to do: say so with the pointer too */
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* a permanent aimed at the stack: what it does from that slot */
+.slot-preview.is-permanent b {
+  font-size: 1.3rem;
+}
+
+button.is-busy:disabled {
+  cursor: progress;
+}
