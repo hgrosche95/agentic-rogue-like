@@ -966,9 +966,12 @@ def run_program(
         a, b = order.index(queued[0]), order.index(queued[1])
         order[a], order[b] = order[b], order[a]
         queued[0], queued[1] = queued[1], queued[0]
+    garbage_free = total(state.artifacts, "garbage_free") > 0
     collected = None
-    if state.enemy_intent is EnemyIntentType.COLLECT and len(queued) >= 2:
+    if state.enemy_intent is EnemyIntentType.COLLECT and len(queued) >= 2 and not garbage_free:
         collected = queued.pop()
+    main_thread = total(state.artifacts, "main_thread")
+    skip_next = False  # Garbage-Free: a Segfault skips only the line after it
     state.leaked_line = None
     halted_by: str | None = None  # a halting card (Segfault) ended the program
     # the actions that ran so far, each once, with their lines - what a Goto replays
@@ -993,8 +996,9 @@ def run_program(
                 log.append(f"{state.enemy.name} garbage-collects line {slot + 1}: {card.name}.")
                 outcome = "collected"
                 continue
-            if halted_by is not None:
+            if halted_by is not None or skip_next:
                 state.discard_pile.append(card)  # never ran, so never used up
+                skip_next = False
                 outcome = "cut"
                 continue
             if cut_after is not None and lines_run >= cut_after:
@@ -1102,6 +1106,8 @@ def run_program(
                 if slot == last_line:
                     bonus += compiler * len(types - {run.type})
                     forks += tail_call
+                if slot == queued[0]:
+                    forks += main_thread
                 # a buffered action hits, then the enemy gets back what it took
                 held = (state.enemy_hp, state.enemy_block, state.tally.damage_dealt)
                 hand_before = len(state.hand)
@@ -1127,7 +1133,10 @@ def run_program(
                 last = None if glitched else run
                 if not glitched:
                     ran_actions.append((run, slot))
-                if run.halts and not glitched:
+                if run.halts and not glitched and garbage_free:
+                    skip_next = True
+                    log.append(line + f"{run.name} crashes - the next line is skipped.")
+                elif run.halts and not glitched:
                     halted_by = run.name
                     log.append(line + f"{run.name} ends the program here.")
             after_flow = run.type in CONTROL_FLOW_TYPES

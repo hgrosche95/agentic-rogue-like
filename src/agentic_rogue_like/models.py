@@ -72,6 +72,10 @@ class Artifact(BaseModel):
     tail_call_every: int = 1  # ... on every Nth turn only
     pipeline: int = 0  # flat bonus for the action right after control flow
     compiler_bonus: int = 0  # the last line's action +this per card type that ran before it
+    main_thread: int = 0  # extra runs of the action in the first line to run
+    # a halting card (Segfault) only skips the line after it, and the enemy's
+    # garbage collector finds nothing to collect
+    garbage_free: int = 0
     # Bridges between two play styles (see style.py):
     graveyard_attack: int = 0  # attacks +this per STACK_TRACE_CARDS cards in the graveyard
     banish_malware: int = 0  # Malware on the enemy for every card that gets banished

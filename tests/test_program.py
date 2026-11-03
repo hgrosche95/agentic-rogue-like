@@ -766,3 +766,20 @@ def test_goto_runs_the_first_actions_again_from_their_own_lines() -> None:
     assert _damage_dealt("Exploit", "Exploit", "Exploit", "Goto 1") == 15 + 5 + 10
     # with nothing before it, it idles
     assert _damage_dealt("Goto 1", "Exploit") == 5
+
+
+# ---- Main Thread, Garbage-Free
+
+
+def test_main_thread_runs_the_first_line_twice() -> None:
+    assert _damage_dealt("Exploit", "Firewall", artifact="Main Thread") == 10
+    # control flow in the first line: nothing to run twice
+    assert _damage_dealt("Loop", "Exploit", artifact="Main Thread") == 5
+
+
+def test_garbage_free_softens_segfault_and_stops_the_collector() -> None:
+    assert _damage_dealt("Segfault", "Exploit", "Exploit", artifact="Garbage-Free") == 16 + 5
+    state, player = _fight(artifact="Garbage-Free")
+    state.enemy_intent = EnemyIntentType.COLLECT
+    _queue(state, player, "Exploit", "Exploit")
+    assert [s.outcome for s in program_preview(state, player).steps] == ["ran", "ran"]

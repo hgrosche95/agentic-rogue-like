@@ -275,6 +275,25 @@ PROGRAM_ARTIFACT_POOL: list[Artifact] = [
         extra_draw=1,
         extra_draw_every=2,
     ),
+    Artifact(
+        id="main-thread",
+        name="Main Thread",
+        description=(
+            "The action in the first line of your program to run runs twice, but enemies "
+            "have 15% more HP."
+        ),
+        main_thread=1,
+        enemy_hp_percent=15,
+    ),
+    Artifact(
+        id="garbage-free",
+        name="Garbage-Free",
+        description=(
+            "A card that would end your program only skips the line after it, and enemies' "
+            "garbage collectors find nothing to collect."
+        ),
+        garbage_free=1,
+    ),
 ]
 
 
