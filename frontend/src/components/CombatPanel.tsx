@@ -29,6 +29,8 @@ import { BossIntro, TurnBanner } from "./CombatBanners";
 import { banishCount, programPlan, queues } from "../program";
 import { hasSeenTutorial } from "../tutorial";
 import { ProgramLines, ProgramOutput, TakeBack } from "./ProgramLines";
+import { TurnSummaryCard } from "./TurnSummaryCard";
+import { summarizeTurn, type TurnSummary } from "../turnSummary";
 import { SlotPreview } from "./SlotPreview";
 import { Tutorial } from "./Tutorial";
 
@@ -154,6 +156,8 @@ function fanStyle(index: number, count: number): CSSProperties {
 // for its card animation to play out before the next line starts (at the
 // normal tempo, see tempo.ts)
 const PROGRAM_STEP_MS = 1100;
+// how long the turn summary stays up after the program has run
+const SUMMARY_MS = 6000;
 
 // how long a turn banner stays up - and an overclock's, with or without the
 // boss's line to read
@@ -252,6 +256,13 @@ export function CombatPanel({
   const [spent, setSpent] = useState<{ on: PendingCombatView; lines: number[] } | null>(null);
   const spentLines = spent?.on === combat ? spent.lines : [];
   const [helpOpen, setHelpOpen] = useState(false);
+  // what the program's last run came to, shown over the board for a while
+  const [turnSummary, setTurnSummary] = useState<TurnSummary | null>(null);
+  useEffect(() => {
+    if (!turnSummary) return;
+    const timer = window.setTimeout(() => setTurnSummary(null), tempoMs(SUMMARY_MS));
+    return () => window.clearTimeout(timer);
+  }, [turnSummary]);
   // The coach marks: shown in the first fight of each mode, again from the
   // help sheet (a new key starts them over); they follow the cards played
   // and turns ended.
@@ -379,6 +390,7 @@ export function CombatPanel({
     const taken = combat.enemy_hp - (steps.at(-1)?.enemy_hp ?? combat.enemy_hp);
     const finish = () => {
       endTurnFrom.current = { combat, hp: player.hp };
+      if (programMode) setTurnSummary(summarizeTurn(combat, player.artifacts));
       // the enemy's move, called out while the server works the turn out -
       // unless the program has already taken it down
       if (!(combat.program_preview && combat.program_preview.enemy_hp <= 0)) {
@@ -871,6 +883,7 @@ export function CombatPanel({
         {/* a dragged card dropped anywhere on (or near) the zone goes to the
             nearest slot that takes it - see useCardDrag */}
         <div className="field-zone" ref={fieldRef} data-drop-zone="">
+          {turnSummary && <TurnSummaryCard summary={turnSummary} onClose={() => setTurnSummary(null)} />}
           <div className="zone-head">
             <span className="zone-label zone-title">
               {programMode ? `Program · runs ${reversed ? "right to left" : "left to right"}` : "Execution stack"}

@@ -3042,3 +3042,111 @@ button.field-slot.is-queued:hover:not(:disabled) {
     animation: none;
   }
 }
+
+/* ---------- the program's run in one card, after it has run ---------- */
+.field-zone {
+  position: relative;
+}
+
+.turn-summary {
+  position: absolute;
+  z-index: 20;
+  top: 10px;
+  right: 14px;
+  width: min(300px, calc(100% - 28px));
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line-strong);
+  border-top: 3px solid var(--gold);
+  border-radius: 12px;
+  background: var(--panel-solid);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 0.45);
+  animation: summary-in var(--dur-slow) var(--ease-out) both;
+}
+
+.turn-summary header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.turn-summary-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.turn-summary-close {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-dim);
+}
+
+.turn-summary-close:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+
+.turn-summary-totals {
+  display: flex;
+  gap: 14px;
+  margin: 4px 0 6px;
+  font-family: var(--font-head);
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.turn-summary-totals b {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.turn-summary-totals .is-damage {
+  color: var(--warm);
+}
+
+.turn-summary-totals .is-block {
+  color: var(--cyan);
+}
+
+.turn-summary ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.turn-summary li.is-combo {
+  color: var(--gold);
+}
+
+.turn-summary li.is-lost {
+  color: var(--danger);
+}
+
+.turn-summary li.is-artifact {
+  color: var(--text-dim);
+}
+
+@keyframes summary-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .turn-summary {
+    animation: none;
+  }
+}
