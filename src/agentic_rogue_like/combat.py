@@ -599,14 +599,32 @@ def _check_boss_phase(state: CombatState) -> str:
     return line
 
 
+def phase_floor(state: CombatState) -> int:
+    """The HP a boss can't be brought below in its current phase: its next
+    phase's threshold - a boss never skips a phase, a hit or a tick that
+    would carry it past one stops there (and _check_boss_phase moves it on).
+    0 for anything else, or once its last phase has begun."""
+    if not state.boss or state.phase >= state.boss_phases:
+        return 0
+    return max(1, state.enemy.hp * PHASE_HP_PERCENT[state.phase + 1] // 100)
+
+
+def _lose_hp(state: CombatState, amount: int) -> int:
+    """The enemy loses up to `amount` HP, no further than phase_floor.
+    Returns what it lost."""
+    lost = max(0, min(amount, state.enemy_hp - phase_floor(state)))
+    state.enemy_hp -= lost
+    state.tally.damage_dealt += lost
+    return lost
+
+
 def _damage_enemy(state: CombatState, damage: int) -> tuple[int, int]:
     """Apply damage to the enemy's block first, then its HP. Returns (absorbed, dealt)."""
     absorbed = min(damage, state.enemy_block)
     state.enemy_block -= absorbed
     dealt = damage - absorbed
-    state.tally.damage_dealt += min(dealt, state.enemy_hp)
-    state.tally.biggest_hit = max(state.tally.biggest_hit, min(dealt, state.enemy_hp))
-    state.enemy_hp = max(state.enemy_hp - dealt, 0)
+    lost = _lose_hp(state, dealt)
+    state.tally.biggest_hit = max(state.tally.biggest_hit, lost)
     return absorbed, dealt
 
 
@@ -1876,9 +1894,10 @@ def _tick_statuses(state: CombatState, player: PlayerState) -> list[str]:
     log: list[str] = []
     name = state.enemy.name
     if stacks := state.enemy_status.get(Status.MALWARE, 0):
-        state.tally.damage_dealt += min(stacks, state.enemy_hp)
-        state.enemy_hp = max(state.enemy_hp - stacks, 0)
-        log.append(f"Malware eats {stacks} HP off {name}. {name} at {state.enemy_hp} HP.")
+        lost = _lose_hp(state, stacks)
+        log.append(f"Malware eats {lost} HP off {name}. {name} at {state.enemy_hp} HP.")
+        if line := _check_boss_phase(state):
+            log.append(line.strip())
     if stacks := state.player_status.get(Status.MALWARE, 0):
         _hurt(state, player, stacks, "Malware")
         log.append(f"Malware eats {stacks} of your HP. You are at {player.hp} HP.")

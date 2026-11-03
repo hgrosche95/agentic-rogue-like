@@ -1,7 +1,8 @@
 """Artifacts - passive, run-long bonuses.
 
-The player picks one of three at the start of a run and another one every
-ARTIFACT_EVERY_STEPS steps on the map. Unlike cards they never have to be
+The player picks one of three at the start of a run, and earns another
+pick by beating an elite or an act's boss (engine._finish_combat) - the
+harder fights a path goes through, the more artifacts it pays. Unlike cards they never have to be
 drawn or played: each one is a bag of numbers (see models.Artifact) that the
 engine and combat.py add up at fixed hook points - opening hand, every turn
 end, after a fight, at a rest site, ... So a new artifact is a new entry in
@@ -20,7 +21,6 @@ import random
 
 from .models import Artifact, PlayerState
 
-ARTIFACT_EVERY_STEPS = 3
 ARTIFACT_CHOICES = 3
 
 ARTIFACT_POOL: list[Artifact] = [

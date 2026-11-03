@@ -35,15 +35,17 @@ export function ArtifactBar({
             <li
               key={pulse?.ids.includes(artifact.id) ? `${artifact.id}-${pulse.id}` : artifact.id}
               className={`artifact-chip${timer ? " is-timed" : ""}${timer?.active ? ` is-firing is-${timer.tone}` : ""}${pulse?.ids.includes(artifact.id) ? " is-pulsed" : ""}`}
+              data-artifact-id={artifact.id}
               data-tip-term={artifact.name}
               data-tip={artifact.description + state}
               tabIndex={0}
             >
-              <ArtifactIcon id={artifact.id} size={13} />
-              {artifact.name}
+              {/* an icon only: the name and the effect are in its tooltip */}
+              <ArtifactIcon id={artifact.id} size={18} />
+              <span className="sr-only">{artifact.name}</span>
               {timer && (
                 <b className="artifact-timer" aria-label={timer.active ? "active this turn" : `in ${timer.next}`}>
-                  {timer.active ? "NOW" : `in ${timer.next}`}
+                  {timer.active ? "!" : timer.next}
                 </b>
               )}
             </li>

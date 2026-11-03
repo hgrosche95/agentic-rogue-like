@@ -56,7 +56,9 @@ function typeLine(card: Card): { label: string; repeats: boolean } {
 // flow) is about, big, with what it counts - from the card's own value, so
 // an upgrade shows up here too. Types whose value is no count are left out.
 type StatIcon = "cards" | "percent" | "shield" | "damage" | "token" | "clock";
-const STAT: Partial<Record<CardType, { icon: StatIcon; unit: string; sign?: "+" | "−"; percent?: boolean }>> = {
+const STAT: Partial<
+  Record<CardType, { icon: StatIcon; unit: string; sign?: "+" | "−"; percent?: boolean; half?: boolean }>
+> = {
   draw: { icon: "cards", unit: "draw" },
   retrieve: { icon: "cards", unit: "back" },
   restore: { icon: "cards", unit: "back" },
@@ -71,7 +73,8 @@ const STAT: Partial<Record<CardType, { icon: StatIcon; unit: string; sign?: "+" 
   chain: { icon: "damage", unit: "per card", sign: "+" },
   token_regen: { icon: "token", unit: "per turn", sign: "+" },
   opener: { icon: "token", unit: "free / turn" },
-  quarantine: { icon: "shield", unit: "per 2 malware", sign: "+" },
+  // its value counts half blocks (2: one block per Malware)
+  quarantine: { icon: "shield", unit: "per malware", sign: "+", half: true },
   recycle: { icon: "cards", unit: "per banish" },
   pipe: { icon: "damage", unit: "per action", sign: "+" },
   batch: { icon: "token", unit: "per action" },
@@ -407,7 +410,7 @@ export function CardFace({
           <StatGlyph icon={stat.icon} />
           <b>
             {stat.sign ?? ""}
-            {card.value}
+            {stat.half ? card.value / 2 : card.value}
             {stat.percent ? "%" : ""}
           </b>
           <span className="card-unit">{stat.unit}</span>

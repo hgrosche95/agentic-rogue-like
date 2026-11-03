@@ -14,7 +14,7 @@ from .agent.card_agent import card_for_style
 from .agent.encounter_agent import enemy_for_node
 from .agent.event_agent import event_for_room
 from .agent.narrator import narrate
-from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
+from .artifacts import gain_artifact, heal, roll_artifact_offer, total
 from .cards import can_upgrade, reward_card, roll_card_reward, upgrade_card
 from .characters import CHARACTERS, artifact_pool, reward_pool
 from .combat import CombatState, auto_resolve_combat
@@ -180,15 +180,10 @@ def available_choices(run: RunState) -> list[str]:
 
 
 def move_to(run: RunState, node_id: str) -> None:
-    """Step onto `node_id`; every ARTIFACT_EVERY_STEPS steps an artifact offer waits there."""
+    """Step onto `node_id`."""
     run.previous_node_id = run.current_node_id
     run.current_node_id = node_id
     run.steps += 1
-    if run.steps % ARTIFACT_EVERY_STEPS == 0:
-        rng = random.Random(f"{run.seed}-artifacts-{run.steps}")
-        run.artifact_offer = (
-            roll_artifact_offer(rng, run.player.artifacts, pool=artifact_pool(run)) or None
-        )
 
 
 def switch_choices(run: RunState) -> list[str]:
@@ -394,6 +389,15 @@ def _finish_combat(
         elite=node.type is not NodeType.COMBAT,
         pool=reward_pool(run),
     )
+    # The harder fights pay an artifact on top: an elite, an act's boss. Its
+    # own rng, so the offer doesn't shift the run rng's sequence.
+    if node.type in (NodeType.ELITE, NodeType.BOSS):
+        offer_rng = random.Random(f"{run.seed}-artifacts-{run.act}-{node.id}")
+        run.artifact_offer = (
+            roll_artifact_offer(offer_rng, run.player.artifacts, pool=artifact_pool(run)) or None
+        )
+        if run.artifact_offer:
+            run.history.append("It leaves an artifact behind - pick one to install.")
     if node.type is NodeType.BOSS:
         advance_act(run)
 
