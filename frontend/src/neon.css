@@ -2956,3 +2956,22 @@ button.field-slot.is-queued:hover:not(:disabled) {
     transform: translate(-50%, -100%) scale(0.95);
   }
 }
+
+/* ---------- what the enemy's program move does to a line ---------- */
+.line-threat {
+  position: absolute;
+  z-index: 4;
+  top: 20px;
+  right: -10px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--danger);
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 18px;
+  text-transform: uppercase;
+  color: var(--panel-solid);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--danger) 60%, transparent);
+  pointer-events: none;
+}

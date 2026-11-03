@@ -172,6 +172,24 @@ export const KEYWORDS: Keyword[] = [
     text: "Boss move: your program runs right to left this turn - Fork and Loop then steer the lines to their left.",
   },
   {
+    id: "garbage-collector",
+    term: "Garbage Collector",
+    pattern: /\bgarbage collector\b/,
+    text: "Enemy move: the last line of your program is thrown away before it runs and goes to the graveyard unused. Don't save your best for last.",
+  },
+  {
+    id: "race-condition",
+    term: "Race Condition",
+    pattern: /\brace condition\b/,
+    text: "Enemy move: the first two lines of your program swap places - a Fork or If Wounded may end up behind what it was meant to steer.",
+  },
+  {
+    id: "memory-leak",
+    term: "Memory Leak",
+    pattern: /\bmemory leak\b/,
+    text: "Enemy move: the first line that runs stays locked for your next turn.",
+  },
+  {
     id: "malware",
     term: "Malware",
     pattern: /\bmalware\b|\binfect(?:s|ed)?\b/,

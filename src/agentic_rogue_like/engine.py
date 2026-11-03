@@ -20,7 +20,7 @@ from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
-from .enemies import escalate, with_affix, with_interrupt
+from .enemies import escalate, with_affix, with_program_move
 from .events import EventOption, GameEvent, apply_option
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
@@ -447,7 +447,7 @@ def _room_enemy(
         affix_rng = random.Random(f"{run.seed}-affix-{run.act}-{node.id}")
         enemy = with_affix(enemy, affix_rng, style)
     if run.program_mode and not boss:
-        enemy = with_interrupt(enemy, style)
+        enemy = with_program_move(enemy, style, run.player.deck)
     if style is not None and answers(enemy, style):
         enemy = enemy.model_copy(update={"taunt": taunt(style)})
     return escalate(enemy, node.floor, NUM_FLOORS, run.act)

@@ -294,12 +294,18 @@ class MoveKind(StrEnum):
     # Program mode, bosses only (combat._roll_boss_intent): a light hit, and
     # the player's program runs right to left this turn.
     REFACTOR = "refactor"
+    # Program mode only, each with a light hit (combat.run_program):
+    COLLECT = "collect"  # garbage collector: the last line to run is thrown away unrun
+    RACE = "race"  # race condition: the first two lines to run swap places
+    LEAK = "leak"  # memory leak: the first line to run stays locked next turn
 
 
 # Moves only the game hands out - enemies get them in program runs
 # (enemies.with_interrupt, the boss move set); move sets from the pool or
 # the agent never have them.
-PROGRAM_ONLY_MOVES = frozenset({MoveKind.INTERRUPT, MoveKind.REFACTOR})
+PROGRAM_ONLY_MOVES = frozenset(
+    {MoveKind.INTERRUPT, MoveKind.REFACTOR, MoveKind.COLLECT, MoveKind.RACE, MoveKind.LEAK}
+)
 
 
 # Default power (percent of the enemy's attack stat) per move kind - the
@@ -316,6 +322,9 @@ DEFAULT_MOVE_POWER: dict[MoveKind, int] = {
     MoveKind.CORRUPT: 50,
     MoveKind.INTERRUPT: 50,
     MoveKind.REFACTOR: 100,
+    MoveKind.COLLECT: 50,
+    MoveKind.RACE: 50,
+    MoveKind.LEAK: 50,
 }
 DEFAULT_BARRAGE_HITS = 3
 DEFAULT_INFECT_STACKS = 3

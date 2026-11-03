@@ -417,8 +417,10 @@ export function CombatPanel({
         const live = !sequence.skipping.current;
         setRunning(step.slot);
         setSpent({ on: combat, lines: shown.slice(0, i).map((s) => s.slot) });
-        if (step.outcome === "cut") {
-          arenaRef.current?.programHit({ dealt: 0, runs: 0, block: 0, heal: 0, weight: 0, cut: true });
+        if (step.outcome === "cut" || step.outcome === "collected") {
+          const halted = steps.some((s) => s.outcome === "ran" && combat.program[s.slot]?.halts);
+          const cutBy = step.outcome === "collected" ? "Collected" : halted ? "Exit" : "Interrupt";
+          arenaRef.current?.programHit({ dealt: 0, runs: 0, block: 0, heal: 0, weight: 0, cut: true, cutBy });
           sfx.play("error");
           return;
         }

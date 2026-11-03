@@ -145,6 +145,18 @@ GLITCH_DAMAGE = 2.5
 # (pool enemies with and without enemies.with_interrupt: 20.2 HP plain,
 # 20.4-20.5 armed at 4-4.5, within the noise).
 INTERRUPT_DAMAGE = 4.5
+# The other program moves, set like it: a garbage collector throws away one
+# line (the last, often the strongest), a race condition only reorders two,
+# a memory leak takes a line away for the next turn.
+COLLECT_DAMAGE = 4.0
+RACE_DAMAGE = 2.0
+LEAK_DAMAGE = 3.0
+_PROGRAM_MOVE_DAMAGE = {
+    MoveKind.INTERRUPT: INTERRUPT_DAMAGE,
+    MoveKind.COLLECT: COLLECT_DAMAGE,
+    MoveKind.RACE: RACE_DAMAGE,
+    MoveKind.LEAK: LEAK_DAMAGE,
+}
 
 
 def _malware(stacks: int, turns: float) -> float:
@@ -182,8 +194,9 @@ def _per_turn(
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + _malware(move.stacks, turns))
         elif move.kind is MoveKind.LOCK:
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + LOCK_DAMAGE)
-        elif move.kind is MoveKind.INTERRUPT:
-            damage += p * (through_block(hit(move.power, _D6_MEAN)) + INTERRUPT_DAMAGE)
+        elif move.kind in _PROGRAM_MOVE_DAMAGE:
+            extra = _PROGRAM_MOVE_DAMAGE[move.kind]
+            damage += p * (through_block(hit(move.power, _D6_MEAN)) + extra)
         elif move.kind is MoveKind.CORRUPT:
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + GLITCH_DAMAGE * move.stacks)
         elif move.kind is MoveKind.DEFEND:

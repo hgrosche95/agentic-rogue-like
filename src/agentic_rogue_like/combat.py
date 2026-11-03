@@ -129,6 +129,9 @@ class EnemyIntentType(StrEnum):
     CORRUPT = "corrupt"  # a light hit that shuffles Glitch cards into the draw pile
     INTERRUPT = "interrupt"  # a light hit; the program is cut off after a few lines
     REFACTOR = "refactor"  # bosses: a light hit; the program runs right to left
+    COLLECT = "collect"  # a light hit; the program's last line is thrown away unrun
+    RACE = "race"  # a light hit; the program's first two lines swap places
+    LEAK = "leak"  # a light hit; the program's first line stays locked next turn
 
 
 # Intents that hit the player - everything else deals no damage.
@@ -143,6 +146,9 @@ ATTACKING_INTENTS = frozenset(
         EnemyIntentType.CORRUPT,
         EnemyIntentType.INTERRUPT,
         EnemyIntentType.REFACTOR,
+        EnemyIntentType.COLLECT,
+        EnemyIntentType.RACE,
+        EnemyIntentType.LEAK,
     }
 )
 
@@ -153,6 +159,9 @@ _LIGHT_HIT_KINDS = {
     EnemyIntentType.CORRUPT: MoveKind.CORRUPT,
     EnemyIntentType.INTERRUPT: MoveKind.INTERRUPT,
     EnemyIntentType.REFACTOR: MoveKind.REFACTOR,
+    EnemyIntentType.COLLECT: MoveKind.COLLECT,
+    EnemyIntentType.RACE: MoveKind.RACE,
+    EnemyIntentType.LEAK: MoveKind.LEAK,
 }
 
 # How often a boss refactors a program, against its other moves' weights
@@ -277,6 +286,9 @@ class CombatState(BaseModel):
     # queued lines in run order, and how many there are - what the
     # position scalings (LINES, FIRST_LINE, LAST_LINE) read. None otherwise.
     line_position: tuple[int, int] | None = None
+    # Memory Leak: the line that ran first this turn, locked by the enemy's
+    # move for the player's next turn.
+    leaked_line: int | None = None
     tally: FightTally = Field(default_factory=FightTally)
 
 
@@ -880,7 +892,8 @@ class ProgramStep(BaseModel):
     slot: int
     name: str
     type: CardType
-    # "ran", "cut" (an interrupt stopped it) or "skipped" (the enemy was down)
+    # "ran", "cut" (an interrupt or a Segfault stopped it), "collected" (a
+    # garbage collector threw it away) or "skipped" (the enemy was down)
     outcome: str
     runs: int  # how often its action ran - a fork's target twice, a loop its repeats
     damage: int  # the enemy's HP lost
@@ -947,6 +960,16 @@ def run_program(
     order = _run_order(state)
     # the queued lines in run order, for the position scalings
     queued = [s for s in order if state.program[s] is not None]
+    # The enemy's program moves: a race condition swaps the first two lines
+    # to run, a garbage collector throws the last one away unrun.
+    if state.enemy_intent is EnemyIntentType.RACE and len(queued) >= 2:
+        a, b = order.index(queued[0]), order.index(queued[1])
+        order[a], order[b] = order[b], order[a]
+        queued[0], queued[1] = queued[1], queued[0]
+    collected = None
+    if state.enemy_intent is EnemyIntentType.COLLECT and len(queued) >= 2:
+        collected = queued.pop()
+    state.leaked_line = None
     halted_by: str | None = None  # a halting card (Segfault) ended the program
     for step, slot in enumerate(order):
         card = state.program[slot]
@@ -963,6 +986,11 @@ def run_program(
                 state.discard_pile.append(card)  # never ran, so never used up
                 outcome = "skipped"
                 continue
+            if slot == collected:
+                state.discard_pile.append(card)  # never ran, so never used up
+                log.append(f"{state.enemy.name} garbage-collects line {slot + 1}: {card.name}.")
+                outcome = "collected"
+                continue
             if halted_by is not None:
                 state.discard_pile.append(card)  # never ran, so never used up
                 outcome = "cut"
@@ -977,6 +1005,8 @@ def run_program(
                 outcome = "cut"
                 continue
             lines_run += 1
+            if lines_run == 1 and state.enemy_intent is EnemyIntentType.LEAK:
+                state.leaked_line = slot
             ran_names.append(card.name)
             state.line_position = (queued.index(slot), len(queued))
             line = f"[{slot + 1}] "
@@ -1778,6 +1808,9 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
         EnemyIntentType.CORRUPT: "corrupts your code" if own else "strikes",
         EnemyIntentType.INTERRUPT: "strikes",
         EnemyIntentType.REFACTOR: "strikes",
+        EnemyIntentType.COLLECT: "strikes",
+        EnemyIntentType.RACE: "strikes",
+        EnemyIntentType.LEAK: "strikes",
     }[intent]
     rolled = " + ".join(str(h) for h in hits)
     log.append(
@@ -1795,6 +1828,10 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
             state.locked_slots = [slot]
             kind = "Line" if state.program_mode else "Slot"
             log.append(f"{kind} {slot + 1} is locked for your next turn.")
+    if intent is EnemyIntentType.LEAK and state.leaked_line is not None:
+        state.locked_slots = [state.leaked_line]
+        log.append(f"Line {state.leaked_line + 1} leaks memory - it is locked for your next turn.")
+        state.leaked_line = None
     if intent is EnemyIntentType.CORRUPT:
         glitches = [_glitch(state, i) for i in range(current_move(state).stacks)]
         for glitch in glitches:

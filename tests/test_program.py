@@ -28,7 +28,13 @@ from agentic_rogue_like.combat import (
     start_combat,
     take_back,
 )
-from agentic_rogue_like.enemies import ENEMY_POOL, with_interrupt
+from agentic_rogue_like.enemies import (
+    ENEMY_POOL,
+    PROGRAM_MOVES,
+    program_counter,
+    with_interrupt,
+    with_program_move,
+)
 from agentic_rogue_like.engine import _room_enemy, available_choices, move_to, new_run, resolve_node
 from agentic_rogue_like.models import (
     Artifact,
@@ -521,13 +527,13 @@ def test_with_interrupt_keeps_the_threat() -> None:
     assert with_interrupt(armed) == armed
 
 
-def test_only_program_runs_meet_interrupts() -> None:
+def test_only_program_runs_meet_program_moves() -> None:
     for program_mode in (False, True):
         run = new_run(2, program_mode=program_mode)
         node = run.nodes[available_choices(run)[0]]
         node = node.model_copy(update={"type": NodeType.COMBAT})
         enemy = _room_enemy(run, node, random.Random(1))
-        has = any(m.kind is MoveKind.INTERRUPT for m in enemy.moves)
+        has = any(m.kind in PROGRAM_MOVES for m in enemy.moves)
         assert has is program_mode
 
 
@@ -693,3 +699,58 @@ def test_a_program_that_gets_five_lines_through_is_a_clean_run() -> None:
     steps = program_preview(state, player).steps
     assert steps[-1].combo == "Clean Run"
     assert state.enemy.hp - program_preview(state, player).enemy_hp == 15 + 5
+
+
+# ---- program moves: garbage collector, race condition, memory leak
+
+
+def test_a_garbage_collector_throws_the_last_line_away() -> None:
+    state, player = _fight()
+    state.enemy_intent = EnemyIntentType.COLLECT
+    _queue(state, player, "Exploit", "Return")
+    steps = program_preview(state, player).steps
+    assert [s.outcome for s in steps] == ["ran", "collected"]
+    end_turn(state, player, random.Random(2))
+    assert state.enemy.hp - state.enemy_hp == 5
+    # alone, a line is left alone
+    state, player = _fight()
+    state.enemy_intent = EnemyIntentType.COLLECT
+    _queue(state, player, "Exploit")
+    assert program_preview(state, player).steps[0].outcome == "ran"
+
+
+def test_a_race_condition_swaps_the_first_two_lines() -> None:
+    state, player = _fight()
+    state.enemy_intent = EnemyIntentType.RACE
+    _queue(state, player, "Fork", "Exploit")  # swapped, the Fork comes too late
+    steps = program_preview(state, player).steps
+    assert [s.name for s in steps] == ["Exploit", "Fork"]
+    end_turn(state, player, random.Random(2))
+    assert state.enemy.hp - state.enemy_hp == 5
+
+
+def test_a_memory_leak_locks_the_first_line_for_the_next_turn() -> None:
+    state, player = _fight()
+    state.enemy_intent = EnemyIntentType.LEAK
+    _queue(state, player, "Exploit", "Exploit", slots=[1, 3])
+    end_turn(state, player, random.Random(2))
+    assert state.locked_slots == [1]
+
+
+def test_the_agi_picks_the_program_move_that_hurts_the_deck() -> None:
+    def deck(*names: str) -> list[Card]:
+        return [_card(n) for n in names]
+
+    assert program_counter(deck("Monolith", "Return", "Fork")) is MoveKind.COLLECT
+    assert program_counter(deck("Bootstrap", "Bootstrap")) is MoveKind.LEAK
+    assert program_counter(deck("Fork", "If Wounded")) is MoveKind.RACE
+    assert program_counter(deck("Loop", "Buffer")) is MoveKind.INTERRUPT
+
+    enemy = ENEMY_POOL["mid"][0]
+    armed = with_program_move(enemy, PlayStyle.PROGRAM, deck("Bootstrap", "Bootstrap"))
+    assert any(m.kind is MoveKind.LEAK for m in armed.moves)
+    assert answers(armed, PlayStyle.PROGRAM)
+    # without a program style: one move, fixed by the enemy, for variety
+    plain = with_program_move(enemy)
+    assert sum(m.kind in PROGRAM_MOVES for m in plain.moves) == 1
+    assert with_program_move(plain) is plain

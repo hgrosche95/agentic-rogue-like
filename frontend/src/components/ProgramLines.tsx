@@ -100,6 +100,7 @@ function PipelineResult({ combat, live }: { combat: PendingCombatView; live: { d
 function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep | undefined, before: ProgramStep[]) {
   if (!step) return null;
   if (step.outcome === "cut") return { text: "cut", tone: "cut" };
+  if (step.outcome === "collected") return { text: "collected", tone: "cut" };
   if (step.outcome === "skipped") return { text: "–", tone: "idle" };
   if (card.type === "retrieve") {
     // Undo, Rollback: what the lines before it leave in the graveyard comes back
@@ -154,6 +155,24 @@ function boostsOf(steps: ProgramStep[]): Map<number, { times: number; looped: bo
     }
   });
   return boosts;
+}
+
+// The lines the enemy's program move hits: the two a race condition swaps
+// (they run in the order of the preview's steps) and the first line to
+// run, which a memory leak locks for the next turn. A garbage collector's
+// line already says "collected" in its chip.
+function threatsOf(combat: PendingCombatView, steps: ProgramStep[]): Map<number, { text: string; title: string }> {
+  const threats = new Map<number, { text: string; title: string }>();
+  const ran = steps.filter((s) => s.outcome === "ran");
+  if (combat.enemy_intent === "race") {
+    for (const step of steps.slice(0, 2)) {
+      if (steps.length >= 2) threats.set(step.slot, { text: "⇄", title: "Race Condition: swapped with the other marked line" });
+    }
+  }
+  if (combat.enemy_intent === "leak" && ran[0]) {
+    threats.set(ran[0].slot, { text: "leak", title: "Memory Leak: this line is locked for your next turn" });
+  }
+  return threats;
 }
 
 // The link on the rail from a line to the next: a fork doubling it, a loop
@@ -396,6 +415,8 @@ export function ProgramLines({
 
   const steps = combat.program_preview?.steps ?? [];
   const boosts = boostsOf(steps);
+  // what the enemy's program move does to which line, marked on it
+  const threats = threatsOf(combat, steps);
   return (
     <div
       className={`program-board${reversed ? " is-reversed" : ""}`}
@@ -416,6 +437,11 @@ export function ProgramLines({
                 key={line}
                 className={`program-line${line === hotLine ? " is-hot" : ""}${running === line ? " is-running" : ""}${spentLines.includes(line) ? " is-spent" : ""}${boost ? " is-boosted" : ""}`}
               >
+                {card && threats.get(line) && (
+                  <span className="line-threat" title={threats.get(line)!.title}>
+                    {threats.get(line)!.text}
+                  </span>
+                )}
                 {boost && (
                   <span
                     className="line-boost"

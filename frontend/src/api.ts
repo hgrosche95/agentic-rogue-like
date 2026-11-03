@@ -194,7 +194,13 @@ export type EnemyIntentType =
   // program mode: cuts the program off after a few lines
   | "interrupt"
   // program mode, bosses: the program runs right to left
-  | "refactor";
+  | "refactor"
+  // program mode: the last line is thrown away unrun
+  | "collect"
+  // program mode: the first two lines to run swap places
+  | "race"
+  // program mode: the first line to run stays locked next turn
+  | "leak";
 
 // How the player plays, read from their chosen cards - see style.py.
 export type PlayStyle = "permanents" | "graveyard" | "one_shot" | "aggro" | "turtle" | "malware" | "program";
@@ -213,6 +219,9 @@ export const ATTACKING_INTENTS: EnemyIntentType[] = [
   "corrupt",
   "interrupt",
   "refactor",
+  "collect",
+  "race",
+  "leak",
 ];
 
 export interface PendingCombatView {
@@ -303,7 +312,7 @@ export interface ProgramStep {
   slot: number;
   name: string;
   type: CardType;
-  outcome: "ran" | "cut" | "skipped";
+  outcome: "ran" | "cut" | "collected" | "skipped";
   // how often its action ran - a fork's target twice, a loop its repeats
   runs: number;
   damage: number;
