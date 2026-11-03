@@ -390,12 +390,14 @@
   }
 }
 
+/* a bigger hit, a bigger number - above the readable base size neon.css
+   sets (and the program's own numbers, which start bigger) */
 .arena-popup.is-solid {
-  font-size: 5.6cqw;
+  font-size: max(32px, 6.6cqw);
 }
 
 .arena-popup.is-heavy {
-  font-size: 7.4cqw;
+  font-size: max(38px, 8.4cqw);
   color: #fff;
 }
 
@@ -723,13 +725,21 @@
     height: clamp(18px, 1.7cqw, 24px);
   }
   .combat-panel .arena-popup {
-    font-size: min(4.4cqw, 46px);
+    font-size: clamp(26px, 5.4cqw, 58px);
+  }
+  .combat-panel .arena-program-fx {
+    font-size: clamp(30px, 6.4cqw, 66px);
+  }
+  .combat-panel .arena-program-fx.is-combo,
+  .combat-panel .arena-program-fx.is-block,
+  .combat-panel .arena-program-fx.is-heal {
+    font-size: clamp(18px, 3.8cqw, 38px);
   }
   .combat-panel .arena-popup.is-solid {
-    font-size: min(5.6cqw, 58px);
+    font-size: clamp(32px, 6.6cqw, 72px);
   }
   .combat-panel .arena-popup.is-heavy {
-    font-size: min(7.4cqw, 76px);
+    font-size: clamp(38px, 8.4cqw, 90px);
   }
   /* above the scene's fading foot */
   .combat-panel .arena-victory {

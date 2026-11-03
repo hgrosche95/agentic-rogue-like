@@ -2892,3 +2892,55 @@ button.field-slot.is-queued:hover:not(:disabled) {
     animation: none;
   }
 }
+
+/* ---------- numbers over the fighters: big enough to read, up long enough
+   to read them, and never clipped at the scene's edge (only the canvas has
+   the rounded corners) ---------- */
+.arena-stage {
+  overflow: visible;
+}
+
+.arena-stage .pixel-frame,
+.arena-stage .pixel-canvas {
+  border-radius: 18px;
+}
+
+.arena-popup {
+  z-index: 5;
+  font-size: max(26px, 5.4cqw);
+  white-space: nowrap;
+  animation-duration: 1.9s;
+  animation-name: arena-popup-hold;
+}
+
+.arena-program-fx {
+  font-size: max(30px, 6.4cqw);
+}
+
+.arena-program-fx.is-combo,
+.arena-program-fx.is-block,
+.arena-program-fx.is-heal {
+  font-size: max(18px, 3.8cqw);
+}
+
+@keyframes arena-popup-hold {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10%) scale(0.6);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(-50%, -20%) scale(1.18);
+  }
+  20% {
+    transform: translate(-50%, -30%) scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(-50%, -70%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -100%) scale(0.95);
+  }
+}
