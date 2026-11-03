@@ -259,3 +259,54 @@ def test_bridges_feed_both_of_their_styles() -> None:
     assert {PlayStyle.MALWARE, PlayStyle.TURTLE} <= card_styles(_card("Quarantine"))
     assert {PlayStyle.ONE_SHOT, PlayStyle.GRAVEYARD} <= card_styles(_card("Recycle Bin"))
     assert card_styles(_card("Guard Clause")) == {PlayStyle.PROGRAM, PlayStyle.TURTLE}
+
+
+# ---- the balance bot knows the bridges
+
+
+def test_bot_prefers_a_card_for_the_style_its_deck_leans_on() -> None:
+    from agentic_rogue_like.balance_sim import pick_reward
+
+    deck = starter_deck() + [_card("Zero-Day"), _card("Sandbox"), _card("Backup")]
+    offer = [_card("Daemon"), _card("Payload")]  # both uncommon
+    assert offer[pick_reward(offer, "smart", random.Random(0), deck)].name == "Payload"
+
+
+def test_bot_skips_a_card_its_deck_cannot_use() -> None:
+    from agentic_rogue_like.balance_sim import card_fit
+
+    no_malware = [c for c in starter_deck() if c.applies is None]
+    assert card_fit(_card("Quarantine"), no_malware) < 0
+    assert card_fit(_card("Quarantine"), starter_deck()) >= 0
+
+
+def test_bot_takes_bridge_artifacts_only_for_a_fitting_deck() -> None:
+    from agentic_rogue_like.balance_sim import pick_artifact
+
+    offer = [_artifact("Daemon Worm"), _artifact("Titanium Chassis")]
+    plain = pick_artifact(offer, "smart", random.Random(0), starter_deck())
+    assert plain.name == "Titanium Chassis"
+    built = pick_artifact(offer, "smart", random.Random(0), starter_deck() + [_card("Daemon")])
+    assert built.name == "Daemon Worm"
+
+
+def test_bot_raises_block_before_counterstrike() -> None:
+    from agentic_rogue_like.balance_sim import smart_bot
+
+    state, player = _fight()
+    state.enemy_intent = EnemyIntentType.ATTACK
+    state.hand = [_card("Counterstrike"), _card("Firewall")]
+    smart_bot(state, player, random.Random(0))
+    # the Firewall's 5 block went into the Counterstrike
+    assert state.enemy.hp - state.enemy_hp == 5
+
+
+def test_bot_uninstalls_a_failsafe_for_the_kill() -> None:
+    from agentic_rogue_like.balance_sim import smart_bot
+
+    state, player = _fight(hp=8)
+    _play(state, player, "Failsafe", 0)
+    _next_turn(state, player)
+    state.hand = []
+    smart_bot(state, player, random.Random(0))
+    assert state.enemy_hp <= 0
