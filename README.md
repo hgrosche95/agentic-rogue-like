@@ -489,10 +489,10 @@ kein neuer Code.
 | Quick Boot | Starthand +2 Karten |
 | Rate Limiter | Gegner treffen um 3 schwächer, aber −1 ATK |
 | Vampire Process | Jede gespielte Angriffskarte heilt 1 HP |
-| Stack Trace | Angriffe +1 Schaden je 5 Karten im Friedhof (Friedhof × Aggro) |
-| Logic Bomb | Jede verbannte Karte gibt dem Gegner 2 Malware (Einmal × Malware) |
-| Daemon Worm | Jeder feuernde Daemon gibt 1 Malware (Permanente × Malware) |
-| Retained State | Am Rundenende bis zu 2 Block je Permanent behalten (Block × Permanente) |
+| Stack Trace | Angriffe +1 Schaden je 4 Karten im Friedhof (Friedhof × Aggro) |
+| Logic Bomb | Jede verbannte Karte gibt dem Gegner 3 Malware (Einmal × Malware) |
+| Daemon Worm | Jeder feuernde Daemon gibt 2 Malware (Permanente × Malware) |
+| Retained State | Am Rundenende bis zu 3 Block je Permanent behalten (Block × Permanente) |
 
 ## Elite-Zusätze
 
@@ -917,7 +917,7 @@ nicht verlangt.
 
 Karten, die mitten im Zug Karten auf die Hand bringen (ziehen, zurückholen),
 sind absichtlich alle Einmal-Karten: Ohne Energie-System wären sonst
-Endlos-Kombos möglich. (Recycle Bin zieht zwar wiederholt, aber höchstens 2
+Endlos-Kombos möglich. (Recycle Bin zieht zwar wiederholt, aber höchstens 3
 Karten pro Zug – und nur, wenn etwas verbannt wird.)
 
 **Brücken zwischen den Stilen.** Damit sich gemischte Decks lohnen statt zu
@@ -926,10 +926,10 @@ Stile; `style.py` zählt sie für beide:
 
 | Karte | Brücke | Effekt |
 | --- | --- | --- |
-| Failsafe | Permanente × Einmal | Permanent, Rüstung 1; wird sie verbannt, 10 Schaden |
-| Counterstrike | Block × Aggro | 0 (+ATK) Schaden, +1 je Block, den man gerade hat |
-| Quarantine | Malware × Block | Permanent; Zugende: 1 Block je 2 Malware auf dem Gegner |
-| Recycle Bin | Einmal × Friedhof | Permanent; wird eine Karte verbannt, 1 Karte ziehen (max. 2/Zug) |
+| Failsafe | Permanente × Einmal | Permanent, Rüstung 1; wird sie verbannt, 14 Schaden |
+| Counterstrike | Block × Aggro | 3 (+ATK) Schaden, +1 je Block, den man gerade hat |
+| Quarantine | Malware × Block | Permanent; Zugende: 1 Block je Malware auf dem Gegner |
+| Recycle Bin | Einmal × Friedhof | Permanent; wird eine Karte verbannt, 1 Karte ziehen (max. 3/Zug) |
 | Guard Clause | Programm × Block | Kontrollfluss; mit 5+ Block läuft die nächste Aktion zweimal |
 
 Alles, was verbannt wird – verbraucht, per Purge, von Kernel Panic/System

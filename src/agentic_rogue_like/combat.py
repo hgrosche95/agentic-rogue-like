@@ -91,8 +91,8 @@ HALLUCINATION_CHANCE = 0.5
 CHAIN_MAX_PLAYS = 3
 # Bridges between play styles (style.py):
 GUARD_BLOCK = 5  # Guard Clause: the block the player needs for its extra run
-RECYCLE_MAX_PER_TURN = 2  # cards the Recycle Bins draw per turn, all together
-STACK_TRACE_CARDS = 5  # Stack Trace: +graveyard_attack per this many graveyard cards
+RECYCLE_MAX_PER_TURN = 3  # cards the Recycle Bins draw per turn, all together
+STACK_TRACE_CARDS = 4  # Stack Trace: +graveyard_attack per this many graveyard cards
 
 # Move strength scales off the attack stat (plus a boss's phase strength).
 # How hard each kind hits by default is models.DEFAULT_MOVE_POWER; a move in
@@ -449,7 +449,7 @@ def quarantine_block(state: CombatState) -> int:
     """Block the Quarantines raise at the end of the turn: their value per 2
     Malware on the enemy, before the enemy acts (and before Malware ticks)."""
     quarantine = sum(c.value for c in state.field if c and c.type is CardType.QUARANTINE)
-    return quarantine * (state.enemy_status.get(Status.MALWARE, 0) // 2)
+    return quarantine * state.enemy_status.get(Status.MALWARE, 0) // 2
 
 
 def turn_block(state: CombatState) -> int:

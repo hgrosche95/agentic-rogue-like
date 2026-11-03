@@ -478,29 +478,29 @@ REWARD_POOL: list[Card] = [
         name="Failsafe",
         type=CardType.ARMOR,
         value=1,
-        banish_damage=10,
+        banish_damage=14,
         rarity=Rarity.UNCOMMON,
         description=(
-            "Permanent. Reduce incoming damage by 1. When it is banished, deal 10 damage."
+            "Permanent. Reduce incoming damage by 1. When it is banished, deal 14 damage."
         ),
     ),
     Card(
         id="counterstrike",
         name="Counterstrike",
         type=CardType.ATTACK,
-        value=0,
+        value=3,
         scaling=Scaling.BLOCK,
         scale_value=1,
         rarity=Rarity.UNCOMMON,
-        description="Deal 0 (+ATK) damage, +1 per block you have.",
+        description="Deal 3 (+ATK) damage, +1 per block you have.",
     ),
     Card(
         id="quarantine",
         name="Quarantine",
         type=CardType.QUARANTINE,
-        value=1,
+        value=2,
         rarity=Rarity.UNCOMMON,
-        description="Permanent. End of turn: gain 1 block per 2 Malware on the enemy.",
+        description="Permanent. End of turn: gain 1 block per Malware on the enemy.",
     ),
     Card(
         id="recycle-bin",
@@ -509,7 +509,7 @@ REWARD_POOL: list[Card] = [
         value=1,
         token_cost=2,
         rarity=Rarity.RARE,
-        description=("Permanent. Whenever a card is banished, draw 1 card (at most 2 per turn)."),
+        description="Permanent. Whenever a card is banished, draw 1 card (at most 3 per turn).",
     ),
 ]
 
@@ -874,15 +874,15 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
         "description": "One-shot. Deal 0 (+ATK) damage. Infect it with 9 Malware.",
     },
     "Failsafe": {
-        "banish_damage": 16,
+        "banish_damage": 20,
         "description": (
-            "Permanent. Reduce incoming damage by 1. When it is banished, deal 16 damage."
+            "Permanent. Reduce incoming damage by 1. When it is banished, deal 20 damage."
         ),
     },
-    "Counterstrike": {"value": 4, "description": "Deal 4 (+ATK) damage, +1 per block you have."},
+    "Counterstrike": {"value": 7, "description": "Deal 7 (+ATK) damage, +1 per block you have."},
     "Quarantine": {
         "value": 2,
-        "description": "Permanent. End of turn: gain 2 block per 2 Malware on the enemy.",
+        "description": "Permanent. End of turn: gain 3 block per 2 Malware on the enemy.",
     },
     "Guard Clause": {
         "draw": 1,

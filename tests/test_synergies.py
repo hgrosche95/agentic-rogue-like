@@ -21,6 +21,7 @@ from agentic_rogue_like.combat import (
     end_turn,
     incoming_damage,
     play_card,
+    quarantine_block,
     start_combat,
     take_back,
     uninstalls,
@@ -106,8 +107,8 @@ def test_failsafe_goes_off_when_kernel_panic_destroys_it() -> None:
     state, player = _fight()
     _play(state, player, "Failsafe", 0)
     _play(state, player, "Kernel Panic", 1)
-    # 5 for the one permanent, 10 from the Failsafe itself
-    assert state.enemy.hp - state.enemy_hp == 15
+    # 5 for the one permanent, 14 from the Failsafe itself
+    assert state.enemy.hp - state.enemy_hp == 19
 
 
 def test_failsafe_goes_off_when_it_is_uninstalled_or_purged() -> None:
@@ -116,7 +117,7 @@ def test_failsafe_goes_off_when_it_is_uninstalled_or_purged() -> None:
     _next_turn(state, player)
     before = state.enemy_hp
     take_back(state, "field", 0, random.Random(0))
-    assert before - state.enemy_hp == 10
+    assert before - state.enemy_hp == 14
 
 
 def test_failsafe_armors_like_encryption_and_upgrades() -> None:
@@ -144,11 +145,11 @@ def test_api_finishes_a_fight_an_uninstalled_failsafe_wins() -> None:
 def test_counterstrike_hits_for_the_block_you_have() -> None:
     state, player = _fight()
     counter = _card("Counterstrike")
-    assert attack_damage(state, counter, player) == 0
+    assert attack_damage(state, counter, player) == 3
     _play(state, player, "Firewall", 0)
-    assert attack_damage(state, counter, player) == 5
+    assert attack_damage(state, counter, player) == 8
     _play(state, player, "Counterstrike", 1)
-    assert state.enemy.hp - state.enemy_hp == 5
+    assert state.enemy.hp - state.enemy_hp == 8
 
 
 # ---- Quarantine (malware x turtle)
@@ -159,15 +160,13 @@ def test_quarantine_blocks_off_the_enemys_malware() -> None:
     _play(state, player, "Quarantine", 0)
     state.enemy_status[Status.MALWARE] = 7
     state.enemy_intent = EnemyIntentType.ATTACK
-    low, _ = incoming_damage(state)
-    state.player_block = 0
-    # 3 block (7 // 2) count in the preview ...
-    state.enemy_status[Status.MALWARE] = 0
-    assert incoming_damage(state)[0] - low == 3
-    # ... and at the end of the turn
-    state.enemy_status[Status.MALWARE] = 7
+    # one block per Malware, counted in the preview ...
+    assert quarantine_block(state) == 7
+    unblocked = state.model_copy(update={"enemy_status": {}})
+    assert incoming_damage(state)[1] == max(0, incoming_damage(unblocked)[1] - 7)
+    # ... and raised at the end of the turn
     log = end_turn(state, player, random.Random(4))
-    assert any("quarantine raises 3 block" in line for line in log)
+    assert any("quarantine raises 7 block" in line for line in log)
 
 
 # ---- Recycle Bin (one-shot x graveyard)
@@ -203,10 +202,10 @@ def test_glitches_feed_no_banish_payoff() -> None:
 def test_logic_bomb_infects_for_every_banished_card() -> None:
     state, player = _fight("Logic Bomb")
     _play(state, player, "Zero-Day", 0)
-    assert state.enemy_status[Status.MALWARE] == 2
+    assert state.enemy_status[Status.MALWARE] == 3
 
 
-def test_stack_trace_adds_damage_per_five_graveyard_cards() -> None:
+def test_stack_trace_adds_damage_per_four_graveyard_cards() -> None:
     state, player = _fight("Stack Trace")
     exploit = _card("Exploit")
     state.discard_pile = [_card("Exploit") for _ in range(11)]
@@ -218,8 +217,8 @@ def test_daemon_worm_infects_when_daemons_fire() -> None:
     _play(state, player, "Daemon", 0)
     _play(state, player, "Daemon", 1)
     end_turn(state, player, random.Random(4))
-    # 2 stacks on, one fades after biting
-    assert state.enemy_status[Status.MALWARE] == 1
+    # 4 stacks on (2 per Daemon), one fades after biting
+    assert state.enemy_status[Status.MALWARE] == 3
 
 
 def test_retained_state_keeps_block_per_permanent() -> None:
@@ -228,7 +227,7 @@ def test_retained_state_keeps_block_per_permanent() -> None:
     _play(state, player, "Overclock", 1)
     state.player_block = 9
     end_turn(state, player, random.Random(4))
-    assert state.player_block == 4
+    assert state.player_block == 6
 
 
 # ---- Guard Clause (program x turtle)
@@ -298,13 +297,13 @@ def test_bot_raises_block_before_counterstrike() -> None:
     state.hand = [_card("Counterstrike"), _card("Firewall")]
     smart_bot(state, player, random.Random(0))
     # the Firewall's 5 block went into the Counterstrike
-    assert state.enemy.hp - state.enemy_hp == 5
+    assert state.enemy.hp - state.enemy_hp == 8
 
 
 def test_bot_uninstalls_a_failsafe_for_the_kill() -> None:
     from agentic_rogue_like.balance_sim import smart_bot
 
-    state, player = _fight(hp=8)
+    state, player = _fight(hp=12)
     _play(state, player, "Failsafe", 0)
     _next_turn(state, player)
     state.hand = []
