@@ -621,6 +621,28 @@ schwerer: Im Simulator bleibt die Run-Siegquote mit und ohne Anpassung gleich
 antwortender Gegner eröffnet den Kampf mit einer Zeile der AGI, und auf der
 Karte zeigt das Panel „AGI analysis“, was sie bisher gelesen hat.
 
+## Die AGI kompiliert dir eine Karte
+
+Einmal pro Akt, sobald das Deck nach einer Kartenbelohnung einen klaren Stil
+zeigt, meldet sich die AGI: „Your reliance on … has been analysed.“ Sie bietet
+eine Karte an, die genau zu diesem Stil passt – stark, aber als Köder: Wer sie
+nimmt, zahlt 6 max HP oder bekommt einen Glitch ins Deck. Wie der Deal am
+Run-Start wird das Angebot angenommen oder abgelehnt, bevor es weitergeht
+(`engine.offer_forged_card`, `forge.py`).
+
+Entworfen wird die Karte vom Karten-Agenten (`agent/card_agent.py`, gleicher
+Aufbau wie der Event-Agent): Er bekommt Stil, Schlüsselkarten und Setting und
+wählt nur Bausteine (`forge.CardSpec`) – Name, Angriff oder Block, Werte,
+eine bekannte Skalierung, Nachteile. Den Regeltext schreibt das Spiel selbst
+(`forge.describe`), und `forge.validate_spec` prüft die Stärke gegen ein
+Budget: Wert plus Skalierung mal typischer Anzahl, mal Treffer, plus Malware,
+minus Nachteile, mal 0,65 für Einmal-Karten muss zwischen 12 und 16 liegen –
+über einer normalen seltenen Karte (10–12), unter einer Einmal-Karte wie
+Zero-Day (16), den Rest bezahlt der Preis des Deals. Ein Entwurf außerhalb
+geht mit dem Grund zurück (höchstens 3 Versuche). Ist der Agent aus oder
+scheitert er, kommt ein fester Entwurf pro Stil (Core Dump für den Friedhof,
+Hot Loop für Kontrollfluss, …), der dasselbe Budget einhält.
+
 ## Programm-Modus (Prototyp)
 
 Ein zweiter Spielmodus pro Run (`new_run(..., program_mode=True)`, in der API

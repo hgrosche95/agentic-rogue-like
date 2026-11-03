@@ -3150,3 +3150,30 @@ button.field-slot.is-queued:hover:not(:disabled) {
     animation: none;
   }
 }
+
+/* ---------- the AGI's forged card: bait, held up in its colour ---------- */
+.deal-forged-card {
+  display: grid;
+  place-items: center;
+  margin: 0.4rem 0 1.1rem;
+}
+
+.deal-forged-card > .hand-card {
+  position: relative;
+  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--ai-red, var(--danger)) 55%, transparent));
+  animation: forged-reveal var(--dur-slow) var(--ease-out) both;
+}
+
+@keyframes forged-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px) rotate(-3deg) scale(0.92);
+    filter: blur(3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deal-forged-card > .hand-card {
+    animation: none;
+  }
+}

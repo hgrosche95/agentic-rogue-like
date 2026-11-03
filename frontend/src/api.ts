@@ -465,11 +465,15 @@ export interface StarterKit {
 // One of the AGI's opening deals; `cards` is what taking it adds to the deck,
 // `mentions` every card its description names (an upgrade as it will be).
 export interface AgiDeal {
-  kind: "strip" | "mutate" | "forbidden" | "trojan" | "hotfix" | "bribe";
+  // "forged": mid-run, a card the AGI compiled for the player's style (forge.py)
+  kind: "strip" | "mutate" | "forbidden" | "trojan" | "hotfix" | "bribe" | "forged";
   name: string;
   description: string;
   cards: Card[];
   mentions: Card[];
+  // a forged deal's own opening lines, empty for the opening offer
+  greeting: string;
+  pitch: string;
 }
 
 // The server's answer never arrived (or the network dropped it). The move

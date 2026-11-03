@@ -548,6 +548,9 @@ class AgiDealView(BaseModel):
     # every card its description names - removed, added, or (for an upgrade)
     # as it will be afterwards - so the frontend can show each on hover
     mentions: list[CardView]
+    # a forged deal's own opening lines (forge.py), empty otherwise
+    greeting: str = ""
+    pitch: str = ""
 
     @classmethod
     def of(cls, deal: AgiDeal, deck: list[Card]) -> AgiDealView:
@@ -559,6 +562,8 @@ class AgiDealView(BaseModel):
             description=deal.description,
             cards=[CardView.of(c) for c in deal.add],
             mentions=[CardView.of(c) for c in removed + deal.add + upgraded],
+            greeting=deal.greeting,
+            pitch=deal.pitch,
         )
 
 
@@ -855,7 +860,10 @@ def resolve_current_node(run_id: str) -> RunView:
     if run.card_reward is not None:
         raise HTTPException(status_code=409, detail="choose a card first")
     if start_pending(run):
-        raise HTTPException(status_code=409, detail="finish the start of the run first")
+        raise HTTPException(
+            status_code=409,
+            detail="answer the pending choice (start of the run or the AGI's offer) first",
+        )
 
     prefetch = session.prefetch
     if node.type is NodeType.EVENT:

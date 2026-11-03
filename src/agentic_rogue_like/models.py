@@ -481,6 +481,7 @@ class DealKind(StrEnum):
     TROJAN = "trojan"  # an artifact, and a Glitch in the deck
     HOTFIX = "hotfix"  # upgrade basic cards
     BRIBE = "bribe"  # credits, and a Glitch in the deck
+    FORGED = "forged"  # mid-run: a card compiled for the player's style, for a price (forge.py)
 
 
 class AgiDeal(BaseModel):
@@ -496,6 +497,10 @@ class AgiDeal(BaseModel):
     artifact: Artifact | None = None
     max_hp: int = 0
     gold: int = 0
+    # A forged deal's own opening lines - empty for the opening offer, whose
+    # window has its own.
+    greeting: str = ""
+    pitch: str = ""
 
 
 class Combo(BaseModel):
@@ -584,5 +589,7 @@ class RunState(BaseModel):
     # then the AGI's opening deal to take or turn down (starts.py).
     kit_offer: list[StarterKit] | None = None
     agi_deals: list[AgiDeal] | None = None
+    # The acts the AGI has already forged a card in (forge.py) - once per act.
+    forged_acts: list[int] = Field(default_factory=list)
     # For the summary at the end of the run (stats.py) - never read by play.
     stats: RunStats = Field(default_factory=RunStats)
