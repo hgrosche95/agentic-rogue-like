@@ -655,3 +655,77 @@ button.is-busy:disabled {
     opacity var(--dur, 0.3s) var(--ease-out, ease-out),
     filter var(--dur, 0.3s) var(--ease-out, ease-out);
 }
+
+/* straight trails: drawn smooth, with round ends under the rooms */
+.map-path {
+  shape-rendering: geometricPrecision;
+  stroke-linecap: round;
+}
+
+/* ---------- block on the HP bar ---------- */
+.hp-row {
+  position: relative;
+  display: block;
+}
+
+/* the shield sits on the bar's start, over its frame */
+.hp-shield {
+  --chip: var(--cyan);
+  position: absolute;
+  z-index: 2;
+  left: -6px;
+  top: 50%;
+  translate: 0 -50%;
+  height: 26px;
+  padding: 0 8px 0 6px !important;
+  border: 2px solid var(--cyan) !important;
+  border-radius: 7px 7px 13px 13px !important;
+  background: #062a35 !important;
+  color: #dffbff !important;
+  font-size: 13px !important;
+  box-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 70%, transparent) !important;
+}
+
+.hp-shield .chip-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--cyan);
+}
+
+/* the bar framed in the shield's colour while block stands in front of it */
+.hud-bar.is-shielded {
+  box-shadow:
+    0 0 0 2px var(--cyan),
+    0 0 12px color-mix(in srgb, var(--cyan) 55%, transparent);
+}
+
+/* ---------- a number rising off a permanent or artifact at work ---------- */
+.effect-tick {
+  position: fixed;
+  z-index: 52;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font: 800 14px/1.35 var(--font-head);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  color: #0b0a1e;
+  box-shadow: 0 0 14px currentColor;
+}
+
+.effect-tick.is-block {
+  background: var(--cyan);
+  box-shadow: 0 0 14px var(--cyan);
+}
+.effect-tick.is-damage {
+  background: #ff5c8a;
+  box-shadow: 0 0 14px #ff5c8a;
+}
+.effect-tick.is-malware {
+  background: #5dff9b;
+  box-shadow: 0 0 14px #5dff9b;
+}
+.effect-tick.is-heal {
+  background: #6dffa8;
+  box-shadow: 0 0 14px #6dffa8;
+}

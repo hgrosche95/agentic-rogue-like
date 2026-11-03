@@ -35,6 +35,7 @@ export function ArtifactBar({
             <li
               key={pulse?.ids.includes(artifact.id) ? `${artifact.id}-${pulse.id}` : artifact.id}
               className={`artifact-chip${timer ? " is-timed" : ""}${timer?.active ? ` is-firing is-${timer.tone}` : ""}${pulse?.ids.includes(artifact.id) ? " is-pulsed" : ""}`}
+              data-artifact-id={artifact.id}
               data-tip-term={artifact.name}
               data-tip={artifact.description + state}
               tabIndex={0}

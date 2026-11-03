@@ -88,15 +88,11 @@ export function NodeBadge({ type, size = 22 }: { type: NodeType; size?: number }
   );
 }
 
-// A trail between two rooms: a right-angled step along the direction the layers
-// run, like a path on a pixel board.
-function trail(from: { x: number; y: number }, to: { x: number; y: number }, horizontal: boolean): string {
-  if (horizontal) {
-    const mx = Math.round((from.x + to.x) / 2);
-    return `M ${from.x} ${from.y} H ${mx} V ${to.y} H ${to.x}`;
-  }
-  const my = Math.round((from.y + to.y) / 2);
-  return `M ${from.x} ${from.y} V ${my} H ${to.x} V ${to.y}`;
+// A trail between two rooms: one straight line, room to room. Right-angled
+// steps all bent at the same spot between two layers, so the trails of a
+// layer ran together into one bar and hid which room led to which.
+function trail(from: { x: number; y: number }, to: { x: number; y: number }, _horizontal: boolean): string {
+  return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
 }
 
 // Corner brackets around the room you stand in, with its NOW tag above.

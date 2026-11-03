@@ -881,8 +881,10 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     },
     "Counterstrike": {"value": 7, "description": "Deal 7 (+ATK) damage, +1 per block you have."},
     "Quarantine": {
-        "value": 2,
-        "description": "Permanent. End of turn: gain 3 block per 2 Malware on the enemy.",
+        "value": 3,
+        "description": (
+            "Permanent. End of turn: gain 1.5 block per Malware on the enemy (rounded down)."
+        ),
     },
     "Guard Clause": {
         "draw": 1,

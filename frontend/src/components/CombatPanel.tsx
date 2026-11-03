@@ -22,6 +22,7 @@ import { useSequence } from "../hooks/useSequence";
 import { describeIntent, rangeText, STATUS_TEXT } from "../readouts";
 import { StatChip } from "./StatChip";
 import { firingArtifacts } from "../artifactPulse";
+import { showTicks } from "../effectTicks";
 import { tempoMs } from "../tempo";
 import { CardFace, type Readout } from "./CardFace";
 import { CombatHelp, HelpButton } from "./CombatHelp";
@@ -149,7 +150,22 @@ function Pile({
 // `ghost`: where the HP will be - what the queued program takes off the
 // enemy, what the telegraphed hit takes off the player - shown as a pulsing
 // stretch of the bar.
-function HpBar({ hp, max, side, ghost }: { hp: number; max: number; side: "player" | "enemy"; ghost?: number }) {
+// `block`: shown on the bar itself - a shield at its start with the number,
+// and the bar framed in the shield's colour - so it reads with the HP it
+// protects instead of as one chip among many.
+function HpBar({
+  hp,
+  max,
+  side,
+  ghost,
+  block = 0,
+}: {
+  hp: number;
+  max: number;
+  side: "player" | "enemy";
+  ghost?: number;
+  block?: number;
+}) {
   const pct = (value: number) => Math.max(0, Math.min(100, (value / max) * 100));
   const percent = pct(hp);
   const after = ghost === undefined ? percent : pct(Math.min(ghost, hp));
@@ -158,7 +174,9 @@ function HpBar({ hp, max, side, ghost }: { hp: number; max: number; side: "playe
   const changes = forecast !== null && forecast < hp;
   const lethal = changes && forecast === 0;
   return (
-    <span className={`hud-bar is-${side}${lethal ? " is-lethal" : ""}`}>
+    <span className={`hp-row${block > 0 ? " has-block" : ""}`}>
+      <StatChip className="hp-shield" icon="block" label="" value={block} tip={`${block} block: soaks that much of the next hit, then it is gone.`} tipTerm="Block" />
+    <span className={`hud-bar is-${side}${lethal ? " is-lethal" : ""}${block > 0 ? " is-shielded" : ""}`}>
       {/* slid along rather than resized, so the bar's motion stays off layout */}
       <span style={{ transform: `translateX(${percent - 100}%)` }} />
       {after < percent && <i className="hud-ghost" style={{ left: `${after}%`, width: `${percent - after}%` }} />}
@@ -169,6 +187,7 @@ function HpBar({ hp, max, side, ghost }: { hp: number; max: number; side: "playe
           {changes && <b className="hud-forecast">→ {forecast}</b>} / {max}
         </span>
       </em>
+    </span>
     </span>
   );
 }
@@ -770,6 +789,13 @@ export function CombatPanel({
     if (ids.length > 0) setArtifactPulse({ ids, id: (artifactPulse?.id ?? 0) + 1 });
   }
 
+  // ...and every permanent or artifact that acted on its own shows what it did
+  const ticked = useRef(log.length);
+  useEffect(() => {
+    if (log.length > ticked.current) showTicks(log.slice(ticked.current), player.artifacts);
+    ticked.current = log.length;
+  }, [log, player.artifacts]);
+
   // what ending the turn now leads to, under the button's label
   const endTurnNote = !attacking
     ? `next: ${intent.label.toLowerCase()}`
@@ -873,6 +899,7 @@ export function CombatPanel({
               max={player.max_hp}
               side="player"
               ghost={attacking && !enemySlain && running === null ? player.hp - combat.incoming_max : undefined}
+              block={combat.player_block}
             />
             <div className="hud-meta">
               {attacking && !enemySlain && (
@@ -887,7 +914,6 @@ export function CombatPanel({
                       : `Incoming ${rangeText(combat.incoming_min, combat.incoming_max)}`}
                 </span>
               )}
-              <StatChip className="block-badge" icon="block" label="Block" value={combat.player_block} />
               <StatChip className="armor-badge" icon="armor" label="Armor" value={combat.armor} />
               <StatusBadges statuses={combat.player_status} />
               {combat.token_limit !== null && <TokenMeter combat={combat} />}
@@ -910,6 +936,7 @@ export function CombatPanel({
               hp={shownEnemyHp}
               max={combat.enemy_max_hp}
               side="enemy"
+              block={enemySlain ? 0 : combat.enemy_block}
               ghost={
                 programMode && running === null && queuedLines.length > 0 && combat.program_preview
                   ? combat.program_preview.enemy_hp
@@ -952,9 +979,6 @@ export function CombatPanel({
                   Phase {combat.enemy_phase}/{combat.enemy_phases}
                   {combat.enemy_strength > 0 && ` · +${combat.enemy_strength} ATK`}
                 </span>
-              )}
-              {combat.enemy_block > 0 && (
-                <span className="block-badge enemy-block-badge">Block {combat.enemy_block}</span>
               )}
               {!enemySlain && <StatusBadges statuses={combat.enemy_status} />}
               {enemySlain && <span className="intent-badge is-defeated">Defeated</span>}

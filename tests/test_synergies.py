@@ -309,3 +309,44 @@ def test_bot_uninstalls_a_failsafe_for_the_kill() -> None:
     state.hand = []
     smart_bot(state, player, random.Random(0))
     assert state.enemy_hp <= 0
+
+
+def test_upgraded_quarantine_blocks_more_and_never_less() -> None:
+    from agentic_rogue_like.combat import quarantine_block
+
+    state, player = _fight()
+    state.field[0] = _card("Quarantine")
+    upgraded_state, _ = _fight()
+    upgraded_state.field[0] = upgrade_card(_card("Quarantine"))
+    for malware in range(1, 9):
+        state.enemy_status[Status.MALWARE] = malware
+        upgraded_state.enemy_status[Status.MALWARE] = malware
+        assert quarantine_block(state) == malware
+        assert quarantine_block(upgraded_state) >= malware
+    assert quarantine_block(upgraded_state) == 12  # 8 Malware: 1.5 each
+
+
+def test_every_upgrade_changes_more_than_its_text() -> None:
+    from agentic_rogue_like.cards import (
+        CARD_UPGRADES,
+        VIBE_CODER_PROGRAM_POOL,
+        VIBE_CODER_REWARD_POOL,
+        vibe_coder_starter_deck,
+    )
+
+    pool = (
+        REWARD_POOL
+        + PROGRAM_REWARD_POOL
+        + VIBE_CODER_REWARD_POOL
+        + VIBE_CODER_PROGRAM_POOL
+        + starter_deck()
+        + starter_deck(program_mode=True)
+        + vibe_coder_starter_deck()
+    )
+    for name, changes in CARD_UPGRADES.items():
+        card = next(c for c in pool if c.name == name)
+        assert any(
+            getattr(card, field) != value
+            for field, value in changes.items()
+            if field != "description"
+        ), name
