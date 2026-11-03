@@ -1,0 +1,225 @@
+/* ---------- alive.css: the details that make the table feel alive ----------
+   Loaded last. Rarity on a card's edge, cards travelling to their piles,
+   the log's colours, status chips, idle life and screen wipes - all of it
+   off the layout (transform, opacity, glow) and off for reduced motion. */
+
+/* ---------- rarity on the card's edge ---------- */
+.card-edge {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  padding: 2.5px;
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+
+.card-edge.is-uncommon {
+  background: linear-gradient(135deg, #f4f8ff, #7d8fb5 26%, #ffffff 44%, #5d6b8f 64%, #dfe7f7);
+}
+
+.card-edge.is-rare {
+  padding: 3px;
+  background: linear-gradient(135deg, #fff3b0, #e0a020 24%, #fffbe0 42%, #b9780a 62%, #ffe27a 82%, #c98a10);
+}
+
+/* the gold rule's corner marks */
+.card-corners {
+  position: absolute;
+  inset: 6px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.card-corners::before,
+.card-corners::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #ffd54d;
+}
+
+.card-corners::before {
+  top: 0;
+  left: 0;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.card-corners::after {
+  right: 0;
+  bottom: 0;
+  border-left: 0;
+  border-top: 0;
+}
+
+.hand-card:has(> .card-edge.is-uncommon) {
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.5),
+    0 0 14px rgba(200, 214, 255, 0.28);
+}
+
+.hand-card:has(> .card-edge.is-rare) {
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.5),
+    0 0 22px rgba(255, 207, 77, 0.45);
+}
+
+/* the older gold double rule gives way to the edge */
+.hand-card.rarity-rare {
+  outline: none;
+}
+
+/* the tag at the card's foot */
+.card-rarity {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  z-index: 4;
+  translate: -50% 0;
+  padding: 0 7px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: #0b0a1e;
+  font: 700 8.5px/1.5 var(--font-head);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.card-rarity.is-starter {
+  color: #8f8ac7;
+}
+.card-rarity.is-common {
+  color: #c9c6ef;
+}
+.card-rarity.is-uncommon {
+  color: #c8d6f5;
+}
+.card-rarity.is-rare {
+  color: #ffd54d;
+}
+
+/* small cards (deck lists, narrow phones) keep their foot free */
+@media (max-width: 600px) {
+  .card-rarity {
+    display: none;
+  }
+}
+
+/* ---------- the combat log: an icon and a colour per kind of line ---------- */
+.monitor-line {
+  display: grid;
+  grid-template-columns: 1.15em 1fr;
+  gap: 0.45em;
+  align-items: start;
+  padding: 0.08em 0.3em 0.08em 0.15em;
+  border-radius: 4px;
+  transition: opacity var(--dur, 0.3s) var(--ease-out, ease-out);
+}
+
+.monitor-icon {
+  width: 1.05em;
+  height: 1.05em;
+  margin-top: 0.12em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.monitor-icon .fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+.monitor-line.is-hit .monitor-icon {
+  color: #ff5c8a;
+}
+.monitor-line.is-hurt .monitor-icon {
+  color: #ff9a3d;
+}
+.monitor-line.is-block .monitor-icon {
+  color: var(--cyan);
+}
+.monitor-line.is-heal .monitor-icon {
+  color: #6dffa8;
+}
+.monitor-line.is-malware .monitor-icon {
+  color: #5dff9b;
+}
+.monitor-line.is-banish .monitor-icon {
+  color: #ff4f8b;
+}
+.monitor-line.is-foe .monitor-icon {
+  color: #b9f26b;
+}
+.monitor-line.is-command .monitor-icon,
+.monitor-line.is-plain .monitor-icon {
+  color: #8f8ac7;
+}
+
+.monitor-line b {
+  font-weight: 700;
+}
+.monitor-line .tok-dmg {
+  color: #ff5c8a;
+}
+.monitor-line .tok-hurt {
+  color: #ff9a3d;
+}
+.monitor-line .tok-block {
+  color: var(--cyan);
+}
+.monitor-line .tok-malware {
+  color: #5dff9b;
+}
+.monitor-line .tok-hp {
+  color: #e8e6ff;
+}
+.monitor-line .tok-card {
+  color: var(--gold);
+}
+
+/* older lines step back, the newest one is lit */
+.monitor-line.is-old {
+  opacity: 0.45;
+}
+
+.monitor-line:last-child {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--cyan) 13%, transparent), transparent 80%);
+  box-shadow: inset 2px 0 0 var(--cyan);
+  color: #f2f0ff;
+}
+
+.monitor-line.is-command:last-child {
+  color: var(--gold);
+}
+
+/* a round's divider */
+.monitor-turn {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  margin: 0.1em 0;
+  font-family: var(--font-head);
+  font-size: 0.66em;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #6f6aa6;
+}
+
+.monitor-turn::before,
+.monitor-turn::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #3a3670;
+}

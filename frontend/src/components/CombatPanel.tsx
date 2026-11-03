@@ -749,6 +749,7 @@ export function CombatPanel({
           }}
           exchange={exchange}
           log={log}
+          turn={combat.turn}
           commands={commands}
           typing={typing}
           slain={enemySlain}

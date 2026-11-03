@@ -12,6 +12,7 @@ import "./sockets.css";
 import "./faces.css";
 import "./table.css";
 import "./cardread.css";
+import "./alive.css";
 import {
   buyShopArtifact,
   removeShopCard,

@@ -256,6 +256,7 @@ export function CombatArena({
   hero = "chronos",
   contextFull = false,
   playerMaxHp = 50,
+  turn,
   children,
   ref,
 }: {
@@ -264,6 +265,8 @@ export function CombatArena({
   exchange: HpExchange | null;
   log: string[];
   commands: HackerCommand[];
+  // the fight's current turn, for the log's round dividers
+  turn?: number;
   typing: boolean;
   slain?: boolean;
   onContinue?: () => void;
@@ -396,7 +399,7 @@ export function CombatArena({
     <div className="arena-stage">
       <PixelStage onScene={onScene} followTempo>
         {!slain && <IntentMarker key={`${enemy.intent}-${enemy.intentMin}-${enemy.intentMax}`} enemy={enemy} />}
-        <CombatMonitor lines={log} commands={commands} />
+        <CombatMonitor lines={log} commands={commands} turn={turn} />
         {exchange && (
           <div key={exchange.id} className="arena-fx" aria-hidden="true">
             {exchange.enemyDelta !== 0 && (
