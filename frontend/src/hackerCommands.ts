@@ -82,6 +82,8 @@ export function commandFor(card: Card, enemyName: string, banished: string[] = [
       return `fork() && fork()`;
     case "loop":
       return `while true; do !!; done`;
+    case "goto":
+      return `goto 1 # considered harmful`;
     case "pipe":
       return `cat ./queue | xargs`;
     case "batch":

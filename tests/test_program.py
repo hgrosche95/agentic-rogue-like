@@ -754,3 +754,15 @@ def test_the_agi_picks_the_program_move_that_hurts_the_deck() -> None:
     plain = with_program_move(enemy)
     assert sum(m.kind in PROGRAM_MOVES for m in plain.moves) == 1
     assert with_program_move(plain) is plain
+
+
+# ---- Goto 1
+
+
+def test_goto_runs_the_first_actions_again_from_their_own_lines() -> None:
+    # Bootstrap is the first line both times: 10 + 5, then again 10 + 5
+    assert _damage_dealt("Bootstrap", "Exploit", "Goto 1") == 30
+    # only the first 2 actions come back (and the three Exploits are a Burst: +5)
+    assert _damage_dealt("Exploit", "Exploit", "Exploit", "Goto 1") == 15 + 5 + 10
+    # with nothing before it, it idles
+    assert _damage_dealt("Goto 1", "Exploit") == 5

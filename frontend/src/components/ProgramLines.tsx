@@ -109,6 +109,12 @@ function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep |
       : { text: "nothing to fetch", tone: "idle" };
   }
   if (CONTROL_FLOW_TYPES.includes(card.type)) {
+    if (card.type === "goto") {
+      const replayed = before.filter((s) => s.outcome === "ran" && !CONTROL_FLOW_TYPES.includes(s.type)).slice(0, card.value);
+      return replayed.length > 0
+        ? { text: `↑ 1 · ${replayed.length} again`, tone: "flow" }
+        : { text: "nothing to jump to", tone: "idle" };
+    }
     if (card.type === "loop") {
       // a loop repeats the last action run before it - with none, it idles
       const target = loopTarget(before);
@@ -139,12 +145,25 @@ function loopTarget(before: ProgramStep[]): ProgramStep | undefined {
 }
 
 // The lines control flow works on, for a badge on their card: run more than
-// once (a Fork, If Wounded, Tail Call in front of it) and repeated by a Loop.
-function boostsOf(steps: ProgramStep[]): Map<number, { times: number; looped: boolean }> {
+// once (a Fork, If Wounded, Tail Call in front of it) and repeated by a
+// Loop or a Goto.
+function boostsOf(
+  steps: ProgramStep[],
+  program: (Card | null)[],
+): Map<number, { times: number; looped: boolean }> {
   const boosts = new Map<number, { times: number; looped: boolean }>();
   steps.forEach((step, i) => {
     if (step.outcome !== "ran") return;
-    if (step.type === "loop") {
+    if (step.type === "goto") {
+      const replayed = steps
+        .slice(0, i)
+        .filter((s) => s.outcome === "ran" && !CONTROL_FLOW_TYPES.includes(s.type))
+        .slice(0, program[step.slot]?.value ?? 0);
+      for (const target of replayed) {
+        const b = boosts.get(target.slot) ?? { times: target.runs, looped: false };
+        boosts.set(target.slot, { ...b, looped: true });
+      }
+    } else if (step.type === "loop") {
       const target = loopTarget(steps.slice(0, i));
       if (target) {
         const b = boosts.get(target.slot) ?? { times: target.runs, looped: false };
@@ -414,7 +433,7 @@ export function ProgramLines({
   }
 
   const steps = combat.program_preview?.steps ?? [];
-  const boosts = boostsOf(steps);
+  const boosts = boostsOf(steps, combat.program);
   // what the enemy's program move does to which line, marked on it
   const threats = threatsOf(combat, steps);
   return (

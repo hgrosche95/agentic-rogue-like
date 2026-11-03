@@ -349,6 +349,7 @@ export function cardSound(type: CardType, banishes = false): SfxName {
     // control flow only steers - it sounds like shuffling the stack
     case "fork":
     case "loop":
+    case "goto":
     case "if_wounded":
     case "pipe":
     case "batch":

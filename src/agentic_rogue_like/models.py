@@ -126,6 +126,9 @@ class CardType(StrEnum):
     FLUSH = "flush"  # deals the stored damage, +value percent
     # the next action runs `value` more time(s) if the player has GUARD_BLOCK block
     GUARD = "guard"
+    # jumps back to the first line once: the first `value` actions that ran
+    # before it run again, each from its own line
+    GOTO = "goto"
 
 
 # Control flow (program mode, combat.run_program): steers the actions around
@@ -141,6 +144,7 @@ CONTROL_FLOW_TYPES = frozenset(
         CardType.BUFFER,
         CardType.FLUSH,
         CardType.GUARD,
+        CardType.GOTO,
     }
 )
 

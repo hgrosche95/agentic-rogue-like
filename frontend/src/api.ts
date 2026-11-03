@@ -43,7 +43,8 @@ export type CardType =
   | "try_catch"
   | "buffer"
   | "flush"
-  | "guard";
+  | "guard"
+  | "goto";
 
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
@@ -72,6 +73,7 @@ export const CONTROL_FLOW_TYPES: readonly CardType[] = [
   "buffer",
   "flush",
   "guard",
+  "goto",
 ];
 export const QUEUED_TYPES: readonly CardType[] = [
   "attack",

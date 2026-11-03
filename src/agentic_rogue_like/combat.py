@@ -971,6 +971,8 @@ def run_program(
         collected = queued.pop()
     state.leaked_line = None
     halted_by: str | None = None  # a halting card (Segfault) ended the program
+    # the actions that ran so far, each once, with their lines - what a Goto replays
+    ran_actions: list[tuple[Card, int]] = []
     for step, slot in enumerate(order):
         card = state.program[slot]
         if card is None:
@@ -1061,6 +1063,24 @@ def run_program(
                     )
                 else:
                     log.append(line + f"{run.name}: the buffer is empty.")
+            elif run.type is CardType.GOTO:
+                replay = ran_actions[: run.value]
+                if not replay:
+                    log.append(line + f"{run.name}: nothing has run yet to jump back to.")
+                for action, action_slot in replay:
+                    state.plays_this_turn = max(played - 1, ran)
+                    # it runs from its own line again: Bootstrap is first once more
+                    state.line_position = (queued.index(action_slot), len(queued))
+                    wounded = predictor if _wounded(state) else 0
+                    log.append(
+                        line
+                        + f"{run.name} -> line {action_slot + 1}: "
+                        + _run_line(state, action, action_slot, player, rng, wounded)
+                    )
+                    ran += 1
+                    if state.enemy_hp <= 0:
+                        break
+                state.line_position = (queued.index(slot), len(queued))
             elif run.type is CardType.LOOP:
                 repeats = run.value + (tail_call if slot == last_line else 0)
                 if last is None:
@@ -1105,6 +1125,8 @@ def run_program(
                     log.append(line + f"{taken} damage go into the buffer ({stored} stored).")
                 forks = 0
                 last = None if glitched else run
+                if not glitched:
+                    ran_actions.append((run, slot))
                 if run.halts and not glitched:
                     halted_by = run.name
                     log.append(line + f"{run.name} ends the program here.")

@@ -455,6 +455,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
             c is not None and c.type in _PROGRAM_TARGETS for c in state.program
         ):
             order.append(CardType.LOOP)
+            order.append(CardType.GOTO)  # like a Loop: after what it replays
             if any(c is not None and c.type is CardType.BUFFER for c in state.program):
                 order.append(CardType.FLUSH)
         if state.enemy_intent in ATTACKING_INTENTS:

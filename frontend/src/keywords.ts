@@ -99,6 +99,12 @@ export const KEYWORDS: Keyword[] = [
     text: "Control flow: the last action to its left runs once more.",
   },
   {
+    id: "goto",
+    term: "Goto 1",
+    pattern: /\bgoto 1\b|\bjumps back to line 1\b/,
+    text: "Control flow: once it runs, the program jumps back to line 1 and the first actions that ran before it run again - each from its own line, so a Bootstrap is the first line once more.",
+  },
+  {
     id: "if-wounded",
     term: "If Wounded",
     pattern: /\bif wounded\b/,

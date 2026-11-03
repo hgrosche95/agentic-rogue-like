@@ -655,6 +655,17 @@ PROGRAM_REWARD_POOL: list[Card] = [
         rarity=Rarity.UNCOMMON,
         description="Control flow. Deals all stored damage, +50%.",
     ),
+    Card(
+        id="goto",
+        name="Goto 1",
+        type=CardType.GOTO,
+        value=2,
+        token_cost=2,
+        rarity=Rarity.RARE,
+        description=(
+            "Control flow. Jumps back to line 1 once: the first 2 actions before it run again."
+        ),
+    ),
     # Attacks that care where their line stands (models.Scaling): first or
     # last to run, in a long program or a short one - and Segfault, which
     # hits hardest of all but ends the program on the spot.
@@ -964,6 +975,12 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Segfault": {
         "value": 22,
         "description": "Deal 22 (+ATK) damage. The program ends after its line.",
+    },
+    "Goto 1": {
+        "value": 3,
+        "description": (
+            "Control flow. Jumps back to line 1 once: the first 3 actions before it run again."
+        ),
     },
     "Loop": {
         "value": 2,
