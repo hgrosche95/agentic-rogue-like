@@ -62,7 +62,6 @@ from pathlib import Path
 from .agent.budgets import _BUDGETS
 from .agent.encounter_schema import EnemyBudget
 from .artifacts import (
-    ARTIFACT_EVERY_STEPS,
     PROGRAM_ARTIFACT_POOL,
     gain_artifact,
     heal,
@@ -818,6 +817,34 @@ class RunResult:
     act_reached: int = 1
 
 
+# Above this share of max HP the smart bot goes looking for elites (an
+# artifact each); below REST_BELOW it heads for a safehouse instead.
+ELITE_HUNT_ABOVE = 0.65
+REST_BELOW = 0.45
+
+
+def pick_path(
+    connections: list[str], nodes: dict, player: PlayerState, bot_name: str, rng: random.Random
+) -> str:
+    """The next room. Naive: at random. Smart: like a player who knows that
+    elites pay an artifact - toward one while healthy, away from it and
+    toward a safehouse while hurt; otherwise at random."""
+    if bot_name == "naive":
+        return rng.choice(connections)
+    share = player.hp / max(player.max_hp, 1)
+
+    def worth(node_id: str) -> int:
+        kind = nodes[node_id].type
+        if kind is NodeType.ELITE:
+            return 2 if share >= ELITE_HUNT_ABOVE else -2
+        if kind is NodeType.REST:
+            return 2 if share < REST_BELOW else 0
+        return 0
+
+    best = max(worth(n) for n in connections)
+    return rng.choice([n for n in connections if worth(n) == best])
+
+
 def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -> RunResult:
     """A full run on a real generated map, picking a random path forward.
 
@@ -839,7 +866,9 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
         apply_deal(player, rng.choice(deals))
 
     while True:
-        if cfg.artifacts and steps % ARTIFACT_EVERY_STEPS == 0:
+        # mirrors the engine: an artifact at the start, then one for every
+        # won elite or act boss (below)
+        if cfg.artifacts and steps == 0:
             offer = roll_artifact_offer(rng, player.artifacts, pool=cfg.artifact_pool())
             if offer:
                 gain_artifact(player, pick_artifact(offer, bot_name, rng, player.deck))
@@ -871,6 +900,10 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
             if node.type is NodeType.BOSS and act >= NUM_ACTS:
                 return RunResult(True, node.floor, fights, act)
             heal(player, total(player.artifacts, "heal_after_combat"))
+            if cfg.artifacts and node.type in (NodeType.ELITE, NodeType.BOSS):
+                offer = roll_artifact_offer(rng, player.artifacts, pool=cfg.artifact_pool())
+                if offer:
+                    gain_artifact(player, pick_artifact(offer, bot_name, rng, player.deck))
             if cfg.rewards:
                 offer = roll_card_reward(rng, elite=node.type is not NodeType.COMBAT, pool=pool)
                 pick = offer[pick_reward(offer, bot_name, rng, player.deck)]
@@ -892,7 +925,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
             event = random_event(rng)
             option = pick_event_option(event, player, bot_name, rng)
             apply_option(option, player, pool, rng)
-        node = nodes[rng.choice(node.connections)]
+        node = nodes[pick_path(node.connections, nodes, player, bot_name, rng)]
         steps += 1
 
 

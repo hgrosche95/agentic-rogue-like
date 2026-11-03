@@ -127,6 +127,8 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
                 ).json()
         if run["card_reward"] is not None:
             run = client.post(f"/runs/{run_id}/card-reward", json={"card_index": None}).json()
+        if run["artifact_offer"] is not None:
+            run = client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0}).json()
         if run["shop"] is not None:
             run = client.post(f"/runs/{run_id}/shop/leave").json()
         if run["rest"] is not None:

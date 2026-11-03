@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 from agentic_rogue_like.api import app
 from agentic_rogue_like.artifacts import (
     ARTIFACT_CHOICES,
-    ARTIFACT_EVERY_STEPS,
     ARTIFACT_POOL,
     gain_artifact,
     roll_artifact_offer,
@@ -153,16 +152,29 @@ def test_card_bonuses_and_lifesteal() -> None:
     assert player.hp == 30 + 4 + 3 + 1
 
 
-def test_run_offers_an_artifact_at_the_start_and_every_few_steps() -> None:
+def test_run_offers_an_artifact_at_the_start_and_for_harder_fights_only() -> None:
+    from agentic_rogue_like.engine import _finish_combat
+    from agentic_rogue_like.models import NodeType
+
     run = new_run(1)
     assert run.artifact_offer is not None and len(run.artifact_offer) == ARTIFACT_CHOICES
 
     choose_artifact(run, 0)
     assert len(run.player.artifacts) == 1 and run.artifact_offer is None
 
-    for step in range(1, ARTIFACT_EVERY_STEPS + 1):
+    # walking the map pays none
+    for _ in range(4):
         move_to(run, available_choices(run)[0])
-        assert (run.artifact_offer is not None) == (step == ARTIFACT_EVERY_STEPS)
+        assert run.artifact_offer is None
+    node = run.nodes[run.current_node_id]
+    # a plain fight pays none, an elite does
+    node.type = NodeType.COMBAT
+    _finish_combat(run, node, "Foe", victory=True, rng=random.Random(1))
+    assert run.artifact_offer is None
+    run.card_reward = None
+    node.type = NodeType.ELITE
+    _finish_combat(run, node, "Foe", victory=True, rng=random.Random(1))
+    assert run.artifact_offer is not None
     assert not {a.id for a in run.artifact_offer} & {a.id for a in run.player.artifacts}
 
 

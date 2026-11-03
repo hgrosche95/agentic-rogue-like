@@ -550,10 +550,11 @@ class RunState(BaseModel):
     # Cards offered after a won fight, waiting for the player to pick one
     # (or skip) - the run can't move on to the next room until then.
     card_reward: list[Card] | None = None
-    # Map steps taken so far - every ARTIFACT_EVERY_STEPS of them (and once
-    # at the start) the player is offered artifacts, and has to pick one
-    # before the room they arrived in can be entered.
+    # Map steps taken so far.
     steps: int = 0
+    # Artifacts on offer - at the start, and after a won elite or act boss
+    # fight (engine._finish_combat): one has to be picked before the run
+    # moves on.
     artifact_offer: list[Artifact] | None = None
     # The shop the player is browsing - open from entering a SHOP room until
     # they leave it; the run can't move on while it is open.

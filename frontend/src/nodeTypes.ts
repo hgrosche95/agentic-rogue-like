@@ -6,7 +6,7 @@ import type { NodeType } from "./api";
 // platforms and ignore the CSS colors that tell node types apart.
 export const NODE_STYLE: Record<NodeType, { symbol: string; label: string; blurb: string }> = {
   combat: { symbol: "C", label: "Fight", blurb: "A construct of the AGI guards this layer." },
-  elite: { symbol: "E", label: "Elite", blurb: "A hardened construct. Tougher fight, better loot." },
+  elite: { symbol: "E", label: "Elite", blurb: "A hardened construct. Tougher fight - beat it for an artifact." },
   event: { symbol: "?", label: "Anomaly", blurb: "Something odd in this layer. Choose how to react." },
   shop: { symbol: "$", label: "Black market", blurb: "Trade credits for an edge." },
   rest: { symbol: "R", label: "Safehouse", blurb: "Patch yourself up, rework a card, or strip one out." },

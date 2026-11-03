@@ -156,6 +156,84 @@ const ICONS: Record<string, ReactNode> = {
       <path d="M0 2 Q-1.8 4.5 0 6.5 Q1.8 4.5 0 2 Z" />
     </>
   ),
+  // ---- program mode
+  // a flame over a line
+  "hot-path": (
+    <>
+      <path d="M0 4 Q-4.5 1.5 -2 -3 Q-1.5 0 0 -0.5 Q-0.5 -4 2.5 -6.5 Q1.5 -2 4 0.5 Q4.5 3.5 0 4 Z" />
+      <path d="M-6.5 6.5 H6.5" />
+    </>
+  ),
+  // a fork in a path, one branch lit
+  "branch-predictor": (
+    <>
+      <path d="M-6.5 0 H-1.5 L4 -5 M-1.5 0 L4 5" />
+      <circle cx="5.5" cy="-5.5" r="1.4" />
+    </>
+  ),
+  // an arrow curling back on itself
+  "tail-call": (
+    <>
+      <path d="M-6 4 H2 Q6 4 6 0 Q6 -4 2 -4 H-3" />
+      <path d="M-1 -6.5 L-3.5 -4 L-1 -1.5" />
+    </>
+  ),
+  // stages in a row with arrows between
+  "pipeline": (
+    <>
+      <rect x="-7" y="-2.5" width="3.5" height="5" rx="0.6" />
+      <rect x="-1.75" y="-2.5" width="3.5" height="5" rx="0.6" />
+      <rect x="3.5" y="-2.5" width="3.5" height="5" rx="0.6" />
+    </>
+  ),
+  // braces around a gear tooth
+  "compiler": (
+    <>
+      <path d="M-3.5 -6 Q-5.5 -6 -5.5 -4 V-1 L-7 0 L-5.5 1 V4 Q-5.5 6 -3.5 6" />
+      <path d="M3.5 -6 Q5.5 -6 5.5 -4 V-1 L7 0 L5.5 1 V4 Q5.5 6 3.5 6" />
+      <circle cx="0" cy="0" r="2" />
+      <path d="M0 -3.5 V-2 M0 2 V3.5 M-3.5 0 H-2 M2 0 H3.5" />
+    </>
+  ),
+  // lines with one more, a plus by it
+  "extra-line": (
+    <>
+      <path d="M-6.5 -4 H2 M-6.5 0 H2 M-6.5 4 H-1" />
+      <path d="M4.5 1.5 V6.5 M2 4 H7" />
+    </>
+  ),
+  // ---- bridges between two styles
+  // a stack of lines with a pointer into it
+  "stack-trace": (
+    <>
+      <path d="M-6 -5 H4 M-6 -1.5 H2 M-6 2 H5 M-6 5.5 H1" />
+      <path d="M7 -1.5 L4.5 0 L7 1.5" />
+    </>
+  ),
+  // a round bomb with a lit fuse
+  "logic-bomb": (
+    <>
+      <circle cx="-1" cy="2" r="4.6" />
+      <path d="M2 -1.5 Q3.5 -5 6 -5.5" />
+      <path d="M6 -7.5 V-6.8 M7.6 -5.5 H6.9 M7.2 -7 L6.6 -6.4" />
+    </>
+  ),
+  // a daemon's claw with a worm curling off it
+  "daemon-worm": (
+    <>
+      <path d="M-6 5 Q-6 -4 0 -5 Q6 -4 6 5" />
+      <path d="M-3 1 Q0 -2 3 1 Q0 4 -3 1" />
+      <circle cx="0" cy="1" r="0.6" />
+    </>
+  ),
+  // a save slot: a floppy with a shield on it
+  "retained-state": (
+    <>
+      <path d="M-6.5 -6.5 H4 L6.5 -4 V6.5 H-6.5 Z" />
+      <path d="M-3.5 -6.5 V-3 H2.5 V-6.5" />
+      <path d="M0 0 L3 1 V3 Q3 5 0 6 Q-3 5 -3 3 V1 Z" />
+    </>
+  ),
   // ---- the Vibe-Coder's
   // a five-pointed star badge
   "pro-plan": <path d="M0 -6.5 L1.9 -2.2 L6.5 -1.8 L3 1.3 L4 6 L0 3.6 L-4 6 L-3 1.3 L-6.5 -1.8 L-1.9 -2.2 Z" />,

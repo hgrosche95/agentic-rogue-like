@@ -437,14 +437,15 @@ def test_three_phase_boss_enters_phase_three_at_a_quarter_hp() -> None:
         player.deck, _enemy(hp=100, attack=10), random.Random(1), boss=True, boss_phases=3
     )
     assert "quarter" in log[1]
-    state.enemy_hp = 30
-
+    state.enemy_hp = 55
+    line = play_card(state, 0, 0, player, random.Random(1))  # 5 damage -> 50 HP
+    assert state.phase == 2 and "phase 2" in line
+    state.enemy_hp, state.enemy_block = 30, 0
     line = play_card(state, 0, 0, player, random.Random(1))  # 5 damage -> 25 HP
 
-    # dropping past both thresholds at once enters both phases
     assert state.phase == 3
     assert state.enemy_strength == 4  # +2 per phase entered
-    assert "phase 2" in line and "phase 3" in line
+    assert "phase 3" in line
     state.enemy_intent = EnemyIntentType.BARRAGE
     state.player_block = 0
     assert len(incoming_damage(state)) == 2  # still a (min, max) pair
@@ -460,3 +461,36 @@ def test_two_phase_boss_never_enters_phase_three() -> None:
     play_card(state, 0, 0, player, random.Random(1))
 
     assert state.phase == 2
+
+
+def test_a_boss_never_skips_a_phase() -> None:
+    """A hit that would carry a boss past its next phase stops at the
+    threshold - the phase begins, the rest of the hit is lost."""
+    big = Card(id="b", name="B", type=CardType.ATTACK, value=200, description="")
+    player = _player([big] * 10)
+    state, _ = start_combat(
+        player.deck, _enemy(hp=100, attack=10), random.Random(1), boss=True, boss_phases=3
+    )
+    play_card(state, 0, 0, player, random.Random(1))
+    assert (state.enemy_hp, state.phase) == (50, 2)
+    state.enemy_block = 0
+    play_card(state, 0, 1, player, random.Random(1))
+    assert (state.enemy_hp, state.phase) == (25, 3)
+    state.enemy_block = 0
+    play_card(state, 0, 2, player, random.Random(1))
+    assert state.enemy_hp == 0  # the last phase has no floor
+
+
+def test_malware_moves_a_boss_into_its_next_phase_too() -> None:
+    from agentic_rogue_like.models import Status
+
+    player = _player([Card(id="j", name="Jab", type=CardType.ATTACK, value=0, description="")] * 10)
+    state, _ = start_combat(
+        player.deck, _enemy(hp=100, attack=10), random.Random(1), boss=True, boss_phases=2
+    )
+    state.enemy_hp = 60
+    state.enemy_status[Status.MALWARE] = 30
+    state.enemy_intent = EnemyIntentType.DEFEND
+    log = end_turn(state, player, random.Random(1))
+    assert (state.enemy_hp, state.phase) == (50, 2)
+    assert any("phase 2" in line for line in log)
