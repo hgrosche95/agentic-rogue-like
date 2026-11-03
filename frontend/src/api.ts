@@ -328,6 +328,9 @@ export interface ProgramStep {
   combo: string | null;
   // a retrieve line (Undo): the cards it fetched back to the hand
   retrieved: string[];
+  // attacks and blocks: how its first run reaches its number, e.g.
+  // "3 +2 ATK +7 first = 12" (combat.action_formula)
+  formula: string | null;
 }
 
 export interface ShopCard {

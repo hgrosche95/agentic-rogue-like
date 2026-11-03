@@ -905,6 +905,8 @@ class ProgramStep(BaseModel):
     enemy_block: int
     combo: str | None = None  # the named combo it completed (COMBOS)
     retrieved: list[str] = Field(default_factory=list)  # what a retrieve fetched back
+    # how its first run came to its number (action_formula) - attacks and blocks
+    formula: str | None = None
 
 
 def run_program(
@@ -984,6 +986,7 @@ def run_program(
         outcome = "ran"
         combo: str | None = None
         retrieved: list[str] = []
+        formula: str | None = None
         try:
             glitched = state.program_glitched[slot]
             state.program[slot], state.program_glitched[slot] = None, False
@@ -1108,6 +1111,19 @@ def run_program(
                     forks += tail_call
                 if slot == queued[0]:
                     forks += main_thread
+                if not glitched:
+                    state.plays_this_turn = max(played - 1, ran)
+                    extras = [
+                        ("pipeline", pipeline if after_flow else 0),
+                        ("pipe", bonus - (pipeline if after_flow else 0)),
+                        ("predictor", predictor if _wounded(state) else 0),
+                    ]
+                    if slot == last_line:
+                        # Compiler: part of `bonus`, named on its own
+                        compiled = compiler * len(types - {run.type})
+                        extras[1] = ("pipe", extras[1][1] - compiled)
+                        extras.append(("compiler", compiled))
+                    formula = action_formula(state, run, player, slot, extras)
                 # a buffered action hits, then the enemy gets back what it took
                 held = (state.enemy_hp, state.enemy_block, state.tally.damage_dealt)
                 hand_before = len(state.hand)
@@ -1173,6 +1189,7 @@ def run_program(
                         enemy_block=state.enemy_block,
                         combo=combo,
                         retrieved=retrieved,
+                        formula=formula,
                     )
                 )
 
@@ -1413,6 +1430,76 @@ def attack_damage(
     if Status.EXPOSED in state.enemy_status:
         multiplier *= EXPOSED_FACTOR
     return round(base * multiplier)
+
+
+# How a scaling's bonus is named in a line's formula (action_formula).
+_SCALING_LABELS = {
+    Scaling.PERMANENT: "permanents",
+    Scaling.GRAVEYARD: "graveyard",
+    Scaling.BANISHED: "banished",
+    Scaling.PLAYED: "played",
+    Scaling.EMPTY_SLOT: "empty slots",
+    Scaling.MALWARE: "malware",
+    Scaling.BLOCK: "block",
+    Scaling.LINES: "lines",
+    Scaling.FIRST_LINE: "first",
+    Scaling.LAST_LINE: "last",
+}
+
+
+def action_formula(
+    state: CombatState,
+    card: Card,
+    player: PlayerState,
+    slot: int,
+    extras: list[tuple[str, int]],
+) -> str | None:
+    """How an attack or block line comes to its number, for the player to
+    follow as the program runs - e.g. "3 +2 ATK +7 first ×1.25 = 15". Built
+    from the same helpers that work the number out; `extras` are the flat
+    bonuses run_program adds (Pipeline, Pipe, Compiler, ...), by name. None
+    for every other card."""
+    if card.type not in (CardType.ATTACK, CardType.BLOCK):
+        return None
+    attack = card.type is CardType.ATTACK
+    parts: list[tuple[str, int]] = [("", card.value)]
+    if attack:
+        parts.append(("ATK", player.attack))
+        traced = len(state.discard_pile) // STACK_TRACE_CARDS
+        parts.append(("stack trace", total(state.artifacts, "graveyard_attack") * traced))
+        boost = sum(c.value for c in state.field if c and c.type is CardType.DAMAGE_BOOST)
+        parts.append(("boost", boost * permanent_count(state)))
+    else:
+        parts.append(("artifacts", total(state.artifacts, "block_bonus")))
+    if card.scaling is not None:
+        parts.append(
+            (_SCALING_LABELS.get(card.scaling, card.scaling.value), _scaling_bonus(state, card))
+        )
+    parts += extras
+    chain = _chain_bonus(state, slot)
+    parts.append(("copilot", chain))
+    multiplier = _amplifier_multiplier(state, slot)
+    bonus = sum(n for _, n in extras) + chain
+    if attack:
+        result = attack_damage(state, card, player, multiplier, bonus)
+        if Status.EXPOSED in state.enemy_status:
+            multiplier *= EXPOSED_FACTOR
+    else:
+        result = block_amount(state, card, multiplier, bonus)
+    # anything the helpers count that has no name here still adds up
+    base = sum(n for _, n in parts)
+    if round(max(0, base) * multiplier) != result and multiplier == 1:
+        parts.append(("other", result - max(0, base)))
+    text = str(card.value)
+    for label, n in parts[1:]:
+        if n:
+            text += f" {'+' if n > 0 else '-'}{abs(n)}{' ' + label if label else ''}"
+    if multiplier != 1:
+        text += f" ×{multiplier:g}"
+    text += f" = {result}"
+    if attack and card.hits > 1:
+        text += f" ×{card.hits} hits"
+    return text
 
 
 def block_amount(state: CombatState, card: Card, multiplier: float = 1.0, bonus: int = 0) -> int:

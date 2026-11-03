@@ -2975,3 +2975,44 @@ button.field-slot.is-queued:hover:not(:disabled) {
   box-shadow: 0 0 12px color-mix(in srgb, var(--danger) 60%, transparent);
   pointer-events: none;
 }
+
+/* ---------- the running line's formula: how it gets to its number ---------- */
+.line-formula {
+  position: absolute;
+  z-index: 6;
+  bottom: calc(100% - 14px);
+  left: 50%;
+  width: max-content;
+  max-width: 260px;
+  padding: 5px 10px;
+  border: 1px solid var(--gold);
+  border-radius: 8px;
+  background: var(--panel-solid);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--text);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--gold) 45%, transparent);
+  transform: translateX(-50%);
+  animation: formula-in var(--dur) var(--ease-out) both;
+  pointer-events: none;
+}
+
+.line-formula b {
+  color: #b78bff;
+}
+
+@keyframes formula-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .line-formula {
+    animation: none;
+  }
+}

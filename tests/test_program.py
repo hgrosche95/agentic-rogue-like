@@ -783,3 +783,18 @@ def test_garbage_free_softens_segfault_and_stops_the_collector() -> None:
     state.enemy_intent = EnemyIntentType.COLLECT
     _queue(state, player, "Exploit", "Exploit")
     assert [s.outcome for s in program_preview(state, player).steps] == ["ran", "ran"]
+
+
+# ---- the formula a line shows as it runs
+
+
+def test_a_line_spells_out_how_it_reaches_its_number() -> None:
+    state, player = _fight()
+    player.attack = 2
+    _queue(state, player, "Overclock", "Bootstrap", "Firewall", "Return", slots=[0, 0, 1, 2])
+    by_name = {s.name: s for s in program_preview(state, player).steps}
+    assert by_name["Bootstrap"].formula == "3 +2 ATK +7 first ×1.25 = 15"
+    assert by_name["Return"].formula == "3 +2 ATK +7 last ×1.25 = 15"
+    assert by_name["Firewall"].formula == "5 ×1.25 = 6"
+    # what it says is what it deals (no combo here)
+    assert by_name["Bootstrap"].dealt == 15

@@ -450,6 +450,7 @@ export function ProgramLines({
           {combat.program.map((card, line) => {
             const at = steps.findIndex((s) => s.slot === line);
             const chip = card && at >= 0 ? lineChip(card, steps[at], steps[at + 1], steps.slice(0, at)) : null;
+            const step = card && at >= 0 ? steps[at] : undefined;
             const boost = card ? boosts.get(line) : undefined;
             return (
               <div
@@ -470,7 +471,19 @@ export function ProgramLines({
                     {boost.looped && "↺"}
                   </span>
                 )}
-                <span className={`line-chip${chip ? ` is-${chip.tone}` : " is-none"}`}>{chip?.text}</span>
+                <span
+                  className={`line-chip${chip ? ` is-${chip.tone}` : " is-none"}`}
+                  title={step?.formula ? `${step.formula}${step.runs > 1 ? `, ${step.runs} times` : ""}` : undefined}
+                >
+                  {chip?.text}
+                </span>
+                {running === line && step?.formula && (
+                  // the running line spells out how it gets there
+                  <span className="line-formula" role="status">
+                    {step.formula}
+                    {step.runs > 1 && <b> ×{step.runs}</b>}
+                  </span>
+                )}
                 {card && at >= 0 && steps[at].combo && (
                   <span className="line-combo" data-tip-term="Combo" data-tip="A named combo: card types run back to back pay out once per run.">
                     ★ {steps[at].combo}
