@@ -50,7 +50,7 @@ from agentic_rogue_like.models import (
     RunStatus,
 )
 from agentic_rogue_like.sessions import get_session
-from agentic_rogue_like.style import PlayStyle, agent_hint, answers, play_style
+from agentic_rogue_like.style import PlayStyle, agent_hint, answers, play_style, taunt
 from agentic_rogue_like.threat import threat
 
 
@@ -602,7 +602,10 @@ def test_control_flow_is_a_style_the_agi_answers_with_interrupts() -> None:
     for i, card in enumerate(deck):
         card.id = f"c{i}"
     assert play_style(deck) is PlayStyle.PROGRAM
-    assert agent_hint(PlayStyle.PROGRAM) is None  # the game answers it itself
+    # the game arms the enemy itself; the agent only hears the role to theme it for
+    hint = agent_hint(PlayStyle.PROGRAM, deck)
+    assert "race condition" in hint and "Fork" in hint
+    assert "only the usual moves" in hint
 
     enemy = ENEMY_POOL["mid"][0]
 
@@ -815,3 +818,14 @@ def test_what_if_shows_the_other_lines_change() -> None:
     assert program_what_if(state, player, _card("Overclock"), 3)[:2] == [5, 6]
     # card flow changes no line
     assert program_what_if(state, player, _card("Phishing"), 2) is None
+
+
+def test_the_agi_names_the_program_move_it_armed_the_enemy_with() -> None:
+    deck = [_card(n) for n in ("Monolith", "Monolith", "Return")]
+    armed = with_program_move(ENEMY_POOL["mid"][0], PlayStyle.PROGRAM, deck)
+    assert taunt(PlayStyle.PROGRAM, armed) == (
+        'AGI: "Your programs run long. Garbage collection scheduled."'
+    )
+    # other styles: the general line, plus the cards the agent hears about
+    assert "Adapting" in taunt(PlayStyle.AGGRO)
+    assert "Their key cards: Monolith" in agent_hint(PlayStyle.PROGRAM, deck)

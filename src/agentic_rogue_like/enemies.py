@@ -14,17 +14,13 @@ from __future__ import annotations
 import random
 
 from .models import (
-    CONTROL_FLOW_TYPES,
     Affix,
     Card,
-    CardType,
     Enemy,
     EnemyMove,
     MoveKind,
-    Rarity,
-    Scaling,
 )
-from .style import COUNTER_AFFIX, COUNTER_WEIGHT, PlayStyle, answers
+from .style import COUNTER_AFFIX, COUNTER_WEIGHT, PROGRAM_MOVES, PlayStyle, answers, program_counter
 from .threat import threat
 
 # Shorthands for the move sets below.
@@ -376,41 +372,13 @@ def with_affix(enemy: Enemy, rng: random.Random, style: PlayStyle | None = None)
 INTERRUPT_SHARE = 0.25
 COUNTER_INTERRUPT_SHARE = 0.4
 
-# What program runs give regular enemies, and what each is called.
-PROGRAM_MOVES: tuple[MoveKind, ...] = (
-    MoveKind.INTERRUPT,
-    MoveKind.COLLECT,
-    MoveKind.RACE,
-    MoveKind.LEAK,
-)
+# What each program move (style.PROGRAM_MOVES) is called.
 PROGRAM_MOVE_NAMES = {
     MoveKind.INTERRUPT: "Interrupt",
     MoveKind.COLLECT: "Garbage Collector",
     MoveKind.RACE: "Race Condition",
     MoveKind.LEAK: "Memory Leak",
 }
-
-
-def program_counter(deck: list[Card]) -> MoveKind:
-    """The program move that hurts this deck most, read from the cards the
-    player chose: a garbage collector against a long program or one that
-    saves its best for last, a memory leak against a strong first line, a
-    race condition against control flow that steers the line after it, an
-    interrupt against everything else that builds a long chain."""
-    scores = dict.fromkeys(PROGRAM_MOVES, 0)
-    for card in deck:
-        if card.rarity is Rarity.STARTER:
-            continue
-        if card.scaling in (Scaling.LINES, Scaling.LAST_LINE) or card.halts:
-            scores[MoveKind.COLLECT] += 1
-        elif card.scaling is Scaling.FIRST_LINE:
-            scores[MoveKind.LEAK] += 1
-        elif card.type in (CardType.FORK, CardType.IF_WOUNDED, CardType.PIPE):
-            scores[MoveKind.RACE] += 1
-        elif card.type in CONTROL_FLOW_TYPES:
-            scores[MoveKind.INTERRUPT] += 1
-    # ties go to the first in PROGRAM_MOVES - the interrupt
-    return max(PROGRAM_MOVES, key=lambda kind: scores[kind])
 
 
 def with_program_move(

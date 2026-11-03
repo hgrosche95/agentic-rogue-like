@@ -442,6 +442,7 @@ def _room_enemy(
         act=run.act,
         style=style,
         final=is_final_boss(run, node),
+        deck=run.player.deck,
     )
     if node.type is NodeType.ELITE:
         affix_rng = random.Random(f"{run.seed}-affix-{run.act}-{node.id}")
@@ -449,7 +450,7 @@ def _room_enemy(
     if run.program_mode and not boss:
         enemy = with_program_move(enemy, style, run.player.deck)
     if style is not None and answers(enemy, style):
-        enemy = enemy.model_copy(update={"taunt": taunt(style)})
+        enemy = enemy.model_copy(update={"taunt": taunt(style, enemy)})
     return escalate(enemy, node.floor, NUM_FLOORS, run.act)
 
 

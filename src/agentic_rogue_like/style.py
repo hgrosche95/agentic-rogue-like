@@ -153,21 +153,99 @@ def answers(enemy: Enemy, style: PlayStyle | None) -> bool:
     )
 
 
-def agent_hint(style: PlayStyle | None) -> str | None:
-    """A sentence for the encounter agent's prompt, or None without a style -
-    or for a program, which the game answers itself."""
-    if style is None or style is PlayStyle.PROGRAM:
+# What program runs give regular enemies (enemies.with_program_move).
+PROGRAM_MOVES: tuple[MoveKind, ...] = (
+    MoveKind.INTERRUPT,
+    MoveKind.COLLECT,
+    MoveKind.RACE,
+    MoveKind.LEAK,
+)
+
+
+def program_counter(deck: list[Card]) -> MoveKind:
+    """The program move that hurts this deck most, read from the cards the
+    player chose: a garbage collector against a long program or one that
+    saves its best for last, a memory leak against a strong first line, a
+    race condition against control flow that steers the line after it, an
+    interrupt against everything else that builds a long chain."""
+    scores = dict.fromkeys(PROGRAM_MOVES, 0)
+    for card in deck:
+        if card.rarity is Rarity.STARTER:
+            continue
+        if card.scaling in (Scaling.LINES, Scaling.LAST_LINE) or card.halts:
+            scores[MoveKind.COLLECT] += 1
+        elif card.scaling is Scaling.FIRST_LINE:
+            scores[MoveKind.LEAK] += 1
+        elif card.type in (CardType.FORK, CardType.IF_WOUNDED, CardType.PIPE):
+            scores[MoveKind.RACE] += 1
+        elif card.type in CONTROL_FLOW_TYPES:
+            scores[MoveKind.INTERRUPT] += 1
+    # ties go to the first in PROGRAM_MOVES - the interrupt
+    return max(PROGRAM_MOVES, key=lambda kind: scores[kind])
+
+
+# How the encounter agent should picture an enemy the game arms with each
+# program move - it can't give program moves itself, but it can name and
+# describe the enemy for the job.
+_PROGRAM_ROLES = {
+    MoveKind.INTERRUPT: "an interrupter that cuts running code short",
+    MoveKind.COLLECT: "a garbage collector that sweeps away the end of a long program",
+    MoveKind.RACE: "a race condition that scrambles the order things run in",
+    MoveKind.LEAK: "a memory leak that clogs up the first line it touches",
+}
+
+# The AGI's line for an enemy armed against the player's program.
+_PROGRAM_TAUNTS = {
+    MoveKind.INTERRUPT: "Your control flow has been analysed. Interrupt handler installed.",
+    MoveKind.COLLECT: "Your programs run long. Garbage collection scheduled.",
+    MoveKind.RACE: "Your Forks depend on order. Let us see how they handle a race.",
+    MoveKind.LEAK: "You always open strong. That first line will leak.",
+}
+
+
+def key_cards(deck: list[Card], style: PlayStyle, limit: int = 3) -> list[str]:
+    """The chosen cards that feed `style` most, by how many copies - what the
+    encounter agent hears the player leans on."""
+    counts: dict[str, int] = {}
+    for card in deck:
+        if card.rarity is not Rarity.STARTER and style in card_styles(card):
+            name = card.name.rstrip("+")
+            counts[name] = counts.get(name, 0) + 1
+    return [name for name, _ in sorted(counts.items(), key=lambda kv: -kv[1])[:limit]]
+
+
+def agent_hint(style: PlayStyle | None, deck: list[Card] | None = None) -> str | None:
+    """A sentence for the encounter agent's prompt, or None without a style.
+    A program style gets no move set to ask for - the game arms the enemy
+    itself (enemies.with_program_move) - but the agent hears which program
+    move, so it can name and describe the enemy for that role. With the
+    deck, it also hears the cards the style rests on."""
+    if style is None:
         return None
+    cards = key_cards(deck, style) if deck else []
+    named = f" Their key cards: {', '.join(cards)}." if cards else ""
+    if style is PlayStyle.PROGRAM:
+        role = _PROGRAM_ROLES[program_counter(deck or [])]
+        return (
+            f"The player's deck leans on {LABELS[style]}.{named} The game arms this enemy "
+            f"against their program as {role}: make its name and description fit that "
+            f"role, but give it only the usual moves."
+        )
     kinds = sorted(k.value for k in COUNTER_MOVES[style])
     if kinds == ["defend"]:
         kinds = [f"defend (power {STRONG_GUARD}+)"]
     moves = f" - for example with {' or '.join(kinds)} moves" if kinds else ""
     return (
         f"The player's deck leans on {LABELS[style]}; give this enemy a move set that "
-        f"pressures that{moves}."
+        f"pressures that{moves}.{named}"
     )
 
 
-def taunt(style: PlayStyle) -> str:
-    """The AGI's line when an enemy it picked answers the player's style."""
+def taunt(style: PlayStyle, enemy: Enemy | None = None) -> str:
+    """The AGI's line when an enemy it picked answers the player's style -
+    against a program, the one for the program move it armed the enemy with."""
+    if style is PlayStyle.PROGRAM and enemy is not None:
+        for move in enemy.moves:
+            if move.kind in _PROGRAM_TAUNTS:
+                return f'AGI: "{_PROGRAM_TAUNTS[move.kind]}"'
     return f'AGI: "Your reliance on {LABELS[style]} has been analysed. Adapting."'
