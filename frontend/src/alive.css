@@ -703,7 +703,7 @@ button.is-busy:disabled {
 .effect-tick {
   position: fixed;
   z-index: 52;
-  padding: 1px 8px;
+  padding: 2px 12px;
   border-radius: 999px;
   font: 800 14px/1.35 var(--font-head);
   font-variant-numeric: tabular-nums;

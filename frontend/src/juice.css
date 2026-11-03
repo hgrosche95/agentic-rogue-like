@@ -471,15 +471,15 @@
   0% {
     opacity: 1;
     transform: translateX(-6px);
-    clip-path: inset(0 0 60% 0);
+    clip-path: inset(0 -0.6em 60% -0.6em);
   }
   25% {
     transform: translateX(5px);
-    clip-path: inset(40% 0 20% 0);
+    clip-path: inset(40% -0.6em 20% -0.6em);
   }
   50% {
     transform: translateX(-3px);
-    clip-path: inset(70% 0 0 0);
+    clip-path: inset(70% -0.6em 0 -0.6em);
   }
   75%,
   100% {
@@ -492,15 +492,15 @@
   0% {
     opacity: 1;
     transform: translateX(6px);
-    clip-path: inset(55% 0 0 0);
+    clip-path: inset(55% -0.6em 0 -0.6em);
   }
   25% {
     transform: translateX(-4px);
-    clip-path: inset(10% 0 55% 0);
+    clip-path: inset(10% -0.6em 55% -0.6em);
   }
   50% {
     transform: translateX(2px);
-    clip-path: inset(0 0 75% 0);
+    clip-path: inset(0 -0.6em 75% -0.6em);
   }
   75%,
   100% {
