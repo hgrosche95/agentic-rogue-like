@@ -782,3 +782,11 @@ button.is-busy:disabled {
 .map-node.is-cut .map-node-loot {
   filter: none;
 }
+
+/* the program's smaller numbers (block, heal, combo) stay up long enough
+   to be read - the damage numbers keep their snappier pace */
+.arena-program-fx.is-block,
+.arena-program-fx.is-heal,
+.arena-program-fx.is-combo {
+  animation-duration: 3s;
+}

@@ -7,7 +7,7 @@ import { firingArtifacts } from "./artifactPulse";
 // page, outside React, so a re-render underneath doesn't cut it short.
 export type TickTone = "block" | "damage" | "malware" | "heal";
 
-const TICK_MS = 1300;
+const TICK_MS = 2800;
 
 export function floatTick(el: Element, text: string, tone: TickTone, delay = 0): void {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -22,8 +22,9 @@ export function floatTick(el: Element, text: string, tone: TickTone, delay = 0):
   const rise = tick.animate(
     [
       { transform: "translate(-50%, 0) scale(0.6)", opacity: 0 },
-      { transform: "translate(-50%, -14px) scale(1.12)", opacity: 1, offset: 0.18 },
-      { transform: "translate(-50%, -22px) scale(1)", opacity: 1, offset: 0.7 },
+      { transform: "translate(-50%, -14px) scale(1.12)", opacity: 1, offset: 0.08 },
+      { transform: "translate(-50%, -18px) scale(1)", opacity: 1, offset: 0.16 },
+      { transform: "translate(-50%, -24px) scale(1)", opacity: 1, offset: 0.85 },
       { transform: "translate(-50%, -38px) scale(1)", opacity: 0 },
     ],
     { duration: TICK_MS, delay, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "backwards" },
@@ -57,7 +58,7 @@ export function showTicks(lines: string[], artifacts: Artifact[]): void {
       const m = line.match(re);
       if (!m) continue;
       document.querySelectorAll(`[data-field-card].type-${type}`).forEach((el) => floatTick(el, text(m), tone, delay));
-      delay += 160;
+      delay += 260;
     }
     const firing = firingArtifacts([line], artifacts);
     const tick = firing.length > 0 ? artifactTick(line) : null;
@@ -66,7 +67,7 @@ export function showTicks(lines: string[], artifacts: Artifact[]): void {
         const chip = document.querySelector(`[data-artifact-id="${id}"]`);
         if (chip) floatTick(chip, tick.text, tick.tone, delay);
       }
-      delay += 160;
+      delay += 260;
     }
   }
 }
