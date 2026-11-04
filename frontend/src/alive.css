@@ -782,3 +782,27 @@ button.is-busy:disabled {
 .map-node.is-cut .map-node-loot {
   filter: none;
 }
+
+/* ---------- piles open on a click ---------- */
+.battlefield .pile[role="button"] {
+  cursor: pointer;
+}
+
+.battlefield .pile[role="button"]:hover .pile-face {
+  box-shadow: 0 0 0 2px var(--pile-glow), 0 0 16px var(--pile-glow);
+}
+
+.deck-count.is-top {
+  left: 8px;
+  right: auto;
+  padding: 0 6px;
+  background: var(--cyan);
+  color: #0b0a1e;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.pile-empty {
+  padding: 1rem 0;
+}

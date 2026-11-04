@@ -5,26 +5,53 @@ import { CloseButton, Overlay } from "./Overlay";
 
 // The whole deck, identical cards stacked into one tile with a count.
 export function DeckView({ deck, onClose }: { deck: Card[]; onClose: () => void }) {
-  const sorted = stackDeck(deck);
+  return <PileView title="Your deck" cards={deck} onClose={onClose} />;
+}
+
+// A look into a pile of cards. `ordered`: shown as they lie, the latest
+// first (the Cache, the Purged pile - what Undo or Undelete takes back is
+// on top); otherwise identical cards stacked into one tile with a count.
+export function PileView({
+  title,
+  cards,
+  onClose,
+  ordered = false,
+  note,
+}: {
+  title: string;
+  cards: Card[];
+  onClose: () => void;
+  ordered?: boolean;
+  note?: string;
+}) {
+  const tiles = ordered
+    ? [...cards].reverse().map((card, i) => ({ card, count: 1, key: `${card.id}-${i}` }))
+    : stackDeck(cards).map(({ card, count }) => ({ card, count, key: card.name }));
 
   return (
-    <Overlay label="Your deck" onClose={onClose} className="deck-view">
+    <Overlay label={title} onClose={onClose} className="deck-view">
       <section className="panel">
         <div className="panel-head">
-          <h2 className="panel-title">Your deck</h2>
+          <h2 className="panel-title">{title}</h2>
           <span className="panel-sub">
-            {deck.length} cards · {sorted.length} different
+            {cards.length} card{cards.length === 1 ? "" : "s"}
+            {note ? ` · ${note}` : ordered ? " · latest first" : ` · ${tiles.length} different`}
           </span>
-          <CloseButton onClick={onClose} label="Close deck" />
+          <CloseButton onClick={onClose} label={`Close ${title.toLowerCase()}`} />
         </div>
-        <div className="deck-grid">
-          {sorted.map(({ card, count }) => (
-            <div key={card.name} className={`hand-card deck-card type-${card.type}`}>
-              <CardFace card={card} />
-              {count > 1 && <span className="deck-count">×{count}</span>}
-            </div>
-          ))}
-        </div>
+        {cards.length === 0 ? (
+          <p className="muted pile-empty">Nothing here yet.</p>
+        ) : (
+          <div className="deck-grid">
+            {tiles.map(({ card, count, key }, i) => (
+              <div key={key} className={`hand-card deck-card type-${card.type}`}>
+                <CardFace card={card} />
+                {count > 1 && <span className="deck-count">×{count}</span>}
+                {ordered && i === 0 && <span className="deck-count is-top">top</span>}
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </Overlay>
   );

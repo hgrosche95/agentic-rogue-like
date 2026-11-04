@@ -21,6 +21,7 @@ import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { useSequence } from "../hooks/useSequence";
 import { describeIntent, rangeText, STATUS_TEXT } from "../readouts";
 import { StatChip } from "./StatChip";
+import { PileView } from "./DeckView";
 import { firingArtifacts } from "../artifactPulse";
 import { showTicks } from "../effectTicks";
 import { tempoMs } from "../tempo";
@@ -114,12 +115,15 @@ function Pile({
   kind,
   term,
   names,
+  onOpen,
 }: {
   label: string;
   count: number;
   kind: string;
   term: string;
   names?: string[];
+  // clicked (or Enter): open a look at the whole pile
+  onOpen?: () => void;
 }) {
   const [last, setLast] = useState(count);
   const [delta, setDelta] = useState<{ n: number; id: number } | null>(null);
@@ -135,6 +139,14 @@ function Pile({
       data-tip-list={names ? peekLines(names, kind !== "deck").join("\n") : undefined}
       data-tip-list-label={kind === "deck" ? "in it, shuffled" : "latest first"}
       tabIndex={0}
+      role={onOpen ? "button" : undefined}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (onOpen && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
     >
       <div key={delta?.id ?? 0} className={`pile-face${delta ? " is-bumped" : ""}`}>
         <span className="pile-count">{count}</span>
@@ -813,6 +825,9 @@ export function CombatPanel({
     ticked.current = log.length;
   }, [log, player.artifacts]);
 
+  // a look into one of the piles, opened by clicking it
+  const [openPile, setOpenPile] = useState<"source" | "cache" | "purged" | null>(null);
+
   // what ending the turn now leads to, under the button's label
   const endTurnNote = !attacking
     ? `next: ${intent.label.toLowerCase()}`
@@ -834,6 +849,20 @@ export function CombatPanel({
 
   return (
     <div className={`combat-panel${programMode ? " is-program" : ""}${choosing ? " is-discarding" : ""}`}>
+      {openPile === "source" && (
+        <PileView
+          title="Source"
+          cards={combat.draw_cards ?? []}
+          note="shuffled - drawn in an order you can't see"
+          onClose={() => setOpenPile(null)}
+        />
+      )}
+      {openPile === "cache" && (
+        <PileView title="Cache" cards={combat.discard_cards ?? []} ordered onClose={() => setOpenPile(null)} />
+      )}
+      {openPile === "purged" && (
+        <PileView title="Purged" cards={combat.banished_cards ?? []} ordered onClose={() => setOpenPile(null)} />
+      )}
       {helpOpen && (
         <CombatHelp
           programMode={programMode}
@@ -1110,7 +1139,14 @@ export function CombatPanel({
       </div>
 
       <div className="battlefield">
-        <Pile label="Source" count={combat.draw_count} kind="deck" term="source" names={combat.draw_names} />
+        <Pile
+          label="Source"
+          count={combat.draw_count}
+          kind="deck"
+          term="source"
+          names={combat.draw_names}
+          onOpen={() => setOpenPile("source")}
+        />
 
         <div className="hand-zone">
           {/* over the hand limit: hard to miss, or the turn seems stuck */}
@@ -1210,6 +1246,7 @@ export function CombatPanel({
               kind="graveyard"
               term="graveyard"
               names={combat.discard_names}
+              onOpen={() => setOpenPile("cache")}
             />
             <Pile
               label="Purged"
@@ -1217,6 +1254,7 @@ export function CombatPanel({
               kind="banished"
               term="banished"
               names={combat.banished_names}
+              onOpen={() => setOpenPile("purged")}
             />
           </div>
         </div>
