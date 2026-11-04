@@ -669,6 +669,8 @@ def test_api_purges_the_chosen_card() -> None:
     assert view["banished_names"] == ["Firewall", "Purge"]
     assert view["draw_names"] == sorted(view["draw_names"])
     assert len(view["draw_names"]) == view["draw_count"]
+    assert [c["name"] for c in view["banished_cards"]] == ["Firewall", "Purge"]
+    assert [c["name"] for c in view["draw_cards"]] == view["draw_names"]
 
 
 # ---- registers, exceptions and named combos

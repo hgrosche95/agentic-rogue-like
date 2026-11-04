@@ -21,6 +21,7 @@ import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
 import { useSequence } from "../hooks/useSequence";
 import { describeIntent, rangeText, STATUS_TEXT } from "../readouts";
 import { StatChip } from "./StatChip";
+import { PileView } from "./DeckView";
 import { firingArtifacts } from "../artifactPulse";
 import { showTicks } from "../effectTicks";
 import { tempoMs } from "../tempo";
@@ -114,12 +115,15 @@ function Pile({
   kind,
   term,
   names,
+  onOpen,
 }: {
   label: string;
   count: number;
   kind: string;
   term: string;
   names?: string[];
+  // clicked (or Enter): open a look at the whole pile
+  onOpen?: () => void;
 }) {
   const [last, setLast] = useState(count);
   const [delta, setDelta] = useState<{ n: number; id: number } | null>(null);
@@ -135,6 +139,14 @@ function Pile({
       data-tip-list={names ? peekLines(names, kind !== "deck").join("\n") : undefined}
       data-tip-list-label={kind === "deck" ? "in it, shuffled" : "latest first"}
       tabIndex={0}
+      role={onOpen ? "button" : undefined}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (onOpen && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
     >
       <div key={delta?.id ?? 0} className={`pile-face${delta ? " is-bumped" : ""}`}>
         <span className="pile-count">{count}</span>
@@ -161,12 +173,15 @@ function HpBar({
   side,
   ghost,
   block = 0,
+  marks = [],
 }: {
   hp: number;
   max: number;
   side: "player" | "enemy";
   ghost?: number;
   block?: number;
+  // HP shares (0..1) marked on the bar - a boss's next phases
+  marks?: number[];
 }) {
   const pct = (value: number) => Math.max(0, Math.min(100, (value / max) * 100));
   const percent = pct(hp);
@@ -182,6 +197,9 @@ function HpBar({
       {/* slid along rather than resized, so the bar's motion stays off layout */}
       <span style={{ transform: `translateX(${percent - 100}%)` }} />
       {after < percent && <i className="hud-ghost" style={{ left: `${after}%`, width: `${percent - after}%` }} />}
+      {marks.map((mark) => (
+        <i key={mark} className="hud-mark" style={{ left: `${mark * 100}%` }} />
+      ))}
       <em>
         {/* one run of text: em centres its content as a grid */}
         <span>
@@ -230,6 +248,10 @@ const SUMMARY_MS = 6000;
 // boss's line to read
 const TURN_BANNER_MS = 850;
 const PHASE_BANNER_MS = 1300;
+// where a boss's next phases begin, as HP shares (combat.PHASE_HP_PERCENT)
+const PHASE_MARKS: Record<number, number[]> = { 2: [0.5], 3: [0.5, 0.25] };
+// how long the table glitches when a boss enters its next phase
+const PHASE_SHIFT_MS = 1100;
 const PHASE_TAUNT_MS = 2300;
 
 // Keys pressed into an input, or on a button focused from the keyboard
@@ -431,10 +453,19 @@ export function CombatPanel({
     if (combat.turn > from && !enemySlain) yourTurn(combat.turn, PLAYER_HIT_MS + 450);
   }, [combat.turn, enemySlain, yourTurn]);
 
+  // a boss entering its next phase shakes the whole table for a moment
+  const [phaseShift, setPhaseShift] = useState(0);
+  useEffect(() => {
+    if (!phaseShift) return;
+    const timer = window.setTimeout(() => setPhaseShift(0), PHASE_SHIFT_MS + ENEMY_HIT_MS + 150);
+    return () => window.clearTimeout(timer);
+  }, [phaseShift]);
+
   useEffect(() => {
     const from = shownPhase.current;
     shownPhase.current = combat.enemy_phase;
     if (!combat.boss || combat.enemy_phase <= from || enemySlain) return;
+    setPhaseShift((n) => n + 1);
     const taunt = combat.enemy_phase_taunts[combat.enemy_phase - 2];
     showBanner(
       {
@@ -813,6 +844,12 @@ export function CombatPanel({
     ticked.current = log.length;
   }, [log, player.artifacts]);
 
+  // a look into one of the piles, opened by clicking it
+  const [openPile, setOpenPile] = useState<"source" | "cache" | "purged" | null>(null);
+
+  // under a quarter of his HP: the edges of the screen pulse red
+  const critical = !enemySlain && player.hp > 0 && player.hp <= player.max_hp * 0.25;
+
   // what ending the turn now leads to, under the button's label
   const endTurnNote = !attacking
     ? `next: ${intent.label.toLowerCase()}`
@@ -833,7 +870,24 @@ export function CombatPanel({
         : combat.field.every((c, i) => c !== null || combat.locked_slots.includes(i))));
 
   return (
-    <div className={`combat-panel${programMode ? " is-program" : ""}${choosing ? " is-discarding" : ""}`}>
+    <div
+      className={`combat-panel${programMode ? " is-program" : ""}${choosing ? " is-discarding" : ""}${phaseShift ? " is-phase-shift" : ""}${critical ? " is-critical" : ""}${combat.boss && combat.enemy_phase > 1 ? ` boss-phase-${combat.enemy_phase}` : ""}`}
+    >
+      {critical && <div className="low-hp-vignette" aria-hidden="true" />}
+      {openPile === "source" && (
+        <PileView
+          title="Source"
+          cards={combat.draw_cards ?? []}
+          note="shuffled - drawn in an order you can't see"
+          onClose={() => setOpenPile(null)}
+        />
+      )}
+      {openPile === "cache" && (
+        <PileView title="Cache" cards={combat.discard_cards ?? []} ordered onClose={() => setOpenPile(null)} />
+      )}
+      {openPile === "purged" && (
+        <PileView title="Purged" cards={combat.banished_cards ?? []} ordered onClose={() => setOpenPile(null)} />
+      )}
       {helpOpen && (
         <CombatHelp
           programMode={programMode}
@@ -890,6 +944,8 @@ export function CombatPanel({
             intentName: combat.enemy_intent_name,
             finalBoss: combat.final_boss,
             phase: combat.enemy_phase,
+            incoming:
+              attacking && running === null && !enemySlain ? [combat.incoming_min, combat.incoming_max] : null,
           }}
           exchange={exchange}
           log={log}
@@ -954,6 +1010,7 @@ export function CombatPanel({
               max={combat.enemy_max_hp}
               side="enemy"
               block={enemySlain ? 0 : combat.enemy_block}
+              marks={combat.boss ? PHASE_MARKS[combat.enemy_phases]?.slice(combat.enemy_phase - 1) : undefined}
               ghost={
                 programMode && running === null && queuedLines.length > 0 && combat.program_preview
                   ? combat.program_preview.enemy_hp
@@ -993,6 +1050,11 @@ export function CombatPanel({
                       : "",
                   ].join(" ")}
                 >
+                  <span className="phase-pips" aria-label={`Phase ${combat.enemy_phase} of ${combat.enemy_phases}`}>
+                    {Array.from({ length: combat.enemy_phases }, (_, i) => (
+                      <i key={i} className={i < combat.enemy_phase ? "is-reached" : undefined} />
+                    ))}
+                  </span>
                   Phase {combat.enemy_phase}/{combat.enemy_phases}
                   {combat.enemy_strength > 0 && ` · +${combat.enemy_strength} ATK`}
                 </span>
@@ -1125,7 +1187,14 @@ export function CombatPanel({
       </div>
 
       <div className="battlefield">
-        <Pile label="Source" count={combat.draw_count} kind="deck" term="source" names={combat.draw_names} />
+        <Pile
+          label="Source"
+          count={combat.draw_count}
+          kind="deck"
+          term="source"
+          names={combat.draw_names}
+          onOpen={() => setOpenPile("source")}
+        />
 
         <div className="hand-zone">
           {/* over the hand limit: hard to miss, or the turn seems stuck */}
@@ -1230,6 +1299,7 @@ export function CombatPanel({
               kind="graveyard"
               term="graveyard"
               names={combat.discard_names}
+              onOpen={() => setOpenPile("cache")}
             />
             <Pile
               label="Purged"
@@ -1237,6 +1307,7 @@ export function CombatPanel({
               kind="banished"
               term="banished"
               names={combat.banished_names}
+              onOpen={() => setOpenPile("purged")}
             />
           </div>
         </div>

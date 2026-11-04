@@ -290,6 +290,10 @@ export interface PendingCombatView {
   draw_names: string[];
   discard_names: string[];
   banished_names: string[];
+  // the cards themselves, for a look into a pile (same order)
+  draw_cards: Card[];
+  discard_cards: Card[];
+  banished_cards: Card[];
   player_block: number;
   armor: number;
   max_hand_size: number;

@@ -269,6 +269,11 @@ class PendingCombatView(BaseModel):
     draw_names: list[str] = Field(default_factory=list)
     discard_names: list[str] = Field(default_factory=list)
     banished_names: list[str] = Field(default_factory=list)
+    # ... and the cards themselves, for a look into a pile: the same order
+    # (the Source pile sorted by name)
+    draw_cards: list[CardView] = Field(default_factory=list)
+    discard_cards: list[CardView] = Field(default_factory=list)
+    banished_cards: list[CardView] = Field(default_factory=list)
     # Program mode (RunState.program_mode): the actions queued per line, run
     # left to right at the end of the turn, and which of them will
     # hallucinate. All null / false in a classic run.
@@ -710,6 +715,9 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             draw_names=sorted(card.name for card in combat.draw_pile),
             discard_names=[card.name for card in combat.discard_pile],
             banished_names=[card.name for card in combat.banished_pile],
+            draw_cards=[CardView.of(c) for c in sorted(combat.draw_pile, key=lambda c: c.name)],
+            discard_cards=[CardView.of(c) for c in combat.discard_pile],
+            banished_cards=[CardView.of(c) for c in combat.banished_pile],
             token_limit=combat.token_limit,
             tokens_used=combat.tokens_used,
             token_regen=token_regen(combat) if combat.token_limit is not None else 0,

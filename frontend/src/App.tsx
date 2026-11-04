@@ -538,6 +538,7 @@ function App() {
         <Overlay key={`event:${run.pending_event.description}`} label="Anomaly">
           <EventPrompt
             event={run.pending_event}
+            where={layerLabel(run.floor, numFloors, run.act)}
             disabled={isLoading}
             onChoose={(optionIndex) => {
               const before = run;
@@ -561,6 +562,7 @@ function App() {
           <RewardScreen
             offer={run.card_reward}
             deckSize={run.player.deck.length}
+            deck={run.player.deck}
             disabled={isLoading}
             onPick={(cardIndex) => runAction(() => chooseCardReward(run.run_id, cardIndex))}
           />

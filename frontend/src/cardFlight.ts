@@ -181,3 +181,42 @@ export function dissolveToPurged(ghost: HTMLElement, from: DOMRect): void {
   document.body.appendChild(ghost);
   toPile(ghost, target, "purged", width, height, from.left + width / 2, from.top + height / 2, { dx: 0, dy: 0, scale: 1 });
 }
+
+
+// A bought card (or artifact) flies up into what it joins - the deck button
+// in the top bar, or the artifact shelf - and that bumps as it lands.
+export function flyInto(item: HTMLElement, target: HTMLElement | null): void {
+  if (!target || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const from = item.getBoundingClientRect();
+  const to = target.getBoundingClientRect();
+  const clone = item.cloneNode(true) as HTMLElement;
+  clone.classList.add("card-flight");
+  clone.removeAttribute("style");
+  Object.assign(clone.style, {
+    left: `${from.left}px`,
+    top: `${from.top}px`,
+    width: `${from.width}px`,
+    height: `${from.height}px`,
+  });
+  document.body.appendChild(clone);
+  const dx = to.left + to.width / 2 - (from.left + from.width / 2);
+  const dy = to.top + to.height / 2 - (from.top + from.height / 2);
+  const scale = Math.min(to.width / from.width, to.height / from.height);
+  const flight = clone.animate(
+    [
+      { transform: "none", opacity: 1, filter: "brightness(1.3)" },
+      { transform: `translate(${dx * 0.35}px, ${dy * 0.35 - 60}px) rotate(-8deg) scale(0.75)`, opacity: 1, offset: 0.4 },
+      { transform: `translate(${dx}px, ${dy}px) rotate(-14deg) scale(${scale})`, opacity: 0.2, filter: "brightness(2)" },
+    ],
+    { duration: 620, easing: "cubic-bezier(0.45, 0, 0.3, 1)" },
+  );
+  const land = () => {
+    clone.remove();
+    target.animate(
+      [{ transform: "scale(1)" }, { transform: "scale(1.18)", filter: "brightness(1.6)" }, { transform: "scale(1)" }],
+      { duration: 360, easing: "ease-out" },
+    );
+  };
+  flight.onfinish = land;
+  flight.oncancel = () => clone.remove();
+}

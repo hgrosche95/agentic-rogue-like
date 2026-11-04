@@ -139,6 +139,39 @@ function MapCursor({
   );
 }
 
+// What a room ahead holds, for the card shown while it is pointed at.
+function roomPreview(
+  node: MapNode,
+  currentFloor: number,
+  act: number,
+  numActs: number,
+): { title: string; line: string; loot?: string; distance: string } {
+  const style = NODE_STYLE[node.type];
+  const jumps = node.floor - currentFloor;
+  const distance = jumps <= 0 ? "this jump" : jumps === 1 ? "next jump" : `${jumps} jumps away`;
+  // deeper layers hold stronger constructs (enemies.escalate)
+  const depth = node.floor <= 2 ? "a light one" : node.floor <= 5 ? "a solid one" : "a heavy one";
+  switch (node.type) {
+    case "combat":
+      return { title: style.label, line: `A construct - ${depth} at this depth.`, distance };
+    case "elite":
+      return { title: style.label, line: "A hardened construct with an affix.", loot: "drops an artifact", distance };
+    case "boss":
+      return {
+        title: style.label,
+        line: act < numActs ? "The act's core: phases, barrages, overloads." : "The AGI itself. Three phases.",
+        loot: act < numActs ? "drops an artifact" : undefined,
+        distance,
+      };
+    case "shop":
+      return { title: style.label, line: "Cards and artifacts for credits, one card removal.", distance };
+    case "rest":
+      return { title: style.label, line: "Heal, upgrade a card or strip one out.", distance };
+    default:
+      return { title: style.label, line: "Something odd - a choice with a price.", distance };
+  }
+}
+
 export function DungeonMap({
   nodes,
   currentNodeId,
@@ -247,6 +280,20 @@ export function DungeonMap({
     for (const id of [originId, ...ahead]) if (leadsThere(id, seen)) route.add(id);
   }
 
+  // the jump just made: a packet runs the trail from the room it left
+  const [jump, setJump] = useState<{ from: string; to: string; id: number } | null>(null);
+  const [lastCurrent, setLastCurrent] = useState(currentNodeId);
+  if (currentNodeId !== lastCurrent) {
+    setLastCurrent(currentNodeId);
+    if (nodes[lastCurrent]?.connections.includes(currentNodeId) || pickPending) {
+      const from = nodes[lastCurrent]?.connections.includes(currentNodeId) ? lastCurrent : originId;
+      if (from) setJump({ from, to: currentNodeId, id: (jump?.id ?? 0) + 1 });
+    }
+  }
+
+  const preview = pointed && nodes[pointed] ? roomPreview(nodes[pointed], currentFloor, act, numActs) : null;
+  const previewAt = pointed && nodes[pointed] ? pos(nodes[pointed]) : null;
+
   return (
     <div className={`dungeon-map${disabled ? " is-busy" : ""}`}>
       <svg className="dungeon-map-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Call stack map">
@@ -294,6 +341,23 @@ export function DungeonMap({
             return <path key={`${node.id}->${targetId}`} d={trail(from, pos(target), isHorizontal)} className={classes} />;
           });
         })}
+        {jump && nodes[jump.from] && nodes[jump.to] && (
+          <g key={jump.id} className="map-packet" aria-hidden="true">
+            <path id={`packet-${jump.id}`} d={trail(pos(nodes[jump.from]), pos(nodes[jump.to]), isHorizontal)} fill="none" />
+            <circle r="6">
+              <animateMotion dur="0.55s" fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1" keyTimes="0;1">
+                <mpath href={`#packet-${jump.id}`} />
+              </animateMotion>
+              <animate attributeName="opacity" values="1;1;0" keyTimes="0;0.8;1" dur="0.8s" fill="freeze" />
+            </circle>
+            <circle r="12" className="map-packet-glow">
+              <animateMotion dur="0.55s" fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1" keyTimes="0;1">
+                <mpath href={`#packet-${jump.id}`} />
+              </animateMotion>
+              <animate attributeName="opacity" values="0.6;0.6;0" keyTimes="0;0.8;1" dur="0.8s" fill="freeze" />
+            </circle>
+          </g>
+        )}
         {/* the picked trail on top of the ones it shares a stretch with */}
         {pickPending && originId && current && (
           <path className="map-path is-picked" d={trail(pos(nodes[originId]), pos(current), isHorizontal)} />
@@ -395,6 +459,18 @@ export function DungeonMap({
           />
         )}
       </svg>
+      {preview && previewAt && (
+        <div
+          className={`map-preview type-${nodes[pointed as string].type}`}
+          style={{ left: `${(previewAt.x / width) * 100}%`, top: `${(previewAt.y / height) * 100}%` }}
+          aria-hidden="true"
+        >
+          <b>{preview.title}</b>
+          <span>{preview.line}</span>
+          {preview.loot && <em>◆ {preview.loot}</em>}
+          <small>{preview.distance}</small>
+        </div>
+      )}
 
       <div className="map-legend">
         {(Object.keys(NODE_STYLE) as NodeType[]).map((type) => (

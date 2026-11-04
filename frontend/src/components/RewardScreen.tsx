@@ -11,14 +11,24 @@ const FLIP_START_MS = 380;
 const FLIP_STAGGER_MS = 230;
 const FLIP_MS = 560;
 
+// "in your deck: 2×" (by name, upgraded copies counted too) or "new"
+function owned(deck: Card[], card: Card): string {
+  const base = card.name.replace(/\+$/, "");
+  const copies = deck.filter((c) => c.name.replace(/\+$/, "") === base).length;
+  return copies > 0 ? `in your deck: ${copies}×` : "new";
+}
+
 export function RewardScreen({
   offer,
   deckSize,
+  deck = [],
   disabled,
   onPick,
 }: {
   offer: Card[];
   deckSize: number;
+  // the deck it would join - each offer says how many copies it already has
+  deck?: Card[];
   disabled: boolean;
   onPick: (cardIndex: number | null) => void;
 }) {
@@ -48,7 +58,9 @@ export function RewardScreen({
       <p className="reward-hint">Add one to your deck ({deckSize} cards) - or skip to keep it lean.</p>
       <div className="reward-cards">
         {offer.map((card, index) => (
-          <div key={card.id} className="reward-slot" style={{ "--i": index } as CSSProperties}>
+          <div key={card.id} className={`reward-slot is-${card.rarity}`} style={{ "--i": index } as CSSProperties}>
+            {/* light rising behind it, in its rarity's colour */}
+            <span className="reward-rays" aria-hidden="true" />
             <button
               className={`hand-card reward-card type-${card.type} rarity-${card.rarity}${pickClass(picked, index)}`}
               disabled={disabled}
@@ -64,6 +76,7 @@ export function RewardScreen({
               {card.rarity === "rare" && <span className="reward-card-shine" aria-hidden="true" />}
             </button>
             {card.rarity === "rare" && <span className="reward-glow" aria-hidden="true" />}
+            <span className="reward-owned">{owned(deck, card)}</span>
           </div>
         ))}
       </div>
