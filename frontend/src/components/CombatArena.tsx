@@ -44,6 +44,9 @@ export interface ArenaEnemy {
   // the run's final boss (hand-drawn), and the boss phase it is in
   finalBoss?: boolean;
   phase?: number;
+  // what its telegraphed attack does to the player through block and armor
+  // (min, max) - null while it isn't attacking or nothing is to be shown
+  incoming?: [number, number] | null;
 }
 
 export interface ArenaStatus {
@@ -182,6 +185,58 @@ function IntentMarker({ enemy }: { enemy: ArenaEnemy }) {
     >
       <IntentIcon intent={enemy.intent} />
       <b>{amount}</b>
+    </div>
+  );
+}
+
+// The telegraphed attack as a line from the enemy to Dr. Chronos. Block
+// stands on it as a shield: what the shield holds stops there, the rest
+// goes on - red to him if anything gets through, broken off and grey if
+// the block takes all of it.
+const ATTACK_FROM = { x: ENEMY_X - 14, y: FLOOR - 22 };
+const ATTACK_TO = { x: PLAYER_X + 9, y: FLOOR - 24 };
+const ATTACK_ARC = { x: (ENEMY_X + PLAYER_X) / 2, y: FLOOR - 44 };
+// where on the way the shield stands (0 enemy .. 1 player)
+const SHIELD_AT = 0.78;
+
+function pointAt(t: number) {
+  const u = 1 - t;
+  return {
+    x: u * u * ATTACK_FROM.x + 2 * u * t * ATTACK_ARC.x + t * t * ATTACK_TO.x,
+    y: u * u * ATTACK_FROM.y + 2 * u * t * ATTACK_ARC.y + t * t * ATTACK_TO.y,
+  };
+}
+
+function AttackLine({ incoming, block, armor }: { incoming: [number, number]; block: number; armor: number }) {
+  const [low, high] = incoming;
+  const held = block + armor > 0;
+  const stopped = high === 0;
+  const path = `M ${ATTACK_FROM.x} ${ATTACK_FROM.y} Q ${ATTACK_ARC.x} ${ATTACK_ARC.y} ${ATTACK_TO.x} ${ATTACK_TO.y}`;
+  const shield = pointAt(SHIELD_AT);
+  const through = pointAt(0.95);
+  return (
+    <div className={`arena-attack${stopped ? " is-stopped" : ""}`} aria-hidden="true">
+      <svg viewBox="0 0 240 100" preserveAspectRatio="none">
+        <path className="arena-attack-path" d={path} pathLength={100} style={held ? { strokeDasharray: `${SHIELD_AT * 100} 100` } : undefined} />
+        {held && !stopped && (
+          <path className="arena-attack-path is-through" d={path} pathLength={100} style={{ strokeDasharray: `0 ${SHIELD_AT * 100 + 3} 100` }} />
+        )}
+      </svg>
+      {held && (
+        <span className="arena-attack-shield" style={{ left: pct.x(shield.x), top: pct.y(shield.y) }}>
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M10 2.6 16 5v4.4c0 4-2.7 6.6-6 8-3.3-1.4-6-4-6-8V5Z" />
+          </svg>
+          {block > 0 && <b>{block}</b>}
+          {armor > 0 && <small>+{armor}</small>}
+        </span>
+      )}
+      <span
+        className={`arena-attack-hit${stopped ? " is-zero" : ""}`}
+        style={{ left: pct.x(through.x + 4), top: pct.y(through.y - 17) }}
+      >
+        {stopped ? "0" : low === high ? `−${high}` : `−${low}–${high}`}
+      </span>
     </div>
   );
 }
@@ -419,6 +474,9 @@ export function CombatArena({
     <div className="arena-stage">
       <PixelStage onScene={onScene} followTempo>
         {!slain && <IntentMarker key={`${enemy.intent}-${enemy.intentMin}-${enemy.intentMax}`} enemy={enemy} />}
+        {!slain && enemy.incoming && (
+          <AttackLine incoming={enemy.incoming} block={status.block} armor={status.armor} />
+        )}
         <CombatMonitor lines={log} commands={commands} turn={turn} />
         {exchange && (
           <div key={exchange.id} className="arena-fx" aria-hidden="true">
