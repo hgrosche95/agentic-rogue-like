@@ -54,8 +54,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       brauchen einen freien Slot, wirken sofort und wandern in den
       Friedhof; permanente Karten (Overclock, Encryption,
       Prefetch) belegen ihren Slot dauerhaft und wirken positionsabhängig — z. B.
-      "Aktionskarten rechts von mir sind 25% effektiver". Man startet mit
-      5 Handkarten und zieht jede Runde 3 nach (Prefetch: +1); nicht gespielte
+      "Aktionskarten rechts von mir sind 10% effektiver". Man startet mit
+      5 Handkarten und zieht jede Runde 3 nach (Prefetch: +1 jeden 2. Zug); nicht gespielte
       Karten bleiben auf der Hand, am Rundenende wird auf 8 abgeworfen.
       `cli.py` und die Tests spielen automatisiert (`auto_resolve_combat` —
       erste bezahlbare Karte in den ersten freien Slot, dann Rundenende),
@@ -626,8 +626,10 @@ Karte zeigt das Panel „AGI analysis“, was sie bisher gelesen hat.
 
 ## Die AGI kompiliert dir eine Karte
 
-Einmal pro Akt, sobald das Deck nach einer Kartenbelohnung einen klaren Stil
-zeigt, meldet sich die AGI: „Your reliance on … has been analysed.“ Sie bietet
+Einmal pro Run, als Belohnung für den ersten Boss (direkt nach dessen
+Kartenbelohnung), meldet sich die AGI – sie hat dann einen ganzen Akt lang
+zugesehen: „Your reliance on … has been analysed.“ Ist der Stil noch nicht
+eindeutig, nimmt sie den, für den die meisten Karten gewählt wurden. Sie bietet
 eine Karte an, die genau zu diesem Stil passt – stark, aber als Köder: Wer sie
 nimmt, zahlt 6 max HP oder bekommt einen Glitch ins Deck. Wie der Deal am
 Run-Start wird das Angebot angenommen oder abgelehnt, bevor es weitergeht
@@ -642,9 +644,12 @@ Budget: Wert plus Skalierung mal typischer Anzahl, mal Treffer, plus Malware,
 minus Nachteile, mal 0,65 für Einmal-Karten muss zwischen 12 und 16 liegen –
 über einer normalen seltenen Karte (10–12), unter einer Einmal-Karte wie
 Zero-Day (16), den Rest bezahlt der Preis des Deals. Ein Entwurf außerhalb
-geht mit dem Grund zurück (höchstens 3 Versuche). Ist der Agent aus oder
+geht mit dem Grund zurück (höchstens 3 Versuche). Die Skalierung muss
+zum gelesenen Stil passen (`forge.STYLE_SCALINGS`): ein Banish-Deck bekommt
+nichts, das Permanente zählt, sondern eine Karte, die mit dem Verbannt-Stapel
+wächst. Ist der Agent aus oder
 scheitert er, kommt ein fester Entwurf pro Stil (Core Dump für den Friedhof,
-Hot Loop für Kontrollfluss, …), der dasselbe Budget einhält.
+Shredder für Einmal-Karten, Hot Loop für Kontrollfluss, …), der dasselbe Budget einhält.
 
 ## Programm-Modus (Prototyp)
 
@@ -879,7 +884,7 @@ dem Verbannt-Stapel skaliert).
 | --- | --- | --- |
 | Angriff | 2× Exploit | 2× Prompt |
 | Block | 3× Firewall, Encryption | 3× Make It Safe |
-| Permanente | Overclock, Encryption, Prefetch, Kernel Panic (nur Classic) | Copilot, Energy Drink |
+| Permanente | Overclock (10 %), Encryption, Prefetch (jeden 2. Zug), Kernel Panic (nur Classic) | Copilot, Energy Drink |
 | Malware | Ping (2 Schaden, 2 Malware) | Ping |
 | Friedhof | Undo (1×, holt die letzte Karte zurück) | Force Push (1 Karte abwerfen, 7 Schaden) |
 | Einmal-Karten | Undo, Garbage Collect (2 Schaden, +2 pro verbannter Karte) | /compact, Garbage Collect |
@@ -965,12 +970,11 @@ allein mit diesem Kit) und Tab-Tab-Tab beim Vibe-Coder (27–29 %).
 
 Im Safehouse lässt sich eine Karte einmal verbessern: Sie bekommt ein „+“ am
 Namen und einen stärkeren Wert, z. B. Exploit 5 → 8 Schaden, Firewall 5 → 8
-Block, Overclock 25 % → 40 %, Encryption 1 → 2 Rüstung, Daemon 4 → 6
+Block, Overclock 10 % → 20 %, Prefetch jeden 2. Zug → jeden Zug, Encryption 1 → 2 Rüstung, Daemon 4 → 6
 Schaden, DDoS 3 → 4 Treffer. Die Upgrades stehen pro Karte ausgeschrieben in
 `cards.CARD_UPGRADES` (grob +40 % auf die Hauptzahl oder ein Effekt mehr),
-nicht als Formel, damit jedes eine bewusste Entscheidung ist. Prefetch und
-System Restore haben keins: ein zweiter Zusatz-Zug pro Runde würde die
-Ziehregel aushebeln, und System Restore hat nichts zu skalieren.
+nicht als Formel, damit jedes eine bewusste Entscheidung ist. System Restore
+hat keins: es hat nichts zu skalieren.
 
 Heilen, Verbessern und Entfernen sind eine echte Abwägung, kein Gratis-Bonus:
 In `balance-sim` heilt der Smart-Bot unter 65 % HP und verbessert sonst eine
@@ -995,8 +999,12 @@ Vibe-Coders; jede zeigt das Startdeck schon einmal, siehe *Startdecks*):
   und zieht 2 (Upgrade: 3), Payload wächst mit dem Verbannt-Stapel,
   Undelete holt eine verbannte Karte zurück, System Restore opfert das
   ganze Feld und holt dafür alle vorher verbannten Karten auf die Hand.
+  Dazu vier, die das Verbannen auch ohne seltene Karten tragen: **Shred**
+  verbannt eine Handkarte und macht 8 Schaden, **Dead Drop** (3 +3 pro
+  verbannter Karte) und **Burn Notice** (3 Block +2 pro verbannter Karte)
+  zahlen den Stapel aus, **Wipe** (1×) verbannt 2 Handkarten und zieht 2.
 
-**Purge** lässt als einzige Karte wählen: Ausgespielt in einen Slot (im
+**Purge**, **Shred** und **Wipe** lassen wählen: Ausgespielt in einen Slot (im
 Programm-Modus in die Hintergrund-Leiste – wie Ziehkarten wirkt sie sofort,
 statt sich einzureihen) leuchten die übrigen Handkarten auf, ein Klick
 verbannt die gewählte, Esc oder Cancel bricht ab. Die API bekommt die Wahl als

@@ -180,6 +180,8 @@ export interface HandCardView extends Card {
   preview: (number | null)[];
   // playing it now would push past the context window - it may hallucinate
   overflows: boolean;
+  // HP playing it costs in the final fight (OMEGA's tax, its toll on the AGI's card)
+  toll: number;
   // program mode, per line it could go into: what every line would then come
   // out with (combat.program_what_if) - null where it can't go
   what_if: ((number | null)[] | null)[];
@@ -263,6 +265,9 @@ export interface PendingCombatView {
   boss: boolean;
   enemy_phase: number;
   enemy_phases: number;
+  // the final boss: the law it rewrote (from phase 3 on), the style it answers
+  omega_law: string | null;
+  omega_style: string | null;
   enemy_strength: number;
   // the run's final boss, the AGI itself - drawn with its own sprite
   final_boss: boolean;

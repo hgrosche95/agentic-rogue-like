@@ -357,7 +357,9 @@ export function CardFace({
   const before = strip(useCardText(changedFrom ?? card));
   const unit = unitOf(card.type);
   const line = typeLine(card);
-  const stat = STAT[card.type];
+  // Prefetch draws every 2nd turn, Prefetch+ every turn (combat.cards_per_turn)
+  const base = STAT[card.type];
+  const stat = base && card.type === "draw_bonus" && !card.upgraded ? { ...base, unit: "every 2nd turn" } : base;
   const { headerRef, bodyRef } = useFitText(
     `${card.name}|${description}|${readout ? 1 : 0}|${showTokens}|${changedFrom ? before : ""}`,
   );

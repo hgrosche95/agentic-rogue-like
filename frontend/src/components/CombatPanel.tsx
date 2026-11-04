@@ -997,6 +997,21 @@ export function CombatPanel({
                   {combat.enemy_strength > 0 && ` · +${combat.enemy_strength} ATK`}
                 </span>
               )}
+              {combat.omega_style && combat.enemy_phase >= 2 && !combat.omega_law && !enemySlain && (
+                <span
+                  className="omega-badge"
+                  tabIndex={0}
+                  data-tip-term="Adapted"
+                  data-tip={`OMEGA has studied your ${combat.omega_style} and plays more of the moves that hurt it. At a quarter HP it rewrites a law of the fight.`}
+                >
+                  Answers your {combat.omega_style}
+                </span>
+              )}
+              {combat.omega_law && !enemySlain && (
+                <span className="law-badge" tabIndex={0} data-tip-term="OMEGA's law" data-tip={combat.omega_law}>
+                  Law: {combat.omega_law}
+                </span>
+              )}
               {!enemySlain && <StatusBadges statuses={combat.enemy_status} />}
               {enemySlain && <span className="intent-badge is-defeated">Defeated</span>}
             </div>
@@ -1150,6 +1165,11 @@ export function CombatPanel({
                 }}
               >
                 <CardFace card={card} readout={readoutOf(card, aimedIndex === card.hand_index ? aimedSlot : null)} />
+                {card.toll > 0 && (
+                  <span className="toll-badge" title="What playing it costs in this fight">
+                    −{card.toll} HP
+                  </span>
+                )}
                 {laidOut.indexOf(card) >= 0 && laidOut.indexOf(card) < 9 && (
                   <KeyHint className="is-hand">{laidOut.indexOf(card) + 1}</KeyHint>
                 )}

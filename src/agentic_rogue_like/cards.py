@@ -115,8 +115,8 @@ def starter_deck(program_mode: bool = False) -> list[Card]:
             id="amplifier-0",
             name="Overclock",
             type=CardType.AMPLIFIER,
-            value=25,
-            description="Permanent. Action cards played to its right are 25% more effective.",
+            value=10,
+            description="Permanent. Action cards played to its right are 10% more effective.",
         )
     )
     cards.append(
@@ -134,7 +134,7 @@ def starter_deck(program_mode: bool = False) -> list[Card]:
             name="Prefetch",
             type=CardType.DRAW_BONUS,
             value=1,
-            description="Permanent. Draw 1 extra card each turn.",
+            description="Permanent. Every 2nd turn, draw 1 extra card.",
         )
     )
     if not program_mode:
@@ -391,6 +391,50 @@ REWARD_POOL: list[Card] = [
         exhaust=True,
         rarity=Rarity.COMMON,
         description="One-shot. Banish a card from your hand. Draw 2 cards.",
+    ),
+    # ---- the banish style beyond the rares: an enabler that hits, payoffs
+    # in attack and defense, and a big dig. balance-sim, two copies in the
+    # starter deck (boss fights won; the deck alone 60 %, with two more
+    # Exploits 52 %): Shred 52, Dead Drop 49, Burn Notice 57, Wipe 75 % -
+    # Wipe at "draw 3" was 80, Purge-style "banish 1, draw 2" 92.
+    Card(
+        id="shred",
+        name="Shred",
+        type=CardType.ATTACK,
+        value=8,
+        banish=1,
+        rarity=Rarity.COMMON,
+        description="Banish a card from your hand. Deal 8 (+ATK) damage.",
+    ),
+    Card(
+        id="dead-drop",
+        name="Dead Drop",
+        type=CardType.ATTACK,
+        value=3,
+        scaling=Scaling.BANISHED,
+        scale_value=3,
+        rarity=Rarity.COMMON,
+        description="Deal 3 (+ATK) damage, +3 per banished card.",
+    ),
+    Card(
+        id="burn-notice",
+        name="Burn Notice",
+        type=CardType.BLOCK,
+        value=3,
+        scaling=Scaling.BANISHED,
+        scale_value=2,
+        rarity=Rarity.UNCOMMON,
+        description="Gain 3 block, +2 per banished card.",
+    ),
+    Card(
+        id="wipe",
+        name="Wipe",
+        type=CardType.DRAW,
+        value=2,
+        banish=2,
+        exhaust=True,
+        rarity=Rarity.UNCOMMON,
+        description="One-shot. Banish 2 cards from your hand. Draw 2 cards.",
     ),
     Card(
         id="memory-dump",
@@ -803,10 +847,13 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Exploit": {"value": 8, "description": "Deal 8 (+ATK) damage."},
     "Firewall": {"value": 8, "description": "Gain 8 block until your next turn."},
     "Overclock": {
-        "value": 40,
-        "description": "Permanent. Action cards played to its right are 40% more effective.",
+        "value": 20,
+        "description": "Permanent. Action cards played to its right are 20% more effective.",
     },
     "Encryption": {"value": 2, "description": "Permanent. Reduce incoming damage by 2."},
+    # draws every turn instead of every 2nd: the upgraded flag is what
+    # combat.cards_per_turn reads
+    "Prefetch": {"upgraded": True, "description": "Permanent. Draw 1 extra card each turn."},
     "Kernel Panic": {
         "value": 7,
         "description": "Destroy all permanent cards. Deal 7 damage for each one.",
@@ -840,6 +887,10 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Sandbox": {"value": 21, "description": "One-shot. Gain 21 block."},
     "Backup": {"value": 14, "description": "One-shot. Heal 14 HP."},
     "Phishing": {"value": 3, "description": "One-shot. Draw 3 cards."},
+    "Shred": {"value": 11, "description": "Banish a card from your hand. Deal 11 (+ATK) damage."},
+    "Dead Drop": {"scale_value": 4, "description": "Deal 3 (+ATK) damage, +4 per banished card."},
+    "Burn Notice": {"scale_value": 3, "description": "Gain 3 block, +3 per banished card."},
+    "Wipe": {"value": 3, "description": "One-shot. Banish 2 cards from your hand. Draw 3 cards."},
     "Purge": {"value": 3, "description": "One-shot. Banish a card from your hand. Draw 3 cards."},
     "Memory Dump": {"value": 5, "description": "One-shot. Discard your hand, then draw 5 cards."},
     "Rollback": {

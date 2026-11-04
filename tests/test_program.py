@@ -802,11 +802,11 @@ def test_a_line_spells_out_how_it_reaches_its_number() -> None:
     player.attack = 2
     _queue(state, player, "Overclock", "Bootstrap", "Firewall", "Return", slots=[0, 0, 1, 2])
     by_name = {s.name: s for s in program_preview(state, player).steps}
-    assert by_name["Bootstrap"].formula == "3 +2 ATK +5 first ×1.25 = 12"
-    assert by_name["Return"].formula == "3 +2 ATK +7 last ×1.25 = 15"
-    assert by_name["Firewall"].formula == "5 ×1.25 = 6"
+    assert by_name["Bootstrap"].formula == "3 +2 ATK +5 first ×1.1 = 11"
+    assert by_name["Return"].formula == "3 +2 ATK +7 last ×1.1 = 13"
+    assert by_name["Firewall"].formula == "5 ×1.1 = 6"
     # what it says is what it deals (no combo here)
-    assert by_name["Bootstrap"].dealt == 12
+    assert by_name["Bootstrap"].dealt == 11
 
 
 # ---- what-if: aiming a card shows what it does to the other lines
@@ -820,7 +820,7 @@ def test_what_if_shows_the_other_lines_change() -> None:
     # a Fork in front of the Exploit doubles it - but line 1 is taken
     assert program_what_if(state, player, _card("Fork"), 0) is None
     # a permanent goes into the background: Overclock boosts every line
-    assert program_what_if(state, player, _card("Overclock"), 3)[:2] == [4, 6]
+    assert program_what_if(state, player, _card("Overclock"), 3)[:2] == [3, 6]
     # card flow changes no line
     assert program_what_if(state, player, _card("Phishing"), 2) is None
 

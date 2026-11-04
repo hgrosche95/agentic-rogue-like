@@ -28,6 +28,7 @@ from ..forge import (
     MALWARE_VALUE,
     ONE_SHOT_FACTOR,
     PROGRAM_SCALINGS,
+    STYLE_SCALINGS,
     TYPICAL_COUNT,
     CardSpec,
     ForgeViolation,
@@ -56,10 +57,12 @@ class CardState(TypedDict):
 
 
 def _build_prompt(state: CardState) -> str:
+    # only the scalings that fit the style (forge.STYLE_SCALINGS)
     scalings = [
         f"{s.value} (typically {TYPICAL_COUNT[s]:g})"
         for s in TYPICAL_COUNT
-        if state["program_mode"] or s not in PROGRAM_SCALINGS
+        if s in STYLE_SCALINGS[state["style"]]
+        and (state["program_mode"] or s not in PROGRAM_SCALINGS)
     ]
     cards = ", ".join(state["key_cards"]) or "nothing in particular yet"
     prompt = (
@@ -90,7 +93,7 @@ def design_card(state: CardState) -> CardState:
 
 def check_budget(state: CardState) -> CardState:
     try:
-        card = validate_spec(state["spec"], state["program_mode"])
+        card = validate_spec(state["spec"], state["program_mode"], state["style"])
         return {**state, "card": card, "last_error": None}
     except ForgeViolation as exc:
         return {**state, "card": None, "last_error": str(exc)}

@@ -52,9 +52,15 @@ class ThreatModel:
 # threat explains 90% of the variance in damage taken (R^2), with a median
 # error of 9% per move set. Damage taken ranged from 1 to 95 HP there.
 # Rechecked once infect joined the random move sets: R^2 0.92, 8% median
-# error, same parameters.
+# error, same parameters. Refitted when the starter Overclock went to 10 %
+# and Prefetch to every 2nd turn (600 move sets x 100 fights, fitted on
+# 400): R^2 0.97 and 6% median error held out - the weaker starter deals
+# less, so the same enemy hurts more (the old model was down to R^2 0.62).
+# armor stays at its real value (Encryption's 1): the free fit's 0.5 priced
+# barrages too high (test_threat's archetypes: a barrage took 8 HP at
+# threat 12, at armor 1 it takes 9.7).
 DEFAULT_MODEL = ThreatModel(
-    player_damage=24.0, armor=1.0, player_block=6.0, purge_damage=6.0, scale=1.0
+    player_damage=16.0, armor=1.0, player_block=6.0, purge_damage=6.0, scale=0.824
 )
 
 # Mean of the roll on top of each kind of hit (combat.intent_hits).

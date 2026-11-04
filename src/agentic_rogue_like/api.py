@@ -37,8 +37,10 @@ from .cards import can_upgrade, upgrade_card
 from .characters import CHARACTERS
 from .combat import (
     AFFIX_DESCRIPTIONS,
+    LAW_TEXT,
     ProgramPreview,
     action_preview,
+    active_law,
     enemy_block_gain,
     incoming_damage,
     intent_hits,
@@ -47,6 +49,7 @@ from .combat import (
     max_hand_size,
     move_name,
     move_queued,
+    omega_toll,
     overflows,
     player_armor,
     program_preview,
@@ -104,7 +107,7 @@ from .models import (
 from .sessions import RunSession, create_session, get_session
 from .shop import MIN_DECK_SIZE, buy_artifact, buy_card, leave_shop, remove_card
 from .stats import note_changes
-from .style import play_style, style_counts
+from .style import LABELS, play_style, style_counts
 
 app = FastAPI(title="agentic-rogue-like")
 
@@ -191,6 +194,9 @@ class HandCardView(CardView):
     # Playing it now would push past the context window - it may
     # hallucinate. Always false for characters without one.
     overflows: bool
+    # HP playing it costs in the final fight (combat.omega_toll): OMEGA's
+    # one-shot tax, its toll on the AGI's own card.
+    toll: int = 0
     # Program mode: per line it could go into, what every line would then
     # come out with (combat.program_what_if) - null where it can't go, and
     # for cards that change no line.
@@ -232,6 +238,10 @@ class PendingCombatView(BaseModel):
     # attack it has gained.
     boss: bool
     enemy_phase: int
+    # The final boss: the law it has rewritten (from phase 3 on), else null,
+    # and the style it answers (from the start, for its phase 2 moves).
+    omega_law: str | None = None
+    omega_style: str | None = None
     enemy_phases: int
     enemy_strength: int
     # The run's final boss, the AGI itself (enemies.FINAL_BOSS_ID) - the
@@ -658,6 +668,8 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             incoming_max=incoming_max,
             boss=combat.boss,
             enemy_phase=combat.phase,
+            omega_law=None if (law := active_law(combat)) is None else LAW_TEXT[law],
+            omega_style=None if combat.omega_style is None else LABELS[combat.omega_style],
             enemy_phases=combat.boss_phases,
             enemy_strength=combat.enemy_strength,
             final_boss=combat.enemy.id == FINAL_BOSS_ID,
@@ -677,6 +689,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
                         for slot in range(len(combat.program))
                     ],
                     overflows=overflows(combat, card),
+                    toll=omega_toll(combat, card),
                     what_if=_what_if(combat, run.player, card),
                     **CardView.of(card).model_dump(),
                 )
