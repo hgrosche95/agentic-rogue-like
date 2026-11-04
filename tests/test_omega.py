@@ -14,6 +14,7 @@ from agentic_rogue_like.combat import (
     _damage_enemy,
     _laws_after_turn,
     _roll_boss_intent,
+    _tick_statuses,
     end_turn,
     incoming_damage,
     play_card,
@@ -102,11 +103,12 @@ def test_one_shots_are_taxed_and_the_agis_card_costs_hp() -> None:
     assert player.hp == 100 - TRAP_COST and "I know its flaw" in line
 
 
-def test_malware_does_nothing_under_its_law() -> None:
+def test_malware_bites_omega_for_half_under_its_law() -> None:
     state, player = _omega(PlayStyle.MALWARE)
-    state.hand = [_card("Ping")]
-    play_card(state, 0, 0, player, random.Random(1))
-    assert Status.MALWARE not in state.enemy_status
+    state.enemy_status[Status.MALWARE] = 6
+    hp = state.enemy_hp
+    _tick_statuses(state, player)
+    assert hp - state.enemy_hp == 3
 
 
 def test_every_program_run_loses_its_last_line() -> None:

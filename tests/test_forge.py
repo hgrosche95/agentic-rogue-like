@@ -76,13 +76,14 @@ def test_a_design_outside_the_rules_is_rejected() -> None:
 # ---- the deal: when it comes, what it costs
 
 
-def test_the_agi_forges_once_per_act_once_the_deck_has_a_style() -> None:
+def test_the_agi_forges_once_as_the_first_boss_reward() -> None:
     run = new_run(3)
     run.artifact_offer = run.kit_offer = run.agi_deals = None
-    offer_forged_card(run)
-    assert run.agi_deals is None  # no style yet: nothing to analyse
-
     run.player.deck += [_card("Stack Overflow"), _card("Brute Force"), _card("Stack Overflow")]
+    offer_forged_card(run)
+    assert run.agi_deals is None  # act 1: still watching
+
+    run.act = 2  # the first boss is down
     offer_forged_card(run)
     (deal,) = run.agi_deals
     assert deal.kind is DealKind.FORGED
@@ -94,12 +95,17 @@ def test_the_agi_forges_once_per_act_once_the_deck_has_a_style() -> None:
     choose_deal(run, 0)
     assert len(run.player.deck) == deck + len(deal.add)
     assert run.player.max_hp == max_hp + deal.max_hp
-    # this act is done
+    # once per run
     offer_forged_card(run)
     assert run.agi_deals is None
+
+
+def test_without_a_clear_style_the_agi_forges_for_the_leading_one() -> None:
+    run = new_run(3)
+    run.artifact_offer = run.kit_offer = run.agi_deals = None
     run.act = 2
-    offer_forged_card(run)
-    assert run.agi_deals is not None
+    offer_forged_card(run)  # nothing chosen yet: raw attacks
+    assert "RAW ATTACKS" in run.agi_deals[0].greeting
 
 
 def test_every_forged_deal_has_a_price() -> None:

@@ -626,8 +626,10 @@ Karte zeigt das Panel „AGI analysis“, was sie bisher gelesen hat.
 
 ## Die AGI kompiliert dir eine Karte
 
-Einmal pro Akt, sobald das Deck nach einer Kartenbelohnung einen klaren Stil
-zeigt, meldet sich die AGI: „Your reliance on … has been analysed.“ Sie bietet
+Einmal pro Run, als Belohnung für den ersten Boss (direkt nach dessen
+Kartenbelohnung), meldet sich die AGI – sie hat dann einen ganzen Akt lang
+zugesehen: „Your reliance on … has been analysed.“ Ist der Stil noch nicht
+eindeutig, nimmt sie den, für den die meisten Karten gewählt wurden. Sie bietet
 eine Karte an, die genau zu diesem Stil passt – stark, aber als Köder: Wer sie
 nimmt, zahlt 6 max HP oder bekommt einen Glitch ins Deck. Wie der Deal am
 Run-Start wird das Angebot angenommen oder abgelehnt, bevor es weitergeht

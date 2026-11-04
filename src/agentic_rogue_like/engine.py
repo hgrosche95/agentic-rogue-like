@@ -42,7 +42,7 @@ from .omega import adapt_omega, omega_taunts
 from .shop import MIN_DECK_SIZE, leave_shop, roll_shop
 from .starts import apply_deal, apply_kit, roll_deals, roll_kits
 from .stats import begin, close_turn, record_fight, record_play
-from .style import answers, key_cards, play_style, taunt
+from .style import PlayStyle, answers, key_cards, play_style, style_counts, taunt
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
 # Index into the offered cards, or None to skip the reward.
@@ -424,27 +424,36 @@ def choose_card_reward(run: RunState, index: int | None) -> None:
 
 
 def offer_forged_card(run: RunState) -> None:
-    """Once per act, as soon as the deck shows a clear style (after a card
-    reward - the moment the deck changes), the AGI offers a card compiled
-    for that style, for a price (forge.py). It waits like the opening deal:
-    taken or refused before the next room."""
+    """Once per run, as the first boss's reward (right after its card
+    reward): the AGI has watched a whole act by then, and offers a card
+    compiled for the style it read, for a price (forge.py). It waits like the
+    opening deal: taken or refused before the next room."""
     if run.status is not RunStatus.ONGOING or run.agi_deals is not None:
         return
-    if run.act in run.forged_acts:
+    # the act advances with the first boss beaten (advance_act)
+    if run.forge_offered or run.act < 2:
         return
-    style = play_style(run.player.deck)
-    if style is None:
-        return
+    style = forge_style(run.player.deck)
     card, by_agent = card_for_style(
         style, key_cards(run.player.deck, style), run.program_mode, run.setting
     )
-    rng = random.Random(f"{run.seed}-forge-{run.act}")
+    rng = random.Random(f"{run.seed}-forge")
     run.agi_deals = [forged_deal(card, style, rng)]
-    run.forged_acts.append(run.act)
+    run.forge_offered = True
     run.history.append(
         f"The AGI has analysed your deck and compiled {card.name}"
         + (" just for you." if by_agent else ".")
     )
+
+
+def forge_style(deck: list[Card]) -> PlayStyle:
+    """The style the AGI forges for: the deck's clear style, else the one the
+    player chose the most cards for (raw attacks if nothing yet)."""
+    if (style := play_style(deck)) is not None:
+        return style
+    counts = style_counts(deck)
+    top = max(counts, key=lambda s: counts[s])
+    return top if counts[top] else PlayStyle.AGGRO
 
 
 def _room_enemy(

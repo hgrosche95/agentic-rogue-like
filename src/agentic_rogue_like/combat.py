@@ -178,7 +178,7 @@ class Law(StrEnum):
     ONE_SHOT_TAX = "one_shot_tax"  # one-shot cards cost HP to play
     ARMOR = "armor"  # every hit on OMEGA deals less
     PIERCE = "pierce"  # its attacks go through half the player's block
-    MALWARE_IMMUNE = "malware_immune"  # Malware does nothing to it
+    MALWARE_HALVED = "malware_halved"  # Malware bites it for half
     COLLECT_LINE = "collect_line"  # every program run loses its last line
 
 
@@ -188,18 +188,18 @@ LAW_FOR_STYLE: dict[PlayStyle, Law] = {
     PlayStyle.ONE_SHOT: Law.ONE_SHOT_TAX,
     PlayStyle.AGGRO: Law.ARMOR,
     PlayStyle.TURTLE: Law.PIERCE,
-    PlayStyle.MALWARE: Law.MALWARE_IMMUNE,
+    PlayStyle.MALWARE: Law.MALWARE_HALVED,
     PlayStyle.PROGRAM: Law.COLLECT_LINE,
 }
 LAW_ARMOR = 3
-ONE_SHOT_TAX = 2
+ONE_SHOT_TAX = 4
 LAW_TEXT: dict[Law, str] = {
     Law.DELETE_PERMANENT: "At the end of every turn your rightmost permanent is deleted.",
     Law.COLLECT_GRAVEYARD: "At the end of every turn your graveyard goes back into your draw pile.",
     Law.ONE_SHOT_TAX: f"One-shot cards cost {ONE_SHOT_TAX} HP to play.",
     Law.ARMOR: f"Every hit on OMEGA deals {LAW_ARMOR} less damage.",
     Law.PIERCE: "Its attacks go through half of your block.",
-    Law.MALWARE_IMMUNE: "Malware does nothing to it.",
+    Law.MALWARE_HALVED: "Malware only does half its damage to it.",
     Law.COLLECT_LINE: "Every program run loses its last line.",
 }
 # Phase 2 on: the moves OMEGA plays more of against each style, by weight.
@@ -673,8 +673,6 @@ def _check_boss_phase(state: CombatState) -> str:
             line += f" {taunts[state.phase - 2]}"
         if (law := active_law(state)) is not None:
             line += f" New law: {LAW_TEXT[law]}"
-            if law is Law.MALWARE_IMMUNE:
-                state.enemy_status.pop(Status.MALWARE, None)
     return line
 
 
@@ -2013,8 +2011,6 @@ def _affix_after_turn(state: CombatState) -> list[str]:
 
 def _afflict(state: CombatState, status: Status, amount: int) -> str:
     """Put `amount` of `status` on the enemy (stacks or turns add up)."""
-    if status is Status.MALWARE and active_law(state) is Law.MALWARE_IMMUNE:
-        return f"{state.enemy.name} is immune to Malware."
     state.enemy_status[status] = state.enemy_status.get(status, 0) + amount
     return f"{state.enemy.name} is {status.value} ({state.enemy_status[status]})."
 
@@ -2025,7 +2021,8 @@ def _tick_statuses(state: CombatState, player: PlayerState) -> list[str]:
     log: list[str] = []
     name = state.enemy.name
     if stacks := state.enemy_status.get(Status.MALWARE, 0):
-        lost = _lose_hp(state, stacks)
+        bite = stacks // 2 if active_law(state) is Law.MALWARE_HALVED else stacks
+        lost = _lose_hp(state, bite)
         log.append(f"Malware eats {lost} HP off {name}. {name} at {state.enemy_hp} HP.")
         if line := _check_boss_phase(state):
             log.append(line.strip())

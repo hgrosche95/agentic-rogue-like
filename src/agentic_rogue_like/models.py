@@ -590,7 +590,8 @@ class RunState(BaseModel):
     # then the AGI's opening deal to take or turn down (starts.py).
     kit_offer: list[StarterKit] | None = None
     agi_deals: list[AgiDeal] | None = None
-    # The acts the AGI has already forged a card in (forge.py) - once per act.
-    forged_acts: list[int] = Field(default_factory=list)
+    # Whether the AGI has offered its forged card yet (forge.py) - once per
+    # run, as the first boss's reward.
+    forge_offered: bool = False
     # For the summary at the end of the run (stats.py) - never read by play.
     stats: RunStats = Field(default_factory=RunStats)

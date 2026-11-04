@@ -121,6 +121,7 @@ from .models import (
     Scaling,
     Status,
 )
+from .omega import adapt_omega
 from .starts import apply_deal, apply_kit, roll_deals, roll_kits
 from .style import PlayStyle, card_styles, play_style, style_counts
 from .threat import DEFAULT_MODEL, ThreatModel, threat
@@ -155,6 +156,8 @@ class SimConfig:
     # Program mode (combat.run_program) for every fight, control flow cards
     # in the rewards.
     program: bool = False
+    # The final fight answers the run, as in the game (omega.adapt_omega).
+    omega: bool = True
 
     def __post_init__(self) -> None:
         hero = CHARACTERS[self.character]
@@ -203,6 +206,7 @@ def load_variant(path: Path, character: Character = Character.CHRONOS) -> SimCon
     base.affixes = raw.get("affixes", base.affixes)
     base.adaptive = raw.get("adaptive", base.adaptive)
     base.program = raw.get("program", base.program)
+    base.omega = raw.get("omega", base.omega)
 
     card_overrides: dict[str, dict] = raw.get("cards", {})
     extra: list[dict] = raw.get("extra_cards", [])
@@ -774,7 +778,9 @@ def fight(
     rng: random.Random,
     act: int = 1,
     program: bool = False,
+    omega: bool = False,
 ) -> FightResult:
+    """`omega`: the run's final fight, set up against the deck as in the game."""
     hp_before = player.hp
     state, _ = start_combat(
         player.deck,
@@ -786,6 +792,8 @@ def fight(
         character=player.character,
         program_mode=program,
     )
+    if omega:
+        adapt_omega(state, player.deck)
     turns = 0
     while turns < MAX_AUTO_TURNS and state.enemy_hp > 0 and player.hp > 0:
         turns += 1
@@ -901,7 +909,8 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
             if cfg.program and node.type is not NodeType.BOSS:
                 base = with_program_move(base, style, player.deck)
             enemy = escalate(base, node.floor, NUM_FLOORS, act)
-            result = fight(player, enemy, tier, bot, rng, act, cfg.program)
+            final = node.type is NodeType.BOSS and act >= NUM_ACTS
+            result = fight(player, enemy, tier, bot, rng, act, cfg.program, final and cfg.omega)
             fights.append(result)
             if not result.won:
                 return RunResult(False, node.floor, fights, act)
