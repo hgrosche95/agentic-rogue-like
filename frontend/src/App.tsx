@@ -561,6 +561,7 @@ function App() {
           <RewardScreen
             offer={run.card_reward}
             deckSize={run.player.deck.length}
+            deck={run.player.deck}
             disabled={isLoading}
             onPick={(cardIndex) => runAction(() => chooseCardReward(run.run_id, cardIndex))}
           />

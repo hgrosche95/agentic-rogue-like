@@ -1105,3 +1105,297 @@ button.is-busy:disabled {
     animation: none;
   }
 }
+
+/* ---------- card rewards: light behind each offer, and what you already own ---------- */
+.reward-slot {
+  --ray: rgba(201, 198, 239, 0.18);
+}
+.reward-slot.is-uncommon {
+  --ray: rgba(200, 214, 255, 0.32);
+}
+.reward-slot.is-rare {
+  --ray: rgba(255, 213, 77, 0.45);
+}
+
+.reward-rays {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  z-index: 0;
+  width: 320%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  pointer-events: none;
+  background: repeating-conic-gradient(from 0deg, var(--ray) 0deg 6deg, transparent 6deg 18deg);
+  -webkit-mask: radial-gradient(circle, #000 0, transparent 46%);
+  mask: radial-gradient(circle, #000 0, transparent 46%);
+  opacity: 0;
+  animation:
+    reward-rays-in 0.9s var(--ease-out, ease-out) calc(var(--flip-at, 400ms) + 200ms) forwards,
+    reward-rays-turn 24s linear infinite;
+}
+
+@keyframes reward-rays-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes reward-rays-turn {
+  to {
+    rotate: 360deg;
+  }
+}
+
+.reward-owned {
+  position: relative;
+  z-index: 1;
+  display: block;
+  margin-top: 10px;
+  text-align: center;
+  font: 700 11px/1.2 var(--font-head);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim, #8f8ac7);
+  opacity: 0;
+  animation: reward-rays-in 0.4s var(--ease-out, ease-out) calc(var(--flip-at, 400ms) + 500ms) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reward-rays {
+    animation: none;
+    opacity: 1;
+  }
+  .reward-owned {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ---------- the black market ---------- */
+/* what you can't afford: greyed out, and it shakes its head when tried */
+.shop-item > .is-unaffordable {
+  filter: grayscale(0.85) brightness(0.7);
+  cursor: not-allowed;
+}
+
+.shop-item > .is-unaffordable:hover {
+  filter: grayscale(0.6) brightness(0.8);
+}
+
+/* price tags as holograms: a band of light runs over the ones you can pay */
+.price-tag:not(.is-sold, .is-short) {
+  background-image: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.35) 45%,
+    rgba(52, 231, 255, 0.25) 52%,
+    transparent 65%
+  );
+  background-size: 260% 100%;
+  animation: holo-tag 3.2s linear infinite;
+}
+
+@keyframes holo-tag {
+  from {
+    background-position: 130% 0;
+  }
+  to {
+    background-position: -130% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .price-tag:not(.is-sold, .is-short) {
+    animation: none;
+  }
+}
+
+/* ---------- top bar: icons in front of the vitals ---------- */
+.stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.stat-icon {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.stat-icon.is-hp {
+  fill: var(--danger);
+  stroke: none;
+  animation: heart-beat 1.4s var(--ease-in-out, ease-in-out) infinite;
+}
+
+.stat-icon.is-coin {
+  color: var(--gold);
+}
+
+/* a change of credits: the coin turns over */
+.stat-icon.is-spin {
+  animation: coin-turn 0.7s var(--ease-out, ease-out) 0.25s;
+}
+
+@keyframes heart-beat {
+  0%,
+  60%,
+  100% {
+    transform: scale(1);
+  }
+  70% {
+    transform: scale(1.25);
+  }
+  80% {
+    transform: scale(1);
+  }
+  88% {
+    transform: scale(1.15);
+  }
+}
+
+@keyframes coin-turn {
+  0% {
+    transform: rotateY(0);
+  }
+  100% {
+    transform: rotateY(720deg);
+  }
+}
+
+/* low on HP, the heart races */
+.combat-panel.is-critical ~ * .stat-icon.is-hp,
+.game:has(.combat-panel.is-critical) .stat-icon.is-hp {
+  animation-duration: 0.6s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-icon.is-hp,
+  .stat-icon.is-spin {
+    animation: none;
+  }
+}
+
+/* ---------- the end screen: the path taken, the artifacts collected ---------- */
+.summary-path h3,
+.summary-artifacts h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin: 0 0 0.6rem;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.summary-path h3 span,
+.summary-artifacts h3 span {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--text-dim);
+}
+
+.summary-path ol {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.summary-path li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  opacity: 0;
+  animation: summary-step 0.35s var(--ease-out, ease-out) calc(0.6s + var(--i) * 0.12s) forwards;
+}
+
+/* a trail from each room to the next */
+.summary-path li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 13px;
+  left: calc(50% + 15px);
+  width: 22px;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.6;
+}
+
+.summary-path li small {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* the room the run ended in */
+.summary-path li.is-last .node-badge {
+  filter: drop-shadow(0 0 6px var(--accent));
+}
+
+.end-screen.is-lost .summary-path li.is-last .node-badge {
+  filter: drop-shadow(0 0 6px var(--danger)) grayscale(0.3);
+}
+
+.summary-artifacts ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.summary-artifacts li {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--gold);
+  border-radius: 9px;
+  color: var(--gold);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--gold) 35%, transparent);
+  opacity: 0;
+  animation: summary-step 0.35s var(--ease-out, ease-out) calc(1s + var(--i) * 0.1s) forwards;
+}
+
+@keyframes summary-step {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* the MVP card stands out */
+.summary-mvp-card {
+  box-shadow:
+    0 0 0 2px var(--gold),
+    0 0 26px color-mix(in srgb, var(--gold) 45%, transparent) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summary-path li,
+  .summary-artifacts li {
+    animation: none;
+    opacity: 1;
+  }
+}

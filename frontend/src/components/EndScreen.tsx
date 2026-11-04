@@ -4,7 +4,9 @@ import { sfx } from "../audio";
 import { HERO } from "../characters";
 import { stackDeck } from "../deck";
 import { layerLabel, numFloorsOf } from "../layers";
+import { ArtifactIcon } from "./ArtifactIcon";
 import { CardFace } from "./CardFace";
+import { NodeBadge } from "./DungeonMap";
 
 // How long a tile's number takes to count up, and how far apart the tiles start.
 const COUNT_MS = 900;
@@ -91,6 +93,10 @@ export function EndScreen({ run, onRestart }: { run: RunView; onRestart: () => v
   const elapsed = useElapsed(COUNT_MS + STAGGER_MS * tiles.length);
   const layer = layerLabel(run.floor, numFloorsOf(run.nodes), run.act);
   const deck = stackDeck(run.player.deck);
+  // the rooms of this act entered, in the order of the layers
+  const path = Object.values(run.nodes)
+    .filter((node) => node.visited || node.id === run.current_node.id)
+    .sort((a, b) => a.floor - b.floor);
   const combo = summary?.best_combo ?? null;
   const highlights = summary !== null && (summary.killed_by !== null || combo !== null || summary.mvp_card !== null);
 
@@ -177,6 +183,36 @@ export function EndScreen({ run, onRestart }: { run: RunView; onRestart: () => v
         <p>
           Reached act {run.act}/{run.num_acts}, floor {run.floor + 1} with {run.player.gold} gold.
         </p>
+      )}
+
+      {/* the way taken through this act's call stack, room by room */}
+      <section className="summary-path" aria-label="Your path">
+        <h3>
+          Your path <span>{run.act > 1 ? `act ${run.act} · after ${run.act - 1} cleared` : `act ${run.act}`}</span>
+        </h3>
+        <ol>
+          {path.map((node, i) => (
+            <li key={node.id} style={{ "--i": i } as CSSProperties} className={i === path.length - 1 ? "is-last" : undefined}>
+              <NodeBadge type={node.type} size={26} />
+              <small>{layerLabel(node.floor, numFloorsOf(run.nodes), run.act)}</small>
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      {run.player.artifacts.length > 0 && (
+        <section className="summary-artifacts" aria-label="Artifacts">
+          <h3>
+            Artifacts <span>{run.player.artifacts.length}</span>
+          </h3>
+          <ul>
+            {run.player.artifacts.map((artifact, i) => (
+              <li key={artifact.id} style={{ "--i": i } as CSSProperties} data-tip-term={artifact.name} data-tip={artifact.description} tabIndex={0}>
+                <ArtifactIcon id={artifact.id} size={22} />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <section className="summary-deck">
