@@ -4,6 +4,7 @@ import { sfx } from "../audio";
 import { listDeck } from "../deck";
 import { pickClass, useOverlayPick } from "../overlayStage";
 import { CardFace } from "./CardFace";
+import { RoomHeader } from "./RoomHeader";
 
 type Mode = "choose" | "upgrade" | "remove";
 
@@ -149,6 +150,7 @@ export function RestScreen({
 
   return (
     <div className="reward-screen rest-screen">
+      <RoomHeader kind="rest" line="safehouse: connection secure" />
       <h2>Safehouse</h2>
 
       {mode === "choose" && (

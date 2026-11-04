@@ -1399,3 +1399,63 @@ button.is-busy:disabled {
     opacity: 1;
   }
 }
+
+/* ---------- a pixel scene over the safehouse and an anomaly ---------- */
+.room-header {
+  position: relative;
+  margin: -0.25rem 0 1rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: #0b0a1e;
+}
+
+.room-header canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+/* the terminal line, typed out */
+.room-header-line {
+  position: absolute;
+  left: 12px;
+  bottom: 8px;
+  overflow: hidden;
+  width: 0;
+  white-space: nowrap;
+  font: 600 12px/1.2 ui-monospace, "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  text-shadow: 0 0 8px currentColor;
+  border-right: 7px solid currentColor;
+  animation:
+    room-type 1.2s steps(var(--chars, 30)) 0.3s forwards,
+    room-cursor 0.9s steps(1) infinite;
+}
+
+.room-header.is-rest .room-header-line {
+  color: #5dff9b;
+}
+
+.room-header.is-event .room-header-line {
+  color: #c48bff;
+}
+
+@keyframes room-type {
+  to {
+    width: calc(var(--chars, 30) * 1ch + 4px);
+  }
+}
+
+@keyframes room-cursor {
+  50% {
+    border-right-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .room-header-line {
+    animation: none;
+    width: auto;
+  }
+}

@@ -538,6 +538,7 @@ function App() {
         <Overlay key={`event:${run.pending_event.description}`} label="Anomaly">
           <EventPrompt
             event={run.pending_event}
+            where={layerLabel(run.floor, numFloors, run.act)}
             disabled={isLoading}
             onChoose={(optionIndex) => {
               const before = run;
