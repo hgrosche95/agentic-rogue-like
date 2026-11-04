@@ -59,8 +59,6 @@ export function RewardScreen({
       <div className="reward-cards">
         {offer.map((card, index) => (
           <div key={card.id} className={`reward-slot is-${card.rarity}`} style={{ "--i": index } as CSSProperties}>
-            {/* light rising behind it, in its rarity's colour */}
-            <span className="reward-rays" aria-hidden="true" />
             <button
               className={`hand-card reward-card type-${card.type} rarity-${card.rarity}${pickClass(picked, index)}`}
               disabled={disabled}
