@@ -644,9 +644,12 @@ Budget: Wert plus Skalierung mal typischer Anzahl, mal Treffer, plus Malware,
 minus Nachteile, mal 0,65 für Einmal-Karten muss zwischen 12 und 16 liegen –
 über einer normalen seltenen Karte (10–12), unter einer Einmal-Karte wie
 Zero-Day (16), den Rest bezahlt der Preis des Deals. Ein Entwurf außerhalb
-geht mit dem Grund zurück (höchstens 3 Versuche). Ist der Agent aus oder
+geht mit dem Grund zurück (höchstens 3 Versuche). Die Skalierung muss
+zum gelesenen Stil passen (`forge.STYLE_SCALINGS`): ein Banish-Deck bekommt
+nichts, das Permanente zählt, sondern eine Karte, die mit dem Verbannt-Stapel
+wächst. Ist der Agent aus oder
 scheitert er, kommt ein fester Entwurf pro Stil (Core Dump für den Friedhof,
-Hot Loop für Kontrollfluss, …), der dasselbe Budget einhält.
+Shredder für Einmal-Karten, Hot Loop für Kontrollfluss, …), der dasselbe Budget einhält.
 
 ## Programm-Modus (Prototyp)
 
@@ -997,8 +1000,12 @@ Vibe-Coders; jede zeigt das Startdeck schon einmal, siehe *Startdecks*):
   und zieht 2 (Upgrade: 3), Payload wächst mit dem Verbannt-Stapel,
   Undelete holt eine verbannte Karte zurück, System Restore opfert das
   ganze Feld und holt dafür alle vorher verbannten Karten auf die Hand.
+  Dazu vier, die das Verbannen auch ohne seltene Karten tragen: **Shred**
+  verbannt eine Handkarte und macht 8 Schaden, **Dead Drop** (3 +3 pro
+  verbannter Karte) und **Burn Notice** (3 Block +2 pro verbannter Karte)
+  zahlen den Stapel aus, **Wipe** (1×) verbannt 2 Handkarten und zieht 2.
 
-**Purge** lässt als einzige Karte wählen: Ausgespielt in einen Slot (im
+**Purge**, **Shred** und **Wipe** lassen wählen: Ausgespielt in einen Slot (im
 Programm-Modus in die Hintergrund-Leiste – wie Ziehkarten wirkt sie sofort,
 statt sich einzureihen) leuchten die übrigen Handkarten auf, ein Klick
 verbannt die gewählte, Esc oder Cancel bricht ab. Die API bekommt die Wahl als

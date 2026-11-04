@@ -162,3 +162,31 @@ def test_the_card_agent_falls_back_to_the_static_design(monkeypatch) -> None:
         card, by_agent = card_agent.card_for_style(PlayStyle.AGGRO, [], program_mode=False)
     assert not by_agent and card.name == "Brute Loop"
     assert len(always_bad.prompts) == card_agent.MAX_ATTEMPTS
+
+
+def test_a_forged_card_has_to_fit_the_analysed_style() -> None:
+    counts_permanents = CardSpec(
+        name="Botnet Bomb", attack=True, value=4, scaling=Scaling.PERMANENT, scale_value=4
+    )
+    with pytest.raises(ForgeViolation, match="doesn't fit a deck that leans on one-shot cards"):
+        validate_spec(counts_permanents, program_mode=False, style=PlayStyle.ONE_SHOT)
+    assert validate_spec(counts_permanents, program_mode=False, style=PlayStyle.PERMANENTS)
+    # the static design for a banish deck pays off the banished pile
+    assert fallback_card(PlayStyle.ONE_SHOT, program_mode=False).scaling is Scaling.BANISHED
+
+
+def test_the_card_agent_only_hears_the_scalings_of_the_style(monkeypatch) -> None:
+    monkeypatch.setenv("ENCOUNTER_AGENT_ENABLED", "1")
+    monkeypatch.delenv("ENCOUNTER_AGENT_MODEL_SOURCE", raising=False)
+    wrong = CardSpec(
+        name="Botnet Bomb", attack=True, value=4, scaling=Scaling.PERMANENT, scale_value=4
+    )
+    right = CardSpec(
+        name="Shred Storm", attack=True, value=4, scaling=Scaling.BANISHED, scale_value=4
+    )
+    model = _Scripted(wrong, right)
+    with patch.object(card_agent.encounter_agent, "_model", return_value=model):
+        card, by_agent = card_agent.card_for_style(PlayStyle.ONE_SHOT, ["Payload"], False)
+    assert by_agent and card.name == "Shred Storm"
+    assert "banished (typically" in model.prompts[0] and "permanent (" not in model.prompts[0]
+    assert "doesn't fit a deck that leans on one-shot cards" in model.prompts[1]

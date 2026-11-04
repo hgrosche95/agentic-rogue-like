@@ -44,6 +44,18 @@ TYPICAL_COUNT: dict[Scaling, float] = {
     Scaling.LAST_LINE: 0.8,
 }
 PROGRAM_SCALINGS = frozenset({Scaling.LINES, Scaling.FIRST_LINE, Scaling.LAST_LINE})
+# The scalings a card for each style may use - the card has to fit what the
+# AGI analysed (a banish deck gets no card that counts permanents). A card
+# without a scaling fits every style.
+STYLE_SCALINGS: dict[PlayStyle, frozenset[Scaling]] = {
+    PlayStyle.PERMANENTS: frozenset({Scaling.PERMANENT, Scaling.EMPTY_SLOT}),
+    PlayStyle.GRAVEYARD: frozenset({Scaling.GRAVEYARD}),
+    PlayStyle.ONE_SHOT: frozenset({Scaling.BANISHED}),
+    PlayStyle.AGGRO: frozenset({Scaling.PLAYED}),
+    PlayStyle.TURTLE: frozenset({Scaling.BLOCK}),
+    PlayStyle.MALWARE: frozenset({Scaling.MALWARE}),
+    PlayStyle.PROGRAM: PROGRAM_SCALINGS,
+}
 ONE_SHOT_FACTOR = 0.65  # banished after use
 DISCARD_COST = 3.0  # per random hand card thrown away
 HALT_COST = 2.0  # the program ends after its line
@@ -124,8 +136,15 @@ def describe(spec: CardSpec) -> str:
     return " ".join(parts)
 
 
-def validate_spec(spec: CardSpec, program_mode: bool) -> Card:
-    """The Card a design makes, or ForgeViolation saying what is wrong."""
+def validate_spec(spec: CardSpec, program_mode: bool, style: PlayStyle | None = None) -> Card:
+    """The Card a design makes, or ForgeViolation saying what is wrong.
+    `style`: the style it is forged for - its scaling has to fit it."""
+    if style is not None and spec.scaling is not None and spec.scaling not in STYLE_SCALINGS[style]:
+        allowed = ", ".join(sorted(s.value for s in STYLE_SCALINGS[style]))
+        raise ForgeViolation(
+            f"scaling {spec.scaling.value} doesn't fit a deck that leans on {LABELS[style]} - "
+            f"use {allowed} or none"
+        )
     if not spec.attack and (spec.hits > 1 or spec.malware):
         raise ForgeViolation("a block card can't have hits or malware")
     if spec.scaling is None and spec.scale_value:
@@ -173,7 +192,9 @@ FALLBACK_SPECS: dict[PlayStyle, CardSpec] = {
         scale_value=3,
         discard_cost=1,
     ),
-    PlayStyle.ONE_SHOT: CardSpec(name="Kill -9", attack=True, value=22, one_shot=True),
+    PlayStyle.ONE_SHOT: CardSpec(
+        name="Shredder", attack=True, value=4, scaling=Scaling.BANISHED, scale_value=4
+    ),
     PlayStyle.AGGRO: CardSpec(name="Brute Loop", attack=True, value=6, hits=2),
     PlayStyle.TURTLE: CardSpec(name="Air Gap", attack=False, value=13),
     PlayStyle.MALWARE: CardSpec(
@@ -190,7 +211,7 @@ def fallback_card(style: PlayStyle, program_mode: bool) -> Card:
     if not program_mode and spec.scaling in PROGRAM_SCALINGS:
         # a program style without a program can't happen in play; stay safe
         spec = FALLBACK_SPECS[PlayStyle.AGGRO]
-    return validate_spec(spec, program_mode)
+    return validate_spec(spec, program_mode, style)
 
 
 def forged_deal(card: Card, style: PlayStyle, rng: random.Random) -> AgiDeal:

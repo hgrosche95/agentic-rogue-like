@@ -392,6 +392,50 @@ REWARD_POOL: list[Card] = [
         rarity=Rarity.COMMON,
         description="One-shot. Banish a card from your hand. Draw 2 cards.",
     ),
+    # ---- the banish style beyond the rares: an enabler that hits, payoffs
+    # in attack and defense, and a big dig. balance-sim, two copies in the
+    # starter deck (boss fights won; the deck alone 60 %, with two more
+    # Exploits 52 %): Shred 52, Dead Drop 49, Burn Notice 57, Wipe 75 % -
+    # Wipe at "draw 3" was 80, Purge-style "banish 1, draw 2" 92.
+    Card(
+        id="shred",
+        name="Shred",
+        type=CardType.ATTACK,
+        value=8,
+        banish=1,
+        rarity=Rarity.COMMON,
+        description="Banish a card from your hand. Deal 8 (+ATK) damage.",
+    ),
+    Card(
+        id="dead-drop",
+        name="Dead Drop",
+        type=CardType.ATTACK,
+        value=3,
+        scaling=Scaling.BANISHED,
+        scale_value=3,
+        rarity=Rarity.COMMON,
+        description="Deal 3 (+ATK) damage, +3 per banished card.",
+    ),
+    Card(
+        id="burn-notice",
+        name="Burn Notice",
+        type=CardType.BLOCK,
+        value=3,
+        scaling=Scaling.BANISHED,
+        scale_value=2,
+        rarity=Rarity.UNCOMMON,
+        description="Gain 3 block, +2 per banished card.",
+    ),
+    Card(
+        id="wipe",
+        name="Wipe",
+        type=CardType.DRAW,
+        value=2,
+        banish=2,
+        exhaust=True,
+        rarity=Rarity.UNCOMMON,
+        description="One-shot. Banish 2 cards from your hand. Draw 2 cards.",
+    ),
     Card(
         id="memory-dump",
         name="Memory Dump",
@@ -840,6 +884,10 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Sandbox": {"value": 21, "description": "One-shot. Gain 21 block."},
     "Backup": {"value": 14, "description": "One-shot. Heal 14 HP."},
     "Phishing": {"value": 3, "description": "One-shot. Draw 3 cards."},
+    "Shred": {"value": 11, "description": "Banish a card from your hand. Deal 11 (+ATK) damage."},
+    "Dead Drop": {"scale_value": 4, "description": "Deal 3 (+ATK) damage, +4 per banished card."},
+    "Burn Notice": {"scale_value": 3, "description": "Gain 3 block, +3 per banished card."},
+    "Wipe": {"value": 3, "description": "One-shot. Banish 2 cards from your hand. Draw 3 cards."},
     "Purge": {"value": 3, "description": "One-shot. Banish a card from your hand. Draw 3 cards."},
     "Memory Dump": {"value": 5, "description": "One-shot. Discard your hand, then draw 5 cards."},
     "Rollback": {
