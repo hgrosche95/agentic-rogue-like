@@ -1015,3 +1015,93 @@ button.is-busy:disabled {
     animation: none;
   }
 }
+
+/* ---------- the map: what a room ahead holds ---------- */
+.dungeon-map {
+  position: relative;
+}
+
+.map-preview {
+  position: absolute;
+  z-index: 5;
+  display: grid;
+  gap: 3px;
+  min-width: 170px;
+  max-width: 230px;
+  padding: 8px 11px 9px;
+  border: 1px solid var(--line-strong, #4a4588);
+  border-top: 3px solid var(--node, var(--accent));
+  border-radius: 8px;
+  background: var(--panel-solid, #0b0a1e);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+  translate: -50% calc(-100% - 30px);
+  pointer-events: none;
+  font-size: 12px;
+  line-height: 1.35;
+  animation: map-preview-in 0.16s var(--ease-out, ease-out);
+}
+
+.map-preview b {
+  font: 700 13px/1.2 var(--font-head);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--node, var(--accent));
+}
+
+.map-preview em {
+  font-style: normal;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.map-preview small {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim, #8f8ac7);
+}
+
+.map-preview.type-combat {
+  --node: #ff9a3d;
+}
+.map-preview.type-elite {
+  --node: #ff4f8b;
+}
+.map-preview.type-event {
+  --node: #9b8cff;
+}
+.map-preview.type-shop {
+  --node: #ffcf4d;
+}
+.map-preview.type-rest {
+  --node: #5dff9b;
+}
+.map-preview.type-boss {
+  --node: #ff4fd8;
+}
+
+@keyframes map-preview-in {
+  from {
+    opacity: 0;
+    translate: -50% calc(-100% - 22px);
+  }
+}
+
+/* ---------- a jump: a packet runs the trail ---------- */
+.map-packet circle {
+  fill: #e8fdff;
+}
+
+.map-packet .map-packet-glow {
+  fill: var(--cyan);
+  filter: blur(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-packet {
+    display: none;
+  }
+  .map-preview {
+    animation: none;
+  }
+}
