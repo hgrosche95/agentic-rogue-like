@@ -54,8 +54,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       brauchen einen freien Slot, wirken sofort und wandern in den
       Friedhof; permanente Karten (Overclock, Encryption,
       Prefetch) belegen ihren Slot dauerhaft und wirken positionsabhängig — z. B.
-      "Aktionskarten rechts von mir sind 25% effektiver". Man startet mit
-      5 Handkarten und zieht jede Runde 3 nach (Prefetch: +1); nicht gespielte
+      "Aktionskarten rechts von mir sind 10% effektiver". Man startet mit
+      5 Handkarten und zieht jede Runde 3 nach (Prefetch: +1 jeden 2. Zug); nicht gespielte
       Karten bleiben auf der Hand, am Rundenende wird auf 8 abgeworfen.
       `cli.py` und die Tests spielen automatisiert (`auto_resolve_combat` —
       erste bezahlbare Karte in den ersten freien Slot, dann Rundenende),
@@ -884,7 +884,7 @@ dem Verbannt-Stapel skaliert).
 | --- | --- | --- |
 | Angriff | 2× Exploit | 2× Prompt |
 | Block | 3× Firewall, Encryption | 3× Make It Safe |
-| Permanente | Overclock, Encryption, Prefetch, Kernel Panic (nur Classic) | Copilot, Energy Drink |
+| Permanente | Overclock (10 %), Encryption, Prefetch (jeden 2. Zug), Kernel Panic (nur Classic) | Copilot, Energy Drink |
 | Malware | Ping (2 Schaden, 2 Malware) | Ping |
 | Friedhof | Undo (1×, holt die letzte Karte zurück) | Force Push (1 Karte abwerfen, 7 Schaden) |
 | Einmal-Karten | Undo, Garbage Collect (2 Schaden, +2 pro verbannter Karte) | /compact, Garbage Collect |
@@ -970,12 +970,11 @@ allein mit diesem Kit) und Tab-Tab-Tab beim Vibe-Coder (27–29 %).
 
 Im Safehouse lässt sich eine Karte einmal verbessern: Sie bekommt ein „+“ am
 Namen und einen stärkeren Wert, z. B. Exploit 5 → 8 Schaden, Firewall 5 → 8
-Block, Overclock 25 % → 40 %, Encryption 1 → 2 Rüstung, Daemon 4 → 6
+Block, Overclock 10 % → 20 %, Prefetch jeden 2. Zug → jeden Zug, Encryption 1 → 2 Rüstung, Daemon 4 → 6
 Schaden, DDoS 3 → 4 Treffer. Die Upgrades stehen pro Karte ausgeschrieben in
 `cards.CARD_UPGRADES` (grob +40 % auf die Hauptzahl oder ein Effekt mehr),
-nicht als Formel, damit jedes eine bewusste Entscheidung ist. Prefetch und
-System Restore haben keins: ein zweiter Zusatz-Zug pro Runde würde die
-Ziehregel aushebeln, und System Restore hat nichts zu skalieren.
+nicht als Formel, damit jedes eine bewusste Entscheidung ist. System Restore
+hat keins: es hat nichts zu skalieren.
 
 Heilen, Verbessern und Entfernen sind eine echte Abwägung, kein Gratis-Bonus:
 In `balance-sim` heilt der Smart-Bot unter 65 % HP und verbessert sonst eine

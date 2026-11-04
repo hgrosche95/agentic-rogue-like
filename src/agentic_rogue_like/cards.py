@@ -115,8 +115,8 @@ def starter_deck(program_mode: bool = False) -> list[Card]:
             id="amplifier-0",
             name="Overclock",
             type=CardType.AMPLIFIER,
-            value=25,
-            description="Permanent. Action cards played to its right are 25% more effective.",
+            value=10,
+            description="Permanent. Action cards played to its right are 10% more effective.",
         )
     )
     cards.append(
@@ -134,7 +134,7 @@ def starter_deck(program_mode: bool = False) -> list[Card]:
             name="Prefetch",
             type=CardType.DRAW_BONUS,
             value=1,
-            description="Permanent. Draw 1 extra card each turn.",
+            description="Permanent. Every 2nd turn, draw 1 extra card.",
         )
     )
     if not program_mode:
@@ -847,10 +847,13 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Exploit": {"value": 8, "description": "Deal 8 (+ATK) damage."},
     "Firewall": {"value": 8, "description": "Gain 8 block until your next turn."},
     "Overclock": {
-        "value": 40,
-        "description": "Permanent. Action cards played to its right are 40% more effective.",
+        "value": 20,
+        "description": "Permanent. Action cards played to its right are 20% more effective.",
     },
     "Encryption": {"value": 2, "description": "Permanent. Reduce incoming damage by 2."},
+    # draws every turn instead of every 2nd: the upgraded flag is what
+    # combat.cards_per_turn reads
+    "Prefetch": {"upgraded": True, "description": "Permanent. Draw 1 extra card each turn."},
     "Kernel Panic": {
         "value": 7,
         "description": "Destroy all permanent cards. Deal 7 damage for each one.",

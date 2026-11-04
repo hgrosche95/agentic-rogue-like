@@ -82,6 +82,7 @@ from .style import PlayStyle
 
 HAND_SIZE = 5  # opening hand
 CARDS_PER_TURN = 3  # drawn at the end of every turn, on top of what's left
+DRAW_BONUS_EVERY = 2  # a draw-bonus permanent (Prefetch) adds its card every 2nd turn
 MAX_HAND_SIZE = 8  # discard down to this at the end of the turn
 FIELD_SIZE = 5
 MAX_AUTO_TURNS = 50
@@ -363,7 +364,15 @@ def _draw(state: CombatState, count: int, rng: random.Random) -> int:
 
 def cards_per_turn(state: CombatState) -> int:
     """Cards drawn for turn `state.turn`."""
-    draw_bonus = sum(c.value for c in state.field if c and c.type is CardType.DRAW_BONUS)
+    # Prefetch draws its extra card every DRAW_BONUS_EVERY turns, Prefetch+
+    # every turn
+    draw_bonus = sum(
+        c.value
+        for c in state.field
+        if c
+        and c.type is CardType.DRAW_BONUS
+        and (c.upgraded or state.turn % DRAW_BONUS_EVERY == 0)
+    )
     artifact_bonus = every_nth_turn(state.artifacts, "extra_draw", "extra_draw_every", state.turn)
     return max(0, CARDS_PER_TURN + state.turn_draw_modifier + draw_bonus + artifact_bonus)
 
