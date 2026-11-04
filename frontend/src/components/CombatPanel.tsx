@@ -944,8 +944,6 @@ export function CombatPanel({
             intentName: combat.enemy_intent_name,
             finalBoss: combat.final_boss,
             phase: combat.enemy_phase,
-            incoming:
-              attacking && running === null && !enemySlain ? [combat.incoming_min, combat.incoming_max] : null,
           }}
           exchange={exchange}
           log={log}
