@@ -59,6 +59,8 @@ from .characters import profile
 from .models import (
     CONTROL_FLOW_TYPES,
     DEFAULT_BARRAGE_HITS,
+    DEFAULT_CORRUPT_GLITCHES,
+    DEFAULT_INFECT_STACKS,
     DEFAULT_INTERRUPT_AFTER,
     DEFAULT_MOVE_POWER,
     PERMANENT_CARD_TYPES,
@@ -76,6 +78,7 @@ from .models import (
     Scaling,
     Status,
 )
+from .style import PlayStyle
 
 HAND_SIZE = 5  # opening hand
 CARDS_PER_TURN = 3  # drawn at the end of every turn, on top of what's left
@@ -163,6 +166,54 @@ _LIGHT_HIT_KINDS = {
     EnemyIntentType.RACE: MoveKind.RACE,
     EnemyIntentType.LEAK: MoveKind.LEAK,
 }
+
+
+# The final boss (OMEGA) answers the run it has watched (engine.adapt_omega):
+# from phase 2 on it plays more of the moves that hurt the player's style
+# (OMEGA_COUNTER_WEIGHTS), and in phase 3 it rewrites one law of the fight
+# against that style (Law) for the rest of the fight.
+class Law(StrEnum):
+    DELETE_PERMANENT = "delete_permanent"  # the rightmost permanent goes, every turn
+    COLLECT_GRAVEYARD = "collect_graveyard"  # the graveyard goes back into the draw pile
+    ONE_SHOT_TAX = "one_shot_tax"  # one-shot cards cost HP to play
+    ARMOR = "armor"  # every hit on OMEGA deals less
+    PIERCE = "pierce"  # its attacks go through half the player's block
+    MALWARE_IMMUNE = "malware_immune"  # Malware does nothing to it
+    COLLECT_LINE = "collect_line"  # every program run loses its last line
+
+
+LAW_FOR_STYLE: dict[PlayStyle, Law] = {
+    PlayStyle.PERMANENTS: Law.DELETE_PERMANENT,
+    PlayStyle.GRAVEYARD: Law.COLLECT_GRAVEYARD,
+    PlayStyle.ONE_SHOT: Law.ONE_SHOT_TAX,
+    PlayStyle.AGGRO: Law.ARMOR,
+    PlayStyle.TURTLE: Law.PIERCE,
+    PlayStyle.MALWARE: Law.MALWARE_IMMUNE,
+    PlayStyle.PROGRAM: Law.COLLECT_LINE,
+}
+LAW_ARMOR = 3
+ONE_SHOT_TAX = 2
+LAW_TEXT: dict[Law, str] = {
+    Law.DELETE_PERMANENT: "At the end of every turn your rightmost permanent is deleted.",
+    Law.COLLECT_GRAVEYARD: "At the end of every turn your graveyard goes back into your draw pile.",
+    Law.ONE_SHOT_TAX: f"One-shot cards cost {ONE_SHOT_TAX} HP to play.",
+    Law.ARMOR: f"Every hit on OMEGA deals {LAW_ARMOR} less damage.",
+    Law.PIERCE: "Its attacks go through half of your block.",
+    Law.MALWARE_IMMUNE: "Malware does nothing to it.",
+    Law.COLLECT_LINE: "Every program run loses its last line.",
+}
+# Phase 2 on: the moves OMEGA plays more of against each style, by weight.
+OMEGA_COUNTER_WEIGHTS: dict[PlayStyle, dict[EnemyIntentType, int]] = {
+    PlayStyle.PERMANENTS: {EnemyIntentType.PURGE: 3},
+    PlayStyle.GRAVEYARD: {EnemyIntentType.CORRUPT: 3},
+    PlayStyle.ONE_SHOT: {EnemyIntentType.DEFEND: 3},
+    PlayStyle.AGGRO: {EnemyIntentType.DEFEND: 3},
+    PlayStyle.TURTLE: {EnemyIntentType.INFECT: 3},
+    PlayStyle.MALWARE: {EnemyIntentType.BARRAGE: 4},
+    PlayStyle.PROGRAM: {EnemyIntentType.COLLECT: 2, EnemyIntentType.RACE: 2},
+}
+# What playing the AGI's own forged card (forge.py) costs in the final fight.
+TRAP_COST = 3
 
 # How often a boss refactors a program, against its other moves' weights
 # (attack 4, barrage 2, charge 2, brace 3).
@@ -289,6 +340,11 @@ class CombatState(BaseModel):
     # Memory Leak: the line that ran first this turn, locked by the enemy's
     # move for the player's next turn.
     leaked_line: int | None = None
+    # The final boss only (engine.adapt_omega): the style it answers, the law
+    # it rewrites in phase 3, and what the AGI's forged card costs to play.
+    omega_style: PlayStyle | None = None
+    omega_law: Law | None = None
+    trap_cost: int = 0
     tally: FightTally = Field(default_factory=FightTally)
 
 
@@ -371,6 +427,16 @@ def enemy_attack(state: CombatState) -> int:
 def current_move(state: CombatState) -> EnemyMove | None:
     """The move-set entry behind the telegraphed intent (None for bosses)."""
     return None if state.enemy_move is None else state.enemy.moves[state.enemy_move]
+
+
+def active_law(state: CombatState) -> Law | None:
+    """The law OMEGA has rewritten - from its phase 3 on, else None."""
+    return state.omega_law if state.phase >= 3 else None
+
+
+def _usable_block(state: CombatState, block: int) -> int:
+    """The block that counts against an enemy hit - half under OMEGA's pierce law."""
+    return block // 2 if active_law(state) is Law.PIERCE else block
 
 
 def _move_power(state: CombatState, kind: MoveKind) -> int:
@@ -479,6 +545,7 @@ def incoming_damage(state: CombatState) -> tuple[int, int]:
     if not hits:
         return 0, 0
     block = state.player_block + fortify_block(state) + quarantine_block(state) + turn_block(state)
+    block = _usable_block(state, block)
     armor = player_armor(state)
     return (
         _damage_taken([low for low, _ in hits], block, armor),
@@ -558,6 +625,14 @@ def _roll_boss_intent(state: CombatState, rng: random.Random) -> EnemyIntentType
         del weights[EnemyIntentType.CHARGE]
     if state.program_mode and previous is not EnemyIntentType.REFACTOR:
         weights[EnemyIntentType.REFACTOR] = BOSS_REFACTOR_WEIGHT
+    if state.omega_style is not None and state.phase >= 2:
+        # OMEGA allocates more of itself to the player's style
+        for intent, weight in OMEGA_COUNTER_WEIGHTS[state.omega_style].items():
+            if intent is EnemyIntentType.PURGE and not permanent_count(state):
+                continue
+            if intent in (EnemyIntentType.COLLECT, EnemyIntentType.RACE) and not state.program_mode:
+                continue
+            weights[intent] = max(weights.get(intent, 0), weight)
     return rng.choices(list(weights), weights=list(weights.values()))[0]
 
 
@@ -596,6 +671,10 @@ def _check_boss_phase(state: CombatState) -> str:
         taunts = state.enemy.phase_taunts
         if state.phase - 2 < len(taunts):
             line += f" {taunts[state.phase - 2]}"
+        if (law := active_law(state)) is not None:
+            line += f" New law: {LAW_TEXT[law]}"
+            if law is Law.MALWARE_IMMUNE:
+                state.enemy_status.pop(Status.MALWARE, None)
     return line
 
 
@@ -620,6 +699,8 @@ def _lose_hp(state: CombatState, amount: int) -> int:
 
 def _damage_enemy(state: CombatState, damage: int) -> tuple[int, int]:
     """Apply damage to the enemy's block first, then its HP. Returns (absorbed, dealt)."""
+    if active_law(state) is Law.ARMOR:
+        damage = max(0, damage - LAW_ARMOR)
     absorbed = min(damage, state.enemy_block)
     state.enemy_block -= absorbed
     dealt = damage - absorbed
@@ -766,6 +847,7 @@ def play_card(
     # The cost is paid before anything else, so a card like Memory Dump can't
     # throw away the very cards it is about to draw - and Purge can't banish them.
     cost_line = _pay_banish(state, banished, rng) + _pay_discard_cost(state, card, rng)
+    cost_line += _omega_toll(state, card, player)
 
     if queues(state, card):
         # Paid for now, run at the end of the turn (run_program).
@@ -988,7 +1070,10 @@ def run_program(
         queued[0], queued[1] = queued[1], queued[0]
     garbage_free = total(state.artifacts, "garbage_free") > 0
     collected = None
-    if state.enemy_intent is EnemyIntentType.COLLECT and len(queued) >= 2 and not garbage_free:
+    collecting = (
+        state.enemy_intent is EnemyIntentType.COLLECT or active_law(state) is Law.COLLECT_LINE
+    )
+    if collecting and len(queued) >= 2 and not garbage_free:
         collected = queued.pop()
     main_thread = total(state.artifacts, "main_thread")
     skip_next = False  # Garbage-Free: a Segfault skips only the line after it
@@ -1815,7 +1900,7 @@ def end_turn(
             return log
     else:
         armor = player_armor(state)
-        reduction = state.player_block + armor
+        reduction = _usable_block(state, state.player_block) + armor
         # The d6 on top of the move's hit.
         low, high = intent_hits(state)[0]
         raw_damage = low - 1 + rng.randint(1, high - low + 1)
@@ -1845,6 +1930,7 @@ def end_turn(
             if state.enemy_hp <= 0:
                 return log
 
+    log.extend(_laws_after_turn(state, rng))
     log.extend(_affix_after_turn(state))
     log.extend(_tick_statuses(state, player))
     if state.enemy_hp <= 0 or player.hp <= 0:
@@ -1868,6 +1954,49 @@ def end_turn(
     return log
 
 
+def omega_toll(state: CombatState, card: Card) -> int:
+    """HP playing `card` costs in the final fight - also what the hand shows."""
+    tax = ONE_SHOT_TAX if card.exhaust and active_law(state) is Law.ONE_SHOT_TAX else 0
+    return tax + (state.trap_cost if card.id.startswith("agi-") else 0)
+
+
+def _omega_toll(state: CombatState, card: Card, player: PlayerState) -> str:
+    """What playing `card` costs in the final fight: HP for a one-shot under
+    OMEGA's tax law, and HP for the AGI's own forged card - it knows its flaw."""
+    line = ""
+    if card.exhaust and active_law(state) is Law.ONE_SHOT_TAX:
+        _hurt(state, player, ONE_SHOT_TAX, "OMEGA's tax")
+        line += f"OMEGA's law takes {ONE_SHOT_TAX} HP for the one-shot. "
+    if state.trap_cost and card.id.startswith("agi-"):
+        _hurt(state, player, state.trap_cost, card.name)
+        line += (
+            f'OMEGA: "I built {card.name}. I know its flaw." It costs you {state.trap_cost} HP. '
+        )
+    return line
+
+
+def _laws_after_turn(state: CombatState, rng: random.Random) -> list[str]:
+    """OMEGA's end-of-turn laws: a permanent deleted, or the graveyard
+    collected back into the draw pile."""
+    law = active_law(state)
+    if law is Law.DELETE_PERMANENT:
+        slots = [i for i, c in enumerate(state.field) if c is not None]
+        if slots:
+            deleted = state.field[slots[-1]]
+            if state.program_mode:
+                state.field.pop(slots[-1])
+            else:
+                state.field[slots[-1]] = None
+            return [f"OMEGA deletes your {deleted.name}." + _banish(state, [deleted], rng)]
+    if law is Law.COLLECT_GRAVEYARD and state.discard_pile:
+        count = len(state.discard_pile)
+        state.draw_pile += state.discard_pile
+        state.discard_pile = []
+        rng.shuffle(state.draw_pile)
+        return [f"OMEGA garbage-collects your graveyard: {count} card(s) back into the draw pile."]
+    return []
+
+
 def _affix_after_turn(state: CombatState) -> list[str]:
     """What an elite's affix does once it has acted."""
     name, affix = state.enemy.name, state.enemy.affix
@@ -1884,6 +2013,8 @@ def _affix_after_turn(state: CombatState) -> list[str]:
 
 def _afflict(state: CombatState, status: Status, amount: int) -> str:
     """Put `amount` of `status` on the enemy (stacks or turns add up)."""
+    if status is Status.MALWARE and active_law(state) is Law.MALWARE_IMMUNE:
+        return f"{state.enemy.name} is immune to Malware."
     state.enemy_status[status] = state.enemy_status.get(status, 0) + amount
     return f"{state.enemy.name} is {status.value} ({state.enemy_status[status]})."
 
@@ -1962,7 +2093,7 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
 
     hits = [rng.randint(low, high) for low, high in intent_hits(state)]
     armor = player_armor(state)
-    taken = _damage_taken(hits, state.player_block, armor)
+    taken = _damage_taken(hits, _usable_block(state, state.player_block), armor)
     _hurt(state, player, taken, own or _SPECIAL_MOVE_NAMES.get(intent, state.enemy.attack_name))
     move = {
         EnemyIntentType.BARRAGE: f"unleashes a {len(hits)}-hit barrage",
@@ -2000,12 +2131,14 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
         log.append(f"Line {state.leaked_line + 1} leaks memory - it is locked for your next turn.")
         state.leaked_line = None
     if intent is EnemyIntentType.CORRUPT:
-        glitches = [_glitch(state, i) for i in range(current_move(state).stacks)]
+        move = current_move(state)  # None for a boss: the defaults
+        stacks = move.stacks if move else DEFAULT_CORRUPT_GLITCHES
+        glitches = [_glitch(state, i) for i in range(stacks)]
         for glitch in glitches:
             state.draw_pile.insert(rng.randrange(len(state.draw_pile) + 1), glitch)
         log.append(f"{len(glitches)} Glitch card(s) seep into your draw pile.")
     if intent is EnemyIntentType.INFECT:
-        stacks = current_move(state).stacks if current_move(state) else 0
+        stacks = current_move(state).stacks if current_move(state) else DEFAULT_INFECT_STACKS
         state.player_status[Status.MALWARE] = state.player_status.get(Status.MALWARE, 0) + stacks
         log.append(
             f"{stacks} Malware creeps into your systems "

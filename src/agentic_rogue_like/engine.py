@@ -38,6 +38,7 @@ from .models import (
     RunState,
     RunStatus,
 )
+from .omega import adapt_omega, omega_taunts
 from .shop import MIN_DECK_SIZE, leave_shop, roll_shop
 from .starts import apply_deal, apply_kit, roll_deals, roll_kits
 from .stats import begin, close_turn, record_fight, record_play
@@ -483,6 +484,8 @@ def _room_enemy(
         enemy = with_program_move(enemy, style, run.player.deck)
     if style is not None and answers(enemy, style):
         enemy = enemy.model_copy(update={"taunt": taunt(style, enemy)})
+    if is_final_boss(run, node):
+        enemy = omega_taunts(enemy, run.player.deck, run.stats)
     return escalate(enemy, node.floor, NUM_FLOORS, run.act)
 
 
@@ -513,6 +516,8 @@ def start_combat_node(
         character=run.player.character,
         program_mode=run.program_mode,
     )
+    if is_final_boss(run, node):
+        adapt_omega(state, run.player.deck)
     run.history.extend(log)
     return state
 

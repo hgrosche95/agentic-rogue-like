@@ -3177,3 +3177,59 @@ button.field-slot.is-queued:hover:not(:disabled) {
     animation: none;
   }
 }
+
+/* ---------- the final fight: OMEGA answers the run ---------- */
+.omega-badge,
+.law-badge {
+  max-width: 100%;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.omega-badge {
+  color: var(--ai-red);
+  border: 1px solid var(--ai-red);
+  background: color-mix(in srgb, var(--ai-red) 10%, transparent);
+}
+
+/* the law it rewrote: the loudest thing on its plate */
+.law-badge {
+  color: var(--panel-solid);
+  background: var(--ai-red);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--ai-red) 60%, transparent);
+  white-space: normal;
+  animation: law-in var(--dur-slow) var(--ease-out) both;
+}
+
+@keyframes law-in {
+  from {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+}
+
+/* what a hand card costs to play in this fight */
+.hand-card .toll-badge {
+  position: absolute;
+  z-index: 3;
+  top: -10px;
+  left: 50%;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ai-red);
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--panel-solid);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .law-badge {
+    animation: none;
+  }
+}
