@@ -1,0 +1,137 @@
+/* A fight on a phone is a game screen, not a page: everything that decides
+   the turn - the plates, the stack, the hand, End Turn - fits one screen.
+   The logo, the log over the scene, the enemy's flavor line and the hint
+   line step aside (the log stays one tap away in the header), the hand is
+   one row that swipes, and the hand with End Turn is pinned to the bottom.
+   Loaded last. */
+
+@media (max-width: 600px) {
+  .game.is-combat .topbar .brand {
+    display: none;
+  }
+
+  .game.is-combat .topbar {
+    margin-bottom: 8px;
+  }
+
+  .combat-panel .arena-monitor,
+  .combat-panel .hud-flavor,
+  .combat-panel .field-hint {
+    display: none;
+  }
+
+  /* the scene at its crisp 1x is 240x100: the stage hugs it instead of
+     keeping the wide screen's proportions around it */
+  .arena-wrap > .arena-stage {
+    aspect-ratio: auto;
+    height: 112px;
+  }
+
+  /* the two plates: name, bar and chips, tight - "Fully blocked / Lethal"
+     is said by End Turn's own line here */
+  .vs-hud .incoming-badge {
+    display: none;
+  }
+
+  .vs-hud .artifact-bar .artifact-chip {
+    width: 28px;
+    height: 28px;
+  }
+
+  .arena-wrap {
+    gap: 8px;
+  }
+
+  .arena-wrap > .vs-hud {
+    padding: 8px 10px;
+  }
+
+  .vs-hud .vs-body {
+    gap: 5px;
+  }
+
+  .vs-hud .hud-name {
+    font-size: 12px;
+  }
+
+  .vs-hud .intent-badge {
+    white-space: nowrap;
+    font-size: 11px;
+  }
+
+  .vs-hud .hud-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+  }
+
+  .vs-hud .hud-meta > * {
+    margin: 0;
+  }
+
+  .vs-hud .artifact-bar {
+    gap: 4px;
+  }
+
+  .combat-row {
+    margin-top: 8px;
+  }
+
+  .field-zone {
+    padding: 6px 8px 8px;
+  }
+
+  .zone-head {
+    margin-bottom: 4px;
+  }
+
+  /* the hand: one row that swipes sideways, snapping card by card */
+  .hand {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 18px 8px 6px;
+    margin: 0 -12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .hand::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hand .hand-card {
+    flex: none;
+    width: 104px;
+    height: 146px;
+    scroll-snap-align: start;
+    /* sideways the finger scrolls the row; upwards it still drags the card
+       to the stack (useCardDrag), and a tap still picks it */
+    touch-action: pan-x;
+  }
+
+  /* hand, deck, End Turn and the piles: a tray pinned to the bottom */
+  .battlefield {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    gap: 6px;
+    margin: 8px -12px 0;
+    padding: 0 12px calc(8px + env(safe-area-inset-bottom));
+    background: linear-gradient(to bottom, transparent, var(--bg) 22px);
+  }
+
+  .battlefield > .pile .pile-face,
+  .side-piles .pile-face {
+    width: 36px;
+    height: 48px;
+  }
+
+  .end-turn-button {
+    padding: 0.6rem 0.9rem;
+  }
+}

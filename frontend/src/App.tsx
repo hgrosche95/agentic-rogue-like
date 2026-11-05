@@ -13,6 +13,7 @@ import "./faces.css";
 import "./table.css";
 import "./cardread.css";
 import "./alive.css";
+import "./phone.css";
 import {
   buyShopArtifact,
   removeShopCard,
