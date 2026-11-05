@@ -169,8 +169,8 @@ export function RestScreen({
               }}
             >
               <RestIcon kind="heal" />
-              <span className="artifact-name">Rest</span>
-              <span className="rest-figure">+{rest.heal_amount} HP</span>
+              <span className="artifact-name">Patch up</span>
+              <span className="rest-figure">+{rest.heal_amount} integrity</span>
               <span className="artifact-description">
                 Patch yourself up: {hp} → {healed} of {maxHp} integrity.
               </span>
@@ -199,7 +199,7 @@ export function RestScreen({
               onClick={() => pick("remove")}
             >
               <RestIcon kind="remove" />
-              <span className="artifact-name">Strip out</span>
+              <span className="artifact-name">Delete a card</span>
               <span className="rest-figure">− one card</span>
               <span className="artifact-description">
                 {rest.can_remove

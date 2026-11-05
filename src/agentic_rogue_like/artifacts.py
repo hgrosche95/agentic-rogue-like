@@ -34,7 +34,7 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="self-healing-script",
         name="Self-Healing Script",
-        description="Heal 6 HP after every won fight.",
+        description="Heal 6 integrity after every won fight.",
         heal_after_combat=6,
     ),
     Artifact(
@@ -81,7 +81,7 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="titanium-chassis",
         name="Titanium Chassis",
-        description="+15 max HP.",
+        description="+15 max integrity.",
         max_hp=15,
     ),
     Artifact(
@@ -93,7 +93,7 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="medkit-exe",
         name="Medkit.exe",
-        description="Your heal cards heal 4 more HP.",
+        description="Your heal cards heal 4 more integrity.",
         heal_bonus=4,
     ),
     Artifact(
@@ -111,21 +111,21 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="sleep-mode",
         name="Sleep Mode",
-        description="Rest sites heal 15 more HP, and heal 3 HP after every won fight.",
+        description="Safehouses heal 15 more integrity, and heal 3 integrity after every won fight.",
         rest_heal=15,
         heal_after_combat=3,
     ),
     Artifact(
         id="glass-cannon",
         name="Glass Cannon",
-        description="+4 ATK, but -12 max HP.",
+        description="+4 ATK, but -12 max integrity.",
         attack=4,
         max_hp=-12,
     ),
     Artifact(
         id="lag-spike",
         name="Lag Spike",
-        description="Enemies start every fight with 15% less HP.",
+        description="Enemies start every fight with 15% less integrity.",
         enemy_hp_percent=-15,
     ),
     Artifact(
@@ -151,20 +151,20 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="vampire-process",
         name="Vampire Process",
-        description="Every attack card you play heals you 1 HP.",
+        description="Every attack card you play heals you 1 integrity.",
         lifesteal=1,
     ),
     # ---- bridges between two styles (style.py)
     Artifact(
         id="stack-trace",
         name="Stack Trace",
-        description="Attacks deal +1 damage for every 4 cards in your graveyard.",
+        description="Attacks deal +1 damage for every 4 cards in your Cache.",
         graveyard_attack=1,
     ),
     Artifact(
         id="logic-bomb",
         name="Logic Bomb",
-        description="Whenever a card is banished, infect the enemy with 3 Malware.",
+        description="Whenever a card is purged, infect the enemy with 3 Malware.",
         banish_malware=3,
     ),
     Artifact(
@@ -199,7 +199,7 @@ VIBE_CODER_ARTIFACT_POOL: list[Artifact] = [
         id="lo-fi-beats",
         name="Lo-fi Beats",
         description=(
-            "1 more token frees up at the end of every turn. Heal 3 HP after every won fight."
+            "1 more token frees up at the end of every turn. Heal 3 integrity after every won fight."
         ),
         token_regen=1,
         heal_after_combat=3,
@@ -229,7 +229,7 @@ PROGRAM_ARTIFACT_POOL: list[Artifact] = [
         name="Hot Path",
         description=(
             "The card in line 2 of your program runs as its upgraded version, but "
-            "enemies have 10% more HP."
+            "enemies have 10% more integrity."
         ),
         hot_path=2,
         enemy_hp_percent=10,
@@ -238,7 +238,7 @@ PROGRAM_ARTIFACT_POOL: list[Artifact] = [
         id="branch-predictor",
         name="Branch Predictor",
         description=(
-            "Once the enemy is at half HP or less, every further action in your program gets +3."
+            "Once the enemy is at half integrity or less, every further action in your program gets +3."
         ),
         wounded_bonus=3,
     ),
@@ -280,7 +280,7 @@ PROGRAM_ARTIFACT_POOL: list[Artifact] = [
         name="Main Thread",
         description=(
             "The action in the first line of your program to run runs twice, but enemies "
-            "have 15% more HP."
+            "have 15% more integrity."
         ),
         main_thread=1,
         enemy_hp_percent=15,

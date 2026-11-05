@@ -50,7 +50,7 @@ def test_the_game_writes_the_rules_text() -> None:
         discard_cost=1,
     )
     assert describe(spec) == (
-        "Discard 1 random card. Deal 3 (+ATK) damage, +3 per card in your graveyard."
+        "Discard 1 random card. Deal 3 (+ATK) damage, +3 per card in your Cache."
     )
     assert card_power(spec) == 3 + 3 * 4 - 3
     worm = CardSpec(name="Worm", attack=True, value=2, hits=2, malware=3, one_shot=True)
@@ -87,7 +87,7 @@ def test_the_agi_forges_once_as_the_first_boss_reward() -> None:
     offer_forged_card(run)
     (deal,) = run.agi_deals
     assert deal.kind is DealKind.FORGED
-    assert "GRAVEYARD" in deal.greeting
+    assert "CACHE" in deal.greeting
     forged = deal.add[0]
     assert forged.name == "Core Dump" and forged.description in deal.description
 
@@ -149,7 +149,7 @@ def test_the_card_agent_retries_with_the_reason(monkeypatch) -> None:
         )
 
     assert by_agent and card.name == "Necro Cache"
-    assert card.description == "Deal 4 (+ATK) damage, +2 per card in your graveyard."
+    assert card.description == "Deal 4 (+ATK) damage, +2 per card in your Cache."
     assert "cyberpunk" in model.prompts[0] and "Stack Overflow" in model.prompts[0]
     assert "rejected: power 72.0" in model.prompts[1]
 

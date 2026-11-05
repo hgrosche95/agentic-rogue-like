@@ -13,6 +13,7 @@ import "./faces.css";
 import "./table.css";
 import "./cardread.css";
 import "./alive.css";
+import "./phone.css";
 import {
   buyShopArtifact,
   removeShopCard,
@@ -68,6 +69,7 @@ import { ScreenWipe } from "./components/ScreenWipe";
 import { CloseButton, Overlay } from "./components/Overlay";
 import { OverlayStage } from "./components/OverlayStage";
 import { RUN_ID_KEY } from "./errors";
+import { hasSeenTutorial } from "./tutorial";
 import { layerLabel, numFloorsOf } from "./layers";
 import { ProgramModeContext } from "./program";
 import { RestScreen } from "./components/RestScreen";
@@ -132,8 +134,9 @@ function App() {
   const [selectedSetting, setSelectedSetting] = useState(FALLBACK_SETTINGS[0]);
   const [characters, setCharacters] = useState<CharacterView[]>(FALLBACK_CHARACTERS);
   const [selectedCharacter, setSelectedCharacter] = useState<Character>("chronos");
-  // program mode is the game's own idea - it starts selected
-  const [programMode, setProgramMode] = useState(true);
+  // program mode is the game's own idea - it starts selected once a first
+  // fight has been played; a newcomer starts on the plainer classic table
+  const [programMode, setProgramMode] = useState(() => hasSeenTutorial("classic") || hasSeenTutorial("program"));
   const [isMapOpen, setIsMapOpen] = useState(false);
   // Hovering a room on the map previews it in the next-jump panel.
   const [focusedJump, setFocusedJump] = useState<string | null>(null);
@@ -238,13 +241,14 @@ function App() {
     if (!runId) return;
     getRun(runId)
       .then((stored) => {
-        if (stored.status === "ongoing") setRun((current) => current ?? stored);
-        else storeRunId(null);
+        // a finished run comes back too: its end screen stays until the
+        // player starts a new run
+        setRun((current) => current ?? stored);
       })
       .catch(() => storeRunId(null));
   }, []);
 
-  const runId = run !== null && run.status === "ongoing" ? run.run_id : null;
+  const runId = run?.run_id ?? null;
   useEffect(() => {
     // only forget the stored run once one was open here - not on first load
     if (runId !== null) storeRunId(runId);
@@ -531,7 +535,13 @@ function App() {
       <OverlayStage busy={isLoading}>
       {!combat && !ongoing && (
         <Overlay key="end" label="Run over" className="is-wide">
-          <EndScreen run={run} onRestart={() => setRun(null)} />
+          <EndScreen
+            run={run}
+            onRestart={() => {
+              storeRunId(null);
+              setRun(null);
+            }}
+          />
         </Overlay>
       )}
       {!combat && ongoing && run.pending_event && (

@@ -75,7 +75,7 @@ const STAT: Partial<
   opener: { icon: "token", unit: "free / turn" },
   // its value counts half blocks (2: one block per Malware)
   quarantine: { icon: "shield", unit: "per malware", sign: "+", half: true },
-  recycle: { icon: "cards", unit: "per banish" },
+  recycle: { icon: "cards", unit: "per purge" },
   pipe: { icon: "damage", unit: "per action", sign: "+" },
   batch: { icon: "token", unit: "per action" },
   buffer: { icon: "clock", unit: "stored" },
@@ -168,7 +168,7 @@ export interface Readout {
 // The smallest name and effect text a card face shrinks to (px) - a text
 // that doesn't fit at these has to get shorter instead.
 const NAME_FLOOR = 8;
-const BODY_FLOOR = 10;
+const BODY_FLOOR = 11;
 
 // Steps `el`'s font size down from its stylesheet size until `overflows`
 // says it fits, or the floor is reached.

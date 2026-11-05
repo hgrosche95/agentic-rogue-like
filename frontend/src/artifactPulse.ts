@@ -7,7 +7,7 @@ const LINES: [RegExp, string][] = [
   [/Your artifacts strike first/, "opening_damage"],
   [/The attack backfires/, "thorns"],
   [/Your artifacts raise \d+ block/, "turn_block"],
-  [/You leech \d+ HP/, "lifesteal"],
+  [/You leech \d+ integrity/, "lifesteal"],
   [/^Logic Bomb:|Logic Bomb: /, "banish_malware"],
   [/Your daemons spread/, "turret_malware"],
   [/Your permanents hold \d+ block over/, "retain_block"],

@@ -103,7 +103,7 @@ export function TopBar({
         </span>
       </div>
       <div className="stats">
-        <div className="stat stat-hp" title={`${hp}/${player.max_hp} HP`}>
+        <div className="stat stat-hp" title={`${hp}/${player.max_hp} integrity - your HP`}>
           <span className="stat-label">
             <StatIcon kind="hp" />
             Integrity

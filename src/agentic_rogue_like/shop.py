@@ -72,7 +72,7 @@ def _open_shop(run: RunState) -> Shop:
 
 def _pay(run: RunState, price: int, what: str) -> None:
     if run.player.gold < price:
-        raise ValueError(f"not enough gold for {what}: costs {price}, you have {run.player.gold}")
+        raise ValueError(f"not enough credits for {what}: costs {price}, you have {run.player.gold}")
     run.player.gold -= price
 
 
@@ -92,7 +92,7 @@ def buy_card(run: RunState, index: int) -> None:
     card = reward_card(item.card, run.player.deck)
     run.player.deck.append(card)
     item.sold = True
-    run.history.append(f"You buy {card.name} for {item.price} gold.")
+    run.history.append(f"You buy {card.name} for {item.price} credits.")
 
 
 def buy_artifact(run: RunState, index: int) -> None:
@@ -107,7 +107,7 @@ def buy_artifact(run: RunState, index: int) -> None:
     gain_artifact(run.player, item.artifact)
     item.sold = True
     run.history.append(
-        f"You buy {item.artifact.name} for {item.price} gold: {item.artifact.description}"
+        f"You buy {item.artifact.name} for {item.price} credits: {item.artifact.description}"
     )
 
 
@@ -130,7 +130,7 @@ def remove_card(run: RunState, deck_index: int) -> None:
     card = deck.pop(deck_index)
     shop.removal_used = True
     run.cards_removed += 1
-    run.history.append(f"You pay {shop.removal_price} gold to purge {card.name} from your deck.")
+    run.history.append(f"You pay {shop.removal_price} credits to delete {card.name} from your deck.")
 
 
 def leave_shop(run: RunState) -> None:

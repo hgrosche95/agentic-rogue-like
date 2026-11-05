@@ -68,7 +68,7 @@ function describeKind(
       return {
         label: "Infect",
         amount: range,
-        title: `Hits for ${range} and leaves Malware on you - it costs HP every turn as it fades`,
+        title: `Hits for ${range} and leaves Malware on you - it costs integrity every turn as it fades`,
       };
     case "lock":
       return {
@@ -80,7 +80,7 @@ function describeKind(
       return {
         label: "Corrupt",
         amount: range,
-        title: `Hits for ${range} and shuffles useless Glitch cards into your draw pile`,
+        title: `Hits for ${range} and shuffles useless Glitch cards into your Source`,
       };
     case "interrupt":
       return {
@@ -98,7 +98,7 @@ function describeKind(
       return {
         label: "Garbage Collector",
         amount: range,
-        title: `Hits for ${range} and throws your program's last line away before it runs - it goes to the graveyard unused`,
+        title: `Hits for ${range} and throws your program's last line away before it runs - it goes to the Cache unused`,
       };
     case "race":
       return {
@@ -117,7 +117,7 @@ function describeKind(
 
 // What each status does, for the badges' tooltips - see combat.STATUS_DESCRIPTIONS.
 export const STATUS_TEXT: Record<Status, string> = {
-  malware: "Loses that much HP at the end of each turn, then one stack fades.",
+  malware: "Loses that much integrity at the end of each turn, then one stack fades.",
   exposed: "Attack cards deal 50% more to it. Turns left.",
   throttled: "Deals 25% less. Turns left.",
 };

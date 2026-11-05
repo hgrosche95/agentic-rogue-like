@@ -107,3 +107,43 @@
     display: none;
   }
 }
+
+/* ---------- the hand is where cards are read: more room for the text ---------- */
+/* the rarity shows on the card's edge and gem, so its tag at the foot goes,
+   and the effect text takes that room, a size up */
+.hand .hand-card .card-rarity {
+  display: none;
+}
+
+.hand .hand-card .card-body {
+  padding-bottom: 0.7rem;
+  font-size: 0.95rem;
+  line-height: 1.22;
+}
+
+.hand .hand-card .card-tag ~ .card-body {
+  padding-bottom: 1rem;
+}
+
+.hand .hand-card .card-typeline,
+.hand .hand-card .card-unit {
+  font-size: 11px;
+}
+
+/* the card under the pointer comes up to reading size */
+@media (hover: hover) and (min-width: 901px) {
+  .hand .hand-card {
+    transform-origin: 50% 100%;
+    transition-property: transform, box-shadow, border-color, opacity, translate, scale;
+  }
+  .hand .hand-card:hover:not(:disabled):not(.is-discarding),
+  .hand .hand-card.is-selected {
+    scale: 1.14;
+  }
+}
+
+@media (hover: hover) and (min-width: 901px) and (prefers-reduced-motion: reduce) {
+  .hand .hand-card {
+    transition-property: none;
+  }
+}

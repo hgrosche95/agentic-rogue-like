@@ -27,8 +27,8 @@ export function eventOutcome(before: RunView, after: RunView, option: EventOptio
   const stat = (label: string, delta: number) => {
     if (delta !== 0) changes.push({ label: `${signed(delta)} ${label}`, tone: delta > 0 ? "gain" : "loss" });
   };
-  stat("HP", now.hp - was.hp);
-  stat("max HP", now.max_hp - was.max_hp);
+  stat("integrity", now.hp - was.hp);
+  stat("max integrity", now.max_hp - was.max_hp);
   stat("ATK", now.attack - was.attack);
   stat("credits", now.gold - was.gold);
   // cards: what came in and what went, by name

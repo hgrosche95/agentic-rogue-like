@@ -66,8 +66,8 @@ FORGE_MAX_HP_COST = 6
 
 _SCALING_TEXT = {
     Scaling.PERMANENT: "per permanent card on the field",
-    Scaling.GRAVEYARD: "per card in your graveyard",
-    Scaling.BANISHED: "per banished card",
+    Scaling.GRAVEYARD: "per card in your Cache",
+    Scaling.BANISHED: "per purged card",
     Scaling.PLAYED: "per card you already played this turn",
     Scaling.EMPTY_SLOT: "per empty field slot",
     Scaling.MALWARE: "per Malware on the enemy",
@@ -217,7 +217,7 @@ def fallback_card(style: PlayStyle, program_mode: bool) -> Card:
 def forged_deal(card: Card, style: PlayStyle, rng: random.Random) -> AgiDeal:
     """The deal around a forged card: the card, and a price."""
     if rng.random() < 0.5:
-        price, max_hp, glitch = f"{FORGE_MAX_HP_COST} max HP", -FORGE_MAX_HP_COST, False
+        price, max_hp, glitch = f"{FORGE_MAX_HP_COST} max integrity", -FORGE_MAX_HP_COST, False
     else:
         price, max_hp, glitch = "a Glitch hidden in your deck", 0, True
     return AgiDeal(

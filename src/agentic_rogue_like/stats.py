@@ -14,6 +14,7 @@ from __future__ import annotations
 import time
 
 from .combat import CombatState, offer_combo
+from .enemies import FINAL_BOSS_ID
 from .models import Card, CardType, Combo, KillingBlow, MapNode, NodeType, RunState, RunStatus
 
 
@@ -94,6 +95,12 @@ def record_fight(run: RunState, state: CombatState, node: MapNode, victory: bool
         stats.bosses_defeated += node.type is NodeType.BOSS
     else:
         move = tally.killed_by or state.enemy.attack_name
-        stats.killed_by = KillingBlow(enemy=state.enemy.name, move=move)
+        stats.killed_by = KillingBlow(
+            enemy=state.enemy.name,
+            move=move,
+            enemy_max_hp=state.enemy.hp,
+            enemy_attack=state.enemy.attack,
+            final_boss=state.enemy.id == FINAL_BOSS_ID,
+        )
     if run.status is not RunStatus.ONGOING:
         stats.ended_at = time.time()

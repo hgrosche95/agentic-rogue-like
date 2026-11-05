@@ -204,7 +204,7 @@ def test_purge_banishes_the_chosen_hand_card_then_draws() -> None:
     assert [c.name for c in state.banished_pile] == ["Filler 2", "Purge"]
     assert [c.name for c in state.hand[:2]] == ["Filler 1", "Filler 3"]
     assert len(state.hand) == 4  # two kept, two drawn
-    assert "You banish Filler 2" in line
+    assert "You purge Filler 2" in line
 
 
 def test_purge_feeds_garbage_collect() -> None:

@@ -78,7 +78,7 @@ def test_a_gamble_is_valued_by_its_chance() -> None:
         label="Bet", effects=[_e("gold", 60)], chance=0.75, fail_effects=[_e("hp", -10)]
     )
     assert option_value(gamble) == pytest.approx(0.75 * 60 - 0.25 * 10 * GOLD_PER_HP)
-    assert describe_option(gamble) == "75%: +60 gold - otherwise: -10 HP"
+    assert describe_option(gamble) == "75%: +60 credits - otherwise: -10 integrity"
 
 
 def test_applying_effects() -> None:

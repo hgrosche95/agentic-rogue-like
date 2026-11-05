@@ -30,14 +30,14 @@ export function ProgramOutput({ combat, playerHp }: { combat: PendingCombatView;
       title="What the program will have done by the time the enemy acts - cards it draws left out"
     >
       <span className={after.enemy_hp <= 0 ? "is-lethal" : undefined}>
-        Enemy {after.enemy_hp <= 0 ? "down" : `${after.enemy_hp} HP`}
+        Enemy {after.enemy_hp <= 0 ? "down" : `${after.enemy_hp} integrity`}
         {after.enemy_block > 0 && after.enemy_hp > 0 && ` · ${after.enemy_block} block`}
         {dealt > 0 && <em> (−{dealt})</em>}
       </span>
       {(after.player_block > combat.player_block || after.player_hp !== playerHp) && (
         <span className={after.player_hp < playerHp ? "is-hurt" : undefined}>
           You
-          {after.player_hp !== playerHp && ` ${after.player_hp} HP`}
+          {after.player_hp !== playerHp && ` ${after.player_hp} integrity`}
           {after.player_block > combat.player_block && ` · ${after.player_block} block`}
         </span>
       )}
@@ -88,7 +88,7 @@ function PipelineResult({ combat, live }: { combat: PendingCombatView; live: { d
             ? "nothing queued"
             : lethal
               ? "clean exit"
-              : `${left} HP left`}
+              : `${left} integrity left`}
       </span>
       {!live && combos.length > 0 && <span className="pipeline-combos">★ {combos.join(" · ")}</span>}
     </div>
@@ -135,7 +135,7 @@ function lineChip(card: Card, step: ProgramStep | undefined, next: ProgramStep |
   }
   if (step.dealt > 0) return { text: step.runs > 1 ? `${step.runs}× = ${step.dealt}` : `${step.dealt}`, tone: "damage" };
   if (step.block > 0) return { text: `+${step.block}`, tone: "block" };
-  if (step.heal > 0) return { text: `+${step.heal} HP`, tone: "heal" };
+  if (step.heal > 0) return { text: `+${step.heal} integrity`, tone: "heal" };
   return null;
 }
 
@@ -223,7 +223,7 @@ export function TakeBack({
   uninstall?: boolean;
 }) {
   const label = uninstall
-    ? `Uninstall ${name} - it is banished for the rest of the fight`
+    ? `Uninstall ${name} - it is purged for the rest of the fight`
     : `Take ${name} back into your hand`;
   return (
     <button

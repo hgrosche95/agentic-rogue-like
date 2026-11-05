@@ -9,6 +9,6 @@ export const NODE_STYLE: Record<NodeType, { symbol: string; label: string; blurb
   elite: { symbol: "E", label: "Elite", blurb: "A hardened construct. Tougher fight - beat it for an artifact." },
   event: { symbol: "?", label: "Anomaly", blurb: "Something odd in this layer. Choose how to react." },
   shop: { symbol: "$", label: "Black market", blurb: "Trade credits for an edge." },
-  rest: { symbol: "R", label: "Safehouse", blurb: "Patch yourself up, rework a card, or strip one out." },
+  rest: { symbol: "R", label: "Safehouse", blurb: "Patch yourself up, rework a card, or delete one." },
   boss: { symbol: "B", label: "Core AI", blurb: "The AGI itself, waiting at the bottom of its code." },
 };

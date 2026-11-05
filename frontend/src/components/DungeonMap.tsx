@@ -166,7 +166,7 @@ function roomPreview(
     case "shop":
       return { title: style.label, line: "Cards and artifacts for credits, one card removal.", distance };
     case "rest":
-      return { title: style.label, line: "Heal, upgrade a card or strip one out.", distance };
+      return { title: style.label, line: "Heal, upgrade a card or delete one.", distance };
     default:
       return { title: style.label, line: "Something odd - a choice with a price.", distance };
   }

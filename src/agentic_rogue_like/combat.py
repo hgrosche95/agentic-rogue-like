@@ -111,8 +111,8 @@ THORNY_DAMAGE = 2  # HP every attack card played against it costs the player
 AFFIX_DESCRIPTIONS = {
     Affix.ARMORED: "Raises block after every one of its turns.",
     Affix.REGENERATING: "Heals after every one of its turns.",
-    Affix.ENRAGED: "Hits 50% harder once below half HP.",
-    Affix.THORNY: f"Every attack card you play against it costs you {THORNY_DAMAGE} HP.",
+    Affix.ENRAGED: "Hits 50% harder once below half integrity.",
+    Affix.THORNY: f"Every attack card you play against it costs you {THORNY_DAMAGE} integrity.",
 }
 # HP percentage at or below which a boss enters each phase past the first.
 PHASE_HP_PERCENT = {2: 50, 3: 25}
@@ -196,8 +196,8 @@ LAW_ARMOR = 3
 ONE_SHOT_TAX = 4
 LAW_TEXT: dict[Law, str] = {
     Law.DELETE_PERMANENT: "At the end of every turn your rightmost permanent is deleted.",
-    Law.COLLECT_GRAVEYARD: "At the end of every turn your graveyard goes back into your draw pile.",
-    Law.ONE_SHOT_TAX: f"One-shot cards cost {ONE_SHOT_TAX} HP to play.",
+    Law.COLLECT_GRAVEYARD: "At the end of every turn your Cache goes back into your Source.",
+    Law.ONE_SHOT_TAX: f"One-shot cards cost {ONE_SHOT_TAX} integrity to play.",
     Law.ARMOR: f"Every hit on OMEGA deals {LAW_ARMOR} less damage.",
     Law.PIERCE: "Its attacks go through half of your block.",
     Law.MALWARE_HALVED: "Malware only does half its damage to it.",
@@ -249,7 +249,7 @@ CLEAN_RUN_DAMAGE = 5
 EXPOSED_FACTOR = 1.5  # attack cards against an exposed enemy
 THROTTLED_FACTOR = 0.75  # a throttled enemy's attack
 STATUS_DESCRIPTIONS = {
-    Status.MALWARE: "Loses that much HP at the end of each turn, then one stack fades.",
+    Status.MALWARE: "Loses that much integrity at the end of each turn, then one stack fades.",
     Status.EXPOSED: "Attack cards deal 50% more to it. Lasts that many of its turns.",
     Status.THROTTLED: "Deals 25% less. Lasts that many of its turns.",
 }
@@ -777,7 +777,7 @@ def start_combat(
         state.program, state.program_glitched = [None] * lines, [False] * lines
     _roll_next_intent(state, rng)
     _draw(state, HAND_SIZE + total(artifacts, "opening_hand"), rng)
-    log = [f"A {enemy.name} appears! ({enemy.hp} HP)"]
+    log = [f"A {enemy.name} appears! ({enemy.hp} integrity)"]
     if enemy.taunt:
         log.append(enemy.taunt)
     if enemy.description:
@@ -788,7 +788,7 @@ def start_combat(
         later = " and again at a quarter" if boss_phases >= 3 else ""
         log.append(
             f"{enemy.name} is a boss: it barrages, charges up crushing blows, "
-            f"and grows stronger at half HP{later}."
+            f"and grows stronger at half integrity{later}."
         )
     if opening := total(artifacts, "opening_damage"):
         _, dealt = _damage_enemy(state, opening)
@@ -886,7 +886,7 @@ def play_card(
             line += " " + _afflict(state, card.applies, card.applies_amount)
 
         if card.exhaust:
-            line += " It's used up and banished for the rest of the fight."
+            line += " It's used up and purged for the rest of the fight."
             line += _banish(state, [card], rng)
         else:
             state.discard_pile.append(card)
@@ -947,7 +947,7 @@ def take_back(state: CombatState, zone: str, index: int, rng: random.Random | No
         else:
             state.field[index] = None
         if card.id not in state.fresh_permanents:
-            line = f"You uninstall {card.name} - it is banished for the rest of the fight."
+            line = f"You uninstall {card.name} - it is purged for the rest of the fight."
             return line + _banish(state, [card], rng or random.Random())
         state.fresh_permanents.remove(card.id)
     else:
@@ -978,7 +978,7 @@ def _banish(state: CombatState, cards: list[Card], rng: random.Random) -> str:
             _, dealt = _damage_enemy(state, card.banish_damage)
             parts.append(
                 f"{card.name} goes off for {dealt} damage. "
-                f"{state.enemy.name} at {state.enemy_hp} HP."
+                f"{state.enemy.name} at {state.enemy_hp} integrity."
             )
     if (malware := total(state.artifacts, "banish_malware") * len(counted)) and state.enemy_hp > 0:
         parts.append("Logic Bomb: " + _afflict(state, Status.MALWARE, malware))
@@ -1139,7 +1139,7 @@ def run_program(
                 log.append(line + f"{run.name}: the next action runs {1 + forks} times.")
             elif run.type is CardType.IF_WOUNDED:
                 forks += run.value if _wounded(state) else 0
-                state_line = "at half HP or less" if _wounded(state) else "still above half HP"
+                state_line = "at half integrity or less" if _wounded(state) else "still above half integrity"
                 log.append(line + f"{run.name}: the enemy is {state_line}.")
             elif run.type is CardType.GUARD:
                 guarded = state.player_block >= GUARD_BLOCK
@@ -1445,7 +1445,7 @@ def _hallucinate(state: CombatState, card: Card, slot_index: int, player: Player
         taken = _damage_taken(hits, state.player_block, 0)
         state.player_block = max(0, state.player_block - sum(hits))
         _hurt(state, player, taken, f"{card.name} (hallucinated)")
-        return f"{lead} and hits you for {taken} damage. You are at {player.hp} HP."
+        return f"{lead} and hits you for {taken} damage. You are at {player.hp} integrity."
     if card.type is CardType.BLOCK:
         amount = block_amount(state, card, multiplier, bonus)
         state.enemy_block += amount
@@ -1454,7 +1454,7 @@ def _hallucinate(state: CombatState, card: Card, slot_index: int, player: Player
         amount = round((card.value + total(state.artifacts, "heal_bonus") + bonus) * multiplier)
         healed = min(amount, state.enemy.hp - state.enemy_hp)
         state.enemy_hp += healed
-        return f"{lead}: {state.enemy.name} heals {healed} HP."
+        return f"{lead}: {state.enemy.name} heals {healed} integrity."
     return f"{lead} and does nothing."
 
 
@@ -1502,9 +1502,9 @@ def _banish_choice(state: CombatState, hand_index: int, banish: list[int] | None
     if banish is None:
         banish = banish_candidates(state, hand_index)[:count]
     if len(set(banish)) != len(banish) or len(banish) != count:
-        raise ValueError(f"pick exactly {count} card(s) to banish")
+        raise ValueError(f"pick exactly {count} card(s) to purge")
     if any(not 0 <= i < len(state.hand) or i == hand_index for i in banish):
-        raise ValueError("banish index is out of range")
+        raise ValueError("purge index is out of range")
     return [state.hand[i] for i in sorted(banish)]
 
 
@@ -1515,7 +1515,7 @@ def _pay_banish(state: CombatState, cards: list[Card], rng: random.Random) -> st
         # by identity - two copies of a card compare equal
         state.hand.pop(next(i for i, h in enumerate(state.hand) if h is c))
     reacted = _banish(state, cards, rng)
-    return f"You banish {_names(cards)} for the rest of the fight.{reacted} "
+    return f"You purge {_names(cards)} for the rest of the fight.{reacted} "
 
 
 def queues(state: CombatState, card: Card) -> bool:
@@ -1747,19 +1747,19 @@ def _apply_action_effect(
         what = f"{hits}x {damage} damage" if hits > 1 else f"{damage} damage"
         leech = ""
         if healed := heal(player, total(state.artifacts, "lifesteal")):
-            leech = f" You leech {healed} HP."
+            leech = f" You leech {healed} integrity."
         if state.enemy.affix is Affix.THORNY:
             _hurt(state, player, THORNY_DAMAGE, "Thorns")
-            leech += f" Its thorns cost you {THORNY_DAMAGE} HP."
+            leech += f" Its thorns cost you {THORNY_DAMAGE} integrity."
         if absorbed > 0:
             return (
                 f"You play {card.name}, dealing {what} - {state.enemy.name}'s "
                 f"block absorbs {absorbed}, {dealt} gets through. {state.enemy.name} at "
-                f"{state.enemy_hp} HP.{leech}"
+                f"{state.enemy_hp} integrity.{leech}"
             )
         return (
             f"You play {card.name}, dealing {what}. {state.enemy.name} at "
-            f"{state.enemy_hp} HP.{leech}"
+            f"{state.enemy_hp} integrity.{leech}"
         )
 
     if card.type is CardType.DRAW:
@@ -1769,7 +1769,7 @@ def _apply_action_effect(
     if card.type is CardType.RETRIEVE:
         returned = _take_recent(state.discard_pile, card.value)
         state.hand.extend(returned)
-        return f"You play {card.name}, pulling {_names(returned)} back from the graveyard."
+        return f"You play {card.name}, pulling {_names(returned)} back from the Cache."
 
     if card.type is CardType.RESTORE:
         # Restore cards never restore each other - two of them could
@@ -1779,7 +1779,7 @@ def _apply_action_effect(
         for c in returned:
             state.banished_pile.remove(c)
         state.hand.extend(returned)
-        return f"You play {card.name}, restoring {_names(returned)} from the banished pile."
+        return f"You play {card.name}, restoring {_names(returned)} from Purged."
 
     if card.type is CardType.REBOOT:
         # Only what was banished *before* this card counts: the permanents it
@@ -1795,7 +1795,7 @@ def _apply_action_effect(
         state.hand.extend(returning)
         return (
             f"You play {card.name}, wiping {len(destroyed)} permanent card(s) and "
-            f"restoring {_names(returning)} from the banished pile."
+            f"restoring {_names(returning)} from Purged."
             + _banish(state, destroyed, rng)
         )
 
@@ -1822,7 +1822,7 @@ def _apply_action_effect(
     if card.type is CardType.HEAL:
         amount = round((card.value + total(state.artifacts, "heal_bonus") + bonus) * multiplier)
         healed = heal(player, amount)
-        return f"You play {card.name}, healing {healed} HP."
+        return f"You play {card.name}, healing {healed} integrity."
 
     # FINAL_STRIKE
     destroyed = [c for c in state.field if c is not None]
@@ -1831,7 +1831,7 @@ def _apply_action_effect(
     absorbed, dealt = _damage_enemy(state, damage)
     return (
         f"You play {card.name}, destroying {len(destroyed)} permanent card(s) for "
-        f"{damage} damage. {state.enemy.name} at {state.enemy_hp} HP."
+        f"{damage} damage. {state.enemy.name} at {state.enemy_hp} integrity."
         + _banish(state, destroyed, rng)
     )
 
@@ -1877,7 +1877,7 @@ def end_turn(
         log.append(
             f"Your daemons hit {state.enemy.name} for {dealt} damage"
             + (f" ({absorbed} blocked)" if absorbed else "")
-            + f". {state.enemy.name} at {state.enemy_hp} HP."
+            + f". {state.enemy.name} at {state.enemy_hp} integrity."
         )
         if state.enemy_hp <= 0:
             return log
@@ -1920,19 +1920,19 @@ def end_turn(
             armor_note = f" (includes {armor} armor)" if armor else ""
             log.append(
                 f"{state.enemy.name} uses {attack_name}. You block "
-                f"{blocked}{armor_note} and take {taken} damage. You are at {player.hp} HP."
+                f"{blocked}{armor_note} and take {taken} damage. You are at {player.hp} integrity."
             )
         else:
             log.append(
                 f"{state.enemy.name} uses {attack_name} for {taken} damage. "
-                f"You are at {player.hp} HP."
+                f"You are at {player.hp} integrity."
             )
 
         if thorns := total(state.artifacts, "thorns"):
             _, dealt = _damage_enemy(state, thorns)
             log.append(
                 f"The attack backfires: {state.enemy.name} takes {dealt} damage. "
-                f"{state.enemy.name} at {state.enemy_hp} HP."
+                f"{state.enemy.name} at {state.enemy_hp} integrity."
             )
             if state.enemy_hp <= 0:
                 return log
@@ -1973,11 +1973,11 @@ def _omega_toll(state: CombatState, card: Card, player: PlayerState) -> str:
     line = ""
     if card.exhaust and active_law(state) is Law.ONE_SHOT_TAX:
         _hurt(state, player, ONE_SHOT_TAX, "OMEGA's tax")
-        line += f"OMEGA's law takes {ONE_SHOT_TAX} HP for the one-shot. "
+        line += f"OMEGA's law takes {ONE_SHOT_TAX} integrity for the one-shot. "
     if state.trap_cost and card.id.startswith("agi-"):
         _hurt(state, player, state.trap_cost, card.name)
         line += (
-            f'OMEGA: "I built {card.name}. I know its flaw." It costs you {state.trap_cost} HP. '
+            f'OMEGA: "I built {card.name}. I know its flaw." It costs you {state.trap_cost} integrity. '
         )
     return line
 
@@ -2000,7 +2000,7 @@ def _laws_after_turn(state: CombatState, rng: random.Random) -> list[str]:
         state.draw_pile += state.discard_pile
         state.discard_pile = []
         rng.shuffle(state.draw_pile)
-        return [f"OMEGA garbage-collects your graveyard: {count} card(s) back into the draw pile."]
+        return [f"OMEGA garbage-collects your Cache: {count} card(s) back into the Source."]
     return []
 
 
@@ -2014,7 +2014,7 @@ def _affix_after_turn(state: CombatState) -> list[str]:
     if affix is Affix.REGENERATING and state.enemy_hp < state.enemy.hp:
         before = state.enemy_hp
         state.enemy_hp = min(state.enemy.hp, before + round(state.enemy.attack * REGEN_FACTOR))
-        return [f"{name} regenerates {state.enemy_hp - before} HP. {name} at {state.enemy_hp} HP."]
+        return [f"{name} regenerates {state.enemy_hp - before} integrity. {name} at {state.enemy_hp} integrity."]
     return []
 
 
@@ -2032,12 +2032,12 @@ def _tick_statuses(state: CombatState, player: PlayerState) -> list[str]:
     if stacks := state.enemy_status.get(Status.MALWARE, 0):
         bite = stacks // 2 if active_law(state) is Law.MALWARE_HALVED else stacks
         lost = _lose_hp(state, bite)
-        log.append(f"Malware eats {lost} HP off {name}. {name} at {state.enemy_hp} HP.")
+        log.append(f"Malware eats {lost} integrity off {name}. {name} at {state.enemy_hp} integrity.")
         if line := _check_boss_phase(state):
             log.append(line.strip())
     if stacks := state.player_status.get(Status.MALWARE, 0):
         _hurt(state, player, stacks, "Malware")
-        log.append(f"Malware eats {stacks} of your HP. You are at {player.hp} HP.")
+        log.append(f"Malware eats {stacks} of your integrity. You are at {player.hp} integrity.")
     for statuses in (state.enemy_status, state.player_status):
         for status in list(statuses):
             statuses[status] -= 1
@@ -2118,7 +2118,7 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
     }[intent]
     rolled = " + ".join(str(h) for h in hits)
     log.append(
-        f"{name} {uses}{move} ({rolled}). You take {taken} damage. You are at {player.hp} HP."
+        f"{name} {uses}{move} ({rolled}). You take {taken} damage. You are at {player.hp} integrity."
     )
     if intent is EnemyIntentType.LOCK:
         # A program locks one of its lines - they are all empty by now.
@@ -2142,7 +2142,7 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
         glitches = [_glitch(state, i) for i in range(stacks)]
         for glitch in glitches:
             state.draw_pile.insert(rng.randrange(len(state.draw_pile) + 1), glitch)
-        log.append(f"{len(glitches)} Glitch card(s) seep into your draw pile.")
+        log.append(f"{len(glitches)} Glitch card(s) seep into your Source.")
     if intent is EnemyIntentType.INFECT:
         stacks = current_move(state).stacks if current_move(state) else DEFAULT_INFECT_STACKS
         state.player_status[Status.MALWARE] = state.player_status.get(Status.MALWARE, 0) + stacks
@@ -2153,7 +2153,7 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
     if thorns := total(state.artifacts, "thorns"):
         _, dealt = _damage_enemy(state, thorns)
         log.append(
-            f"The attack backfires: {name} takes {dealt} damage. {name} at {state.enemy_hp} HP."
+            f"The attack backfires: {name} takes {dealt} damage. {name} at {state.enemy_hp} integrity."
         )
     return log
 
