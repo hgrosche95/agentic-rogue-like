@@ -37,7 +37,13 @@ export function AgiPanel({
       {ranked.length > 0 && (
         <ul className="agi-counts">
           {ranked.map(([s, n]) => (
-            <li key={s} className={s === style ? "is-lead" : ""}>
+            <li
+              key={s}
+              className={s === style ? "is-lead" : ""}
+              tabIndex={0}
+              data-tip-term={LABEL[s]}
+              data-tip={`${n} of the cards you picked play this way. Once one way clearly leads, the AGI sends enemies that answer it.`}
+            >
               {LABEL[s]} <b>{n}</b>
             </li>
           ))}

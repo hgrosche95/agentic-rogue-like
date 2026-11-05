@@ -69,6 +69,7 @@ import { ScreenWipe } from "./components/ScreenWipe";
 import { CloseButton, Overlay } from "./components/Overlay";
 import { OverlayStage } from "./components/OverlayStage";
 import { RUN_ID_KEY } from "./errors";
+import { hasSeenTutorial } from "./tutorial";
 import { layerLabel, numFloorsOf } from "./layers";
 import { ProgramModeContext } from "./program";
 import { RestScreen } from "./components/RestScreen";
@@ -133,8 +134,9 @@ function App() {
   const [selectedSetting, setSelectedSetting] = useState(FALLBACK_SETTINGS[0]);
   const [characters, setCharacters] = useState<CharacterView[]>(FALLBACK_CHARACTERS);
   const [selectedCharacter, setSelectedCharacter] = useState<Character>("chronos");
-  // program mode is the game's own idea - it starts selected
-  const [programMode, setProgramMode] = useState(true);
+  // program mode is the game's own idea - it starts selected once a first
+  // fight has been played; a newcomer starts on the plainer classic table
+  const [programMode, setProgramMode] = useState(() => hasSeenTutorial("classic") || hasSeenTutorial("program"));
   const [isMapOpen, setIsMapOpen] = useState(false);
   // Hovering a room on the map previews it in the next-jump panel.
   const [focusedJump, setFocusedJump] = useState<string | null>(null);

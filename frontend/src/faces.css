@@ -26,12 +26,12 @@
 }
 
 .log-prompt {
-  color: #3d7a5f;
+  color: #56a37f;
 }
 
 .history-log .link-button {
-  color: #3d7a5f;
-  border-color: #3d7a5f;
+  color: #56a37f;
+  border-color: #56a37f;
 }
 
 .history-log-lines {
@@ -70,7 +70,7 @@
 .history-log .log-index {
   font-family: inherit;
   font-size: inherit;
-  color: #3d7a5f;
+  color: #56a37f;
 }
 
 /* ---------- the AGI analysis: a surveillance feed ---------- */

@@ -135,3 +135,25 @@
     padding: 0.6rem 0.9rem;
   }
 }
+
+/* on a touchscreen, small controls catch a finger-sized area around them
+   without growing on screen */
+@media (pointer: coarse) {
+  .help-btn,
+  .link-button,
+  .artifact-bar .artifact-chip {
+    position: relative;
+  }
+  .help-btn::before,
+  .link-button::before,
+  .artifact-bar .artifact-chip::before {
+    content: "";
+    position: absolute;
+    inset: -12px;
+  }
+  .start-screen button,
+  .reward-skip,
+  .shop-screen button {
+    min-height: 44px;
+  }
+}

@@ -43,6 +43,10 @@ const CLASSIC_RULES: [string, string][] = [
 const SHARED_RULES: [string, string][] = [
   ["Hand", "Unplayed cards stay in your hand, up to its limit - over it, you discard when ending the turn."],
   [
+    "Keys",
+    "1-9 picks a card (the number on its top edge), then 1-9 the slot for it. Space or Enter ends the turn, Esc lets go of a picked card, D opens your deck. Program mode: B puts a picked permanent on the background bus.",
+  ],
+  [
     "Context",
     "Vibe-Coder only: cards cost tokens. Past the window they may hallucinate and backfire - a red outline marks a queued one that will.",
   ],

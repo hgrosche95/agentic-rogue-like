@@ -192,8 +192,14 @@ export function CombatMonitor({
     }
   });
 
+  // the newest line of the fight itself, told to a screen reader
+  const latest = [...merged].reverse().find((line) => !line.isCommand)?.text ?? "";
+
   return (
     <div className="arena-monitor">
+      <p className="sr-only" aria-live="polite">
+        {latest}
+      </p>
       <div className="monitor-title">
         <span>Combat log</span>
         <i aria-hidden="true" />

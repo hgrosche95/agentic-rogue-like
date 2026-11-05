@@ -1485,3 +1485,85 @@ button.is-busy:disabled {
 .summary-tiles {
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
+
+/* the log's oldest line runs out under the screen's top edge instead of
+   being cut through the middle of its letters */
+.arena-monitor .monitor-lines {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 1.6em);
+}
+
+/* the black market's way out stays in reach while the wares scroll - the
+   screen clips (not hides) its overflow, so the window stays the scroller */
+.reward-screen.shop-screen {
+  overflow: clip;
+}
+
+/* a band of the window's own ground behind it, edge to edge, so the wares
+   scroll away under it instead of showing through */
+.shop-screen > .reward-skip {
+  position: sticky;
+  bottom: 12px;
+  z-index: 3;
+  box-shadow: 0 0 0 100vmax var(--panel-solid);
+  clip-path: inset(-16px -100vmax -12px -100vmax);
+}
+
+/* ---------- small type that carries real information, a size up ---------- */
+.agi-panel p.muted {
+  font-size: 14px;
+}
+
+.agi-panel .agi-counts {
+  font-size: 12.5px;
+}
+
+.agi-panel .agi-counts li {
+  cursor: help;
+}
+
+.jump-options em {
+  font-size: 13px;
+}
+
+/* every card shows keyboard focus like every other control - a rare one's
+   and a shop card's too, whose own rules drop the outline */
+.hand-card.hand-card:focus-visible {
+  outline: 2px solid #34e7ff;
+  outline-offset: 3px;
+}
+
+/* ---------- program mode on a short laptop screen (768px high) ----------
+   The rail is taller than the classic stack: the scene steps down to its 2x
+   size, the lines get shorter, and the HUD plates sit in the wide screen's
+   corners instead of beside a scene that is no longer edge to edge. */
+@media (max-height: 820px) and (min-width: 1200px) {
+  .combat-panel.is-program {
+    --arena-w: min(100%, 480px);
+  }
+  .combat-panel.is-program .pipeline .program-lines .program-line {
+    max-width: 92px;
+  }
+  .combat-panel.is-program .field-zone {
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+  .combat-panel.is-program .arena-wrap > .vs-hud.is-player {
+    left: 12px;
+    right: auto;
+  }
+  .combat-panel.is-program .arena-wrap > .vs-hud.is-enemy {
+    left: auto;
+    right: 12px;
+  }
+  .combat-panel.is-program .arena-wrap > .vs-hud {
+    width: min(300px, calc((100% - var(--arena-w)) / 2 - 28px));
+  }
+}
+
+/* ... and on a 900px-high screen the hint line under the hand stayed just
+   below the fold: the scene gives up those pixels */
+@media (min-width: 1200px) and (min-height: 820px) {
+  .combat-panel.is-program {
+    --stage-h: min(calc(100vw / 2.4), 54vh, calc(100vh - 595px));
+  }
+}

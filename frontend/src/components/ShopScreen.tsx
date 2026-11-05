@@ -76,7 +76,7 @@ export function ShopScreen({
       ? `Your deck can't get smaller than ${shop.min_deck_size} cards.`
       : gold < shop.removal_price
         ? "Not enough credits."
-        : "Remove one card from your deck for good. Every purge costs more.";
+        : "Remove one card from your deck for good. Every deletion costs more.";
 
   useEffect(() => {
     sfx.play("reward_open");
