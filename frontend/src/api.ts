@@ -451,7 +451,14 @@ export interface RunSummary {
   credits_spent: number;
   artifacts_collected: number;
   // a defeat: the enemy, and the move (or Malware, Thorns, ...) that took the last HP
-  killed_by: { enemy: string; move: string } | null;
+  killed_by: {
+    enemy: string;
+    move: string;
+    // to draw it as it was in the fight (0 for a run from before)
+    enemy_max_hp: number;
+    enemy_attack: number;
+    final_boss: boolean;
+  } | null;
 }
 
 // Runs only live in the API's memory (sessions.py): a restart or an idle

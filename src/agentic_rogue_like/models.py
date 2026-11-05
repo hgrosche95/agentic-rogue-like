@@ -515,6 +515,10 @@ class Combo(BaseModel):
 class KillingBlow(BaseModel):
     enemy: str
     move: str
+    # what the end screen needs to draw the enemy as it looked in the fight
+    enemy_max_hp: int = 0
+    enemy_attack: int = 0
+    final_boss: bool = False
 
 
 class RunStats(BaseModel):

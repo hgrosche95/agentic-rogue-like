@@ -1,9 +1,11 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { RunSummary, RunView } from "../api";
 import { sfx } from "../audio";
 import { HERO } from "../characters";
 import { stackDeck } from "../deck";
 import { layerLabel, numFloorsOf } from "../layers";
+import { enemySprite } from "../pixel/enemySprite";
+import { COLORS } from "../pixel/palette";
 import { ArtifactIcon } from "./ArtifactIcon";
 import { CardFace } from "./CardFace";
 import { NodeBadge } from "./DungeonMap";
@@ -55,6 +57,66 @@ interface Tile {
   tone?: "good" | "bad" | "gold";
 }
 
+// The enemy that ended the run, as it stood in the fight: its sprite drawn
+// crisp at a whole-number scale, a few rows knocked sideways like a frame
+// that froze mid-glitch.
+function KillerSprite({ name, maxHp, attack, setting, finalBoss }: {
+  name: string;
+  maxHp: number;
+  attack: number;
+  setting: string;
+  finalBoss: boolean;
+}) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const sprite = useMemo(
+    () => enemySprite({ name, maxHp, attack, setting, finalBoss }),
+    [name, maxHp, attack, setting, finalBoss],
+  );
+  useEffect(() => {
+    const ctx = ref.current?.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, sprite.w, sprite.h - sprite.top);
+    // its empty rows above the head are cut, so it sits in the frame's middle
+    for (let y = sprite.top; y < sprite.h; y++) {
+      // three thin bands of the frame slip, as the connection drops
+      const slip = y % 23 === 7 ? 2 : y % 31 === 19 ? -3 : 0;
+      for (let x = 0; x < sprite.w; x++) {
+        const p = sprite.pixels[y * sprite.w + x];
+        if (!p) continue;
+        ctx.fillStyle = COLORS[p - 1];
+        ctx.fillRect(x + slip, y - sprite.top, 1, 1);
+      }
+    }
+  }, [sprite]);
+  return (
+    <canvas
+      ref={ref}
+      className="summary-killer-sprite"
+      width={sprite.w}
+      height={sprite.h - sprite.top}
+      style={{ "--w": sprite.w, "--h": sprite.h - sprite.top } as CSSProperties}
+      aria-hidden="true"
+    />
+  );
+}
+
+// How deep the run got: one segment per layer of the act, lit up to where
+// it ended.
+function DepthBar({ floor, numFloors, act, numActs }: { floor: number; numFloors: number; act: number; numActs: number }) {
+  return (
+    <div className="summary-depth" aria-label={`Act ${act} of ${numActs}, layer ${floor + 1} of ${numFloors}`}>
+      <span className="summary-depth-label">
+        Act {act}/{numActs} · layer <b>{floor + 1}</b>/{numFloors}
+      </span>
+      <span className="summary-depth-bar" aria-hidden="true">
+        {Array.from({ length: numFloors }, (_, i) => (
+          <i key={i} className={i < floor ? "is-done" : i === floor ? "is-here" : undefined} />
+        ))}
+      </span>
+    </div>
+  );
+}
+
 function tilesOf(summary: RunSummary): Tile[] {
   const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   return [
@@ -89,30 +151,48 @@ export function EndScreen({ run, onRestart }: { run: RunView; onRestart: () => v
     sfx.play(won ? "victory" : "defeat");
   }, [won]);
   const summary = run.summary;
-  const tiles = summary ? tilesOf(summary) : [];
+  // a stat that stayed at 0 says nothing - only the fights won always shows
+  const tiles = summary ? tilesOf(summary).filter((tile, i) => i === 0 || tile.value > 0) : [];
+  const killer = !won ? (summary?.killed_by ?? null) : null;
+  const numFloors = numFloorsOf(run.nodes);
   const elapsed = useElapsed(COUNT_MS + STAGGER_MS * tiles.length);
-  const layer = layerLabel(run.floor, numFloorsOf(run.nodes), run.act);
   const deck = stackDeck(run.player.deck);
   // the rooms of this act entered, in the order of the layers
   const path = Object.values(run.nodes)
     .filter((node) => node.visited || node.id === run.current_node.id)
     .sort((a, b) => a.floor - b.floor);
   const combo = summary?.best_combo ?? null;
-  const highlights = summary !== null && (summary.killed_by !== null || combo !== null || summary.mvp_card !== null);
+  const highlights = summary !== null && (combo !== null || summary.mvp_card !== null);
 
   return (
     <div className={`end-screen run-summary ${won ? "is-won" : "is-lost"}`}>
-      <header className="summary-head">
-        <span className="summary-kicker">{won ? "Run complete" : "Connection lost"}</span>
-        <h2>{won ? "Victory" : "You have fallen"}</h2>
-        <ul className="summary-meta">
-          <li>
-            Act {run.act}/{run.num_acts} · <b>{layer}</b>
-          </li>
-          <li>{HERO[run.player.character].name}</li>
-          <li>{run.program_mode ? "Program mode" : "Classic mode"}</li>
-          {summary?.duration_seconds != null && <li>{formatDuration(summary.duration_seconds)}</li>}
-        </ul>
+      <header className={`summary-head${killer ? " has-killer" : ""}`}>
+        {killer && (
+          <div className="summary-killer-frame">
+            <KillerSprite
+              name={killer.enemy}
+              maxHp={killer.enemy_max_hp}
+              attack={killer.enemy_attack}
+              setting={run.setting}
+              finalBoss={killer.final_boss}
+            />
+          </div>
+        )}
+        <div className="summary-head-text">
+          <h2>{won ? "Victory" : "You have fallen"}</h2>
+          {killer && (
+            <p className="summary-dump">
+              <span>&gt; process terminated by <b>{killer.enemy}</b></span>
+              <span>&gt; last signal: {killer.move}</span>
+            </p>
+          )}
+          <DepthBar floor={run.floor} numFloors={numFloors} act={run.act} numActs={run.num_acts} />
+          <ul className="summary-meta">
+            <li>{HERO[run.player.character].name}</li>
+            <li>{run.program_mode ? "Program mode" : "Classic mode"}</li>
+            {summary?.duration_seconds != null && <li>{formatDuration(summary.duration_seconds)}</li>}
+          </ul>
+        </div>
       </header>
 
       {summary && (
@@ -133,13 +213,6 @@ export function EndScreen({ run, onRestart }: { run: RunView; onRestart: () => v
 
           {highlights && (
             <div className="summary-highlights">
-              {summary.killed_by && (
-                <section className="summary-highlight is-killer">
-                  <h3>Killed by</h3>
-                  <p className="summary-killer">{summary.killed_by.enemy}</p>
-                  <p className="summary-note">with {summary.killed_by.move}</p>
-                </section>
-              )}
               {combo && (
                 <section className="summary-highlight is-combo">
                   <h3>Best combo</h3>
@@ -181,7 +254,7 @@ export function EndScreen({ run, onRestart }: { run: RunView; onRestart: () => v
 
       {!summary && (
         <p>
-          Reached act {run.act}/{run.num_acts}, floor {run.floor + 1} with {run.player.gold} gold.
+          Reached act {run.act}/{run.num_acts}, layer {run.floor + 1} with {run.player.gold} credits.
         </p>
       )}
 

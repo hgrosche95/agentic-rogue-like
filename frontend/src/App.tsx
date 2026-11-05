@@ -239,13 +239,14 @@ function App() {
     if (!runId) return;
     getRun(runId)
       .then((stored) => {
-        if (stored.status === "ongoing") setRun((current) => current ?? stored);
-        else storeRunId(null);
+        // a finished run comes back too: its end screen stays until the
+        // player starts a new run
+        setRun((current) => current ?? stored);
       })
       .catch(() => storeRunId(null));
   }, []);
 
-  const runId = run !== null && run.status === "ongoing" ? run.run_id : null;
+  const runId = run?.run_id ?? null;
   useEffect(() => {
     // only forget the stored run once one was open here - not on first load
     if (runId !== null) storeRunId(runId);
@@ -532,7 +533,13 @@ function App() {
       <OverlayStage busy={isLoading}>
       {!combat && !ongoing && (
         <Overlay key="end" label="Run over" className="is-wide">
-          <EndScreen run={run} onRestart={() => setRun(null)} />
+          <EndScreen
+            run={run}
+            onRestart={() => {
+              storeRunId(null);
+              setRun(null);
+            }}
+          />
         </Overlay>
       )}
       {!combat && ongoing && run.pending_event && (
