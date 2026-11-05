@@ -2,7 +2,7 @@ import type { PlayStyle } from "../api";
 
 const LABEL: Record<PlayStyle, string> = {
   permanents: "Permanents",
-  graveyard: "Graveyard",
+  graveyard: "Cache",
   one_shot: "One-shots",
   aggro: "Attacks",
   turtle: "Blocking",

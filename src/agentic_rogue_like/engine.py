@@ -266,7 +266,7 @@ def open_shop(run: RunState, narrator: Narrator | None = None) -> None:
     run.shop = roll_shop(run)
     run.history.append(
         f"A merchant lays out {len(run.shop.cards)} cards and "
-        f"{len(run.shop.artifacts)} artifacts. You have {run.player.gold} gold."
+        f"{len(run.shop.artifacts)} artifacts. You have {run.player.gold} credits."
     )
 
 
@@ -294,7 +294,7 @@ def _open_rest(run: RunState) -> RestSite:
 
 def rest_heal(run: RunState) -> None:
     healed = heal(run.player, _open_rest(run).heal_amount)
-    run.history.append(f"You rest and recover {healed} HP.")
+    run.history.append(f"You rest and recover {healed} integrity.")
     run.rest = None
 
 
@@ -321,7 +321,7 @@ def rest_remove(run: RunState, deck_index: int) -> None:
     if len(deck) <= MIN_DECK_SIZE:
         raise ValueError(f"your deck can't get smaller than {MIN_DECK_SIZE} cards")
     card = deck.pop(deck_index)
-    run.history.append(f"You strip {card.name} out of your deck.")
+    run.history.append(f"You delete {card.name} from your deck.")
     run.rest = None
 
 
@@ -362,7 +362,7 @@ def advance_act(run: RunState) -> None:
     run.floor = 0
     healed = heal(run.player, run.player.max_hp * ACT_HEAL_PERCENT // 100)
     run.history.append(
-        f"The way to act {run.act} opens. You catch your breath and recover {healed} HP - "
+        f"The way to act {run.act} opens. You catch your breath and recover {healed} integrity - "
         f"the enemies ahead are stronger."
     )
 
@@ -382,9 +382,9 @@ def _finish_combat(
     if node.type is NodeType.BOSS:
         reward *= 2
     run.player.gold += reward
-    run.history.append(f"You loot {reward} gold from the {enemy_name}.")
+    run.history.append(f"You loot {reward} credits from the {enemy_name}.")
     if healed := heal(run.player, total(run.player.artifacts, "heal_after_combat")):
-        run.history.append(f"Your artifacts patch you up for {healed} HP.")
+        run.history.append(f"Your artifacts patch you up for {healed} integrity.")
     run.card_reward = roll_card_reward(
         rng,
         elite=node.type is not NodeType.COMBAT,

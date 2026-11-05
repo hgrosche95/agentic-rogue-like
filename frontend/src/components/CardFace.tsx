@@ -75,7 +75,7 @@ const STAT: Partial<
   opener: { icon: "token", unit: "free / turn" },
   // its value counts half blocks (2: one block per Malware)
   quarantine: { icon: "shield", unit: "per malware", sign: "+", half: true },
-  recycle: { icon: "cards", unit: "per banish" },
+  recycle: { icon: "cards", unit: "per purge" },
   pipe: { icon: "damage", unit: "per action", sign: "+" },
   batch: { icon: "token", unit: "per action" },
   buffer: { icon: "clock", unit: "stored" },

@@ -57,7 +57,7 @@ KITS = (
     ),
     _KitSpec(
         "graveyard",
-        "Graveyard",
+        "Cache",
         "Throw cards away on purpose, then bring the best ones back.",
         ("Brute Force", "Rollback"),
     ),
@@ -215,7 +215,7 @@ def roll_deals(
                 kind=DealKind.FORBIDDEN,
                 name="Forbidden patch",
                 description=(
-                    f"Take {rare.name} ({rare.description}) - for {FORBIDDEN_MAX_HP} max HP."
+                    f"Take {rare.name} ({rare.description}) - for {FORBIDDEN_MAX_HP} max integrity."
                 ),
                 add=[rare],
                 max_hp=-FORBIDDEN_MAX_HP,

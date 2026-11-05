@@ -16,8 +16,8 @@ type LineKind = "hit" | "hurt" | "block" | "heal" | "malware" | "banish" | "foe"
 // take 5 damage" is a hurt, not a block.
 function lineKind(text: string, isCommand = false): LineKind {
   if (isCommand) return "command";
-  if (/You are at \d+ HP|You take \d+|of your HP|cost you \d+ HP/.test(text)) return "hurt";
-  if (/banish|uninstall|purges/i.test(text)) return "banish";
+  if (/You are at \d+ integrity|You take \d+|of your integrity|cost you \d+ integrity/.test(text)) return "hurt";
+  if (/\bpurged?\b|uninstall|purges/i.test(text)) return "banish";
   if (/Malware|infect/i.test(text)) return "malware";
   if (
     /^You (play|queue)[^,]*, (dealing|destroying)|hit .* for \d+ damage|goes off for|strike first|backfires|lets the buffer out/.test(
@@ -72,7 +72,7 @@ function KindIcon({ kind }: { kind: LineKind }) {
 
 // The numbers and names a line is about, in their colours.
 const TOKENS =
-  /(\d+ (?:\(\+ATK\) )?damage|\d+x \d+ damage|\d+ block|\d+ Malware|Malware \(\d+\)|malware \(\d+\)|\d+ HP)|^(You (?:play|queue|start|uninstall|take) )([^,.-]+?)(?=,| -| in |\.| back| for|$)/g;
+  /(\d+ (?:\(\+ATK\) )?damage|\d+x \d+ damage|\d+ block|\d+ Malware|Malware \(\d+\)|malware \(\d+\)|\d+ integrity)|^(You (?:play|queue|start|uninstall|take) )([^,.-]+?)(?=,| -| in |\.| back| for|$)/g;
 
 function colorize(text: string, kind: LineKind): ReactNode[] {
   if (kind === "command") return [text];

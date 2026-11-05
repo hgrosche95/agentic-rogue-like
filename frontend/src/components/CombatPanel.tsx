@@ -1042,9 +1042,9 @@ export function CombatPanel({
                   title={[
                     combat.enemy_phase > 1
                       ? `Overclocked: +${combat.enemy_strength} attack, and it purges permanents.`
-                      : "Overclocks into phase 2 at half HP.",
+                      : "Overclocks into phase 2 at half integrity.",
                     combat.enemy_phases > 2 && combat.enemy_phase < 3
-                      ? "Phase 3 at a quarter HP: stronger again, no more bracing, 4-hit barrages."
+                      ? "Phase 3 at a quarter integrity: stronger again, no more bracing, 4-hit barrages."
                       : "",
                   ].join(" ")}
                 >
@@ -1062,7 +1062,7 @@ export function CombatPanel({
                   className="omega-badge"
                   tabIndex={0}
                   data-tip-term="Adapted"
-                  data-tip={`OMEGA has studied your ${combat.omega_style} and plays more of the moves that hurt it. At a quarter HP it rewrites a law of the fight.`}
+                  data-tip={`OMEGA has studied your ${combat.omega_style} and plays more of the moves that hurt it. At a quarter integrity it rewrites a law of the fight.`}
                 >
                   Answers your {combat.omega_style}
                 </span>
@@ -1108,7 +1108,7 @@ export function CombatPanel({
                     className="interrupt-note"
                     tabIndex={0}
                     data-tip-term="Interrupt"
-                    data-tip="The enemy cuts your program off: queued lines after these don't run this turn - they go to the graveyard unused."
+                    data-tip="The enemy cuts your program off: queued lines after these don't run this turn - they go to the Cache unused."
                   >
                     Interrupt after {cutAfter} line{cutAfter === 1 ? "" : "s"}
                   </span>
@@ -1209,7 +1209,7 @@ export function CombatPanel({
           {banishing !== null && banishCard && (
             <div className="discard-banner is-banish" role="status">
               <span>
-                {banishCard.name} - pick {banishNeeded} card{banishNeeded === 1 ? "" : "s"} to banish
+                {banishCard.name} - pick {banishNeeded} card{banishNeeded === 1 ? "" : "s"} to purge
               </span>
               <b>
                 {banishing.picks.length}/{banishNeeded}
@@ -1234,7 +1234,7 @@ export function CombatPanel({
                 <CardFace card={card} readout={readoutOf(card, aimedIndex === card.hand_index ? aimedSlot : null)} />
                 {card.toll > 0 && (
                   <span className="toll-badge" title="What playing it costs in this fight">
-                    −{card.toll} HP
+                    −{card.toll} integrity
                   </span>
                 )}
                 {laidOut.indexOf(card) >= 0 && laidOut.indexOf(card) < 9 && (
@@ -1295,7 +1295,7 @@ export function CombatPanel({
               label="Cache"
               count={combat.discard_count}
               kind="graveyard"
-              term="graveyard"
+              term="cache"
               names={combat.discard_names}
               onOpen={() => setOpenPile("cache")}
             />
@@ -1303,7 +1303,7 @@ export function CombatPanel({
               label="Purged"
               count={combat.banished_count}
               kind="banished"
-              term="banished"
+              term="purged"
               names={combat.banished_names}
               onOpen={() => setOpenPile("purged")}
             />
@@ -1320,7 +1320,7 @@ export function CombatPanel({
                 <span className="key-only">to skip</span>
               </>
           : banishing !== null && banishCard
-            ? `${banishCard.name}: click ${banishNeeded === 1 ? "the card" : `${banishNeeded} cards`} to banish for the rest of the fight - Esc to cancel.`
+            ? `${banishCard.name}: click ${banishNeeded === 1 ? "the card" : `${banishNeeded} cards`} to purge for the rest of the fight - Esc to cancel.`
           : discarding !== null
             ? `Hand limit is ${combat.max_hand_size}: pick ${excess} card(s) to discard (${discarding.length}/${excess}).`
             : selectedHandIndex !== null &&

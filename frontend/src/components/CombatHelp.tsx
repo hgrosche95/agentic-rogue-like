@@ -8,7 +8,7 @@ const PROGRAM_RULES: [string, string][] = [
   ["Queue", "Attacks, blocks, heals and Final Strike go into a line - nothing happens yet."],
   [
     "Run",
-    "Run program runs the lines left to right, then the enemy acts. Above the lines you see what the program will do: the enemy's HP and block, your block.",
+    "Run program runs the lines left to right, then the enemy acts. Above the lines you see what the program will do: the enemy's integrity and block, your block.",
   ],
   [
     "Background",
@@ -18,17 +18,17 @@ const PROGRAM_RULES: [string, string][] = [
   ["Move", "Drag a queued card onto another line - or click it, then the line. An occupied line swaps."],
   [
     "Control flow",
-    "Fork: the next action runs twice. Loop: the last action to its left runs again. If Wounded: the next action runs twice if the enemy is at half HP or less by then. Vibe-Coder only - Pipe: the next action gets a bonus for every action that already ran. Batch: frees tokens for every action still to run.",
+    "Fork: the next action runs twice. Loop: the last action to its left runs again. If Wounded: the next action runs twice if the enemy is at half integrity or less by then. Vibe-Coder only - Pipe: the next action gets a bonus for every action that already ran. Batch: frees tokens for every action still to run.",
   ],
   [
     "Interrupt",
-    "An enemy announcing an Interrupt lets only your first lines run - the cut ones are greyed out and go to the graveyard unused. Put what matters first.",
+    "An enemy announcing an Interrupt lets only your first lines run - the cut ones are greyed out and go to the Cache unused. Put what matters first.",
   ],
   [
     "Refactor",
     "A boss announcing a Refactor runs your program right to left this turn - Fork and Loop then steer the lines to their left.",
   ],
-  ["Hot Path", "With the Hot Path artifact, the card in its gold line runs as its upgraded version."],
+  ["Hot Path", "With the Hot Path artifact, the card in its golden line runs as its upgraded version."],
 ];
 
 const CLASSIC_RULES: [string, string][] = [

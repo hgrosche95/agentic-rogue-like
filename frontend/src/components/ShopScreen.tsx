@@ -154,7 +154,7 @@ export function ShopScreen({
         })}
       </div>
 
-      <h3 className="shop-section">Purge a card</h3>
+      <h3 className="shop-section">Delete a card</h3>
       <div className="shop-purge">
         <PriceTag price={shop.removal_price} sold={shop.removal_used} affordable={gold >= shop.removal_price} />
         <span className="shop-purge-note">{purgeNote}</span>
@@ -180,7 +180,7 @@ export function ShopScreen({
               type="button"
               className={`hand-card deck-card type-${card.type}`}
               disabled={disabled}
-              aria-label={`Purge ${card.name} for ${shop.removal_price} credits`}
+              aria-label={`Delete ${card.name} for ${shop.removal_price} credits`}
               onMouseEnter={() => sfx.play("hover")}
               onClick={() => {
                 sfx.play("reward_pick");

@@ -42,9 +42,9 @@ const PERMANENT_LINES: [RegExp, Card["type"], TickTone, (m: RegExpMatchArray) =>
 
 // what an artifact's line comes to, as a tick on its chip
 function artifactTick(line: string): { text: string; tone: TickTone } | null {
-  const m = line.match(/(\d+) (block|damage|Malware|HP)/);
+  const m = line.match(/(\d+) (block|damage|Malware|integrity)/);
   if (!m) return null;
-  const tone: TickTone = m[2] === "block" ? "block" : m[2] === "Malware" ? "malware" : m[2] === "HP" ? "heal" : "damage";
+  const tone: TickTone = m[2] === "block" ? "block" : m[2] === "Malware" ? "malware" : m[2] === "integrity" ? "heal" : "damage";
   return { text: `+${m[1]} ${m[2] === "damage" ? "dmg" : m[2].toLowerCase()}`, tone };
 }
 

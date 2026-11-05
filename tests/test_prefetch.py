@@ -105,7 +105,7 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
         if run["pending_event"] is not None:
             event_rooms += 1
             assert run["pending_event"]["description"] == PREFETCHED_EVENT_TEXT
-            assert run["pending_event"]["options"][0]["effects"] == "+40 gold, -5 HP"
+            assert run["pending_event"]["options"][0]["effects"] == "+40 credits, -5 integrity"
             run = client.post(f"/runs/{run_id}/event-choice", json={"option_index": 0}).json()
         while run["pending_combat"] is not None:
             combat = run["pending_combat"]
