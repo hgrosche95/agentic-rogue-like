@@ -247,27 +247,51 @@ export function DungeonMap({
     ? allNodes.find((n) => n.visited && n.connections.includes(currentNodeId))?.id
     : currentNodeId;
 
-  // Everything still ahead: the rooms the trails lead to from where you
-  // stand (or from the room the pending pick left). The rest of the layers
-  // to come is out of reach and steps back, so the ways you can still go
-  // stand out.
-  const ahead = new Set<string>();
-  if (originId) {
-    const queue = [originId];
-    while (queue.length > 0) {
-      const id = queue.pop() as string;
-      for (const next of nodes[id]?.connections ?? []) {
-        if (!ahead.has(next)) {
-          ahead.add(next);
-          queue.push(next);
+  // At an act's first layer no room lies behind you: the rooms the pick can
+  // still switch between are where the ways start, all of them.
+  const starts =
+    pickPending && !originId
+      ? allNodes.filter((n) => n.floor === currentFloor && (n.id === currentNodeId || reachable.has(n.id))).map((n) => n.id)
+      : [];
+  const roots = originId ? [originId] : starts;
+  const isRoot = (id: string) => roots.includes(id);
+
+  // every room the trails lead to from `from` - at most `hops` jumps on
+  const reachedFrom = (from: string[], hops = Infinity) => {
+    const seen = new Set<string>();
+    let layer = [...from];
+    for (let hop = 0; hop < hops && layer.length > 0; hop++) {
+      const next: string[] = [];
+      for (const id of layer) {
+        for (const to of nodes[id]?.connections ?? []) {
+          if (!seen.has(to)) {
+            seen.add(to);
+            next.push(to);
+          }
         }
       }
+      layer = next;
     }
-  }
-  const onWay = (id: string) => id === originId || ahead.has(id);
-  // A room pointed at: every way there from here lights up.
+    return seen;
+  };
+
+  // Everything still ahead: the rooms the trails lead to from where you
+  // stand (or from the room the pending pick left, or from every start). The
+  // rest of the layers to come is out of reach and steps back, so the ways
+  // you can still go stand out.
+  const ahead = reachedFrom(roots);
+  const onWay = (id: string) => isRoot(id) || ahead.has(id);
+  // At the start, the next two jumps from the room picked so far stand out
+  // from the other starts' ways - where the starts differ - so the pick is
+  // made knowing where it leads. Further on the ways mostly meet again.
+  const pickedWay = starts.length > 1 ? new Set([currentNodeId, ...reachedFrom([currentNodeId], 2)]) : null;
+  // A room pointed at: every way there from here lights up - a start pointed
+  // at, every way on from it.
   const route = new Set<string>();
-  if (pointed && ahead.has(pointed) && originId) {
+  if (pointed && starts.includes(pointed)) {
+    route.add(pointed);
+    for (const id of reachedFrom([pointed])) route.add(id);
+  } else if (pointed && ahead.has(pointed)) {
     const leadsThere = (id: string, seen: Map<string, boolean>): boolean => {
       if (id === pointed) return true;
       if (seen.has(id)) return seen.get(id) as boolean;
@@ -277,7 +301,7 @@ export function DungeonMap({
       return there;
     };
     const seen = new Map<string, boolean>();
-    for (const id of [originId, ...ahead]) if (leadsThere(id, seen)) route.add(id);
+    for (const id of [...roots, ...ahead]) if (leadsThere(id, seen)) route.add(id);
   }
 
   // the jump just made: a packet runs the trail from the room it left
@@ -328,11 +352,13 @@ export function DungeonMap({
             const isNext = node.id === originId && reachable.has(targetId);
             const isAhead = onWay(node.id) && ahead.has(targetId);
             const onRoute = route.has(node.id) && route.has(targetId);
+            const onPicked = pickedWay !== null && pickedWay.has(node.id) && pickedWay.has(targetId);
             const classes = [
               "map-path",
               walked && "is-walked",
               isNext && "is-next",
               isAhead && "is-ahead",
+              onPicked && "is-picked-way",
               onRoute && "is-route",
               !walked && !isAhead && "is-cut",
             ]
@@ -385,6 +411,7 @@ export function DungeonMap({
             // a later room no trail from here leads to
             !isCurrent && !node.visited && node.floor > currentFloor && !ahead.has(node.id) && "is-cut",
             route.has(node.id) && node.id !== originId && "is-on-route",
+            pickedWay?.has(node.id) && node.id !== currentNodeId && "is-on-picked-way",
           ]
             .filter(Boolean)
             .join(" ");
@@ -406,7 +433,7 @@ export function DungeonMap({
               tabIndex={interactive ? 0 : undefined}
               aria-label={`${isEnterable ? "Enter " : ""}${style.label}, ${layerLabel(node.floor, numFloors, act)}`}
               onMouseEnter={() => {
-                if (ahead.has(node.id)) setPointed(node.id);
+                if (ahead.has(node.id) || starts.includes(node.id)) setPointed(node.id);
                 if (!interactive) return;
                 sfx.play("hover");
                 if (isReachable) onHover?.(node.id);

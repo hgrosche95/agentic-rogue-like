@@ -639,6 +639,16 @@ button.is-busy:disabled {
   stroke: color-mix(in srgb, var(--accent) 45%, var(--line));
 }
 
+/* at an act's start: where the room picked so far leads, in the pick's gold */
+.map-path.is-picked-way {
+  stroke: color-mix(in srgb, var(--gold) 70%, var(--line));
+}
+
+.map-node.is-on-picked-way .map-node-shape {
+  stroke: color-mix(in srgb, var(--gold) 80%, transparent);
+  stroke-width: 2;
+}
+
 /* pointing at a room lights every way there */
 .map-path.is-route {
   stroke: var(--accent);
