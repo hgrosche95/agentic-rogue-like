@@ -111,7 +111,9 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="sleep-mode",
         name="Sleep Mode",
-        description="Safehouses heal 15 more integrity, and heal 3 integrity after every won fight.",
+        description=(
+            "Safehouses heal 15 more integrity, and heal 3 integrity after every won fight."
+        ),
         rest_heal=15,
         heal_after_combat=3,
     ),
@@ -158,13 +160,13 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="stack-trace",
         name="Stack Trace",
-        description="Attacks deal +1 damage for every 4 cards in your Cache.",
+        description="Attacks deal +1 damage for every 4 cards in your Graveyard.",
         graveyard_attack=1,
     ),
     Artifact(
         id="logic-bomb",
         name="Logic Bomb",
-        description="Whenever a card is purged, infect the enemy with 3 Malware.",
+        description="Whenever a card is banished, infect the enemy with 3 Malware.",
         banish_malware=3,
     ),
     Artifact(
@@ -199,7 +201,8 @@ VIBE_CODER_ARTIFACT_POOL: list[Artifact] = [
         id="lo-fi-beats",
         name="Lo-fi Beats",
         description=(
-            "1 more token frees up at the end of every turn. Heal 3 integrity after every won fight."
+            "1 more token frees up at the end of every turn. "
+            "Heal 3 integrity after every won fight."
         ),
         token_regen=1,
         heal_after_combat=3,
@@ -238,7 +241,8 @@ PROGRAM_ARTIFACT_POOL: list[Artifact] = [
         id="branch-predictor",
         name="Branch Predictor",
         description=(
-            "Once the enemy is at half integrity or less, every further action in your program gets +3."
+            "Once the enemy is at half integrity or less, "
+            "every further action in your program gets +3."
         ),
         wounded_bonus=3,
     ),

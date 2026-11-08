@@ -22,7 +22,7 @@ const PROGRAM_RULES: [string, string][] = [
   ],
   [
     "Interrupt",
-    "An enemy announcing an Interrupt lets only your first lines run - the cut ones are greyed out and go to the Cache unused. Put what matters first.",
+    "An enemy announcing an Interrupt lets only your first lines run - the cut ones are greyed out and go to the Graveyard unused. Put what matters first.",
   ],
   [
     "Refactor",

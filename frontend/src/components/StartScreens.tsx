@@ -6,7 +6,7 @@ import { CardFace } from "./CardFace";
 import { TextWithCards } from "./CardMention";
 import { RichText } from "./RichText";
 
-// The start of a run, after the first artifact (see the backend's starts.py):
+// The start of a run (see the backend's starts.py):
 // a starter kit that sets the deck's direction, then the AGI's deal.
 
 export function KitScreen({

@@ -196,7 +196,7 @@ LAW_ARMOR = 3
 ONE_SHOT_TAX = 4
 LAW_TEXT: dict[Law, str] = {
     Law.DELETE_PERMANENT: "At the end of every turn your rightmost permanent is deleted.",
-    Law.COLLECT_GRAVEYARD: "At the end of every turn your Cache goes back into your Source.",
+    Law.COLLECT_GRAVEYARD: "At the end of every turn your Graveyard goes back into your Source.",
     Law.ONE_SHOT_TAX: f"One-shot cards cost {ONE_SHOT_TAX} integrity to play.",
     Law.ARMOR: f"Every hit on OMEGA deals {LAW_ARMOR} less damage.",
     Law.PIERCE: "Its attacks go through half of your block.",
@@ -832,7 +832,7 @@ def play_card(
     rng: random.Random,
     banish: list[int] | None = None,
 ) -> str:
-    """`banish`: for a card that banishes hand cards (Purge), the hand
+    """`banish`: for a card that banishes hand cards (Banish), the hand
     indices - before the play - of the cards it takes (see _banish_choice)."""
     if not 0 <= hand_index < len(state.hand):
         raise ValueError(f"hand_index {hand_index} is out of range")
@@ -852,7 +852,7 @@ def play_card(
     if state.free_plays:
         state.free_plays -= 1
     # The cost is paid before anything else, so a card like Memory Dump can't
-    # throw away the very cards it is about to draw - and Purge can't banish them.
+    # throw away the very cards it is about to draw - and Banish can't banish them.
     cost_line = _pay_banish(state, banished, rng) + _pay_discard_cost(state, card, rng)
     cost_line += _omega_toll(state, card, player)
 
@@ -886,7 +886,7 @@ def play_card(
             line += " " + _afflict(state, card.applies, card.applies_amount)
 
         if card.exhaust:
-            line += " It's used up and purged for the rest of the fight."
+            line += " It's used up and banished for the rest of the fight."
             line += _banish(state, [card], rng)
         else:
             state.discard_pile.append(card)
@@ -947,7 +947,7 @@ def take_back(state: CombatState, zone: str, index: int, rng: random.Random | No
         else:
             state.field[index] = None
         if card.id not in state.fresh_permanents:
-            line = f"You uninstall {card.name} - it is purged for the rest of the fight."
+            line = f"You uninstall {card.name} - it is banished for the rest of the fight."
             return line + _banish(state, [card], rng or random.Random())
         state.fresh_permanents.remove(card.id)
     else:
@@ -1139,7 +1139,9 @@ def run_program(
                 log.append(line + f"{run.name}: the next action runs {1 + forks} times.")
             elif run.type is CardType.IF_WOUNDED:
                 forks += run.value if _wounded(state) else 0
-                state_line = "at half integrity or less" if _wounded(state) else "still above half integrity"
+                state_line = (
+                    "at half integrity or less" if _wounded(state) else "still above half integrity"
+                )
                 log.append(line + f"{run.name}: the enemy is {state_line}.")
             elif run.type is CardType.GUARD:
                 guarded = state.player_block >= GUARD_BLOCK
@@ -1502,9 +1504,9 @@ def _banish_choice(state: CombatState, hand_index: int, banish: list[int] | None
     if banish is None:
         banish = banish_candidates(state, hand_index)[:count]
     if len(set(banish)) != len(banish) or len(banish) != count:
-        raise ValueError(f"pick exactly {count} card(s) to purge")
+        raise ValueError(f"pick exactly {count} card(s) to banish")
     if any(not 0 <= i < len(state.hand) or i == hand_index for i in banish):
-        raise ValueError("purge index is out of range")
+        raise ValueError("banish index is out of range")
     return [state.hand[i] for i in sorted(banish)]
 
 
@@ -1515,7 +1517,7 @@ def _pay_banish(state: CombatState, cards: list[Card], rng: random.Random) -> st
         # by identity - two copies of a card compare equal
         state.hand.pop(next(i for i, h in enumerate(state.hand) if h is c))
     reacted = _banish(state, cards, rng)
-    return f"You purge {_names(cards)} for the rest of the fight.{reacted} "
+    return f"You banish {_names(cards)} for the rest of the fight.{reacted} "
 
 
 def queues(state: CombatState, card: Card) -> bool:
@@ -1769,7 +1771,7 @@ def _apply_action_effect(
     if card.type is CardType.RETRIEVE:
         returned = _take_recent(state.discard_pile, card.value)
         state.hand.extend(returned)
-        return f"You play {card.name}, pulling {_names(returned)} back from the Cache."
+        return f"You play {card.name}, pulling {_names(returned)} back from the Graveyard."
 
     if card.type is CardType.RESTORE:
         # Restore cards never restore each other - two of them could
@@ -1779,7 +1781,7 @@ def _apply_action_effect(
         for c in returned:
             state.banished_pile.remove(c)
         state.hand.extend(returned)
-        return f"You play {card.name}, restoring {_names(returned)} from Purged."
+        return f"You play {card.name}, restoring {_names(returned)} from Banished."
 
     if card.type is CardType.REBOOT:
         # Only what was banished *before* this card counts: the permanents it
@@ -1795,7 +1797,7 @@ def _apply_action_effect(
         state.hand.extend(returning)
         return (
             f"You play {card.name}, wiping {len(destroyed)} permanent card(s) and "
-            f"restoring {_names(returning)} from Purged."
+            f"restoring {_names(returning)} from Banished."
             + _banish(state, destroyed, rng)
         )
 
@@ -1977,7 +1979,8 @@ def _omega_toll(state: CombatState, card: Card, player: PlayerState) -> str:
     if state.trap_cost and card.id.startswith("agi-"):
         _hurt(state, player, state.trap_cost, card.name)
         line += (
-            f'OMEGA: "I built {card.name}. I know its flaw." It costs you {state.trap_cost} integrity. '
+            f'OMEGA: "I built {card.name}. I know its flaw." '
+            f"It costs you {state.trap_cost} integrity. "
         )
     return line
 
@@ -2000,7 +2003,7 @@ def _laws_after_turn(state: CombatState, rng: random.Random) -> list[str]:
         state.draw_pile += state.discard_pile
         state.discard_pile = []
         rng.shuffle(state.draw_pile)
-        return [f"OMEGA garbage-collects your Cache: {count} card(s) back into the Source."]
+        return [f"OMEGA garbage-collects your Graveyard: {count} card(s) back into the Source."]
     return []
 
 
@@ -2014,7 +2017,10 @@ def _affix_after_turn(state: CombatState) -> list[str]:
     if affix is Affix.REGENERATING and state.enemy_hp < state.enemy.hp:
         before = state.enemy_hp
         state.enemy_hp = min(state.enemy.hp, before + round(state.enemy.attack * REGEN_FACTOR))
-        return [f"{name} regenerates {state.enemy_hp - before} integrity. {name} at {state.enemy_hp} integrity."]
+        return [
+            f"{name} regenerates {state.enemy_hp - before} integrity. "
+            f"{name} at {state.enemy_hp} integrity."
+        ]
     return []
 
 
@@ -2032,7 +2038,9 @@ def _tick_statuses(state: CombatState, player: PlayerState) -> list[str]:
     if stacks := state.enemy_status.get(Status.MALWARE, 0):
         bite = stacks // 2 if active_law(state) is Law.MALWARE_HALVED else stacks
         lost = _lose_hp(state, bite)
-        log.append(f"Malware eats {lost} integrity off {name}. {name} at {state.enemy_hp} integrity.")
+        log.append(
+            f"Malware eats {lost} integrity off {name}. {name} at {state.enemy_hp} integrity."
+        )
         if line := _check_boss_phase(state):
             log.append(line.strip())
     if stacks := state.player_status.get(Status.MALWARE, 0):
@@ -2086,14 +2094,14 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
         if slot is not None and state.program_mode:
             purged = state.field.pop(slot)
             log.append(
-                f"{name} purges your {purged.name} - your newest background process!"
+                f"{name} banishes your {purged.name} - your newest background process!"
                 + _banish(state, [purged], rng)
             )
         elif slot is not None:
             purged = state.field[slot]
             state.field[slot] = None
             log.append(
-                f"{name} purges your {purged.name} from slot {slot + 1}!"
+                f"{name} banishes your {purged.name} from slot {slot + 1}!"
                 + _banish(state, [purged], rng)
             )
 
@@ -2118,7 +2126,8 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
     }[intent]
     rolled = " + ".join(str(h) for h in hits)
     log.append(
-        f"{name} {uses}{move} ({rolled}). You take {taken} damage. You are at {player.hp} integrity."
+        f"{name} {uses}{move} ({rolled}). You take {taken} damage. "
+        f"You are at {player.hp} integrity."
     )
     if intent is EnemyIntentType.LOCK:
         # A program locks one of its lines - they are all empty by now.
@@ -2153,7 +2162,8 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
     if thorns := total(state.artifacts, "thorns"):
         _, dealt = _damage_enemy(state, thorns)
         log.append(
-            f"The attack backfires: {name} takes {dealt} damage. {name} at {state.enemy_hp} integrity."
+            f"The attack backfires: {name} takes {dealt} damage. "
+            f"{name} at {state.enemy_hp} integrity."
         )
     return log
 

@@ -95,13 +95,12 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       denselben Kartenanimationen wie Dr. Chronos; über seinem Kopf schwebt
       eine Chat-Blase, die beim Tippen pulsiert und bei vollem Kontextfenster
       orange flackert.
-- [x] **Deck-Building** — zu Beginn des Runs (nach dem ersten Artefakt)
-      ein Start-Kit wählen und ein Angebot der AGI annehmen oder ablehnen
+- [x] **Deck-Building** — zu Beginn des Runs ein Start-Kit wählen und ein Angebot der AGI annehmen oder ablehnen
       (siehe *Start eines Runs*), danach nach jedem Sieg eine von drei Karten wählen
       (`/runs/{id}/card-reward`); 24 Belohnungskarten mit Abwurfkosten,
       Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
-- [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
-      drei wählen, danach eins für jeden Sieg über einen Elite-Gegner oder
+- [x] **Artefakte** — passive Boni für den ganzen Run: keins zu Beginn,
+      eins aus drei für jeden Sieg über einen Elite-Gegner oder
       den Boss eines Akts (`/runs/{id}/artifact`). 24 Stück in `artifacts.py`, siehe *Artefakte* unten.
 - [x] **Rastplatz mit Wahl** — ein Safehouse heilt nicht mehr automatisch,
       man wählt eins von dreien: heilen (15 HP, mit Artefakten mehr), eine
@@ -329,7 +328,7 @@ pro Hälfte der Karte um 10 % stärker an Leben und Angriff (und damit
 Block) — Akt 1 ×1,0 / ×1,1, Akt 2 ×1,21 / ×1,331 — aufgeschlagen erst
 *nach* der Erzeugung (`enemies.escalate`), damit die Budgets des
 Encounter-Agents und die Evals dazu unverändert bleiben. Nach jedem
-gewonnenen Kampf kommt eine Karte ins Deck, am Start und nach jedem Elite-
+gewonnenen Kampf kommt eine Karte ins Deck, nach jedem Elite-
 oder Aktboss-Sieg ein Artefakt (der Smart-Bot nimmt Brücken nur passend zum
 Deck, sonst zufällig). Ziel: schwer machbar und über den
 ganzen Run immer schwerer — der Spieler wird mit Deck und Artefakten stärker,
@@ -867,8 +866,8 @@ nur den Spieler stärker.
 
 ## Start eines Runs
 
-Damit sich der Anfang nicht jedes Mal gleich spielt, kommen nach dem ersten
-Artefakt zwei Entscheidungen (`starts.py`, `POST /runs/{id}/kit` und
+Damit sich der Anfang nicht jedes Mal gleich spielt, kommen am Anfang zwei Entscheidungen
+(ohne Artefakt – das erste gibt es beim ersten Elite) (`starts.py`, `POST /runs/{id}/kit` und
 `/agi-deal`):
 
 ### Startdecks
@@ -948,7 +947,7 @@ erscheinen Vibe-Coder- und Programm-Kits nur dort.
 Kit-Karten zählen für die AGI als selbst gewählt (`style.py`), sie liest den
 Stil also schon ab dem ersten Kampf mit.
 
-**Angebot der AGI** – danach bietet die AGI drei von sechs Deals an, oder
+**Angebot der AGI** – danach bietet die AGI drei von fünf Deals an, oder
 man lehnt ab. Jeder Deal wird beim Würfeln bis auf die Karte ausgerechnet,
 der Text sagt also genau, was man bekommt:
 
@@ -957,7 +956,6 @@ der Text sagt also genau, was man bekommt:
 | Delete legacy code | eine Grundkarte Angriff und eine Block aus dem Deck |
 | Mutation | zwei Grundkarten werden zu zwei bestimmten häufigen Karten |
 | Forbidden patch | eine bestimmte seltene Karte, kostet 5 max. HP |
-| Trojan gift | ein bestimmtes Artefakt, aber ein Glitch dauerhaft im Deck |
 | Hotfix | zwei Grundkarten verbessern |
 | Bribe | 90 Credits, aber ein Glitch dauerhaft im Deck |
 
@@ -995,7 +993,7 @@ Vibe-Coders; jede zeigt das Startdeck schon einmal, siehe *Startdecks*):
 - **Friedhof** — Brute Force, Fork Bomb, Honeypot und Memory Dump werfen
   Karten ab (Kosten!), Stack Overflow skaliert damit, Rollback holt zurück.
 - **Einmal-Karten** (1×) — Zero-Day, Sandbox, Backup sind stark, werden aber
-  für den Rest des Kampfes verbannt; Purge verbannt eine Handkarte nach Wahl
+  für den Rest des Kampfes verbannt; Banish verbannt eine Handkarte nach Wahl
   und zieht 2 (Upgrade: 3), Payload wächst mit dem Verbannt-Stapel,
   Undelete holt eine verbannte Karte zurück, System Restore opfert das
   ganze Feld und holt dafür alle vorher verbannten Karten auf die Hand.
@@ -1004,14 +1002,14 @@ Vibe-Coders; jede zeigt das Startdeck schon einmal, siehe *Startdecks*):
   verbannter Karte) und **Burn Notice** (3 Block +2 pro verbannter Karte)
   zahlen den Stapel aus, **Wipe** (1×) verbannt 2 Handkarten und zieht 2.
 
-**Purge**, **Shred** und **Wipe** lassen wählen: Ausgespielt in einen Slot (im
+**Banish**, **Shred** und **Wipe** lassen wählen: Ausgespielt in einen Slot (im
 Programm-Modus in die Hintergrund-Leiste – wie Ziehkarten wirkt sie sofort,
 statt sich einzureihen) leuchten die übrigen Handkarten auf, ein Klick
 verbannt die gewählte, Esc oder Cancel bricht ab. Die API bekommt die Wahl als
 `banish_indices` an `POST /runs/{id}/combat/play-card` (Handindizes vor dem
 Ausspielen, wie `discard_indices` beim Zugende); fehlt sie, geht die
 schwächste Karte (`combat.banish_candidates`: Glitch, dann schlichte
-Grundkarten). Der Smart-Bot spielt Purge nur, wenn er etwas Wertloses
+Grundkarten). Der Smart-Bot spielt Banish nur, wenn er etwas Wertloses
 loswird: einen Glitch oder eine Grundkarte, die der Intent des Gegners gerade
 nicht verlangt.
 
@@ -1032,7 +1030,7 @@ Stile; `style.py` zählt sie für beide:
 | Recycle Bin | Einmal × Friedhof | Permanent; wird eine Karte verbannt, 1 Karte ziehen (max. 3/Zug) |
 | Guard Clause | Programm × Block | Kontrollfluss; mit 5+ Block läuft die nächste Aktion zweimal |
 
-Alles, was verbannt wird – verbraucht, per Purge, von Kernel Panic/System
+Alles, was verbannt wird – verbraucht, per Banish, von Kernel Panic/System
 Restore zerstört, vom Gegner gepurgt oder deinstalliert –, läuft durch
 `combat._banish` und löst Failsafe, Logic Bomb und Recycle Bin aus; Glitches
 nicht.

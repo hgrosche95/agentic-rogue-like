@@ -50,6 +50,38 @@
   background: color-mix(in srgb, var(--card) 85%, #fff);
 }
 
+/* program mode: card flow runs the moment it is played - an amber type
+   line with a bolt ... */
+.card-typeline.is-instant,
+.card-typeline.is-instant b {
+  color: #07071a;
+}
+
+.card-typeline.is-instant {
+  background: var(--gold);
+}
+
+.card-typeline-icon.is-bolt {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* ... and its text opens
+   with a bolt and "Instant:" (keywords.ts explains it on hover) */
+.card-body .card-instant {
+  font-weight: 700;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+.card-instant svg {
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.15em;
+  vertical-align: -0.05em;
+  fill: currentColor;
+}
+
 /* the readout under it: the card's icon in front of its number */
 .card-typeline + .card-readout {
   margin-top: 5px;

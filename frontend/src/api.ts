@@ -96,7 +96,7 @@ export interface Card {
   rarity: Rarity;
   // one-shot: banished for the rest of the fight after it is played
   exhaust: boolean;
-  // hand cards it banishes when played - the player picks them (Purge)
+  // hand cards it banishes when played - the player picks them (Banish)
   banish: number;
   // attacks only: the damage is dealt this many times
   hits: number;
@@ -285,7 +285,7 @@ export interface PendingCombatView {
   // per field slot: taking it back banishes it (it has run since an earlier
   // turn) instead of returning it to the hand
   field_uninstalls: boolean[];
-  // the piles' cards by name: Cache and Purged in order (latest last), the
+  // the piles' cards by name: Graveyard and Banished in order (latest last), the
   // Source pile sorted
   draw_names: string[];
   discard_names: string[];
@@ -407,7 +407,7 @@ export interface RunView {
   artifact_offer: Artifact[] | null;
   // program mode for the whole run - card texts read differently there
   program_mode: boolean;
-  // the start of the run, after the first artifact: a kit, then the AGI's deal
+  // the start of the run: a kit, then the AGI's deal
   kit_offer: StarterKit[] | null;
   agi_deals: AgiDeal[] | null;
   shop: ShopView | null;
@@ -651,7 +651,7 @@ export function restRemove(runId: string, index: number): Promise<RunView> {
   });
 }
 
-// `banishIndices`: the hand cards a banishing card (Purge) takes - exactly
+// `banishIndices`: the hand cards a banishing card (Banish) takes - exactly
 // banishCount of them (program.ts).
 export function playCard(
   runId: string,

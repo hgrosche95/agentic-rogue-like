@@ -1,5 +1,5 @@
 /* "Juice": motion and feedback for the moments that matter - who travels,
-   the jump to the next layer, how a hit lands, what the next hit will leave
+   how a hit lands, what the next hit will leave
    of you, and the win. Loaded after flair.css. Every effect here stands
    still under prefers-reduced-motion (bottom of file). */
 
@@ -140,157 +140,6 @@
 @media (max-width: 640px) {
   .setting-picker .character-card {
     width: calc(50% - 0.4rem);
-  }
-}
-
-/* ---------- the jump to the next layer ---------- */
-.jump-transition {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-/* the screen dims under the streaks and comes back as they pass */
-.jump-transition::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: #05050f;
-  animation: jump-dim 1150ms var(--ease-in-out) both;
-}
-
-/* light streaks rushing out from the middle */
-.jump-streaks {
-  position: absolute;
-  inset: -40%;
-  background:
-    repeating-conic-gradient(from 3deg at 50% 50%, transparent 0deg 5.5deg, rgba(159, 246, 255, 0.75) 5.5deg 6deg, transparent 6deg 11deg),
-    repeating-conic-gradient(from 0deg at 50% 50%, transparent 0deg 8deg, rgba(255, 61, 139, 0.45) 8deg 8.4deg, transparent 8.4deg 17deg);
-  mask-image: radial-gradient(circle at 50% 50%, transparent 6%, #000 22%, #000 45%, transparent 70%);
-  animation: jump-streaks 1150ms cubic-bezier(0.55, 0, 0.3, 1) both;
-}
-
-/* a glitch band wiping down the screen as the jump lands */
-.jump-wipe {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, transparent 0 46%, rgba(52, 231, 255, 0.5) 47%, #fff 49.5%, rgba(255, 61, 139, 0.5) 52%, transparent 53% 100%) 0 0 / 100% 300%,
-    repeating-linear-gradient(0deg, rgba(52, 231, 255, 0.12) 0 2px, transparent 2px 7px);
-  mix-blend-mode: screen;
-  animation: jump-wipe 1150ms linear both;
-}
-
-.jump-label {
-  position: relative;
-  display: grid;
-  justify-items: center;
-  gap: 0.35rem;
-  animation: jump-label 1150ms var(--ease-out) both;
-}
-
-.jump-label b {
-  font-family: var(--font-head);
-  font-weight: 700;
-  font-size: clamp(2.2rem, 7vw, 4.4rem);
-  letter-spacing: 0.08em;
-  color: var(--cyan-bright);
-  text-shadow:
-    -3px 0 rgba(255, 61, 139, 0.75),
-    3px 0 rgba(52, 231, 255, 0.75),
-    0 0 30px rgba(52, 231, 255, 0.6);
-  /* the path types itself in */
-  clip-path: inset(0 100% 0 0);
-  animation: jump-type 1150ms steps(7, end) both;
-}
-
-.jump-label small {
-  font-family: var(--font-body);
-  font-weight: 700;
-  font-size: 0.95rem;
-  letter-spacing: 0.32em;
-  text-transform: uppercase;
-  color: var(--gold);
-}
-
-@keyframes jump-dim {
-  0% {
-    opacity: 0;
-  }
-  25%,
-  60% {
-    opacity: 0.88;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes jump-streaks {
-  0% {
-    opacity: 0;
-    transform: scale(0.35) rotate(0deg);
-  }
-  20% {
-    opacity: 1;
-  }
-  70% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: scale(2.4) rotate(6deg);
-  }
-}
-
-@keyframes jump-wipe {
-  0%,
-  45% {
-    opacity: 0;
-    background-position: 0 100%, 0 0;
-  }
-  50% {
-    opacity: 1;
-  }
-  85% {
-    opacity: 1;
-    background-position: 0 0%, 0 0;
-  }
-  100% {
-    opacity: 0;
-    background-position: 0 0%, 0 0;
-  }
-}
-
-@keyframes jump-type {
-  0%,
-  22% {
-    clip-path: inset(0 100% 0 0);
-  }
-  50%,
-  100% {
-    clip-path: inset(0 0 0 0);
-  }
-}
-
-@keyframes jump-label {
-  0%,
-  18% {
-    opacity: 0;
-    transform: scale(1.12);
-  }
-  30%,
-  72% {
-    opacity: 1;
-    transform: none;
-  }
-  100% {
-    opacity: 0;
-    transform: scale(0.96);
   }
 }
 
@@ -580,21 +429,8 @@
   .arena-victory-title::after {
     display: none;
   }
-  .jump-streaks,
-  .jump-wipe,
   .arena-jolt {
     display: none;
-  }
-  .jump-transition::before {
-    animation: jump-dim 1150ms linear both;
-  }
-  .jump-label,
-  .jump-label b {
-    animation: none;
-    clip-path: none;
-  }
-  .jump-label {
-    animation: jump-dim-label 1150ms linear both;
   }
   .arena-terminated {
     animation: none;
@@ -602,17 +438,6 @@
   }
   .credits-gain {
     animation: credits-gain-still 1.6s linear both;
-  }
-}
-
-@keyframes jump-dim-label {
-  0%,
-  100% {
-    opacity: 0;
-  }
-  25%,
-  70% {
-    opacity: 1;
   }
 }
 

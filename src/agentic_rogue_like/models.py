@@ -234,7 +234,7 @@ class Card(BaseModel):
     # the lines after it don't run this turn (combat.run_program).
     halts: bool = False
     # Damage dealt to the enemy when this card gets banished - destroyed,
-    # purged, taken back from the field, or used up (combat._banish).
+    # banished, taken back from the field, or used up (combat._banish).
     banish_damage: int = 0
 
 
@@ -590,7 +590,7 @@ class RunState(BaseModel):
     # The rest site the player is at, until they pick what to do there (see
     # engine.open_rest); the run can't move on while it is open.
     rest: RestSite | None = None
-    # The start of the run, after the first artifact: a starter kit to pick,
+    # The start of the run: a starter kit to pick,
     # then the AGI's opening deal to take or turn down (starts.py).
     kit_offer: list[StarterKit] | None = None
     agi_deals: list[AgiDeal] | None = None

@@ -223,7 +223,7 @@ export function TakeBack({
   uninstall?: boolean;
 }) {
   const label = uninstall
-    ? `Uninstall ${name} - it is purged for the rest of the fight`
+    ? `Uninstall ${name} - it is banished for the rest of the fight`
     : `Take ${name} back into your hand`;
   return (
     <button

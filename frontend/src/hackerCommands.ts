@@ -22,7 +22,7 @@ function slug(name: string): string {
 }
 
 // The shell command Dr. Chronos "hacks in" for a played card - `banished`:
-// the hand cards it banishes (Purge), shredded first.
+// the hand cards it banishes (Banish), shredded first.
 export function commandFor(card: Card, enemyName: string, banished: string[] = []): string {
   const target = slug(enemyName) || "target";
   if (banished.length > 0) {

@@ -47,7 +47,7 @@ STRONG_GUARD = 120
 
 LABELS = {
     PlayStyle.PERMANENTS: "permanent cards",
-    PlayStyle.GRAVEYARD: "your Cache",
+    PlayStyle.GRAVEYARD: "your Graveyard",
     PlayStyle.ONE_SHOT: "one-shot cards",
     PlayStyle.AGGRO: "raw attacks",
     PlayStyle.TURTLE: "blocking",

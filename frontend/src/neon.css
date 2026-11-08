@@ -3228,6 +3228,24 @@ button.field-slot.is-queued:hover:not(:disabled) {
   pointer-events: none;
 }
 
+/* program mode: a card that takes effect the moment it is played (card
+   flow) - a dashed amber frame and its "Instant" type line, so it never reads as
+   one more line for the program */
+.hand-card.is-instant {
+  outline: 2px dashed var(--gold);
+  outline-offset: 3px;
+}
+
+.hand-card.is-instant::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  background: repeating-linear-gradient(135deg, rgba(255, 211, 107, 0.09) 0 6px, transparent 6px 14px);
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .law-badge {
     animation: none;

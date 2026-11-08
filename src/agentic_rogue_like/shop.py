@@ -72,7 +72,9 @@ def _open_shop(run: RunState) -> Shop:
 
 def _pay(run: RunState, price: int, what: str) -> None:
     if run.player.gold < price:
-        raise ValueError(f"not enough credits for {what}: costs {price}, you have {run.player.gold}")
+        raise ValueError(
+            f"not enough credits for {what}: costs {price}, you have {run.player.gold}"
+        )
     run.player.gold -= price
 
 
@@ -130,7 +132,9 @@ def remove_card(run: RunState, deck_index: int) -> None:
     card = deck.pop(deck_index)
     shop.removal_used = True
     run.cards_removed += 1
-    run.history.append(f"You pay {shop.removal_price} credits to delete {card.name} from your deck.")
+    run.history.append(
+        f"You pay {shop.removal_price} credits to delete {card.name} from your deck."
+    )
 
 
 def leave_shop(run: RunState) -> None:

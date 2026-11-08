@@ -61,7 +61,7 @@ export function flyCard(card: HTMLElement, slot: HTMLElement, lands = false, pil
   );
   flight.oncancel = () => clone.remove();
   // an action burns out in its slot, then what is left of it goes on to its
-  // pile - the Cache, or the Purged pile for a one-shot
+  // pile - the Graveyard, or the Banished pile for a one-shot
   flight.onfinish = () => {
     const target = pile ? pileFace(pile) : null;
     if (lands || !target) {
@@ -69,13 +69,13 @@ export function flyCard(card: HTMLElement, slot: HTMLElement, lands = false, pil
       return;
     }
     const end = { dx, dy: dy - 14, scale: fit * 1.08 };
-    toPile(clone, target, pile ?? "cache", width, height, cx, cy, end);
+    toPile(clone, target, pile ?? "graveyard", width, height, cx, cy, end);
   };
 }
 
-export type PileKind = "cache" | "purged";
+export type PileKind = "graveyard" | "banished";
 
-const PILE_CLASS: Record<PileKind, string> = { cache: "pile-graveyard", purged: "pile-banished" };
+const PILE_CLASS: Record<PileKind, string> = { graveyard: "pile-graveyard", banished: "pile-banished" };
 const PILE_MS = 420;
 
 function pileFace(kind: PileKind): HTMLElement | null {
@@ -83,7 +83,7 @@ function pileFace(kind: PileKind): HTMLElement | null {
 }
 
 // A pixel mask that keeps a card's middle and eats away at its edges - a
-// card dissolving into the Purged pile (made once, then reused).
+// card dissolving into the Banished pile (made once, then reused).
 let dissolveMask: string | null = null;
 function pixelMask(): string {
   if (dissolveMask) return dissolveMask;
@@ -117,7 +117,7 @@ function toPile(
   const px = to.left + to.width / 2 - cx;
   const py = to.top + to.height / 2 - cy;
   const small = Math.min(to.width / width, to.height / height) * 0.9;
-  if (kind === "purged") {
+  if (kind === "banished") {
     clone.style.setProperty("mask-image", pixelMask());
     clone.style.setProperty("-webkit-mask-image", pixelMask());
     clone.style.setProperty("mask-size", "100% 100%");
@@ -133,7 +133,7 @@ function toPile(
         opacity: 0.85,
         offset: 0.5,
       },
-      { transform: `translate(${px}px, ${py}px) rotate(-12deg) scale(${small})`, opacity: kind === "purged" ? 0 : 0.6 },
+      { transform: `translate(${px}px, ${py}px) rotate(-12deg) scale(${small})`, opacity: kind === "banished" ? 0 : 0.6 },
     ],
     { duration: PILE_MS, easing: "cubic-bezier(0.5, 0, 0.75, 0.4)" },
   );
@@ -167,11 +167,11 @@ function sparks(at: DOMRect, color: string): void {
 }
 
 // A card taken off the field without coming back to the hand - destroyed,
-// purged or uninstalled: its last picture (`ghost`, a copy of the slot's
-// card made before it went) comes apart on its way into the Purged pile.
-export function dissolveToPurged(ghost: HTMLElement, from: DOMRect): void {
+// banished or uninstalled: its last picture (`ghost`, a copy of the slot's
+// card made before it went) comes apart on its way into the Banished pile.
+export function dissolveToBanished(ghost: HTMLElement, from: DOMRect): void {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const target = pileFace("purged");
+  const target = pileFace("banished");
   if (!target) return;
   const width = from.width;
   const height = from.height;
@@ -179,7 +179,7 @@ export function dissolveToPurged(ghost: HTMLElement, from: DOMRect): void {
   ghost.removeAttribute("style");
   Object.assign(ghost.style, { left: `${from.left}px`, top: `${from.top}px`, width: `${width}px`, height: `${height}px` });
   document.body.appendChild(ghost);
-  toPile(ghost, target, "purged", width, height, from.left + width / 2, from.top + height / 2, { dx: 0, dy: 0, scale: 1 });
+  toPile(ghost, target, "banished", width, height, from.left + width / 2, from.top + height / 2, { dx: 0, dy: 0, scale: 1 });
 }
 
 

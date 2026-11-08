@@ -1,6 +1,6 @@
 // The game's terms, each with a short definition - one place for every text
 // that marks them (RichText) and for the tooltip that explains them
-// (Tooltips). The game says Source / Cache / Purged / Integrity / Credits
+// (Tooltips). The game says Source / Graveyard / Banished / Integrity / Credits
 // everywhere; the tooltip terms carry the plain word next to them.
 
 export interface Keyword {
@@ -27,28 +27,34 @@ export const KEYWORDS: Keyword[] = [
     text: "Banished after it is played - gone for the rest of the fight, back in the next one. Marked 1× on the card.",
   },
   {
-    id: "cache",
-    term: "Cache · discard pile",
-    pattern: /\b(?:your|the) cache\b/,
+    id: "graveyard",
+    term: "Graveyard · discard pile",
+    pattern: /\b(?:your|the) graveyard\b/,
     text: "Played and discarded cards land here. When Source runs dry, it is shuffled back in.",
   },
   {
-    id: "purged",
-    term: "Purged · out of the fight",
-    pattern: /\bpurged\b/,
+    id: "banished",
+    term: "Banished · out of the fight",
+    pattern: /\bbanished\b/,
     text: "Gone for the rest of the fight. One-shot cards end up here; they are back next fight.",
   },
   {
-    id: "purge",
-    term: "Purge",
-    pattern: /\bpurges?\b/,
-    text: "Send a card from your hand to Purged: gone for the rest of the fight, back next fight. You pick which. Every purged card feeds Payload and Garbage Collect.",
+    id: "banish",
+    term: "Banish",
+    pattern: /\bbanish(?:es)?\b/,
+    text: "Send a card from your hand to Banished: gone for the rest of the fight, back next fight. You pick which. Every banished card feeds Payload and Garbage Collect.",
+  },
+  {
+    id: "instant",
+    term: "Instant",
+    pattern: /\binstant\b/,
+    text: "Takes effect the moment you play it - it never waits in a program line.",
   },
   {
     id: "source",
     term: "Source · draw pile",
     pattern: /\b(?:your|the) source\b/,
-    text: "Your draw pile. You draw from it at the start of every turn; empty, the Cache is shuffled back in.",
+    text: "Your draw pile. You draw from it at the start of every turn; empty, the Graveyard is shuffled back in.",
   },
   {
     id: "integrity",
@@ -157,7 +163,7 @@ export const KEYWORDS: Keyword[] = [
     id: "program-ends",
     term: "Program ends",
     pattern: /program ends/,
-    text: "Program mode: the lines after it don't run this turn - their cards go to the Cache unused.",
+    text: "Program mode: the lines after it don't run this turn - their cards go to the Graveyard unused.",
   },
   {
     id: "combo",
@@ -175,7 +181,7 @@ export const KEYWORDS: Keyword[] = [
     id: "interrupt",
     term: "Interrupt",
     pattern: /\binterrupt(?:s|ed)?\b/,
-    text: "Enemy move: only your first lines run this turn - the cut ones go to the Cache unused. Put what matters first.",
+    text: "Enemy move: only your first lines run this turn - the cut ones go to the Graveyard unused. Put what matters first.",
   },
   {
     id: "refactor",
@@ -187,7 +193,7 @@ export const KEYWORDS: Keyword[] = [
     id: "garbage-collector",
     term: "Garbage Collector",
     pattern: /\bgarbage collector\b/,
-    text: "Enemy move: the last line of your program is thrown away before it runs and goes to the Cache unused. Don't save your best for last.",
+    text: "Enemy move: the last line of your program is thrown away before it runs and goes to the Graveyard unused. Don't save your best for last.",
   },
   {
     id: "race-condition",

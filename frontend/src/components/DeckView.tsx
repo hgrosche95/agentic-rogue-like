@@ -9,7 +9,7 @@ export function DeckView({ deck, onClose }: { deck: Card[]; onClose: () => void 
 }
 
 // A look into a pile of cards. `ordered`: shown as they lie, the latest
-// first (the Cache, the Purged pile - what Undo or Undelete takes back is
+// first (the Graveyard, the Banished pile - what Undo or Undelete takes back is
 // on top); otherwise identical cards stacked into one tile with a count.
 export function PileView({
   title,

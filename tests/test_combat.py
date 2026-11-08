@@ -426,7 +426,7 @@ def test_purge_destroys_the_rightmost_permanent() -> None:
     assert state.field[3] is None
     assert state.field[0] == ARMOR
     assert AMPLIFIER in state.banished_pile
-    assert any("purges" in line for line in log)
+    assert any("banishes" in line for line in log)
     assert player.hp < player.max_hp
 
 

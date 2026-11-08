@@ -9,7 +9,7 @@ import {
 } from "../api";
 import { cardSound, hitsOf, sfx } from "../audio";
 import { splitTaunt, useBanners } from "../banners";
-import { dissolveToPurged, flyCard } from "../cardFlight";
+import { dissolveToBanished, flyCard } from "../cardFlight";
 import { ArtifactBar } from "./ArtifactBar";
 import { activeArtifactsLine } from "../artifactTimers";
 import { HERO } from "../characters";
@@ -30,7 +30,7 @@ import { CombatHelp, HelpButton } from "./CombatHelp";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
 import { HeroPortrait } from "./HeroPortrait";
 import { BossIntro, TurnBanner } from "./CombatBanners";
-import { banishCount, programPlan, queues } from "../program";
+import { banishCount, programPlan, queues, runsNow } from "../program";
 import { hasSeenTutorial } from "../tutorial";
 import { ProgramLines, ProgramOutput, TakeBack } from "./ProgramLines";
 import { TurnSummaryCard } from "./TurnSummaryCard";
@@ -95,7 +95,7 @@ function KeyHint({ children, className = "" }: { children: ReactNode; className?
 // `term`: the keyword (keywords.ts) the pile's tooltip explains
 // A pile with its count. When the count changes it bumps and shows by how
 // much ("+1", "−2") for a moment - cards visibly arriving or leaving.
-// What a pile holds, for its tooltip: the Cache and Purged pile their latest
+// What a pile holds, for its tooltip: the Graveyard and Banished pile their latest
 // cards first, the Source pile what is left in it - counted, without its order.
 const PEEK_CARDS = 5;
 
@@ -302,7 +302,7 @@ export function CombatPanel({
   const setDiscarding = (picks: number[] | null) =>
     setDiscardChoice(picks === null ? null : { on: combat, picks });
   const excess = Math.max(0, combat.hand.length - combat.max_hand_size);
-  // A card that banishes hand cards (Purge), played into a slot, first asks
+  // A card that banishes hand cards (Banish), played into a slot, first asks
   // which: the play waits here until they are picked - for the table it was
   // played on, like the discard picks; null while not choosing.
   const [banishChoice, setBanishChoice] = useState<{
@@ -388,10 +388,10 @@ export function CombatPanel({
   const arenaRef = useRef<ArenaHandle>(null);
   const fieldRef = useRef<HTMLDivElement>(null);
   // The permanents' last pictures, so one that leaves the field without
-  // coming back to the hand (destroyed, purged, uninstalled) can be shown
-  // coming apart on its way to the Purged pile (cardFlight.dissolveToPurged).
+  // coming back to the hand (destroyed, banished, uninstalled) can be shown
+  // coming apart on its way to the Banished pile (cardFlight.dissolveToBanished).
   const fieldShots = useRef(new Map<string, { ghost: HTMLElement; rect: DOMRect }>());
-  const purgedBefore = useRef(combat.banished_count);
+  const banishedBefore = useRef(combat.banished_count);
   useLayoutEffect(() => {
     const root = fieldRef.current;
     if (!root) return;
@@ -400,14 +400,14 @@ export function CombatPanel({
       const id = el.dataset.fieldCard;
       if (id) now.set(id, { ghost: el.cloneNode(true) as HTMLElement, rect: el.getBoundingClientRect() });
     });
-    // only while the Purged pile grew - a fight that ends clears the field too
-    if (combat.banished_count > purgedBefore.current) {
+    // only while the Banished pile grew - a fight that ends clears the field too
+    if (combat.banished_count > banishedBefore.current) {
       const inHand = new Set(combat.hand.map((card) => card.id));
       for (const [id, shot] of fieldShots.current) {
-        if (!now.has(id) && !inHand.has(id)) dissolveToPurged(shot.ghost, shot.rect);
+        if (!now.has(id) && !inHand.has(id)) dissolveToBanished(shot.ghost, shot.rect);
       }
     }
-    purgedBefore.current = combat.banished_count;
+    banishedBefore.current = combat.banished_count;
     fieldShots.current = now;
   }, [combat]);
   // Dr. Chronos typing a card in, the program running: skippable
@@ -689,7 +689,7 @@ export function CombatPanel({
     const stays = played !== undefined && (queues(combat, played) || PERMANENT_CARD_TYPES.includes(played.type));
     // into the program's background: to the hint, where its socket shows up
     // an action goes on into its pile once it has burnt out in the slot
-    const pile = stays || !played ? undefined : played.exhaust ? "purged" : "cache";
+    const pile = stays || !played ? undefined : played.exhaust ? "banished" : "graveyard";
     if (card) flyCard(card, slot.querySelector<HTMLElement>(".background-hint") ?? slot, stays, pile);
     setSelectedHandIndex(null);
     setPlayed({ on: combat, handIndex, slotIndex });
@@ -845,7 +845,7 @@ export function CombatPanel({
   }, [log, player.artifacts]);
 
   // a look into one of the piles, opened by clicking it
-  const [openPile, setOpenPile] = useState<"source" | "cache" | "purged" | null>(null);
+  const [openPile, setOpenPile] = useState<"source" | "graveyard" | "banished" | null>(null);
 
   // under a quarter of his HP: the edges of the screen pulse red
   const critical = !enemySlain && player.hp > 0 && player.hp <= player.max_hp * 0.25;
@@ -882,11 +882,11 @@ export function CombatPanel({
           onClose={() => setOpenPile(null)}
         />
       )}
-      {openPile === "cache" && (
-        <PileView title="Cache" cards={combat.discard_cards ?? []} ordered onClose={() => setOpenPile(null)} />
+      {openPile === "graveyard" && (
+        <PileView title="Graveyard" cards={combat.discard_cards ?? []} ordered onClose={() => setOpenPile(null)} />
       )}
-      {openPile === "purged" && (
-        <PileView title="Purged" cards={combat.banished_cards ?? []} ordered onClose={() => setOpenPile(null)} />
+      {openPile === "banished" && (
+        <PileView title="Banished" cards={combat.banished_cards ?? []} ordered onClose={() => setOpenPile(null)} />
       )}
       {helpOpen && (
         <CombatHelp
@@ -1041,7 +1041,7 @@ export function CombatPanel({
                   className={`phase-badge${combat.enemy_phase > 1 ? " is-enraged" : ""}`}
                   title={[
                     combat.enemy_phase > 1
-                      ? `Overclocked: +${combat.enemy_strength} attack, and it purges permanents.`
+                      ? `Overclocked: +${combat.enemy_strength} attack, and it banishes permanents.`
                       : "Overclocks into phase 2 at half integrity.",
                     combat.enemy_phases > 2 && combat.enemy_phase < 3
                       ? "Phase 3 at a quarter integrity: stronger again, no more bracing, 4-hit barrages."
@@ -1108,7 +1108,7 @@ export function CombatPanel({
                     className="interrupt-note"
                     tabIndex={0}
                     data-tip-term="Interrupt"
-                    data-tip="The enemy cuts your program off: queued lines after these don't run this turn - they go to the Cache unused."
+                    data-tip="The enemy cuts your program off: queued lines after these don't run this turn - they go to the Graveyard unused."
                   >
                     Interrupt after {cutAfter} line{cutAfter === 1 ? "" : "s"}
                   </span>
@@ -1209,7 +1209,7 @@ export function CombatPanel({
           {banishing !== null && banishCard && (
             <div className="discard-banner is-banish" role="status">
               <span>
-                {banishCard.name} - pick {banishNeeded} card{banishNeeded === 1 ? "" : "s"} to purge
+                {banishCard.name} - pick {banishNeeded} card{banishNeeded === 1 ? "" : "s"} to banish
               </span>
               <b>
                 {banishing.picks.length}/{banishNeeded}
@@ -1223,7 +1223,7 @@ export function CombatPanel({
                 data-flip-key={handKeys[i]}
                 data-hand-index={card.hand_index}
                 style={fanStyle(laidOut.indexOf(card), laidOut.length)}
-                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${handPick(card.hand_index)}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}`}
+                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${handPick(card.hand_index)}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}${runsNow(combat, card) ? " is-instant" : ""}`}
                 disabled={busy}
                 onMouseEnter={() => sfx.play("hover")}
                 onPointerDown={(event) => drag.onPointerDown(event, card.hand_index)}
@@ -1292,20 +1292,20 @@ export function CombatPanel({
           )}
           <div className="side-piles">
             <Pile
-              label="Cache"
+              label="Graveyard"
               count={combat.discard_count}
               kind="graveyard"
-              term="cache"
+              term="graveyard"
               names={combat.discard_names}
-              onOpen={() => setOpenPile("cache")}
+              onOpen={() => setOpenPile("graveyard")}
             />
             <Pile
-              label="Purged"
+              label="Banished"
               count={combat.banished_count}
               kind="banished"
-              term="purged"
+              term="banished"
               names={combat.banished_names}
-              onOpen={() => setOpenPile("purged")}
+              onOpen={() => setOpenPile("banished")}
             />
           </div>
         </div>
@@ -1320,7 +1320,7 @@ export function CombatPanel({
                 <span className="key-only">to skip</span>
               </>
           : banishing !== null && banishCard
-            ? `${banishCard.name}: click ${banishNeeded === 1 ? "the card" : `${banishNeeded} cards`} to purge for the rest of the fight - Esc to cancel.`
+            ? `${banishCard.name}: click ${banishNeeded === 1 ? "the card" : `${banishNeeded} cards`} to banish for the rest of the fight - Esc to cancel.`
           : discarding !== null
             ? `Hand limit is ${combat.max_hand_size}: pick ${excess} card(s) to discard (${discarding.length}/${excess}).`
             : selectedHandIndex !== null &&
@@ -1329,7 +1329,7 @@ export function CombatPanel({
             : movingLine !== null
             ? `Moving line ${movingLine + 1}: click another line - an occupied one swaps.`
             : programMode && selectedHandIndex === null
-            ? "Attacks, blocks and heals queue into the lines; permanents run in the background and boost the whole program. Drag a queued card to move it."
+            ? "Attacks, blocks and heals queue into the lines; permanents run in the background and boost the whole program; Instant cards (⚡) take effect the moment you play them. Drag a queued card to move it."
             : programMode && aimedCard && queues(combat, aimedCard)
             ? "Choose a program line - it runs at the end of the turn, left to right."
             : programMode && aimedCard && PERMANENT_CARD_TYPES.includes(aimedCard.type)
