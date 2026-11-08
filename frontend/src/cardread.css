@@ -50,7 +50,23 @@
   background: color-mix(in srgb, var(--card) 85%, #fff);
 }
 
-/* program mode: card flow runs the moment it is played - its text opens
+/* program mode: card flow runs the moment it is played - an amber type
+   line with a bolt ... */
+.card-typeline.is-instant,
+.card-typeline.is-instant b {
+  color: #07071a;
+}
+
+.card-typeline.is-instant {
+  background: var(--gold);
+}
+
+.card-typeline-icon.is-bolt {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* ... and its text opens
    with a bolt and "Instant:" (keywords.ts explains it on hover) */
 .card-body .card-instant {
   font-weight: 700;
