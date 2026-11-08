@@ -60,7 +60,7 @@ function describeKind(
       return { label: "Overload", amount: range, title: `Releases a crushing overload for ${range} next` };
     case "purge":
       return {
-        label: "Purge",
+        label: "Banish",
         amount: range,
         title: `Destroys your rightmost permanent card, then hits for ${range}`,
       };
@@ -98,7 +98,7 @@ function describeKind(
       return {
         label: "Garbage Collector",
         amount: range,
-        title: `Hits for ${range} and throws your program's last line away before it runs - it goes to the Cache unused`,
+        title: `Hits for ${range} and throws your program's last line away before it runs - it goes to the Graveyard unused`,
       };
     case "race":
       return {

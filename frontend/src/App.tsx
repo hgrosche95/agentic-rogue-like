@@ -64,7 +64,6 @@ import { IntroScreen } from "./components/IntroScreen";
 import { LoadingIndicator } from "./components/LoadingIndicator";
 import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
-import { JumpTransition } from "./components/JumpTransition";
 import { ScreenWipe } from "./components/ScreenWipe";
 import { CloseButton, Overlay } from "./components/Overlay";
 import { OverlayStage } from "./components/OverlayStage";
@@ -469,12 +468,6 @@ function App() {
         )}
         <AudioControls />
       </TopBar>
-
-      <JumpTransition
-        stamp={`${run.act}:${run.current_node.floor}`}
-        layer={layerLabel(run.current_node.floor, numFloors, run.act)}
-        room={run.current_node.type}
-      />
 
       {combat && (ongoing || slainCombat) ? (
         <CombatPanel

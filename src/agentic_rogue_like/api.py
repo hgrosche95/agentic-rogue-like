@@ -263,7 +263,7 @@ class PendingCombatView(BaseModel):
     # (banished - it has run since an earlier turn) instead of returning it
     # to the hand (combat.take_back)
     field_uninstalls: list[bool] = Field(default_factory=list)
-    # The piles' cards by name, for a peek at them: the Cache and the Purged
+    # The piles' cards by name, for a peek at them: the Graveyard and the Banished
     # pile in the order they went there (the latest last), the Source pile
     # sorted - its order is the draw's secret.
     draw_names: list[str] = Field(default_factory=list)
@@ -453,7 +453,7 @@ class RunView(BaseModel):
     card_reward: list[CardView] | None
     # Artifacts to pick one from before the current room can be entered.
     artifact_offer: list[Artifact] | None
-    # The start of the run, after the first artifact: a starter kit to pick,
+    # The start of the run: a starter kit to pick,
     # then the AGI's deals to take one of or turn down (starts.py).
     kit_offer: list[StarterKitView] | None
     agi_deals: list[AgiDealView] | None
@@ -505,7 +505,7 @@ class EventChoiceRequest(BaseModel):
 class PlayCardRequest(BaseModel):
     hand_index: int
     slot_index: int
-    # Hand indices (before the play) of the cards a banishing card (Purge)
+    # Hand indices (before the play) of the cards a banishing card (Banish)
     # takes - exactly CardView.banish of them, or fewer if the hand is short.
     # Left out, the weakest go (combat.banish_candidates).
     banish_indices: list[int] | None = None

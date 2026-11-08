@@ -152,15 +152,12 @@ def test_card_bonuses_and_lifesteal() -> None:
     assert player.hp == 30 + 4 + 3 + 1
 
 
-def test_run_offers_an_artifact_at_the_start_and_for_harder_fights_only() -> None:
+def test_run_offers_artifacts_for_harder_fights_only() -> None:
     from agentic_rogue_like.engine import _finish_combat
     from agentic_rogue_like.models import NodeType
 
     run = new_run(1)
-    assert run.artifact_offer is not None and len(run.artifact_offer) == ARTIFACT_CHOICES
-
-    choose_artifact(run, 0)
-    assert len(run.player.artifacts) == 1 and run.artifact_offer is None
+    assert run.artifact_offer is None and not run.player.artifacts
 
     # walking the map pays none
     for _ in range(4):
@@ -174,23 +171,30 @@ def test_run_offers_an_artifact_at_the_start_and_for_harder_fights_only() -> Non
     run.card_reward = None
     node.type = NodeType.ELITE
     _finish_combat(run, node, "Foe", victory=True, rng=random.Random(1))
-    assert run.artifact_offer is not None
-    assert not {a.id for a in run.artifact_offer} & {a.id for a in run.player.artifacts}
+    assert run.artifact_offer is not None and len(run.artifact_offer) == ARTIFACT_CHOICES
+    choose_artifact(run, 0)
+    assert len(run.player.artifacts) == 1 and run.artifact_offer is None
 
 
 def test_api_blocks_the_room_until_an_artifact_is_picked() -> None:
+    from agentic_rogue_like.sessions import get_session
+
     run = client.post("/runs", json={"seed": 1}).json()
     run_id = run["run_id"]
-    assert len(run["artifact_offer"]) == ARTIFACT_CHOICES
-
-    assert client.post(f"/runs/{run_id}/resolve").status_code == 409
-    assert client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 5}).status_code == 400
-
-    picked = run["artifact_offer"][2]
-    run = client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 2}).json()
+    # no artifact at the start of a run
     assert run["artifact_offer"] is None
-    assert run["player"]["artifacts"][0]["id"] == picked["id"]
     assert client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0}).status_code == 409
     client.post(f"/runs/{run_id}/kit", json={"kit_index": 0})
     client.post(f"/runs/{run_id}/agi-deal", json={"deal_index": None})  # run start
+
+    # an offer (as an elite leaves one) blocks the room until it is answered
+    offer = roll_artifact_offer(random.Random(1), [])
+    get_session(run_id).run.artifact_offer = offer
+    assert client.post(f"/runs/{run_id}/resolve").status_code == 409
+    assert client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 5}).status_code == 400
+
+    run = client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 2}).json()
+    assert run["artifact_offer"] is None
+    assert run["player"]["artifacts"][0]["id"] == offer[2].id
+    assert client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0}).status_code == 409
     assert client.post(f"/runs/{run_id}/resolve").status_code == 200

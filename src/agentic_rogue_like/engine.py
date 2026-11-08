@@ -114,13 +114,10 @@ def new_run(
         setting=setting,
         program_mode=program_mode,
     )
-    # Its own rng, so offering artifacts doesn't shift the run rng's sequence
-    # (enemies, events, rewards) compared to a run without them.
-    run.artifact_offer = roll_artifact_offer(
-        random.Random(f"{seed}-artifacts-0"), [], pool=artifact_pool(run)
-    )
-    # ... and so do the starter kits (starts.py), picked after the artifact;
-    # the AGI's deal follows once a kit is in the deck (choose_kit).
+    # No artifact at the start - the first one comes from an elite. The
+    # starter kits (starts.py) get their own rng, so offering them doesn't
+    # shift the run rng's sequence (enemies, events, rewards); the AGI's deal
+    # follows once a kit is in the deck (choose_kit).
     run.kit_offer = roll_kits(random.Random(f"{seed}-kits"), reward_pool(run))
     begin(run)
     return run
@@ -146,9 +143,7 @@ def choose_kit(run: RunState, index: int) -> None:
         f"replace {', '.join(c.name for c in removed)}."
     )
     run.kit_offer = None
-    run.agi_deals = roll_deals(
-        random.Random(f"{run.seed}-deals"), run.player, reward_pool(run), artifact_pool(run)
-    )
+    run.agi_deals = roll_deals(random.Random(f"{run.seed}-deals"), run.player, reward_pool(run))
 
 
 def choose_deal(run: RunState, index: int | None) -> None:

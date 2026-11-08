@@ -129,7 +129,7 @@ def test_omega_speaks_about_the_run() -> None:
     spoken = omega_taunts(omega, [*deck, forged.model_copy(update={"id": "agi-x-0"})], stats)
     assert "You played Exploit 42 times" in spoken.taunt
     assert "you took my card" in spoken.taunt
-    assert "your Cache has been analysed" in spoken.phase_taunts[0]
+    assert "your Graveyard has been analysed" in spoken.phase_taunts[0]
     # without a style or stats: its own lines
     assert omega_taunts(omega, starter_deck(), RunStats()).taunt == omega.taunt
 

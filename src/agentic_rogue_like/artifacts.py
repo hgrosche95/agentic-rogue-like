@@ -158,13 +158,13 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="stack-trace",
         name="Stack Trace",
-        description="Attacks deal +1 damage for every 4 cards in your Cache.",
+        description="Attacks deal +1 damage for every 4 cards in your Graveyard.",
         graveyard_attack=1,
     ),
     Artifact(
         id="logic-bomb",
         name="Logic Bomb",
-        description="Whenever a card is purged, infect the enemy with 3 Malware.",
+        description="Whenever a card is banished, infect the enemy with 3 Malware.",
         banish_malware=3,
     ),
     Artifact(

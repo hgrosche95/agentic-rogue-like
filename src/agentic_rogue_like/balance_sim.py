@@ -356,7 +356,7 @@ def _junk(state: CombatState, card: Card) -> bool:
 
 
 def _banish_pick(state: CombatState, idx: int) -> list[int] | None:
-    """What hand card `idx` (Purge) should banish - the weakest junk - or
+    """What hand card `idx` (Banish) should banish - the weakest junk - or
     None if there is too little junk to make it worth playing."""
     count = banish_count(state, state.hand[idx])
     junk = [i for i in banish_candidates(state, idx) if _junk(state, state.hand[i])]
@@ -400,7 +400,7 @@ def smart_bot(state: CombatState, player: PlayerState, rng: random.Random) -> No
             return
         played = False
         # 0. Flush Glitch cards first - free, and they only clog the hand.
-        # A Purge does it better: it draws on top.
+        # A Banish does it better: it draws on top.
         glitch = next((i for i, c in enumerate(state.hand) if c.type is CardType.GLITCH), None)
         purge = next(
             (i for i, c in enumerate(state.hand) if c.banish and not overflows(state, c)), None
@@ -878,16 +878,12 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
     if cfg.rewards:  # mirrors engine.new_run / choose_kit: a kit, then a deal (both at random)
         kits = roll_kits(random.Random(f"{seed}-kits"), pool)
         apply_kit(player, rng.choice(kits), cfg.program)
-        deals = roll_deals(random.Random(f"{seed}-deals"), player, pool, cfg.artifact_pool())
+        deals = roll_deals(random.Random(f"{seed}-deals"), player, pool)
         apply_deal(player, rng.choice(deals))
 
     while True:
-        # mirrors the engine: an artifact at the start, then one for every
-        # won elite or act boss (below)
-        if cfg.artifacts and steps == 0:
-            offer = roll_artifact_offer(rng, player.artifacts, pool=cfg.artifact_pool())
-            if offer:
-                gain_artifact(player, pick_artifact(offer, bot_name, rng, player.deck))
+        # mirrors the engine: no artifact at the start, one for every won
+        # elite or act boss (below)
         if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
             tier = tier_for(node.floor, node.type, act)
             style = play_style(player.deck) if cfg.adaptive else None

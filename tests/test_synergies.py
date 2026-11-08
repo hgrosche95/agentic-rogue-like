@@ -111,7 +111,7 @@ def test_failsafe_goes_off_when_kernel_panic_destroys_it() -> None:
     assert state.enemy.hp - state.enemy_hp == 19
 
 
-def test_failsafe_goes_off_when_it_is_uninstalled_or_purged() -> None:
+def test_failsafe_goes_off_when_it_is_uninstalled_or_banished() -> None:
     state, player = _fight()
     _play(state, player, "Failsafe", 0)
     _next_turn(state, player)

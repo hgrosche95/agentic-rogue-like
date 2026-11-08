@@ -17,7 +17,7 @@ type LineKind = "hit" | "hurt" | "block" | "heal" | "malware" | "banish" | "foe"
 function lineKind(text: string, isCommand = false): LineKind {
   if (isCommand) return "command";
   if (/You are at \d+ integrity|You take \d+|of your integrity|cost you \d+ integrity/.test(text)) return "hurt";
-  if (/\bpurged?\b|uninstall|purges/i.test(text)) return "banish";
+  if (/\bbanish(?:es|ed)?\b|uninstall/i.test(text)) return "banish";
   if (/Malware|infect/i.test(text)) return "malware";
   if (
     /^You (play|queue)[^,]*, (dealing|destroying)|hit .* for \d+ damage|goes off for|strike first|backfires|lets the buffer out/.test(

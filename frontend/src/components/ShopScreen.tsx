@@ -71,7 +71,7 @@ export function ShopScreen({
   const deckTooSmall = deck.length <= shop.min_deck_size;
   const canPurge = !shop.removal_used && gold >= shop.removal_price && !deckTooSmall;
   const purgeNote = shop.removal_used
-    ? "Done - one purge per black market."
+    ? "Done - one deletion per black market."
     : deckTooSmall
       ? `Your deck can't get smaller than ${shop.min_deck_size} cards.`
       : gold < shop.removal_price

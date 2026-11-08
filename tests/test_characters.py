@@ -408,7 +408,9 @@ def test_vibe_coder_artifact_offers_and_shops_come_from_his_pool() -> None:
     seen: set[str] = set()
     for seed in range(40):
         run = new_run(seed, character=Character.VIBE_CODER)
-        seen |= {a.id for a in run.artifact_offer}
+        seen |= {
+            a.id for a in roll_artifact_offer(random.Random(seed), [], pool=VIBE.artifact_pool)
+        }
         seen |= {item.artifact.id for item in roll_shop(run).artifacts}
 
     assert seen <= pool

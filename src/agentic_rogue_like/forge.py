@@ -66,8 +66,8 @@ FORGE_MAX_HP_COST = 6
 
 _SCALING_TEXT = {
     Scaling.PERMANENT: "per permanent card on the field",
-    Scaling.GRAVEYARD: "per card in your Cache",
-    Scaling.BANISHED: "per purged card",
+    Scaling.GRAVEYARD: "per card in your Graveyard",
+    Scaling.BANISHED: "per banished card",
     Scaling.PLAYED: "per card you already played this turn",
     Scaling.EMPTY_SLOT: "per empty field slot",
     Scaling.MALWARE: "per Malware on the enemy",

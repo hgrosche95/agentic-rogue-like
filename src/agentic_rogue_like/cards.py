@@ -8,7 +8,7 @@ their own payoff card, so a run can lean into one of them:
 - permanents: Botnet, Load Balancer, Mainframe hit harder the fuller the field;
 - graveyard: Memory Dump/Brute Force/Fork Bomb fill it, Stack Overflow and Rollback use it;
 - one-shot cards: Zero-Day/Sandbox/Backup are strong but banished after use,
-  Purge banishes a hand card of the player's choice on top,
+  Banish banishes a hand card of the player's choice on top,
   Payload grows with the banished pile, Undelete brings one card back and
   System Restore all of them - at the price of the whole field.
 
@@ -54,7 +54,7 @@ def _undo() -> Card:
         type=CardType.RETRIEVE,
         value=1,
         exhaust=True,
-        description="One-shot. Return the last card from your Cache to your hand.",
+        description="One-shot. Return the last card from your Graveyard to your hand.",
     )
 
 
@@ -66,7 +66,7 @@ def _garbage_collect() -> Card:
         value=2,
         scaling=Scaling.BANISHED,
         scale_value=2,
-        description="Deal 2 (+ATK) damage, +2 per purged card.",
+        description="Deal 2 (+ATK) damage, +2 per banished card.",
     )
 
 
@@ -278,7 +278,7 @@ REWARD_POOL: list[Card] = [
         scaling=Scaling.GRAVEYARD,
         scale_value=2,
         rarity=Rarity.UNCOMMON,
-        description="Deal 1 (+ATK) damage, +2 per card in your Cache.",
+        description="Deal 1 (+ATK) damage, +2 per card in your Graveyard.",
     ),
     Card(
         id="payload",
@@ -289,7 +289,7 @@ REWARD_POOL: list[Card] = [
         scale_value=4,
         token_cost=2,
         rarity=Rarity.RARE,
-        description="Deal 2 (+ATK) damage, +4 per purged card.",
+        description="Deal 2 (+ATK) damage, +4 per banished card.",
     ),
     # ---- statuses: Malware, Exposed, Throttled (combat.STATUS_DESCRIPTIONS)
     Card(
@@ -384,19 +384,19 @@ REWARD_POOL: list[Card] = [
     ),
     Card(
         id="purge",
-        name="Purge",
+        name="Banish",
         type=CardType.DRAW,
         value=2,
         banish=1,
         exhaust=True,
         rarity=Rarity.COMMON,
-        description="One-shot. Purge a card from your hand. Draw 2 cards.",
+        description="One-shot. Banish a card from your hand. Draw 2 cards.",
     ),
     # ---- the banish style beyond the rares: an enabler that hits, payoffs
     # in attack and defense, and a big dig. balance-sim, two copies in the
     # starter deck (boss fights won; the deck alone 60 %, with two more
     # Exploits 52 %): Shred 52, Dead Drop 49, Burn Notice 57, Wipe 75 % -
-    # Wipe at "draw 3" was 80, Purge-style "banish 1, draw 2" 92.
+    # Wipe at "draw 3" was 80, Banish-style "banish 1, draw 2" 92.
     Card(
         id="shred",
         name="Shred",
@@ -404,7 +404,7 @@ REWARD_POOL: list[Card] = [
         value=8,
         banish=1,
         rarity=Rarity.COMMON,
-        description="Purge a card from your hand. Deal 8 (+ATK) damage.",
+        description="Banish a card from your hand. Deal 8 (+ATK) damage.",
     ),
     Card(
         id="dead-drop",
@@ -414,7 +414,7 @@ REWARD_POOL: list[Card] = [
         scaling=Scaling.BANISHED,
         scale_value=3,
         rarity=Rarity.COMMON,
-        description="Deal 3 (+ATK) damage, +3 per purged card.",
+        description="Deal 3 (+ATK) damage, +3 per banished card.",
     ),
     Card(
         id="burn-notice",
@@ -424,7 +424,7 @@ REWARD_POOL: list[Card] = [
         scaling=Scaling.BANISHED,
         scale_value=2,
         rarity=Rarity.UNCOMMON,
-        description="Gain 3 block, +2 per purged card.",
+        description="Gain 3 block, +2 per banished card.",
     ),
     Card(
         id="wipe",
@@ -434,7 +434,7 @@ REWARD_POOL: list[Card] = [
         banish=2,
         exhaust=True,
         rarity=Rarity.UNCOMMON,
-        description="One-shot. Purge 2 cards from your hand. Draw 2 cards.",
+        description="One-shot. Banish 2 cards from your hand. Draw 2 cards.",
     ),
     Card(
         id="memory-dump",
@@ -454,7 +454,7 @@ REWARD_POOL: list[Card] = [
         value=2,
         exhaust=True,
         rarity=Rarity.COMMON,
-        description="One-shot. Return the last 2 cards from your Cache to your hand.",
+        description="One-shot. Return the last 2 cards from your Graveyard to your hand.",
     ),
     Card(
         id="undelete",
@@ -463,7 +463,7 @@ REWARD_POOL: list[Card] = [
         value=1,
         exhaust=True,
         rarity=Rarity.RARE,
-        description="One-shot. Return the last purged card (not an Undelete) to your hand.",
+        description="One-shot. Return the last banished card (not an Undelete) to your hand.",
     ),
     Card(
         id="system-restore",
@@ -475,7 +475,7 @@ REWARD_POOL: list[Card] = [
         rarity=Rarity.RARE,
         description=(
             "One-shot. Destroy all permanent cards on the field. Return every "
-            "purged card (not a restore card) to your hand."
+            "banished card (not a restore card) to your hand."
         ),
     ),
     # ---- permanents
@@ -525,7 +525,7 @@ REWARD_POOL: list[Card] = [
         banish_damage=14,
         rarity=Rarity.UNCOMMON,
         description=(
-            "Permanent. Reduce incoming damage by 1. When it is purged, deal 14 damage."
+            "Permanent. Reduce incoming damage by 1. When it is banished, deal 14 damage."
         ),
     ),
     Card(
@@ -553,7 +553,7 @@ REWARD_POOL: list[Card] = [
         value=1,
         token_cost=2,
         rarity=Rarity.RARE,
-        description="Permanent. Whenever a card is purged, draw 1 card (at most 3 per turn).",
+        description="Permanent. Whenever a card is banished, draw 1 card (at most 3 per turn).",
     ),
 ]
 
@@ -587,7 +587,7 @@ VIBE_CODER_REWARD_POOL: list[Card] = [
         token_cost=0,
         rarity=Rarity.COMMON,
         description=(
-            "One-shot. Costs no tokens. Return the last card from your Cache to your hand."
+            "One-shot. Costs no tokens. Return the last card from your Graveyard to your hand."
         ),
     ),
     Card(
@@ -864,11 +864,11 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     },
     "Garbage Collect": {
         "scale_value": 3,
-        "description": "Deal 2 (+ATK) damage, +3 per purged card.",
+        "description": "Deal 2 (+ATK) damage, +3 per banished card.",
     },
     "Undo": {
         "value": 2,
-        "description": "One-shot. Return the last 2 cards from your Cache to your hand.",
+        "description": "One-shot. Return the last 2 cards from your Graveyard to your hand.",
     },
     # ---- reward pool
     "Brute Force": {"value": 15, "description": "Discard 1 random card. Deal 15 (+ATK) damage."},
@@ -880,26 +880,26 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     },
     "Stack Overflow": {
         "scale_value": 3,
-        "description": "Deal 1 (+ATK) damage, +3 per card in your Cache.",
+        "description": "Deal 1 (+ATK) damage, +3 per card in your Graveyard.",
     },
-    "Payload": {"scale_value": 5, "description": "Deal 2 (+ATK) damage, +5 per purged card."},
+    "Payload": {"scale_value": 5, "description": "Deal 2 (+ATK) damage, +5 per banished card."},
     "Honeypot": {"value": 11, "description": "Discard 1 random card. Gain 11 block."},
     "Sandbox": {"value": 21, "description": "One-shot. Gain 21 block."},
     "Backup": {"value": 14, "description": "One-shot. Heal 14 integrity."},
     "Phishing": {"value": 3, "description": "One-shot. Draw 3 cards."},
-    "Shred": {"value": 11, "description": "Purge a card from your hand. Deal 11 (+ATK) damage."},
-    "Dead Drop": {"scale_value": 4, "description": "Deal 3 (+ATK) damage, +4 per purged card."},
-    "Burn Notice": {"scale_value": 3, "description": "Gain 3 block, +3 per purged card."},
-    "Wipe": {"value": 3, "description": "One-shot. Purge 2 cards from your hand. Draw 3 cards."},
-    "Purge": {"value": 3, "description": "One-shot. Purge a card from your hand. Draw 3 cards."},
+    "Shred": {"value": 11, "description": "Banish a card from your hand. Deal 11 (+ATK) damage."},
+    "Dead Drop": {"scale_value": 4, "description": "Deal 3 (+ATK) damage, +4 per banished card."},
+    "Burn Notice": {"scale_value": 3, "description": "Gain 3 block, +3 per banished card."},
+    "Wipe": {"value": 3, "description": "One-shot. Banish 2 cards from your hand. Draw 3 cards."},
+    "Banish": {"value": 3, "description": "One-shot. Banish a card from your hand. Draw 3 cards."},
     "Memory Dump": {"value": 5, "description": "One-shot. Discard your hand, then draw 5 cards."},
     "Rollback": {
         "value": 3,
-        "description": "One-shot. Return the last 3 cards from your Cache to your hand.",
+        "description": "One-shot. Return the last 3 cards from your Graveyard to your hand.",
     },
     "Undelete": {
         "value": 2,
-        "description": "One-shot. Return the last 2 purged cards (not Undeletes) to your hand.",
+        "description": "One-shot. Return the last 2 banished cards (not Undeletes) to your hand.",
     },
     "Load Balancer": {
         "value": 2,
@@ -940,7 +940,7 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Failsafe": {
         "banish_damage": 20,
         "description": (
-            "Permanent. Reduce incoming damage by 1. When it is purged, deal 20 damage."
+            "Permanent. Reduce incoming damage by 1. When it is banished, deal 20 damage."
         ),
     },
     "Counterstrike": {"value": 7, "description": "Deal 7 (+ATK) damage, +1 per block you have."},
@@ -977,7 +977,7 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Copy-Paste": {
         "value": 2,
         "description": (
-            "One-shot. Costs no tokens. Return the last 2 cards from your Cache to your hand."
+            "One-shot. Costs no tokens. Return the last 2 cards from your Graveyard to your hand."
         ),
     },
     "Vibe Check": {

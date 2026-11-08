@@ -1,15 +1,15 @@
 """The start of a run: a starter kit, then the AGI's opening deal.
 
 Every run used to open with the same eleven cards, so the first fights all
-played alike. Now, right after the first artifact, the player picks one of
+played alike. Now the run opens with the player picking one of
 three kits - two cards of one strategy that replace basic cards (see
 _KIT_REPLACES) - and so commits to a way of playing from the first room on.
 Then the AGI makes an offer: one of three deals, or none. The deals are
 worked out down to the card when they are rolled, so the player sees exactly
 what they trade.
 
-Both are rolled from their own seeded rngs (like the artifact offers in
-engine.new_run), so they don't shift the run rng's sequence.
+Both are rolled from their own seeded rngs, so they don't shift the run
+rng's sequence. No deal hands out an artifact: the run starts without one.
 """
 
 from __future__ import annotations
@@ -17,11 +17,10 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
-from .artifacts import gain_artifact, roll_artifact_offer
+from .artifacts import gain_artifact
 from .cards import can_upgrade, reward_card, upgrade_card
 from .models import (
     AgiDeal,
-    Artifact,
     Card,
     CardType,
     Character,
@@ -57,7 +56,7 @@ KITS = (
     ),
     _KitSpec(
         "graveyard",
-        "Cache",
+        "Graveyard",
         "Throw cards away on purpose, then bring the best ones back.",
         ("Brute Force", "Rollback"),
     ),
@@ -175,7 +174,6 @@ def roll_deals(
     rng: random.Random,
     player: PlayerState,
     pool: list[Card],
-    artifact_pool: list[Artifact],
 ) -> list[AgiDeal]:
     deck = player.deck
     attacks = _basics(deck, CardType.ATTACK)
@@ -183,7 +181,6 @@ def roll_deals(
     commons = [c for c in pool if c.rarity is Rarity.COMMON]
     rares = [c for c in pool if c.rarity is Rarity.RARE]
     upgradable = [c for c in attacks + blocks if can_upgrade(c)]
-    artifacts = roll_artifact_offer(rng, player.artifacts, count=1, pool=artifact_pool)
 
     deals: list[AgiDeal] = []
     if attacks and blocks:
@@ -219,18 +216,6 @@ def roll_deals(
                 ),
                 add=[rare],
                 max_hp=-FORBIDDEN_MAX_HP,
-            )
-        )
-    if artifacts:
-        artifact = artifacts[0]
-        deals.append(
-            AgiDeal(
-                kind=DealKind.TROJAN,
-                name="Trojan gift",
-                description=f"Install {artifact.name} ({artifact.description}) - "
-                "but a Glitch hides in your deck.",
-                artifact=artifact,
-                add=[glitch_card(deck)],
             )
         )
     if len(upgradable) >= 2:
