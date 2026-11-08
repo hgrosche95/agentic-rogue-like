@@ -1139,7 +1139,9 @@ def run_program(
                 log.append(line + f"{run.name}: the next action runs {1 + forks} times.")
             elif run.type is CardType.IF_WOUNDED:
                 forks += run.value if _wounded(state) else 0
-                state_line = "at half integrity or less" if _wounded(state) else "still above half integrity"
+                state_line = (
+                    "at half integrity or less" if _wounded(state) else "still above half integrity"
+                )
                 log.append(line + f"{run.name}: the enemy is {state_line}.")
             elif run.type is CardType.GUARD:
                 guarded = state.player_block >= GUARD_BLOCK
@@ -1977,7 +1979,8 @@ def _omega_toll(state: CombatState, card: Card, player: PlayerState) -> str:
     if state.trap_cost and card.id.startswith("agi-"):
         _hurt(state, player, state.trap_cost, card.name)
         line += (
-            f'OMEGA: "I built {card.name}. I know its flaw." It costs you {state.trap_cost} integrity. '
+            f'OMEGA: "I built {card.name}. I know its flaw." '
+            f"It costs you {state.trap_cost} integrity. "
         )
     return line
 
@@ -2014,7 +2017,10 @@ def _affix_after_turn(state: CombatState) -> list[str]:
     if affix is Affix.REGENERATING and state.enemy_hp < state.enemy.hp:
         before = state.enemy_hp
         state.enemy_hp = min(state.enemy.hp, before + round(state.enemy.attack * REGEN_FACTOR))
-        return [f"{name} regenerates {state.enemy_hp - before} integrity. {name} at {state.enemy_hp} integrity."]
+        return [
+            f"{name} regenerates {state.enemy_hp - before} integrity. "
+            f"{name} at {state.enemy_hp} integrity."
+        ]
     return []
 
 
@@ -2032,7 +2038,9 @@ def _tick_statuses(state: CombatState, player: PlayerState) -> list[str]:
     if stacks := state.enemy_status.get(Status.MALWARE, 0):
         bite = stacks // 2 if active_law(state) is Law.MALWARE_HALVED else stacks
         lost = _lose_hp(state, bite)
-        log.append(f"Malware eats {lost} integrity off {name}. {name} at {state.enemy_hp} integrity.")
+        log.append(
+            f"Malware eats {lost} integrity off {name}. {name} at {state.enemy_hp} integrity."
+        )
         if line := _check_boss_phase(state):
             log.append(line.strip())
     if stacks := state.player_status.get(Status.MALWARE, 0):
@@ -2118,7 +2126,8 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
     }[intent]
     rolled = " + ".join(str(h) for h in hits)
     log.append(
-        f"{name} {uses}{move} ({rolled}). You take {taken} damage. You are at {player.hp} integrity."
+        f"{name} {uses}{move} ({rolled}). You take {taken} damage. "
+        f"You are at {player.hp} integrity."
     )
     if intent is EnemyIntentType.LOCK:
         # A program locks one of its lines - they are all empty by now.
@@ -2153,7 +2162,8 @@ def _special_move(state: CombatState, player: PlayerState, rng: random.Random) -
     if thorns := total(state.artifacts, "thorns"):
         _, dealt = _damage_enemy(state, thorns)
         log.append(
-            f"The attack backfires: {name} takes {dealt} damage. {name} at {state.enemy_hp} integrity."
+            f"The attack backfires: {name} takes {dealt} damage. "
+            f"{name} at {state.enemy_hp} integrity."
         )
     return log
 

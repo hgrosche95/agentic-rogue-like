@@ -1008,7 +1008,8 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "If Wounded": {
         "draw": 1,
         "description": (
-            "Control flow. Enemy at half integrity or less: the next action runs twice. Draw 1 card."
+            "Control flow. Enemy at half integrity or less: "
+            "the next action runs twice. Draw 1 card."
         ),
     },
     "Bootstrap": {
