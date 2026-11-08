@@ -1329,7 +1329,7 @@ export function CombatPanel({
             : movingLine !== null
             ? `Moving line ${movingLine + 1}: click another line - an occupied one swaps.`
             : programMode && selectedHandIndex === null
-            ? "Attacks, blocks and heals queue into the lines; permanents run in the background and boost the whole program; Instant cards take effect the moment you play them. Drag a queued card to move it."
+            ? "Attacks, blocks and heals queue into the lines; permanents run in the background and boost the whole program; Instant cards (⚡) take effect the moment you play them. Drag a queued card to move it."
             : programMode && aimedCard && queues(combat, aimedCard)
             ? "Choose a program line - it runs at the end of the turn, left to right."
             : programMode && aimedCard && PERMANENT_CARD_TYPES.includes(aimedCard.type)

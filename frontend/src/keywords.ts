@@ -45,6 +45,12 @@ export const KEYWORDS: Keyword[] = [
     text: "Send a card from your hand to Banished: gone for the rest of the fight, back next fight. You pick which. Every banished card feeds Payload and Garbage Collect.",
   },
   {
+    id: "instant",
+    term: "Instant",
+    pattern: /\binstant\b/,
+    text: "Takes effect the moment you play it - it never waits in a program line.",
+  },
+  {
     id: "source",
     term: "Source · draw pile",
     pattern: /\b(?:your|the) source\b/,
