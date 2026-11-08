@@ -50,6 +50,21 @@
   background: color-mix(in srgb, var(--card) 85%, #fff);
 }
 
+/* program mode: card flow runs the moment it is played - an amber band */
+.card-typeline.is-instant,
+.card-typeline.is-instant b {
+  color: #07071a;
+}
+
+.card-typeline.is-instant {
+  background: var(--gold);
+}
+
+.card-typeline-icon.is-bolt {
+  fill: currentColor;
+  stroke: none;
+}
+
 /* the readout under it: the card's icon in front of its number */
 .card-typeline + .card-readout {
   margin-top: 5px;

@@ -30,7 +30,7 @@ import { CombatHelp, HelpButton } from "./CombatHelp";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
 import { HeroPortrait } from "./HeroPortrait";
 import { BossIntro, TurnBanner } from "./CombatBanners";
-import { banishCount, programPlan, queues } from "../program";
+import { banishCount, programPlan, queues, runsNow } from "../program";
 import { hasSeenTutorial } from "../tutorial";
 import { ProgramLines, ProgramOutput, TakeBack } from "./ProgramLines";
 import { TurnSummaryCard } from "./TurnSummaryCard";
@@ -1223,7 +1223,7 @@ export function CombatPanel({
                 data-flip-key={handKeys[i]}
                 data-hand-index={card.hand_index}
                 style={fanStyle(laidOut.indexOf(card), laidOut.length)}
-                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${handPick(card.hand_index)}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}`}
+                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${handPick(card.hand_index)}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}${runsNow(combat, card) ? " is-instant" : ""}`}
                 disabled={busy}
                 onMouseEnter={() => sfx.play("hover")}
                 onPointerDown={(event) => drag.onPointerDown(event, card.hand_index)}
@@ -1329,7 +1329,7 @@ export function CombatPanel({
             : movingLine !== null
             ? `Moving line ${movingLine + 1}: click another line - an occupied one swaps.`
             : programMode && selectedHandIndex === null
-            ? "Attacks, blocks and heals queue into the lines; permanents run in the background and boost the whole program. Drag a queued card to move it."
+            ? "Attacks, blocks and heals queue into the lines; permanents run in the background and boost the whole program; Instant cards take effect the moment you play them. Drag a queued card to move it."
             : programMode && aimedCard && queues(combat, aimedCard)
             ? "Choose a program line - it runs at the end of the turn, left to right."
             : programMode && aimedCard && PERMANENT_CARD_TYPES.includes(aimedCard.type)

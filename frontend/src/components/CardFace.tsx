@@ -1,7 +1,7 @@
 import { useContext, useLayoutEffect, useRef, type ReactNode } from "react";
-import { CONTROL_FLOW_TYPES, PERMANENT_CARD_TYPES, type Card, type CardType } from "../api";
+import { CONTROL_FLOW_TYPES, PERMANENT_CARD_TYPES, QUEUED_TYPES, type Card, type CardType } from "../api";
 import { ShowTokensContext } from "../characters";
-import { useCardText } from "../program";
+import { ProgramModeContext, useCardText } from "../program";
 import { unitOf } from "../readouts";
 import { RichText } from "./RichText";
 
@@ -46,10 +46,14 @@ const TYPE_LINE: Record<Kind, string> = {
 
 // (a one-shot says so with its 1× tag at the card's foot; a permanent with
 // the turning arrows in front of its line - it works every turn)
-function typeLine(card: Card): { label: string; repeats: boolean } {
-  if (card.type === "glitch") return { label: "Junk", repeats: false };
+// In a program, card flow is the one kind that doesn't wait for the program:
+// it takes effect the moment it is played, and its line says so.
+function typeLine(card: Card, program: boolean): { label: string; repeats: boolean; instant: boolean } {
+  if (card.type === "glitch") return { label: "Junk", repeats: false, instant: false };
   const kind = kindOf(card.type);
-  return { label: TYPE_LINE[kind], repeats: kind === "module" };
+  const instant = program && !QUEUED_TYPES.includes(card.type) && !PERMANENT_CARD_TYPES.includes(card.type);
+  if (instant) return { label: "Instant", repeats: false, instant };
+  return { label: TYPE_LINE[kind], repeats: kind === "module", instant };
 }
 
 // The number a card without a readout (card flow, permanents, control
@@ -356,7 +360,7 @@ export function CardFace({
   const description = strip(useCardText(card));
   const before = strip(useCardText(changedFrom ?? card));
   const unit = unitOf(card.type);
-  const line = typeLine(card);
+  const line = typeLine(card, useContext(ProgramModeContext));
   // Prefetch draws every 2nd turn, Prefetch+ every turn (combat.cards_per_turn)
   const base = STAT[card.type];
   const stat = base && card.type === "draw_bonus" && !card.upgraded ? { ...base, unit: "every 2nd turn" } : base;
@@ -382,7 +386,21 @@ export function CardFace({
         </span>
       )}
       {!onField && (
-        <div className="card-typeline" title={line.repeats ? "Stays on the field and works every turn" : undefined}>
+        <div
+          className={`card-typeline${line.instant ? " is-instant" : ""}`}
+          title={
+            line.repeats
+              ? "Stays on the field and works every turn"
+              : line.instant
+                ? "Takes effect the moment you play it - it never goes into a program line"
+                : undefined
+          }
+        >
+          {line.instant && (
+            <svg viewBox="0 0 20 20" aria-hidden="true" className="card-typeline-icon is-bolt">
+              <path d="M11.5 1.5 4 11h5l-1.5 7.5L16 9h-5.2Z" />
+            </svg>
+          )}
           {line.repeats && (
             <svg viewBox="0 0 20 20" aria-hidden="true" className="card-typeline-icon">
               <path d="M15.6 7.4A6 6 0 0 0 4.6 7M4.4 12.6A6 6 0 0 0 15.4 13" />
