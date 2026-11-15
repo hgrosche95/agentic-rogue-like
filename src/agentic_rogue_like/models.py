@@ -597,5 +597,9 @@ class RunState(BaseModel):
     # Whether the AGI has offered its forged card yet (forge.py) - once per
     # run, as the first boss's reward.
     forge_offered: bool = False
+    # What the AGI says on fixed triggers (agent/voice.py): trigger -> lines.
+    # new_run fills in the fallback lines, prefetch.py swaps in the generated
+    # ones once they are back. Empty only for runs saved before it existed.
+    voice: dict[str, list[str]] = Field(default_factory=dict)
     # For the summary at the end of the run (stats.py) - never read by play.
     stats: RunStats = Field(default_factory=RunStats)
