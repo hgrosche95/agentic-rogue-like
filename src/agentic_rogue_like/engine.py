@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from .agent.card_agent import card_for_style
 from .agent.encounter_agent import enemy_for_node
@@ -43,6 +44,9 @@ from .shop import MIN_DECK_SIZE, leave_shop, roll_shop
 from .starts import apply_deal, apply_kit, roll_deals, roll_kits
 from .stats import begin, close_turn, record_fight, record_play
 from .style import PlayStyle, answers, key_cards, play_style, style_counts, taunt
+
+if TYPE_CHECKING:
+    from .agent.act_pack import ActPack
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
 # Index into the offered cards, or None to skip the reward.
@@ -456,14 +460,16 @@ def _room_enemy(
     node: MapNode,
     rng: random.Random,
     prefetched: Callable[[], Enemy] | None = None,
+    act_pack: Callable[[], ActPack | None] | None = None,
 ) -> Enemy:
-    """The enemy of a combat room, ready to fight: picked (agent or pool),
+    """The enemy of a combat room, ready to fight: picked (agent, act pack or pool),
     affixed if elite, escalated for its depth on the map.
 
     Once the player's deck shows a clear style (style.play_style), the AGI
     prefers enemies and affixes that answer it - and an enemy that does opens
     its fight with a taunt. An elite's affix comes from its own rng, seeded
-    per room, so it never shifts the run rng's other draws.
+    per room, so it never shifts the run rng's other draws - and so does the
+    draw out of an `act_pack` (agent/encounter_agent.enemy_for_node).
     """
     boss = node.type is NodeType.BOSS
     style = None if boss else play_style(run.player.deck)
@@ -480,6 +486,8 @@ def _room_enemy(
         style=style,
         final=is_final_boss(run, node),
         deck=run.player.deck,
+        act_pack=act_pack,
+        pack_rng=random.Random(f"{run.seed}-pack-{run.act}-{node.id}"),
     )
     if node.type is NodeType.ELITE:
         affix_rng = random.Random(f"{run.seed}-affix-{run.act}-{node.id}")
@@ -497,6 +505,7 @@ def start_combat_node(
     run: RunState,
     rng: random.Random,
     prefetched_enemy: Callable[[], Enemy] | None = None,
+    act_pack: Callable[[], ActPack | None] | None = None,
 ) -> CombatState:
     """First step of resolving a COMBAT/ELITE/BOSS node the interactive way.
 
@@ -509,7 +518,7 @@ def start_combat_node(
     node.visited = True
     run.floor = node.floor
 
-    enemy = _room_enemy(run, node, rng, prefetched_enemy)
+    enemy = _room_enemy(run, node, rng, prefetched_enemy, act_pack)
     state, log = _start_combat(
         run.player.deck,
         enemy,

@@ -907,7 +907,10 @@ def resolve_current_node(run_id: str) -> RunView:
         )
     elif node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
         session.combat = start_combat_node(
-            run, session.rng, prefetched_enemy=prefetch.take_enemy(node.id)
+            run,
+            session.rng,
+            prefetched_enemy=prefetch.take_enemy(node.id),
+            act_pack=prefetch.act_pack(run.act),
         )
     elif node.type is NodeType.SHOP:
         open_shop(run, narrator=prefetch.narrator)

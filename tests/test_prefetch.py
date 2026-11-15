@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from agentic_rogue_like import prefetch
 from agentic_rogue_like.agent import encounter_agent, event_agent
+from agentic_rogue_like.agent.act_pack import ActPack
 from agentic_rogue_like.api import app
 from agentic_rogue_like.engine import move_to, new_run
 from agentic_rogue_like.events import EventEffect, EventOption, GameEvent
@@ -29,6 +30,21 @@ def _resolve(run_id: str):
 def _prefetched_enemy(**kwargs) -> Enemy:
     return Enemy(
         id=kwargs["enemy_id"], name="Prefetched Wisp", hp=12, attack=3, attack_name="Glimmer"
+    )
+
+
+def _packed(name: str) -> Enemy:
+    return Enemy(id="packed", name=name, hp=12, attack=3, attack_name="Glimmer")
+
+
+def _act_pack(setting: str, act: int) -> ActPack:
+    """Plenty of every tier, so no room of a test walk runs out of them."""
+    return ActPack(
+        act=act,
+        setting=setting,
+        early=[_packed(f"Packed Early {i}") for i in range(8)],
+        mid=[_packed(f"Packed Mid {i}") for i in range(8)],
+        elite=[_packed(f"Packed Elite {i}") for i in range(8)],
     )
 
 
@@ -57,6 +73,7 @@ def agent_enabled(monkeypatch):
     # Stubs on both paths: prefetch must feed every combat room, and no test
     # here may reach Groq.
     monkeypatch.setenv("ENCOUNTER_AGENT_ENABLED", "1")
+    monkeypatch.setattr(prefetch, "generate_act_pack", _act_pack)
     monkeypatch.setattr(prefetch, "generate_balanced_enemy", _prefetched_enemy)
     monkeypatch.setattr(encounter_agent, "generate_balanced_enemy", _live_call_is_a_bug)
     monkeypatch.setattr(prefetch, "generate_valid_event", _prefetched_event)
@@ -78,12 +95,19 @@ def _walk_to_first_combat(run: dict) -> dict:
     raise AssertionError("no combat room reached")
 
 
-def test_combat_rooms_use_the_prefetched_enemy(agent_enabled) -> None:
+def _pack_done(run: dict) -> None:
+    """Wait for the run's act pack - a room entered before it is done plays
+    from the static pool, which is not what these tests are about."""
+    get_session(run["run_id"]).prefetch.act_packs[1].exception(timeout=5)
+
+
+def test_combat_rooms_draw_from_the_act_pack(agent_enabled) -> None:
     run = client.post("/runs", json={"seed": 7}).json()
+    _pack_done(run)
 
     run = _walk_to_first_combat(run)
 
-    assert run["pending_combat"]["enemy_name"] == "Prefetched Wisp"
+    assert run["pending_combat"]["enemy_name"].startswith("Packed ")
 
 
 def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -> None:
@@ -161,32 +185,35 @@ def test_rooms_no_longer_reachable_are_dropped(agent_enabled) -> None:
 
 
 def test_rooms_the_player_can_still_switch_to_stay_warm(agent_enabled) -> None:
+    # 1-1 is an event room next to 1-0: once the player stands in 1-0 it is
+    # only reachable as a switch.
     run = new_run(seed=14)
     cache = prefetch.Prefetch()
     cache.warm(run)
-    assert "1-3" in cache.enemies
+    assert "1-1" in cache.events
 
     run.nodes["0-0"].visited = True
     move_to(run, "1-0")
     cache.warm(run)
-    assert "1-3" in cache.enemies
+    assert "1-1" in cache.events
 
     # once the room is entered, the jump is final
     run.nodes["1-0"].visited = True
     cache.warm(run)
-    assert "1-3" not in cache.enemies
+    assert "1-1" not in cache.events
 
 
-def test_failed_prefetch_falls_back_to_the_static_pool(agent_enabled, monkeypatch) -> None:
-    def _api_is_down(**kwargs) -> Enemy:
+def test_failed_act_pack_falls_back_to_the_static_pool(agent_enabled, monkeypatch) -> None:
+    def _api_is_down(setting: str, act: int) -> ActPack:
         raise ConnectionError("groq unreachable")
 
-    monkeypatch.setattr(prefetch, "generate_balanced_enemy", _api_is_down)
+    monkeypatch.setattr(prefetch, "generate_act_pack", _api_is_down)
     run = client.post("/runs", json={"seed": 7}).json()
+    _pack_done(run)
 
     run = _walk_to_first_combat(run)
 
-    assert run["pending_combat"]["enemy_name"] != "Prefetched Wisp"
+    assert not run["pending_combat"]["enemy_name"].startswith("Packed ")
 
 
 def test_nothing_is_prefetched_when_the_agent_is_disabled(monkeypatch) -> None:
@@ -196,4 +223,5 @@ def test_nothing_is_prefetched_when_the_agent_is_disabled(monkeypatch) -> None:
 
     session = get_session(run["run_id"])
     assert session.prefetch.enemies == {}
+    assert session.prefetch.act_packs == {}
     assert session.prefetch.flavors == {}
