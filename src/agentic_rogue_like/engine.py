@@ -15,6 +15,7 @@ from .agent.card_agent import card_for_style
 from .agent.encounter_agent import enemy_for_node
 from .agent.event_agent import event_for_room
 from .agent.narrator import narrate
+from .agent.voice import fallback_voice
 from .artifacts import gain_artifact, heal, roll_artifact_offer, total
 from .cards import can_upgrade, reward_card, roll_card_reward, upgrade_card
 from .characters import CHARACTERS, artifact_pool, reward_pool
@@ -117,6 +118,7 @@ def new_run(
         current_node_id="0-0",
         setting=setting,
         program_mode=program_mode,
+        voice=fallback_voice(),
     )
     # No artifact at the start - the first one comes from an elite. The
     # starter kits (starts.py) get their own rng, so offering them doesn't

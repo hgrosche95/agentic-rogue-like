@@ -36,6 +36,7 @@ from .agent.encounter_agent import generate_balanced_enemy
 from .agent.event_agent import agent_enabled as event_agent_enabled
 from .agent.event_agent import generate_valid_event
 from .agent.narrator import narrate
+from .agent.voice import generate_voice
 from .enemies import tier_floor
 from .engine import REST_SITUATION, SHOP_SITUATION, is_final_boss, switch_choices
 from .events import EVENT_POOL, GameEvent
@@ -71,10 +72,18 @@ class Prefetch:
     flavors: dict[str, Future[str | None]] = field(default_factory=dict)
     # Keyed by node id: each event room gets its own agent-written event.
     events: dict[str, Future[GameEvent]] = field(default_factory=dict)
+    # The AGI's lines for the whole run (agent/voice.py): one call, started
+    # on the run's first warm(), and copied onto the run by the first warm()
+    # after it is back.
+    voice: Future[dict[str, list[str]]] | None = None
+    voice_applied: bool = False
 
     def warm(self, run: RunState) -> None:
         """Start generating content for the current room and every room reachable from it."""
-        if os.environ.get("ENCOUNTER_AGENT_ENABLED") != "1" or run.status is not RunStatus.ONGOING:
+        if os.environ.get("ENCOUNTER_AGENT_ENABLED") != "1":
+            return
+        self._warm_voice(run)
+        if run.status is not RunStatus.ONGOING:
             return
 
         # The rooms the player can still switch to stay warm too, until the
@@ -128,8 +137,23 @@ class Prefetch:
                 if situation not in self.flavors:
                     self.flavors[situation] = _executor.submit(narrate, run.setting, situation)
 
+    def _warm_voice(self, run: RunState) -> None:
+        """Start the run's voice call once; once it is back, swap it in for
+        the fallback lines - on the request thread, never from the worker,
+        so the run is only ever changed where everything else changes it."""
+        if self.voice is None:
+            self.voice = _executor.submit(generate_voice, run.setting)
+            return
+        if self.voice_applied or not self.voice.done() or self.voice.cancelled():
+            return
+        self.voice_applied = True
+        # generate_voice never raises - it falls back by itself.
+        run.voice = self.voice.result()
+
     def cancel_all(self) -> None:
         """Drop everything still queued, e.g. when the run's session is evicted."""
+        if self.voice is not None:
+            self.voice.cancel()
         for future in [
             *self.enemies.values(),
             *self.act_packs.values(),
