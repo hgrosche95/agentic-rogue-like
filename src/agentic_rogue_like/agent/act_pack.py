@@ -13,18 +13,24 @@ can't be repaired is dropped, never asked for again - one call is the point,
 and a pack a few enemies short is still a pack.
 
 Bosses are not part of the pack: their move set is fixed and they keep coming
-from the encounter agent / static pool. Not wired into the engine yet.
+from the encounter agent / static pool.
+
+With the content library on (agent/library.py), every valid pack's enemies
+are stored there, and a setting whose library holds at least LIBRARY_MINIMUM
+enemies in every tier the act needs is served from it LIBRARY_CHANCE of the
+time - no model call at all.
 """
 
 from __future__ import annotations
 
 import logging
+import random
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from ..models import DEFAULT_SETTING, Enemy
-from . import usage
+from . import library, usage
 from .budgets import tier_budget
 from .encounter_agent import (
     MOVESET_MOVE_RULES,
@@ -42,6 +48,12 @@ TIER_COUNTS: dict[str, int] = {"early": 4, "mid": 4, "elite": 3}
 # One call writes eleven enemies, so it gets more time than a single
 # encounter call (encounter_agent.REQUEST_TIMEOUT_SECONDS).
 REQUEST_TIMEOUT_SECONDS = 60.0
+
+# When a pack may come from the content library instead of the model: every
+# tier the act needs holds at least this many enemies there, and then only
+# this share of the time - the library grows only from fresh packs.
+LIBRARY_MINIMUM = 12
+LIBRARY_CHANCE = 0.5
 
 
 class ActPackProposal(BaseModel):
@@ -127,12 +139,21 @@ def _enemy(proposal: MovesetProposal, enemy_id: str) -> Enemy:
     )
 
 
-def generate_act_pack(setting: str = DEFAULT_SETTING, act: int = 1) -> ActPack:
+def generate_act_pack(
+    setting: str = DEFAULT_SETTING, act: int = 1, rng: random.Random | None = None
+) -> ActPack:
     """All of an act's regular enemies from one model call, each inside its
     tier's budget - repaired through its HP where it missed only on threat,
     dropped where it can't be. Errors of the call itself (network, an
-    unparsable answer) are raised, for the caller to fall back on."""
+    unparsable answer) are raised, for the caller to fall back on.
+
+    Or, with the content library on and well stocked, drawn from it at random
+    (see LIBRARY_MINIMUM / LIBRARY_CHANCE); `rng` decides both."""
     setting = setting or DEFAULT_SETTING
+    rng = rng if rng is not None else random.Random()
+    if (pack := _from_library(setting, act, rng)) is not None:
+        return pack
+
     proposal: ActPackProposal = usage.invoke_structured(
         _model(), ActPackProposal, build_prompt(setting, act), "act_pack"
     )
@@ -155,4 +176,31 @@ def generate_act_pack(setting: str = DEFAULT_SETTING, act: int = 1) -> ActPack:
             # A placeholder id, unique within the pack; the caller swaps in
             # its own like enemy_for_node does for a prefetched enemy.
             enemies.append(_enemy(fitted, f"act{act}-{tier}-{len(enemies)}"))
+    library.store(setting, {tier: getattr(pack, tier) for tier in tiers_for(act)})
     return pack
+
+
+def _from_library(setting: str, act: int, rng: random.Random) -> ActPack | None:
+    """A pack drawn from the content library - None if it is off, any tier is
+    short of LIBRARY_MINIMUM, or the LIBRARY_CHANCE roll says ask the model."""
+    shelves = library.entries(setting)
+    tiers = tiers_for(act)
+    if any(len(shelves.get(tier, [])) < LIBRARY_MINIMUM for tier in tiers):
+        return None
+    if rng.random() >= LIBRARY_CHANCE:
+        return None
+    drawn = library.draw(setting, {tier: TIER_COUNTS[tier] for tier in tiers}, LIBRARY_MINIMUM, rng)
+    if drawn is None:
+        return None
+    logger.info("act pack: act %d of %r drawn from the content library", act, setting)
+    return ActPack(
+        act=act,
+        setting=setting,
+        **{
+            tier: [
+                enemy.model_copy(update={"id": f"act{act}-{tier}-{index}"})
+                for index, enemy in enumerate(enemies)
+            ]
+            for tier, enemies in drawn.items()
+        },
+    )
