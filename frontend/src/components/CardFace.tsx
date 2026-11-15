@@ -3,6 +3,7 @@ import { CONTROL_FLOW_TYPES, PERMANENT_CARD_TYPES, QUEUED_TYPES, type Card, type
 import { ShowTokensContext } from "../characters";
 import { ProgramModeContext, useCardText } from "../program";
 import { unitOf } from "../readouts";
+import { CardArt } from "./CardArt";
 import { RichText } from "./RichText";
 
 // Each card is a module: a drawn type icon in the socket top left (where
@@ -173,6 +174,8 @@ export interface Readout {
 // that doesn't fit at these has to get shorter instead.
 const NAME_FLOOR = 8;
 const BODY_FLOOR = 11;
+// how far the effect text may shrink to keep a card's motif on it
+const ART_TEXT_SHARE = 0.88;
 
 // Steps `el`'s font size down from its stylesheet size until `overflows`
 // says it fits, or the floor is reached.
@@ -263,7 +266,24 @@ function useFitText(key: string) {
       if (!inner || compact) return;
       const style = getComputedStyle(text);
       const room = () => text.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-      shrinkToFit(text, () => inner.getBoundingClientRect().height > room() + 0.5, BODY_FLOOR);
+      const overflows = () => inner.getBoundingClientRect().height > room() + 0.5;
+      // The motif (CardArt) gives way to the text, never the other way round:
+      // at 2x as long as the text keeps ART_TEXT_SHARE of its own size, then
+      // at 1x with the text down to its floor, and only where even that
+      // doesn't fit, not at all - the text is never cut off for it.
+      card.classList.remove("is-art-small", "is-artless");
+      text.style.fontSize = "";
+      const comfortable = Math.max(BODY_FLOOR, parseFloat(style.fontSize) * ART_TEXT_SHARE);
+      for (const [step, floor] of [
+        ["", comfortable],
+        ["is-art-small", BODY_FLOOR],
+        ["is-artless", BODY_FLOOR],
+      ] as const) {
+        card.classList.remove("is-art-small", "is-artless");
+        if (step) card.classList.add(step);
+        shrinkToFit(text, overflows, floor);
+        if (!overflows()) break;
+      }
     };
     fit();
     const observer = new ResizeObserver(fit);
@@ -429,6 +449,13 @@ export function CardFace({
             {stat.percent ? "%" : ""}
           </b>
           <span className="card-unit">{stat.unit}</span>
+        </div>
+      )}
+      {/* the card's pixel motif, between what it is and what it does - it
+          shrinks or steps aside when the text needs the room (useFitText) */}
+      {!onField && (
+        <div className="card-art" aria-hidden="true">
+          <CardArt card={card} />
         </div>
       )}
       {/* what is left of the effect where a narrow slot hides the text */}
