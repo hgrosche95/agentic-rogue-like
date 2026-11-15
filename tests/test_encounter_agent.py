@@ -329,7 +329,9 @@ def test_too_dangerous_proposal_is_corrected_without_retry(monkeypatch) -> None:
     assert low <= threat(enemy) <= high
 
 
-@pytest.mark.parametrize("hp,fixable", [(56, True), (60, False)])
+# The two HPs depend on DEFAULT_MODEL (threat.py): under the current fit
+# 40-55 is fixable, 56-61 rescales inside hp_bounds but misses the floor.
+@pytest.mark.parametrize("hp,fixable", [(50, True), (60, False)])
 def test_the_rescaled_hp_is_checked_again_once(hp: int, fixable: bool) -> None:
     """An infection prices its Malware by how long the fight lasts, and how long
     it lasts is decided by the enemy's own HP - so an infect move set's threat
