@@ -179,3 +179,34 @@
     transition-property: none;
   }
 }
+
+/* ---------- the card's pixel motif (CardArt) between readout and text ---------- */
+/* the box's height sets the scale: 48px is the motif at 2x; CardFace drops
+   it to 1x (is-art-small) or takes it out (is-artless) when the effect text
+   would not fit otherwise */
+.card-art {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 48px;
+  margin-top: 5px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.card-art-canvas {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.is-art-small > .card-art {
+  height: 24px;
+}
+
+.is-artless > .card-art {
+  display: none;
+}
