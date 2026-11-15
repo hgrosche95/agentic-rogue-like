@@ -96,16 +96,17 @@ def test_move_set_run_end_to_end(tmp_path, monkeypatch) -> None:
     def answer(schema, prompt, call):
         if schema is EnemyProposal:
             return _plain_for(prompt)
-        attack = int(prompt.split("must be between ")[1].split(" ")[0])
+        bounds = prompt.split("must be between ")[1]
+        attack = int(bounds.split(" ")[0])
+        max_attack = int(bounds.split(" and ")[1].split(";")[0])
         plain_low = int(prompt.split("hp between ")[1].split(" ")[0])
-        # Like a model that learns from feedback: take the suggested hp,
-        # after any other rejection fall back to the plain range, and start
-        # every other enemy with an absurd hp.
-        if "Change hp to about" in prompt:
-            return _boar(hp=int(prompt.split("hp to about ")[1].split(",")[0]), attack=attack)
+        # Like a model that learns from feedback: after a rejection it stays
+        # inside the ranges, and it starts every other enemy over the attack
+        # bound. An absurd hp no longer works as the bad first try: a miss on
+        # threat alone is retuned by validate_budget itself and never rejected.
         if "rejected" in prompt or call % 2 == 0:
             return _boar(hp=plain_low, attack=attack)
-        return _boar(hp=500, attack=attack)
+        return _boar(hp=plain_low, attack=max_attack + 1)
 
     model = _Scripted(answer)
     contexts = build_test_contexts(repeats=2, settings=("cyberpunk",), with_moves=True)
@@ -125,7 +126,7 @@ def test_move_set_run_end_to_end(tmp_path, monkeypatch) -> None:
     assert boss.avg_moves is None  # plain schema, no move columns
     # The first-try breakdown sees the rejections the retries then fixed.
     assert report.overall.budget_compliance_first_attempt < 1
-    assert report.overall.first_violation_hp + report.overall.first_violation_threat > 0
+    assert report.overall.first_violation_attack > 0
     assert report.overall.retry_fix_rate == 1
 
     # Report round trip: the markdown gets its move set table, the raw JSON

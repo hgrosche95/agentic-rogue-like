@@ -446,6 +446,10 @@ Liegt die Bedrohung daneben, bekommt der Agent im nächsten Versuch eine
 konkrete Rückmeldung, etwa *„threat 23.8 outside budget [8.7, 17.5] – too
 dangerous for this floor. Change hp to about 44, or make the moves weaker“*.
 Weil die Bedrohung proportional zu den HP ist, ist der HP-Vorschlag exakt.
+Liegt er innerhalb der lockeren HP-Grenze, setzt `validate_budget`
+(`agent/encounter_agent.py`) die HP selbst darauf, und der Versuch gilt ohne
+Rückfrage; die Rückmeldung bekommt der Agent erst, wenn kein erlaubter
+HP-Wert die Bedrohung trifft oder eine andere Regel verletzt ist.
 
 Bosse (eigenes Moveset mit Phasen) und das fein-getunte Ollama-Modell bleiben
 beim alten Schema ohne Moves: Das Ollama-Modell wurde genau auf diesen Prompt

@@ -36,6 +36,7 @@ from .encounter_schema import (
     EnemyBudget,
     EnemyProposal,
     MovesetProposal,
+    ThreatViolation,
     proposal_moves,
     validate_proposal,
 )
@@ -171,9 +172,40 @@ def generate_enemy(state: EncounterState) -> EncounterState:
 
 
 def validate_budget(state: EncounterState) -> EncounterState:
+    """Check the proposal against its budget, fixing what can be fixed here.
+
+    A ThreatViolation - everything inside its budget except the threat - is
+    retuned without another model call: threat is proportional to HP, so the
+    fitting HP the violation carries is the proposal's own HP rescaled onto the
+    middle of the threat range. It is applied only when it sits inside the HP
+    this budget allows at all (hp_bounds). Every other violation, and a threat
+    no allowed HP prices right, goes to the retry loop with its original
+    message.
+    """
+    budget = state["budget"]
+    proposal = state["proposal"]
     try:
-        validate_proposal(state["proposal"], state["budget"])
+        validate_proposal(proposal, budget)
         return {**state, "last_error": None}
+    except ThreatViolation as exc:
+        low_hp, high_hp = budget.hp_bounds()
+        if not (low_hp <= exc.fitting_hp <= high_hp):
+            # No HP this budget allows prices the threat right - the retry's
+            # real job is the move set, so it goes back as the original error.
+            return {**state, "last_error": str(exc)}
+        # The one correction attempt: rescaled onto the middle of the threat
+        # range, and checked through the normal validation path.
+        corrected = proposal.model_copy(update={"hp": exc.fitting_hp})
+        try:
+            validate_proposal(corrected, budget)
+        except BudgetViolation:
+            # Where threat is not exactly proportional to HP - an infect move
+            # set prices its Malware by how long the fight lasts, which its own
+            # HP decides - even an allowed HP can miss. Checked once, never
+            # iterated: that one goes back to the model as the original error.
+            return {**state, "last_error": str(exc)}
+        # From here on the corrected proposal is what the graph works with.
+        return {**state, "last_error": None, "proposal": corrected}
     except BudgetViolation as exc:
         return {**state, "last_error": str(exc)}
 

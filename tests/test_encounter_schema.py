@@ -5,6 +5,7 @@ from agentic_rogue_like.agent.encounter_schema import (
     BudgetViolation,
     EnemyBudget,
     EnemyProposal,
+    ThreatViolation,
     validate_proposal,
 )
 
@@ -126,8 +127,18 @@ def test_attack_stays_a_hard_bound() -> None:
 
 
 def test_hp_far_outside_the_budget_is_rejected_even_if_threat_fits() -> None:
-    with pytest.raises(BudgetViolation, match="allowed range"):
-        validate_proposal(_moveset(hp=MID.max_hp * 2), MID)
+    # The threat check runs before the loose HP sanity bound, so to reach that
+    # bound the threat has to fit: these feeble moves price 150 HP inside the
+    # threat range, and 150 is far outside hp_bounds() [24, 90].
+    feeble = [
+        MoveProposal(kind=MoveKind.ATTACK, name="Nibble", weight=1, power=60),
+        MoveProposal(kind=MoveKind.DEFEND, name="Cower", weight=1, power=60),
+    ]
+    with pytest.raises(BudgetViolation, match="allowed range") as exc_info:
+        validate_proposal(_moveset(hp=150, moves=feeble), MID)
+    # A plain violation the agent must retry - not the auto-correctable kind.
+    assert not isinstance(exc_info.value, ThreatViolation)
+    assert "150" in str(exc_info.value)
 
 
 def test_an_unplayable_move_set_comes_back_as_a_violation() -> None:
@@ -207,3 +218,61 @@ def test_an_interrupt_is_not_the_agents_to_give() -> None:
     ]
     with pytest.raises(BudgetViolation, match="interrupt is added by the game"):
         validate_proposal(_moveset(hp=40, moves=moves), MID)
+
+
+# --------------------------------------------- threat violations the agent can auto-correct
+
+from agentic_rogue_like.models import Enemy  # noqa: E402
+from agentic_rogue_like.threat import threat  # noqa: E402
+
+
+def _fitting_hp(proposal, budget: EnemyBudget) -> int:
+    """The HP that lands the proposal's threat on the middle of the budget's
+    threat range - what a ThreatViolation must suggest for the agent (or
+    validate_budget) to retune hp with."""
+    value = threat(
+        Enemy(
+            id="",
+            name="",
+            hp=proposal.hp,
+            attack=proposal.attack,
+            attack_name="",
+            moves=proposal_moves(proposal),
+        )
+    )
+    low, high = budget.threat_range()
+    return round(proposal.hp * ((low + high) / 2) / value)
+
+
+def test_threat_violation_carries_fitting_hp() -> None:
+    # 55 HP at attack 10 threatens 21.8 - above MID's [8.7, 17.5] - while its
+    # attack and HP stay inside their bounds: only the threat is off, so the
+    # violation is the machine-readable ThreatViolation with the fitting HP.
+    proposal = _moveset(hp=55)
+    with pytest.raises(ThreatViolation) as exc_info:
+        validate_proposal(proposal, MID)
+
+    exc = exc_info.value
+    assert exc.fitting_hp == _fitting_hp(proposal, MID)
+    assert f"Change hp to about {exc.fitting_hp}" in str(exc)
+
+
+def test_attack_violation_is_not_threat_violation() -> None:
+    # An out-of-bound attack is not "only the threat is off" - the attack bound
+    # is checked before threat, so this stays the plain BudgetViolation the
+    # agent has to retry with a new attack value.
+    with pytest.raises(BudgetViolation) as exc_info:
+        validate_proposal(_moveset(hp=40, attack=MID.max_attack + 1), MID)
+    assert not isinstance(exc_info.value, ThreatViolation)
+
+
+def test_boss_threat_error_is_plain_budget_violation() -> None:
+    # Bosses (fixed move set) are held to the plain HP/attack ranges only and
+    # never get a ThreatViolation - the message they get back is unchanged.
+    # Fixed values: _BUDGETS["boss"] is hp 90-105, attack 12-14 (budgets.py),
+    # and 106 HP at the hardest attack threatens far beyond what that budget
+    # prices - the plain HP bound is what rejects it.
+    with pytest.raises(BudgetViolation) as exc_info:
+        validate_proposal(_moveset(hp=106, attack=14), _BUDGETS["boss"])
+    assert not isinstance(exc_info.value, ThreatViolation)
+    assert str(exc_info.value) == "hp 106 outside budget [90, 105]"

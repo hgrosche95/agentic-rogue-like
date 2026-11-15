@@ -18,8 +18,6 @@ proposal stays inside its floor's balance budget. Two schemas:
 
 from __future__ import annotations
 
-import math
-
 from pydantic import BaseModel, Field, ValidationError, ValidationInfo, field_validator
 
 from ..models import PROGRAM_ONLY_MOVES, Enemy, EnemyMove, MoveKind
@@ -146,6 +144,25 @@ class BudgetViolation(Exception):
     """Raised when a proposal falls outside its budget."""
 
 
+class ThreatViolation(BudgetViolation):
+    """A proposal that breaks only the threat rule - attack, HP sanity bound and
+    move set are all fine.
+
+    The only violation the budget can fix by itself: threat is proportional to
+    HP, so `fitting_hp` - the HP centering the threat in the budget's range -
+    is what validate_budget (encounter_agent) retunes hp to instead of asking
+    the model for a whole new proposal. It applies it only when `fitting_hp`
+    sits inside budget.hp_bounds(), and checks the result with
+    validate_proposal: proportionality is an approximation, and where the ideal
+    HP sits outside the allowed range even the nearest allowed one may not
+    price the threat right - then this violation goes into the retry unchanged.
+    """
+
+    def __init__(self, message: str, fitting_hp: int) -> None:
+        super().__init__(message)
+        self.fitting_hp = fitting_hp
+
+
 def proposal_moves(proposal: EnemyProposal) -> list[EnemyMove] | None:
     """The proposal's moves as EnemyMoves, None if it has none (default move set).
 
@@ -175,14 +192,32 @@ def validate_proposal(proposal: EnemyProposal, budget: EnemyBudget) -> None:
 
     The message is written for the agent's retry: it says what is off and,
     for threat, which HP would fit.
+
+    Checks run in the order that decides *which* violation a proposal that
+    breaks several rules gets: the move set (the game has to be able to play
+    it), then attack, then threat, then the loose HP sanity bound. Only a
+    proposal that clears everything but the threat gets a ThreatViolation -
+    the auto-correctable kind. So the HP sanity bound sits after the threat
+    check: an enemy so overpowered that even its HP bound can't hold it is a
+    threat problem first, and correcting its HP is what brings it back inside
+    both.
     """
+    # First whether the game can play the move set at all (proposal_moves
+    # validates it by building an Enemy from it), then the hard attack bound -
+    # a proposal that breaks a non-HP rule never gets the auto-correctable
+    # ThreatViolation, whatever its threat does.
+    moves = None if budget.boss else proposal_moves(proposal)
+
     if not (budget.min_attack <= proposal.attack <= budget.max_attack):
         raise BudgetViolation(
             f"attack {proposal.attack} outside budget [{budget.min_attack}, {budget.max_attack}]"
         )
 
-    moves = None if budget.boss else proposal_moves(proposal)
     if moves is None:
+        # Bosses (their own phased move set, which threat() does not model) and
+        # the plain schema the fine-tuned Ollama model was trained on: held to
+        # the HP/attack ranges alone, so never a ThreatViolation, never an
+        # auto-correction.
         if not (budget.min_hp <= proposal.hp <= budget.max_hp):
             raise BudgetViolation(
                 f"hp {proposal.hp} outside budget [{budget.min_hp}, {budget.max_hp}]"
@@ -190,27 +225,25 @@ def validate_proposal(proposal: EnemyProposal, budget: EnemyBudget) -> None:
         return
 
     low_hp, high_hp = budget.hp_bounds()
-    if not (low_hp <= proposal.hp <= high_hp):
-        raise BudgetViolation(f"hp {proposal.hp} outside the allowed range [{low_hp}, {high_hp}]")
-
     enemy = Enemy(
         id="", name="", hp=proposal.hp, attack=proposal.attack, attack_name="", moves=moves
     )
     value = threat(enemy)
     low, high = budget.threat_range()
-    if low <= value <= high:
-        return
-    # Threat is proportional to HP, so the HP that lands on the nearest bound
-    # is one division away - rounded towards the inside of the range, or the
-    # suggestion itself could miss it by a fraction.
-    if value > high:
-        fitting_hp = math.floor(proposal.hp * high / value)
-    else:
-        fitting_hp = math.ceil(proposal.hp * low / value)
-    fitting_hp = max(low_hp, min(high_hp, fitting_hp))
-    direction = "too dangerous" if value > high else "too weak"
-    raise BudgetViolation(
-        f"threat {value:.1f} outside budget [{low:.1f}, {high:.1f}] - the enemy is "
-        f"{direction} for this floor. Change hp to about {fitting_hp}, or make the moves "
-        f"{'weaker' if value > high else 'stronger'}"
-    )
+    if not (low <= value <= high):
+        # Threat is proportional to HP, so the HP that lands it on the middle of
+        # the range - the most room for whatever threat model errors are left -
+        # is one division away. Where it sits outside the HP this budget allows,
+        # validate_budget does not retune to it: that violation goes into the
+        # retry as-is, and "make the moves ..." is the part the model can act on.
+        fitting_hp = round(proposal.hp * ((low + high) / 2) / value)
+        direction = "too dangerous" if value > high else "too weak"
+        raise ThreatViolation(
+            f"threat {value:.1f} outside budget [{low:.1f}, {high:.1f}] - the enemy is "
+            f"{direction} for this floor. Change hp to about {fitting_hp}, or make the moves "
+            f"{'weaker' if value > high else 'stronger'}",
+            fitting_hp,
+        )
+
+    if not (low_hp <= proposal.hp <= high_hp):
+        raise BudgetViolation(f"hp {proposal.hp} outside the allowed range [{low_hp}, {high_hp}]")

@@ -22,3 +22,6 @@ training/.ipynb_checkpoints/
 
 # Blender auto-backups (created on every save)
 *.blend1
+
+# Pipeline worker run logs (context/plan/step logs, not meant to be committed)
+.worker/
