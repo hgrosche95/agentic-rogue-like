@@ -20,6 +20,7 @@ import { ENEMY_X, FLOOR, PLAYER_X, pct } from "../pixel/layout";
 import type { Hero, PixelScene } from "../pixel/scene";
 import { describeIntent } from "../readouts";
 import { tempoMs } from "../tempo";
+import { agiWords, isAgiLine, useTyped } from "../typing";
 import { CombatMonitor } from "./CombatMonitor";
 import { PixelStage } from "./PixelStage";
 
@@ -264,6 +265,50 @@ interface Jolt {
   weight: number;
 }
 
+// How long the AGI's newest line hangs over the monitor.
+const AGI_BUBBLE_MS = 4000;
+
+function AgiBubbleText({ text }: { text: string }) {
+  const shown = useTyped(text);
+  return (
+    <>
+      {text.slice(0, shown)}
+      {shown < text.length && <span className="monitor-cursor" />}
+    </>
+  );
+}
+
+// The AGI's newest line as a speech bubble at the monitor, for AGI_BUBBLE_MS.
+// Only lines that come in while the arena is up - not the ones a resumed
+// fight's log already holds. A newer line replaces it at once. Hidden from
+// screen readers: the monitor already announces the newest line.
+function AgiBubble({ log }: { log: string[] }) {
+  const [firstNew] = useState(log.length);
+  // the newest line whose time over the monitor is up
+  const [expired, setExpired] = useState(-1);
+  let latest = -1;
+  for (let i = log.length - 1; i >= firstNew; i--) {
+    if (isAgiLine(log[i])) {
+      latest = i;
+      break;
+    }
+  }
+
+  useEffect(() => {
+    if (latest < 0) return;
+    const timer = window.setTimeout(() => setExpired(latest), AGI_BUBBLE_MS);
+    return () => window.clearTimeout(timer);
+  }, [latest]);
+
+  if (latest < 0 || expired >= latest) return null;
+  return (
+    <div key={latest} className="arena-agi-bubble" aria-hidden="true">
+      <span className="arena-agi-who">AGI</span>
+      <AgiBubbleText text={agiWords(log[latest])} />
+    </div>
+  );
+}
+
 export function CombatArena({
   enemy,
   status,
@@ -420,6 +465,7 @@ export function CombatArena({
       <PixelStage onScene={onScene} followTempo>
         {!slain && <IntentMarker key={`${enemy.intent}-${enemy.intentMin}-${enemy.intentMax}`} enemy={enemy} />}
         <CombatMonitor lines={log} commands={commands} turn={turn} />
+        <AgiBubble log={log} />
         {exchange && (
           <div key={exchange.id} className="arena-fx" aria-hidden="true">
             {exchange.enemyDelta !== 0 && (

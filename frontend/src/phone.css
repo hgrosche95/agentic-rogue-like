@@ -20,6 +20,15 @@
     display: none;
   }
 
+  /* no monitor on a phone: the AGI speaks from the top of the scene */
+  .combat-panel .arena-agi-bubble {
+    top: 6%;
+    width: 80%;
+  }
+  .combat-panel .arena-agi-bubble::before {
+    display: none;
+  }
+
   /* the scene at its crisp 1x is 240x100: the stage hugs it instead of
      keeping the wide screen's proportions around it */
   .arena-wrap > .arena-stage {

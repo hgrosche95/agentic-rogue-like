@@ -160,6 +160,10 @@
 .monitor-line.is-foe .monitor-icon {
   color: #b9f26b;
 }
+.monitor-line.is-agi,
+.monitor-line.is-agi .monitor-icon {
+  color: var(--agi);
+}
 .monitor-line.is-command .monitor-icon,
 .monitor-line.is-plain .monitor-icon {
   color: #8f8ac7;
@@ -200,6 +204,13 @@
 
 .monitor-line.is-command:last-child {
   color: var(--gold);
+}
+
+/* the AGI's newest line is lit in its own colour - flat, no gradient */
+.monitor-line.is-agi:last-child {
+  background: color-mix(in srgb, var(--agi-edge) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--agi-edge);
+  color: var(--agi);
 }
 
 /* a round's divider */
