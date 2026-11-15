@@ -1,5 +1,5 @@
 """Usage accounting for every LLM call: one log line per call plus process-wide
-totals per purpose ("encounter", "event", "narrator").
+totals per purpose ("encounter", "event", "narrator", "act_pack").
 
 The numbers come from the model response's usage_metadata. For structured
 output, usage.invoke_structured() asks for include_raw=True, because LangChain
