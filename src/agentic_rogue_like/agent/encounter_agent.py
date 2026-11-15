@@ -122,28 +122,43 @@ def _build_prompt(state: EncounterState) -> str:
     return prompt
 
 
-def _moveset_prompt(state: EncounterState) -> str:
-    setting = state.get("setting") or DEFAULT_SETTING
-    budget = state["budget"]
+# The move set prompt's pieces, shared with act_pack.py so a whole act's
+# enemies are asked for under exactly the rules a single one is.
+MOVESET_MOVE_RULES = (
+    "Give it 2 to 4 moves that show how it fights - "
+    "a hulking brute might slam and charge up, a swarm might barrage, a guardian might "
+    "defend and purge, a plague bearer might infect, a saboteur might lock or corrupt. "
+    "Every move set needs at least one attack or barrage. "
+)
+MOVESET_NAME_RULES = (
+    "attack_name is its signature attack. "
+    "Keep the description under 150 characters and every name under 40 characters."
+)
+
+
+def moveset_budget_rules(budget: EnemyBudget) -> str:
+    """The prompt's attack, HP and threat rules for one budget."""
     low_hp, high_hp = budget.hp_bounds()
     return (
-        f"Invent an enemy for a {setting}-themed roguelike encounter. "
-        f"Its name, description, attack_name and move names must fit the {setting} setting "
-        f"instead of generic dungeon fantasy. Give it 2 to 4 moves that show how it fights - "
-        f"a hulking brute might slam and charge up, a swarm might barrage, a guardian might "
-        f"defend and purge, a plague bearer might infect, a saboteur might lock or corrupt. "
-        f"Every move set needs at least one "
-        f"attack or barrage. "
         f"attack is its base strength and must be between {budget.min_attack} and "
         f"{budget.max_attack}; each move's power is a percentage of it. "
         f"The whole enemy's danger is checked against this floor's budget: with plain "
         f"attack and defend moves at power 100, hp between {budget.min_hp} and {budget.max_hp} "
         f"fits. Stronger moves (high power, barrages, charges, purges, infections, locks, "
-        f"corruptions) need less "
-        f"hp, "
+        f"corruptions) need less hp, "
         f"defensive ones allow more - hp must stay between {low_hp} and {high_hp}. "
-        f"attack_name is its signature attack. "
-        f"Keep the description under 150 characters and every name under 40 characters."
+    )
+
+
+def _moveset_prompt(state: EncounterState) -> str:
+    setting = state.get("setting") or DEFAULT_SETTING
+    return (
+        f"Invent an enemy for a {setting}-themed roguelike encounter. "
+        f"Its name, description, attack_name and move names must fit the {setting} setting "
+        f"instead of generic dungeon fantasy. "
+        + MOVESET_MOVE_RULES
+        + moveset_budget_rules(state["budget"])
+        + MOVESET_NAME_RULES
         + (f" {hint}" if (hint := state.get("counter_hint")) else "")
     )
 
@@ -173,28 +188,26 @@ def generate_enemy(state: EncounterState) -> EncounterState:
     return {**state, "proposal": proposal, "attempt": state["attempt"] + 1}
 
 
-def validate_budget(state: EncounterState) -> EncounterState:
-    """Check the proposal against its budget, fixing what can be fixed here.
+def fit_to_budget(proposal: EnemyProposal, budget: EnemyBudget) -> EnemyProposal:
+    """The proposal inside its budget - itself, or with its HP retuned - or the
+    BudgetViolation that keeps it out.
 
     A ThreatViolation - everything inside its budget except the threat - is
     retuned without another model call: threat is proportional to HP, so the
     fitting HP the violation carries is the proposal's own HP rescaled onto the
     middle of the threat range. It is applied only when it sits inside the HP
     this budget allows at all (hp_bounds). Every other violation, and a threat
-    no allowed HP prices right, goes to the retry loop with its original
-    message.
+    no allowed HP prices right, is raised with its original message.
     """
-    budget = state["budget"]
-    proposal = state["proposal"]
     try:
         validate_proposal(proposal, budget)
-        return {**state, "last_error": None}
+        return proposal
     except ThreatViolation as exc:
         low_hp, high_hp = budget.hp_bounds()
         if not (low_hp <= exc.fitting_hp <= high_hp):
             # No HP this budget allows prices the threat right - the retry's
             # real job is the move set, so it goes back as the original error.
-            return {**state, "last_error": str(exc)}
+            raise
         # The one correction attempt: rescaled onto the middle of the threat
         # range, and checked through the normal validation path.
         corrected = proposal.model_copy(update={"hp": exc.fitting_hp})
@@ -204,12 +217,20 @@ def validate_budget(state: EncounterState) -> EncounterState:
             # Where threat is not exactly proportional to HP - an infect move
             # set prices its Malware by how long the fight lasts, which its own
             # HP decides - even an allowed HP can miss. Checked once, never
-            # iterated: that one goes back to the model as the original error.
-            return {**state, "last_error": str(exc)}
-        # From here on the corrected proposal is what the graph works with.
-        return {**state, "last_error": None, "proposal": corrected}
+            # iterated: that one goes back as the original error.
+            raise exc from None
+        return corrected
+
+
+def validate_budget(state: EncounterState) -> EncounterState:
+    """Check the proposal against its budget, fixing what can be fixed here
+    (fit_to_budget); what can't goes to the retry loop with its message."""
+    try:
+        proposal = fit_to_budget(state["proposal"], state["budget"])
     except BudgetViolation as exc:
         return {**state, "last_error": str(exc)}
+    # From here on the (possibly corrected) proposal is what the graph works with.
+    return {**state, "last_error": None, "proposal": proposal}
 
 
 def _route_after_validation(state: EncounterState) -> str:

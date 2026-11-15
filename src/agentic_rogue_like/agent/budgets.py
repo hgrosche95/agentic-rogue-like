@@ -32,6 +32,11 @@ _BUDGETS: dict[str, EnemyBudget] = {
 }
 
 
+def tier_budget(tier: str) -> EnemyBudget:
+    """The budget of one tier by name ("early", "mid", "elite", "boss")."""
+    return _BUDGETS[tier]
+
+
 def budget_for(floor: int, num_floors: int, elite: bool, boss: bool) -> EnemyBudget:
     if boss:
         return _BUDGETS["boss"]
