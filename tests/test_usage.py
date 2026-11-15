@@ -43,7 +43,7 @@ def test_two_calls_sum() -> None:
     usage.record("encounter", 50, 5)
 
     assert usage.totals() == {
-        "encounter": {"aufrufe": 2, "eingabe_tokens": 150, "ausgabe_tokens": 25}
+        "encounter": {"calls": 2, "input_tokens": 150, "output_tokens": 25}
     }
 
 
@@ -52,8 +52,8 @@ def test_purposes_separate() -> None:
     usage.record("narrator", 3, 4)
 
     totals = usage.totals()
-    assert totals["event"] == {"aufrufe": 1, "eingabe_tokens": 1, "ausgabe_tokens": 2}
-    assert totals["narrator"] == {"aufrufe": 1, "eingabe_tokens": 3, "ausgabe_tokens": 4}
+    assert totals["event"] == {"calls": 1, "input_tokens": 1, "output_tokens": 2}
+    assert totals["narrator"] == {"calls": 1, "input_tokens": 3, "output_tokens": 4}
     assert set(totals) == {"event", "narrator"}
 
 
@@ -79,7 +79,7 @@ def test_threadsafe() -> None:
         thread.join()
 
     assert usage.totals() == {
-        "x": {"aufrufe": 8000, "eingabe_tokens": 8000, "ausgabe_tokens": 16000}
+        "x": {"calls": 8000, "input_tokens": 8000, "output_tokens": 16000}
     }
 
 
@@ -93,7 +93,7 @@ def test_invoke_structured_records() -> None:
     assert model.calls == [(_Proposal, True)]  # token counts come from include_raw's raw reply
     assert parsed == "P"
     assert usage.totals() == {
-        "encounter": {"aufrufe": 1, "eingabe_tokens": 10, "ausgabe_tokens": 3}
+        "encounter": {"calls": 1, "input_tokens": 10, "output_tokens": 3}
     }
 
 
@@ -109,4 +109,4 @@ def test_invoke_structured_parsing_error() -> None:
     with pytest.raises(ValueError, match="output did not match the schema"):
         usage.invoke_structured(model, _Proposal, "invent an enemy", "event")
 
-    assert usage.totals() == {"event": {"aufrufe": 1, "eingabe_tokens": 10, "ausgabe_tokens": 2}}
+    assert usage.totals() == {"event": {"calls": 1, "input_tokens": 10, "output_tokens": 2}}

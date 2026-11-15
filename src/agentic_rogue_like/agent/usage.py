@@ -1,21 +1,21 @@
-"""Verbrauchsmessung fuer jeden LLM-Aufruf: eine Logzeile pro Aufruf plus
-prozessweite Summen pro Zweck ("encounter", "event", "narrator").
+"""Usage accounting for every LLM call: one log line per call plus process-wide
+totals per purpose ("encounter", "event", "narrator").
 
-Die Zahlen kommen aus usage_metadata der Modellantwort. Bei strukturierter Ausgabe
-laedt usage.invoke_structured() dazu include_raw=True, weil LangChain die Roantwort
-(und damit usage_metadata) sonst vor dem Parser versteckt. Fehlt usage_metadata -
-kein Attribut, None, oder ein Dict ohne den jeweiligen Schluessel - zaehlt der
-Aufruf mit 0 Tokens: gemessen wird, dass der Aufruf stattgefunden hat.
+The numbers come from the model response's usage_metadata. For structured
+output, usage.invoke_structured() asks for include_raw=True, because LangChain
+otherwise hides the raw response (and with it usage_metadata) behind the parser.
+Where usage_metadata is missing - no attribute, None, or a dict without the key -
+the call counts with 0 tokens: what is measured is that the call happened.
 
-Ein Retry-Versuch ist ein eigener Aufruf und zaehlt einzeln, weil jeder Versuch
-tokens kostet. Gezaeht wird nur, wenn eine Antwort vorliegt: wirft invoke selbst
-(Netzwerkfehler, Timeout), ist nichts aufgezeichnet; liefert sie dagegen eine
-unparsbare Antwort, wird zuerst aufgezeichnet und danach der Fehler geworfen.
+A retry is a call of its own and is counted separately, because every attempt
+costs tokens. A call is only counted once there is a response: if invoke itself
+raises (network error, timeout), nothing is recorded; if it returns an answer
+that cannot be parsed, that is recorded first and the error raised afterwards.
 
-Die Summen sind prozessweit und absichtlich ohne Reset-API - ein Spielprozess
-soll seinen Gesamtverbrauch bis zum Ende behalten. Ein Reset ist Sache der Tests
-(monkeypatch ersetzt _totals). Alle Zugriffe, lesende wie schreibende, laufen
-unter einem Lock, weil der API-Server die Agents in Worker-Threads aufruft.
+The totals are process-wide and deliberately have no reset API - a game process
+should keep its total usage until it ends. Resetting is the tests' business
+(monkeypatch replaces _totals). Every access, reading or writing, happens under
+one lock, because the API server calls the agents from worker threads.
 """
 
 from __future__ import annotations
@@ -30,44 +30,42 @@ _totals: dict[str, dict[str, int]] = {}
 _lock = threading.Lock()
 
 
-def record(zweck: str, eingabe_tokens: int, ausgabe_tokens: int) -> None:
-    """Ein Aufruf ist passiert: Logzeile dafuer, und er fliesst in die Summen
-    dieses Zwecks ein (aufrufe, eingabe_tokens, ausgabe_tokens)."""
+def record(purpose: str, input_tokens: int, output_tokens: int) -> None:
+    """A call happened: one log line for it, and it goes into this purpose's
+    totals (calls, input_tokens, output_tokens)."""
     with _lock:
-        summe = _totals.setdefault(
-            zweck, {"aufrufe": 0, "eingabe_tokens": 0, "ausgabe_tokens": 0}
-        )
-        summe["aufrufe"] += 1
-        summe["eingabe_tokens"] += eingabe_tokens
-        summe["ausgabe_tokens"] += ausgabe_tokens
-    logger.info("llm usage zweck=%s eingabe=%d ausgabe=%d", zweck, eingabe_tokens, ausgabe_tokens)
+        total = _totals.setdefault(purpose, {"calls": 0, "input_tokens": 0, "output_tokens": 0})
+        total["calls"] += 1
+        total["input_tokens"] += input_tokens
+        total["output_tokens"] += output_tokens
+    logger.info("llm usage purpose=%s input=%d output=%d", purpose, input_tokens, output_tokens)
 
 
 def tokens_from(message: Any) -> tuple[int, int]:
-    """(eingabe, ausgabe) Tokens einer Modellantwort, (0, 0) ueberall, wo die
-    Angaben fehlen - auch wenn die Antwort selbst None ist."""
+    """(input, output) tokens of a model response, (0, 0) wherever the numbers
+    are missing - including when the response itself is None."""
     metadata = getattr(message, "usage_metadata", None)
     return _token(metadata, "input_tokens"), _token(metadata, "output_tokens")
 
 
 def totals() -> dict[str, dict[str, int]]:
-    """Kopie der Summen, damit ein Lesender (GET /usage) nicht an _totals selbst
-    schreibt; ohne einen einzigen Aufruf ist sie leer."""
+    """A copy of the totals, so a reader (GET /usage) never writes to _totals
+    itself; empty before the first call."""
     with _lock:
-        return {zweck: dict(summe) for zweck, summe in _totals.items()}
+        return {purpose: dict(total) for purpose, total in _totals.items()}
 
 
-def invoke_structured(model: Any, schema: type, prompt: Any, zweck: str) -> Any:
-    """Strukturierter Aufruf ueber include_raw=True, damit usage_metadata der
-    Roantwort erreichbar bleibt: aufgezeichnet wird der Aufruf in jedem Fall,
-    zurueckkommt das geparste Ergebnis.
+def invoke_structured(model: Any, schema: type, prompt: Any, purpose: str) -> Any:
+    """A structured call through include_raw=True, so the raw response's
+    usage_metadata stays reachable: the call is recorded either way, and the
+    parsed result is what comes back.
 
-    Eine unparsbare Antwort liefert LangChain in parsing_error; sie wird erst
-    aufgezeichnet (bezahlt hat sie Tokens laengst) und dann geworfen, genau wie
-    der Fehler ohne include_raw schon bisher durchgereicht wurde.
+    LangChain delivers an unparsable answer in parsing_error; it is recorded
+    first (it has long since cost its tokens) and then raised, just as the
+    error was passed on without include_raw before.
     """
     result = model.with_structured_output(schema, include_raw=True).invoke(prompt)
-    record(zweck, *tokens_from(result.get("raw")))
+    record(purpose, *tokens_from(result.get("raw")))
     parsing_error = result.get("parsing_error")
     if parsing_error is not None:
         raise parsing_error
@@ -75,8 +73,8 @@ def invoke_structured(model: Any, schema: type, prompt: Any, zweck: str) -> Any:
 
 
 def _token(metadata: Any, key: str) -> int:
-    """Ein Wert aus usage_metadata, 0 fuer alles, was kein Zahlenwert ist.
-    LangChain liefert usage_metadata als Dict, andere Integrationen als Objekt."""
+    """One value out of usage_metadata, 0 for anything that is not a number.
+    LangChain delivers usage_metadata as a dict, other integrations as an object."""
     if metadata is None:
         return 0
     getter = getattr(metadata, "get", None)

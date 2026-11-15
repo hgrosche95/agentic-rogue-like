@@ -365,7 +365,7 @@ def test_usage_returns_totals(monkeypatch) -> None:
     usage.record("narrator", 1, 1)
 
     assert client.get("/usage").json() == {
-        "narrator": {"aufrufe": 2, "eingabe_tokens": 6, "ausgabe_tokens": 8}
+        "narrator": {"calls": 2, "input_tokens": 6, "output_tokens": 8}
     }
 
 

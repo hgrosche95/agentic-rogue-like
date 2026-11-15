@@ -476,7 +476,7 @@ def test_enemy_usage_recorded(monkeypatch) -> None:
     with patch.object(encounter_agent, "_model", return_value=model):
         encounter_agent.generate_enemy(state)
 
-    assert usage.totals()["encounter"] == {"aufrufe": 1, "eingabe_tokens": 40, "ausgabe_tokens": 8}
+    assert usage.totals()["encounter"] == {"calls": 1, "input_tokens": 40, "output_tokens": 8}
 
 
 def test_enemy_retry_counts_each_attempt(monkeypatch) -> None:
@@ -509,4 +509,4 @@ def test_enemy_retry_counts_each_attempt(monkeypatch) -> None:
         )
 
     assert result["attempt"] == encounter_agent.MAX_ATTEMPTS
-    assert usage.totals()["encounter"] == {"aufrufe": 3, "eingabe_tokens": 30, "ausgabe_tokens": 3}
+    assert usage.totals()["encounter"] == {"calls": 3, "input_tokens": 30, "output_tokens": 3}

@@ -199,7 +199,7 @@ def test_event_no_usage_metadata(monkeypatch) -> None:
         )
 
     assert state["event"] == EVENT_POOL[1]  # the call still hands the event through
-    assert usage.totals()["event"] == {"aufrufe": 1, "eingabe_tokens": 0, "ausgabe_tokens": 0}
+    assert usage.totals()["event"] == {"calls": 1, "input_tokens": 0, "output_tokens": 0}
 
 
 def test_effect_kinds_are_all_covered_by_the_pool() -> None:

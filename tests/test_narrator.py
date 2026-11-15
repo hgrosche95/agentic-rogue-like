@@ -98,7 +98,7 @@ def test_narrator_usage_two_calls(monkeypatch) -> None:
         "Neon rain hisses off cracked chrome.",
         "Vending machines hum in the dark.",
     )
-    assert usage.totals()["narrator"] == {"aufrufe": 2, "eingabe_tokens": 20, "ausgabe_tokens": 40}
+    assert usage.totals()["narrator"] == {"calls": 2, "input_tokens": 20, "output_tokens": 40}
 
 
 def test_narrator_without_usage_metadata(monkeypatch) -> None:
@@ -113,4 +113,4 @@ def test_narrator_without_usage_metadata(monkeypatch) -> None:
         text = narrator.narrate("cyberpunk", "a quiet moment of rest")
 
     assert text == "Neon rain hisses off cracked chrome as you catch your breath."
-    assert usage.totals()["narrator"] == {"aufrufe": 1, "eingabe_tokens": 0, "ausgabe_tokens": 0}
+    assert usage.totals()["narrator"] == {"calls": 1, "input_tokens": 0, "output_tokens": 0}
