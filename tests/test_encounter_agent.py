@@ -1,4 +1,5 @@
 import random
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -9,23 +10,33 @@ from agentic_rogue_like.agent.encounter_schema import BudgetViolation, EnemyBudg
 from agentic_rogue_like.agent.ollama_model import DEFAULT_MODEL_NAME, OllamaChatModel
 from agentic_rogue_like.enemies import ENEMY_POOL
 
+# Every model stub below answers in the include_raw=True shape
+# usage.invoke_structured() calls (see agent/usage.py): the proposal it used to
+# return directly is now the "parsed" entry, and "raw" carries no
+# usage_metadata - which is the 0-token case, irrelevant to what these tests
+# assert about attempts, prompts and fallbacks.
+
 
 class _AlwaysOverpowered:
-    def with_structured_output(self, schema):
+    def with_structured_output(self, schema, include_raw: bool = False):
         return self
 
     def invoke(self, prompt):
-        return EnemyProposal(
-            name="Overpowered Thing",
-            description="Too strong.",
-            hp=999,
-            attack=999,
-            attack_name="Overkill",
-        )
+        return {
+            "raw": SimpleNamespace(),
+            "parsed": EnemyProposal(
+                name="Overpowered Thing",
+                description="Too strong.",
+                hp=999,
+                attack=999,
+                attack_name="Overkill",
+            ),
+            "parsing_error": None,
+        }
 
 
 class _ApiIsDown:
-    def with_structured_output(self, schema):
+    def with_structured_output(self, schema, include_raw: bool = False):
         return self
 
     def invoke(self, prompt):
@@ -51,17 +62,21 @@ def test_generate_balanced_enemy_raises_after_exhausting_retries() -> None:
 
 
 class _WellBehaved:
-    def with_structured_output(self, schema):
+    def with_structured_output(self, schema, include_raw: bool = False):
         return self
 
     def invoke(self, prompt):
-        return EnemyProposal(
-            name="Crystal Wisp",
-            description="Glows faintly.",
-            hp=36,
-            attack=9,
-            attack_name="Prism Flare",
-        )
+        return {
+            "raw": SimpleNamespace(),
+            "parsed": EnemyProposal(
+                name="Crystal Wisp",
+                description="Glows faintly.",
+                hp=36,
+                attack=9,
+                attack_name="Prism Flare",
+            ),
+            "parsing_error": None,
+        }
 
 
 def _enemy_for_node(model_stub: object) -> object:
@@ -178,13 +193,17 @@ class _Recording:
         self.proposals = list(proposals)
         self.schemas, self.prompts = [], []
 
-    def with_structured_output(self, schema):
+    def with_structured_output(self, schema, include_raw: bool = False):
         self.schemas.append(schema)
         return self
 
     def invoke(self, prompt):
         self.prompts.append(prompt)
-        return self.proposals.pop(0)
+        return {
+            "raw": SimpleNamespace(),
+            "parsed": self.proposals.pop(0),
+            "parsing_error": None,
+        }
 
 
 def _boar(hp: int, attack: int = 8, moves: list[MoveProposal] | None = None) -> MovesetProposal:
@@ -409,3 +428,85 @@ def test_attack_over_limit_still_retries(monkeypatch) -> None:
     assert len(fake.prompts) == 2
     assert f"attack {budget.max_attack + 1} outside budget" in fake.prompts[1]
     assert (enemy.hp, enemy.attack) == (40, 8)
+
+
+# --------------------------------------------------------- LLM usage accounting
+#
+# Imported inside the tests below, not at module scope: until agent/usage.py
+# exists, a module-level import would take this whole file down with it.
+
+
+class _RawReply:
+    """Model stub in the include_raw=True shape usage.invoke_structured calls:
+    with_structured_output(schema, include_raw=True).invoke(prompt) answers with
+    {"raw", "parsed", "parsing_error"}, the token counts riding on the raw reply.
+    One `parsed` answer is reused for every call - a model that keeps answering
+    the same way."""
+
+    def __init__(self, parsed, usage_metadata: dict | None = None) -> None:
+        self.parsed = parsed
+        self.usage_metadata = usage_metadata
+
+    def with_structured_output(self, schema, include_raw: bool = False):
+        return self
+
+    def invoke(self, prompt: str) -> dict:
+        return {
+            "raw": SimpleNamespace(usage_metadata=self.usage_metadata),
+            "parsed": self.parsed,
+            "parsing_error": None,
+        }
+
+
+def test_enemy_usage_recorded(monkeypatch) -> None:
+    """generate_enemy's call is accounted for with the tokens the reply reports."""
+    from agentic_rogue_like.agent import usage
+
+    monkeypatch.delenv("ENCOUNTER_AGENT_MODEL_SOURCE", raising=False)
+    monkeypatch.setattr(usage, "_totals", {})
+    model = _RawReply(_boar(hp=30), usage_metadata={"input_tokens": 40, "output_tokens": 8})
+    state = {
+        "budget": budget_for(floor=0, num_floors=8, elite=False, boss=False),
+        "setting": "cyberpunk",
+        "attempt": 0,
+        "last_error": None,
+        "proposal": None,
+    }
+
+    with patch.object(encounter_agent, "_model", return_value=model):
+        encounter_agent.generate_enemy(state)
+
+    assert usage.totals()["encounter"] == {"calls": 1, "input_tokens": 40, "output_tokens": 8}
+
+
+def test_enemy_retry_counts_each_attempt(monkeypatch) -> None:
+    """Every attempt of the retry loop is its own model call and counted on its own."""
+    from agentic_rogue_like.agent import usage
+
+    monkeypatch.delenv("ENCOUNTER_AGENT_MODEL_SOURCE", raising=False)
+    monkeypatch.setattr(usage, "_totals", {})
+    model = _RawReply(
+        EnemyProposal(
+            name="Overpowered Thing",
+            description="Too strong.",
+            hp=999,
+            attack=999,
+            attack_name="Overkill",
+        ),
+        usage_metadata={"input_tokens": 10, "output_tokens": 1},
+    )
+    budget = EnemyBudget(min_hp=15, max_hp=25, min_attack=2, max_attack=4)
+
+    with patch.object(encounter_agent, "_model", return_value=model):
+        result = encounter_agent.build_graph().invoke(
+            {
+                "budget": budget,
+                "setting": "cyberpunk",
+                "attempt": 0,
+                "last_error": None,
+                "proposal": None,
+            }
+        )
+
+    assert result["attempt"] == encounter_agent.MAX_ATTEMPTS
+    assert usage.totals()["encounter"] == {"calls": 3, "input_tokens": 30, "output_tokens": 3}

@@ -38,7 +38,7 @@ from ..events import (
     validate_event,
 )
 from ..models import DEFAULT_SETTING
-from . import encounter_agent
+from . import encounter_agent, usage
 
 logger = logging.getLogger(__name__)
 
@@ -78,8 +78,10 @@ def _build_prompt(state: EventState) -> str:
 
 
 def generate_event(state: EventState) -> EventState:
-    model = encounter_agent._model().with_structured_output(GameEvent)
-    event = model.invoke(_build_prompt(state))
+    model = encounter_agent._model()
+    # Accounted like every other LLM call (see agent/usage.py); the event itself
+    # comes back exactly as a plain invoke() handed it out.
+    event = usage.invoke_structured(model, GameEvent, _build_prompt(state), "event")
     return {**state, "event": event, "attempt": state["attempt"] + 1}
 
 

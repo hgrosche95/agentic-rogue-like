@@ -33,6 +33,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
+from .agent import usage
 from .cards import can_upgrade, upgrade_card
 from .characters import CHARACTERS
 from .combat import (
@@ -789,6 +790,16 @@ def health() -> dict[str, str]:
     this process (sessions.py), and the container scales to zero after a few
     minutes without requests."""
     return {"status": "ok"}
+
+
+@app.get("/usage")
+def usage_totals() -> dict[str, dict[str, int]]:
+    """What the LLM agents have cost this process so far, summed per purpose
+    (agent/usage.py): calls, input and output tokens. Empty while the agents
+    is switched off (ENCOUNTER_AGENT_ENABLED, which gates all three agents -
+    see agent/*.py) - nothing runs, so nothing is counted - and read-only
+    here: the ledger is never cleared by looking at it."""
+    return usage.totals()
 
 
 # Errors the browser reports (see frontend/src/errors.ts): a crash there is

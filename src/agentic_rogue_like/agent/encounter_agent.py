@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 from ..enemies import pick_enemy, tier_floor
 from ..models import DEFAULT_SETTING, Card, Enemy
 from ..style import PlayStyle, agent_hint
+from . import usage
 from .budgets import budget_for
 from .encounter_schema import (
     BudgetViolation,
@@ -63,8 +64,8 @@ class EncounterState(TypedDict):
 def _model() -> Any:
     # Return type is Any on purpose: ChatGroq and OllamaChatModel share no
     # common base class, only the duck-typed with_structured_output(schema,
-    # include_raw=...).invoke(prompt) interface that generate_enemy() and the
-    # eval harness actually call.
+    # include_raw=...).invoke(prompt) interface that generate_enemy() (through
+    # usage.invoke_structured) and the eval harness actually call.
     #
     # ENCOUNTER_AGENT_MODEL_SOURCE picks the source - "groq" (default) or
     # "ollama", the fine-tuned model served locally (see training/RESULTS.md
@@ -166,8 +167,9 @@ def _plain_prompt(state: EncounterState) -> str:
 
 def generate_enemy(state: EncounterState) -> EncounterState:
     schema = MovesetProposal if _with_moves(state) else EnemyProposal
-    model = _model().with_structured_output(schema)
-    proposal = model.invoke(_build_prompt(state))
+    # usage.invoke_structured(): the call is accounted for (see agent/usage.py),
+    # and the proposal comes back exactly as a plain invoke() handed it out.
+    proposal = usage.invoke_structured(_model(), schema, _build_prompt(state), "encounter")
     return {**state, "proposal": proposal, "attempt": state["attempt"] + 1}
 
 

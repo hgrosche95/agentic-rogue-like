@@ -344,6 +344,31 @@ def test_health_answers_for_the_keep_alive() -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_usage_empty(monkeypatch) -> None:
+    """Nothing was recorded in this test's own (reset) ledger - and the agents
+    are off in the test suite, so a run of the game records nothing either."""
+    from agentic_rogue_like.agent import usage
+
+    monkeypatch.setattr(usage, "_totals", {})
+
+    response = client.get("/usage")
+
+    assert response.status_code == 200
+    assert response.json() == {}
+
+
+def test_usage_returns_totals(monkeypatch) -> None:
+    from agentic_rogue_like.agent import usage
+
+    monkeypatch.setattr(usage, "_totals", {})
+    usage.record("narrator", 5, 7)
+    usage.record("narrator", 1, 1)
+
+    assert client.get("/usage").json() == {
+        "narrator": {"calls": 2, "input_tokens": 6, "output_tokens": 8}
+    }
+
+
 def test_client_errors_are_logged_and_capped(caplog) -> None:
     import agentic_rogue_like.api as api
 
