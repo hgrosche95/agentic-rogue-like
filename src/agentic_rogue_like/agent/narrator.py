@@ -19,6 +19,8 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
+from . import usage
+
 if TYPE_CHECKING:
     from langchain_groq import ChatGroq
 
@@ -56,7 +58,13 @@ def narrate(setting: str, situation: str) -> str | None:
             f"meaning, one vivid sentence, under {MAX_LENGTH} characters, no "
             f"quotes, no numbers: {situation}"
         )
-        text = _model().invoke(prompt).content.strip()
+        response = _model().invoke(prompt)
+        # Accounted like every other LLM call (see agent/usage.py): recorded
+        # right after invoke returned - a failing invoke records nothing - and
+        # before the content is touched, so a reply without usage_metadata
+        # counts as a call with 0 tokens instead of causing an error here.
+        usage.record("narrator", *usage.tokens_from(response))
+        text = response.content.strip()
         return text or None
     except Exception:
         logger.warning("narrator failed, using plain text", exc_info=True)

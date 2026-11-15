@@ -1,4 +1,5 @@
 import random
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -116,16 +117,20 @@ def test_leave_does_nothing() -> None:
 
 
 class _Scripted:
+    """Answers in the include_raw=True shape usage.invoke_structured() calls
+    (see agent/usage.py); the event it used to return is now "parsed", its
+    "raw" carries no usage_metadata."""
+
     def __init__(self, *events):
         self.events, self.prompts = list(events), []
 
-    def with_structured_output(self, schema):
+    def with_structured_output(self, schema, include_raw: bool = False):
         assert schema is GameEvent
         return self
 
     def invoke(self, prompt):
         self.prompts.append(prompt)
-        return self.events.pop(0)
+        return {"raw": SimpleNamespace(), "parsed": self.events.pop(0), "parsing_error": None}
 
 
 def test_event_agent_retries_with_the_reason(monkeypatch) -> None:
@@ -146,7 +151,7 @@ def test_event_agent_falls_back_to_the_pool(monkeypatch) -> None:
     monkeypatch.setenv("ENCOUNTER_AGENT_ENABLED", "1")
 
     class _Down:
-        def with_structured_output(self, schema):
+        def with_structured_output(self, schema, include_raw: bool = False):
             return self
 
         def invoke(self, prompt):
@@ -164,6 +169,37 @@ def test_event_agent_is_off_without_the_flag_or_on_ollama(monkeypatch) -> None:
     monkeypatch.setenv("ENCOUNTER_AGENT_ENABLED", "1")
     monkeypatch.setenv("ENCOUNTER_AGENT_MODEL_SOURCE", "ollama")
     assert not event_agent.agent_enabled()
+
+
+class _RawReply:
+    """Model stub in the include_raw=True shape usage.invoke_structured calls, with
+    a raw reply that carries no usage_metadata at all - the case usage.py has to
+    turn into 0 tokens instead of an error."""
+
+    def __init__(self, parsed) -> None:
+        self.parsed = parsed
+
+    def with_structured_output(self, schema, include_raw: bool = False):
+        return self
+
+    def invoke(self, prompt: str) -> dict:
+        return {"raw": SimpleNamespace(), "parsed": self.parsed, "parsing_error": None}
+
+
+def test_event_no_usage_metadata(monkeypatch) -> None:
+    from agentic_rogue_like.agent import usage
+
+    monkeypatch.delenv("ENCOUNTER_AGENT_MODEL_SOURCE", raising=False)
+    monkeypatch.setattr(usage, "_totals", {})
+    model = _RawReply(EVENT_POOL[1])
+
+    with patch.object(event_agent.encounter_agent, "_model", return_value=model):
+        state = event_agent.generate_event(
+            {"setting": "cyberpunk", "attempt": 0, "last_error": None, "event": None}
+        )
+
+    assert state["event"] == EVENT_POOL[1]  # the call still hands the event through
+    assert usage.totals()["event"] == {"aufrufe": 1, "eingabe_tokens": 0, "ausgabe_tokens": 0}
 
 
 def test_effect_kinds_are_all_covered_by_the_pool() -> None:
