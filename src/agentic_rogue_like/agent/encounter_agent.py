@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
 
 from ..enemies import pick_enemy, tier_floor
-from ..models import DEFAULT_SETTING, Enemy
+from ..models import DEFAULT_SETTING, Card, Enemy
 from ..style import PlayStyle, agent_hint
 from .budgets import budget_for
 from .encounter_schema import (
@@ -284,6 +284,8 @@ def enemy_for_node(
     prefetched: Callable[[], Enemy] | None = None,
     act: int = 1,
     style: PlayStyle | None = None,
+    final: bool = False,
+    deck: list[Card] | None = None,
 ) -> Enemy:
     """Agent-generated enemy, degrading to the static pool if the agent can't deliver.
 
@@ -308,7 +310,23 @@ def enemy_for_node(
 
     `style` is the player's play style (style.py): the agent is asked for a
     move set that answers it, the static pool weights its answers up.
+    `deck` lets the agent hear the cards the style rests on (style.agent_hint).
+
+    `final` (with `boss`) is the last act's boss: always the AGI itself
+    from the static pool (enemies.ENEMY_POOL["final"]), never generated -
+    the run ends on the same character every time, and no LLM call waits
+    in front of it.
     """
+    if boss and final:
+        return pick_enemy(
+            floor=floor,
+            num_floors=num_floors,
+            elite=elite,
+            boss=boss,
+            rng=rng,
+            act=act,
+            final=True,
+        )
     if os.environ.get("ENCOUNTER_AGENT_ENABLED") != "1":
         return pick_enemy(
             floor=floor,
@@ -330,7 +348,7 @@ def enemy_for_node(
             elite=elite,
             boss=boss,
             setting=setting,
-            counter_hint=agent_hint(style),
+            counter_hint=agent_hint(style, deck),
         )
     except Exception:
         logger.warning("encounter agent failed, using static pool", exc_info=True)

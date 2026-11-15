@@ -10,18 +10,20 @@ from __future__ import annotations
 import random
 from collections.abc import Callable
 
+from .agent.card_agent import card_for_style
 from .agent.encounter_agent import enemy_for_node
 from .agent.event_agent import event_for_room
 from .agent.narrator import narrate
-from .artifacts import ARTIFACT_EVERY_STEPS, gain_artifact, heal, roll_artifact_offer, total
+from .artifacts import gain_artifact, heal, roll_artifact_offer, total
 from .cards import can_upgrade, reward_card, roll_card_reward, upgrade_card
 from .characters import CHARACTERS, artifact_pool, reward_pool
 from .combat import CombatState, auto_resolve_combat
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
-from .enemies import escalate, with_affix, with_interrupt
+from .enemies import escalate, with_affix, with_program_move
 from .events import EventOption, GameEvent, apply_option
+from .forge import forged_deal
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
     DEFAULT_SETTING,
@@ -36,9 +38,11 @@ from .models import (
     RunState,
     RunStatus,
 )
+from .omega import adapt_omega, omega_taunts
 from .shop import MIN_DECK_SIZE, leave_shop, roll_shop
 from .starts import apply_deal, apply_kit, roll_deals, roll_kits
-from .style import answers, play_style, taunt
+from .stats import begin, close_turn, record_fight, record_play
+from .style import PlayStyle, answers, key_cards, play_style, style_counts, taunt
 
 ChooseEventOption = Callable[[GameEvent], EventOption]
 # Index into the offered cards, or None to skip the reward.
@@ -69,6 +73,12 @@ NUM_ACTS = 2
 ACT_HEAL_PERCENT = 40
 
 
+def is_final_boss(run: RunState, node: MapNode) -> bool:
+    """Whether `node` holds the run's final boss: the last act's boss, always
+    the AGI itself (enemies.ENEMY_POOL["final"])."""
+    return node.type is NodeType.BOSS and run.act >= NUM_ACTS
+
+
 def boss_phases(act: int) -> int:
     """Act 1's boss has two phases, every later act's boss a third one."""
     return 2 if act <= 1 else 3
@@ -93,7 +103,7 @@ def new_run(
         max_hp=hero.hp,
         attack=hero.attack,
         gold=0,
-        deck=hero.deck(),
+        deck=hero.deck(program_mode),
     )
     nodes = generate_map(seed)
     run = RunState(
@@ -104,14 +114,12 @@ def new_run(
         setting=setting,
         program_mode=program_mode,
     )
-    # Its own rng, so offering artifacts doesn't shift the run rng's sequence
-    # (enemies, events, rewards) compared to a run without them.
-    run.artifact_offer = roll_artifact_offer(
-        random.Random(f"{seed}-artifacts-0"), [], pool=artifact_pool(run)
-    )
-    # ... and so do the starter kits (starts.py), picked after the artifact;
-    # the AGI's deal follows once a kit is in the deck (choose_kit).
+    # No artifact at the start - the first one comes from an elite. The
+    # starter kits (starts.py) get their own rng, so offering them doesn't
+    # shift the run rng's sequence (enemies, events, rewards); the AGI's deal
+    # follows once a kit is in the deck (choose_kit).
     run.kit_offer = roll_kits(random.Random(f"{seed}-kits"), reward_pool(run))
+    begin(run)
     return run
 
 
@@ -129,15 +137,13 @@ def choose_kit(run: RunState, index: int) -> None:
     if not 0 <= index < len(offer):
         raise ValueError(f"kit index {index} is out of range")
     kit = offer[index]
-    removed = apply_kit(run.player, kit)
+    removed = apply_kit(run.player, kit, run.program_mode)
     run.history.append(
         f"You pack the {kit.name} kit: {' and '.join(c.name for c in kit.cards)} "
         f"replace {', '.join(c.name for c in removed)}."
     )
     run.kit_offer = None
-    run.agi_deals = roll_deals(
-        random.Random(f"{run.seed}-deals"), run.player, reward_pool(run), artifact_pool(run)
-    )
+    run.agi_deals = roll_deals(random.Random(f"{run.seed}-deals"), run.player, reward_pool(run))
 
 
 def choose_deal(run: RunState, index: int | None) -> None:
@@ -160,7 +166,8 @@ def choose_deal(run: RunState, index: int | None) -> None:
 
 
 def start_pending(run: RunState) -> bool:
-    """Whether the start of the run (artifact, kit, deal) still waits on the player."""
+    """Whether the start of the run (artifact, kit, deal) - or a forged deal
+    mid-run - still waits on the player."""
     return run.artifact_offer is not None or run.kit_offer is not None or run.agi_deals is not None
 
 
@@ -169,14 +176,32 @@ def available_choices(run: RunState) -> list[str]:
 
 
 def move_to(run: RunState, node_id: str) -> None:
-    """Step onto `node_id`; every ARTIFACT_EVERY_STEPS steps an artifact offer waits there."""
+    """Step onto `node_id`."""
+    run.previous_node_id = run.current_node_id
     run.current_node_id = node_id
     run.steps += 1
-    if run.steps % ARTIFACT_EVERY_STEPS == 0:
-        rng = random.Random(f"{run.seed}-artifacts-{run.steps}")
-        run.artifact_offer = (
-            roll_artifact_offer(rng, run.player.artifacts, pool=artifact_pool(run)) or None
-        )
+
+
+def switch_choices(run: RunState) -> list[str]:
+    """The other rooms the last jump could have gone to, while the room it
+    went to is not entered yet - the jump only commits on entering."""
+    node = run.nodes[run.current_node_id]
+    if node.visited:
+        return []
+    if run.previous_node_id is None:
+        # the run's first room: any room on the first layer
+        if node.floor != 0:
+            return []
+        return [n.id for n in run.nodes.values() if n.floor == 0 and n.id != node.id]
+    return [n for n in run.nodes[run.previous_node_id].connections if n != node.id]
+
+
+def switch_to(run: RunState, node_id: str) -> None:
+    """Take the last jump to `node_id` instead. Not another step: the step
+    count (and with it the artifact offer) stays as the jump left it."""
+    if node_id not in switch_choices(run):
+        raise ValueError("node_id is not a room the last jump could have gone to")
+    run.current_node_id = node_id
 
 
 def choose_artifact(run: RunState, index: int) -> None:
@@ -236,7 +261,7 @@ def open_shop(run: RunState, narrator: Narrator | None = None) -> None:
     run.shop = roll_shop(run)
     run.history.append(
         f"A merchant lays out {len(run.shop.cards)} cards and "
-        f"{len(run.shop.artifacts)} artifacts. You have {run.player.gold} gold."
+        f"{len(run.shop.artifacts)} artifacts. You have {run.player.gold} credits."
     )
 
 
@@ -264,7 +289,7 @@ def _open_rest(run: RunState) -> RestSite:
 
 def rest_heal(run: RunState) -> None:
     healed = heal(run.player, _open_rest(run).heal_amount)
-    run.history.append(f"You rest and recover {healed} HP.")
+    run.history.append(f"You rest and recover {healed} integrity.")
     run.rest = None
 
 
@@ -291,7 +316,7 @@ def rest_remove(run: RunState, deck_index: int) -> None:
     if len(deck) <= MIN_DECK_SIZE:
         raise ValueError(f"your deck can't get smaller than {MIN_DECK_SIZE} cards")
     card = deck.pop(deck_index)
-    run.history.append(f"You strip {card.name} out of your deck.")
+    run.history.append(f"You delete {card.name} from your deck.")
     run.rest = None
 
 
@@ -327,11 +352,12 @@ def advance_act(run: RunState) -> None:
     run.act += 1
     run.nodes = generate_map(run.seed, run.act)
     run.current_node_id = "0-0"
+    run.previous_node_id = None
     run.nodes["0-0"].visited = True
     run.floor = 0
     healed = heal(run.player, run.player.max_hp * ACT_HEAL_PERCENT // 100)
     run.history.append(
-        f"The way to act {run.act} opens. You catch your breath and recover {healed} HP - "
+        f"The way to act {run.act} opens. You catch your breath and recover {healed} integrity - "
         f"the enemies ahead are stronger."
     )
 
@@ -351,14 +377,23 @@ def _finish_combat(
     if node.type is NodeType.BOSS:
         reward *= 2
     run.player.gold += reward
-    run.history.append(f"You loot {reward} gold from the {enemy_name}.")
+    run.history.append(f"You loot {reward} credits from the {enemy_name}.")
     if healed := heal(run.player, total(run.player.artifacts, "heal_after_combat")):
-        run.history.append(f"Your artifacts patch you up for {healed} HP.")
+        run.history.append(f"Your artifacts patch you up for {healed} integrity.")
     run.card_reward = roll_card_reward(
         rng,
         elite=node.type is not NodeType.COMBAT,
         pool=reward_pool(run),
     )
+    # The harder fights pay an artifact on top: an elite, an act's boss. Its
+    # own rng, so the offer doesn't shift the run rng's sequence.
+    if node.type in (NodeType.ELITE, NodeType.BOSS):
+        offer_rng = random.Random(f"{run.seed}-artifacts-{run.act}-{node.id}")
+        run.artifact_offer = (
+            roll_artifact_offer(offer_rng, run.player.artifacts, pool=artifact_pool(run)) or None
+        )
+        if run.artifact_offer:
+            run.history.append("It leaves an artifact behind - pick one to install.")
     if node.type is NodeType.BOSS:
         advance_act(run)
 
@@ -380,6 +415,40 @@ def choose_card_reward(run: RunState, index: int | None) -> None:
         run.player.deck.append(card)
         run.history.append(f"You add {card.name} to your deck.")
     run.card_reward = None
+    offer_forged_card(run)
+
+
+def offer_forged_card(run: RunState) -> None:
+    """Once per run, as the first boss's reward (right after its card
+    reward): the AGI has watched a whole act by then, and offers a card
+    compiled for the style it read, for a price (forge.py). It waits like the
+    opening deal: taken or refused before the next room."""
+    if run.status is not RunStatus.ONGOING or run.agi_deals is not None:
+        return
+    # the act advances with the first boss beaten (advance_act)
+    if run.forge_offered or run.act < 2:
+        return
+    style = forge_style(run.player.deck)
+    card, by_agent = card_for_style(
+        style, key_cards(run.player.deck, style), run.program_mode, run.setting
+    )
+    rng = random.Random(f"{run.seed}-forge")
+    run.agi_deals = [forged_deal(card, style, rng)]
+    run.forge_offered = True
+    run.history.append(
+        f"The AGI has analysed your deck and compiled {card.name}"
+        + (" just for you." if by_agent else ".")
+    )
+
+
+def forge_style(deck: list[Card]) -> PlayStyle:
+    """The style the AGI forges for: the deck's clear style, else the one the
+    player chose the most cards for (raw attacks if nothing yet)."""
+    if (style := play_style(deck)) is not None:
+        return style
+    counts = style_counts(deck)
+    top = max(counts, key=lambda s: counts[s])
+    return top if counts[top] else PlayStyle.AGGRO
 
 
 def _room_enemy(
@@ -409,14 +478,18 @@ def _room_enemy(
         prefetched=prefetched,
         act=run.act,
         style=style,
+        final=is_final_boss(run, node),
+        deck=run.player.deck,
     )
     if node.type is NodeType.ELITE:
         affix_rng = random.Random(f"{run.seed}-affix-{run.act}-{node.id}")
         enemy = with_affix(enemy, affix_rng, style)
     if run.program_mode and not boss:
-        enemy = with_interrupt(enemy, style)
+        enemy = with_program_move(enemy, style, run.player.deck)
     if style is not None and answers(enemy, style):
-        enemy = enemy.model_copy(update={"taunt": taunt(style)})
+        enemy = enemy.model_copy(update={"taunt": taunt(style, enemy)})
+    if is_final_boss(run, node):
+        enemy = omega_taunts(enemy, run.player.deck, run.stats)
     return escalate(enemy, node.floor, NUM_FLOORS, run.act)
 
 
@@ -447,15 +520,26 @@ def start_combat_node(
         character=run.player.character,
         program_mode=run.program_mode,
     )
+    if is_final_boss(run, node):
+        adapt_omega(state, run.player.deck)
     run.history.extend(log)
     return state
 
 
 def play_combat_card(
-    run: RunState, state: CombatState, hand_index: int, slot_index: int, rng: random.Random
+    run: RunState,
+    state: CombatState,
+    hand_index: int,
+    slot_index: int,
+    rng: random.Random,
+    banish: list[int] | None = None,
 ) -> None:
-    """Raises ValueError (via combat.play_card) on an invalid index or an occupied slot."""
-    run.history.append(_play_combat_card(state, hand_index, slot_index, run.player, rng))
+    """Raises ValueError (via combat.play_card) on an invalid index, an
+    occupied slot or a `banish` choice that doesn't fit the card."""
+    card = state.hand[hand_index] if 0 <= hand_index < len(state.hand) else None
+    dealt = state.tally.damage_dealt
+    run.history.append(_play_combat_card(state, hand_index, slot_index, run.player, rng, banish))
+    record_play(run, state, card, state.tally.damage_dealt - dealt)
 
 
 def end_combat_turn(
@@ -464,12 +548,16 @@ def end_combat_turn(
     """Raises ValueError (via combat.end_turn) if `discard` doesn't bring the
     hand down to exactly the hand limit."""
     run.history.extend(_end_combat_turn(state, run.player, rng, discard))
+    if not state.program_mode:
+        close_turn(state)
 
 
 def finalize_combat(run: RunState, state: CombatState, rng: random.Random) -> None:
     """Call once state.enemy_hp <= 0 or run.player.hp <= 0 to close out an interactive fight."""
     node = run.nodes[run.current_node_id]
-    _finish_combat(run, node, state.enemy.name, victory=run.player.hp > 0, rng=rng)
+    victory = run.player.hp > 0
+    _finish_combat(run, node, state.enemy.name, victory=victory, rng=rng)
+    record_fight(run, state, node, victory)
 
 
 def resolve_node(

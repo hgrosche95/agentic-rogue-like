@@ -27,6 +27,7 @@ import logging
 import os
 import random
 import time
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,8 +37,10 @@ from .cards import can_upgrade, upgrade_card
 from .characters import CHARACTERS
 from .combat import (
     AFFIX_DESCRIPTIONS,
+    LAW_TEXT,
     ProgramPreview,
     action_preview,
+    active_law,
     enemy_block_gain,
     incoming_damage,
     intent_hits,
@@ -46,11 +49,16 @@ from .combat import (
     max_hand_size,
     move_name,
     move_queued,
+    omega_toll,
     overflows,
     player_armor,
     program_preview,
+    program_what_if,
+    take_back,
     token_regen,
+    uninstalls,
 )
+from .enemies import FINAL_BOSS_ID
 from .engine import (
     NUM_ACTS,
     apply_event_choice,
@@ -73,26 +81,33 @@ from .engine import (
     start_combat_node,
     start_event,
     start_pending,
+    switch_choices,
+    switch_to,
 )
 from .events import describe_option
 from .models import (
     MAX_CUSTOM_SETTING_LENGTH,
+    PERMANENT_CARD_TYPES,
     SETTING_PRESETS,
     AgiDeal,
     Artifact,
     Card,
     Character,
+    Combo,
+    KillingBlow,
     MapNode,
     NodeType,
     PlayerState,
     RestSite,
+    RunState,
     RunStatus,
     Shop,
     StarterKit,
 )
 from .sessions import RunSession, create_session, get_session
 from .shop import MIN_DECK_SIZE, buy_artifact, buy_card, leave_shop, remove_card
-from .style import play_style, style_counts
+from .stats import note_changes
+from .style import LABELS, play_style, style_counts
 
 app = FastAPI(title="agentic-rogue-like")
 
@@ -135,6 +150,9 @@ class CardView(BaseModel):
     description: str
     rarity: str
     exhaust: bool
+    # Hand cards it banishes when played - the player picks them
+    # (PlayCardRequest.banish_indices).
+    banish: int
     hits: int
     # Scaling attacks: the bonus per permanent / graveyard / banished card.
     scale_value: int
@@ -143,6 +161,8 @@ class CardView(BaseModel):
     applies_amount: int
     upgraded: bool
     token_cost: int
+    # Program mode: the program ends after its line (Segfault).
+    halts: bool = False
 
     @classmethod
     def of(cls, card: Card) -> CardView:
@@ -154,12 +174,14 @@ class CardView(BaseModel):
             description=card.description,
             rarity=card.rarity.value,
             exhaust=card.exhaust,
+            banish=card.banish,
             hits=max(card.hits, 1),
             scale_value=card.scale_value,
             applies=None if card.applies is None else card.applies.value,
             applies_amount=card.applies_amount,
             upgraded=card.upgraded,
             token_cost=card.token_cost,
+            halts=card.halts,
         )
 
 
@@ -172,12 +194,24 @@ class HandCardView(CardView):
     # Playing it now would push past the context window - it may
     # hallucinate. Always false for characters without one.
     overflows: bool
+    # HP playing it costs in the final fight (combat.omega_toll): OMEGA's
+    # one-shot tax, its toll on the AGI's own card.
+    toll: int = 0
+    # Program mode: per line it could go into, what every line would then
+    # come out with (combat.program_what_if) - null where it can't go, and
+    # for cards that change no line.
+    what_if: list[list[int | None] | None] = []
 
 
 class PendingCombatView(BaseModel):
     enemy_name: str
     # One line of flavor - the encounter agent's, or the static pool's.
     enemy_description: str
+    # The line it opens the fight with (an empty string if none) and, for a
+    # boss, the line it says entering each phase from the second on - the
+    # UI's boss intro and phase banners show them.
+    enemy_taunt: str = ""
+    enemy_phase_taunts: list[str] = []
     enemy_attack_name: str
     # The enemy's base attack stat - what its look is built from.
     enemy_attack: int
@@ -204,8 +238,15 @@ class PendingCombatView(BaseModel):
     # attack it has gained.
     boss: bool
     enemy_phase: int
+    # The final boss: the law it has rewritten (from phase 3 on), else null,
+    # and the style it answers (from the start, for its phase 2 moves).
+    omega_law: str | None = None
+    omega_style: str | None = None
     enemy_phases: int
     enemy_strength: int
+    # The run's final boss, the AGI itself (enemies.FINAL_BOSS_ID) - the
+    # arena draws it with its own sprite instead of a generated one.
+    final_boss: bool = False
     # Elites: their affix (models.Affix) and what it does, else null. Whether
     # an enraged elite is raging right now.
     enemy_affix: str | None
@@ -218,6 +259,21 @@ class PendingCombatView(BaseModel):
     locked_slots: list[int]
     hand: list[HandCardView]
     field: list[CardView | None]
+    # per field slot: whether taking that permanent back uninstalls it
+    # (banished - it has run since an earlier turn) instead of returning it
+    # to the hand (combat.take_back)
+    field_uninstalls: list[bool] = Field(default_factory=list)
+    # The piles' cards by name, for a peek at them: the Graveyard and the Banished
+    # pile in the order they went there (the latest last), the Source pile
+    # sorted - its order is the draw's secret.
+    draw_names: list[str] = Field(default_factory=list)
+    discard_names: list[str] = Field(default_factory=list)
+    banished_names: list[str] = Field(default_factory=list)
+    # ... and the cards themselves, for a look into a pile: the same order
+    # (the Source pile sorted by name)
+    draw_cards: list[CardView] = Field(default_factory=list)
+    discard_cards: list[CardView] = Field(default_factory=list)
+    banished_cards: list[CardView] = Field(default_factory=list)
     # Program mode (RunState.program_mode): the actions queued per line, run
     # left to right at the end of the turn, and which of them will
     # hallucinate. All null / false in a classic run.
@@ -237,6 +293,8 @@ class PendingCombatView(BaseModel):
     token_limit: int | None
     tokens_used: int
     token_regen: int
+    # The player's turn in this fight, from 1 - the UI's turn banner.
+    turn: int = 1
 
 
 class CharacterView(BaseModel):
@@ -316,6 +374,62 @@ class RestView(BaseModel):
         )
 
 
+class RunSummaryView(BaseModel):
+    """The run in numbers, once it is over (stats.py)."""
+
+    # Seconds from the start to the fight that ended it - None for a run
+    # started before the stats were kept.
+    duration_seconds: int | None
+    fights_won: int
+    elites_defeated: int
+    bosses_defeated: int
+    turns: int
+    damage_dealt: int
+    damage_taken: int
+    biggest_hit: int
+    best_combo: Combo | None
+    cards_played: int
+    # The card played most, and how often.
+    mvp_card: CardView | None
+    mvp_plays: int
+    cards_added: int
+    cards_removed: int
+    cards_upgraded: int
+    credits_earned: int
+    credits_spent: int
+    artifacts_collected: int
+    killed_by: KillingBlow | None
+
+    @classmethod
+    def of(cls, run: RunState) -> RunSummaryView:
+        stats = run.stats
+        mvp = stats.mvp_card
+        duration = None
+        if stats.started_at is not None and stats.ended_at is not None:
+            duration = round(stats.ended_at - stats.started_at)
+        return cls(
+            duration_seconds=duration,
+            fights_won=stats.fights_won,
+            elites_defeated=stats.elites_defeated,
+            bosses_defeated=stats.bosses_defeated,
+            turns=stats.turns,
+            damage_dealt=stats.damage_dealt,
+            damage_taken=stats.damage_taken,
+            biggest_hit=stats.biggest_hit,
+            best_combo=stats.best_combo,
+            cards_played=stats.cards_played,
+            mvp_card=None if mvp is None else CardView.of(mvp),
+            mvp_plays=0 if mvp is None else stats.play_counts.get(mvp.name, 0),
+            cards_added=stats.cards_added,
+            cards_removed=stats.cards_removed,
+            cards_upgraded=stats.cards_upgraded,
+            credits_earned=stats.credits_earned,
+            credits_spent=stats.credits_spent,
+            artifacts_collected=len(run.player.artifacts),
+            killed_by=stats.killed_by,
+        )
+
+
 class RunView(BaseModel):
     run_id: str
     status: RunStatus
@@ -328,6 +442,9 @@ class RunView(BaseModel):
     current_node: MapNode
     node_resolved: bool
     available_choices: list[MapNode]
+    # Until the room the last jump went to is entered, the other rooms that
+    # jump could have gone to - choose-node switches to one of them.
+    switch_choices: list[MapNode]
     # Program mode for the whole run (combat.run_program) - card texts and
     # previews read differently there, also outside a fight.
     program_mode: bool
@@ -336,7 +453,7 @@ class RunView(BaseModel):
     card_reward: list[CardView] | None
     # Artifacts to pick one from before the current room can be entered.
     artifact_offer: list[Artifact] | None
-    # The start of the run, after the first artifact: a starter kit to pick,
+    # The start of the run: a starter kit to pick,
     # then the AGI's deals to take one of or turn down (starts.py).
     kit_offer: list[StarterKitView] | None
     agi_deals: list[AgiDealView] | None
@@ -351,6 +468,8 @@ class RunView(BaseModel):
     # Every node in the run, not just the current/reachable ones - the
     # frontend draws the whole dungeon graph, not just the next step.
     nodes: dict[str, MapNode]
+    # Once the run is over (victory or defeat): its summary.
+    summary: RunSummaryView | None = None
 
 
 class NewRunRequest(BaseModel):
@@ -386,11 +505,22 @@ class EventChoiceRequest(BaseModel):
 class PlayCardRequest(BaseModel):
     hand_index: int
     slot_index: int
+    # Hand indices (before the play) of the cards a banishing card (Banish)
+    # takes - exactly CardView.banish of them, or fewer if the hand is short.
+    # Left out, the weakest go (combat.banish_candidates).
+    banish_indices: list[int] | None = None
 
 
 class MoveQueuedRequest(BaseModel):
     from_slot: int
     to_slot: int
+
+
+class TakeBackRequest(BaseModel):
+    # "program": a queued line; "field": a permanent (its slot, or its place
+    # in the background in program mode)
+    zone: Literal["program", "field"]
+    index: int
 
 
 class EndTurnRequest(BaseModel):
@@ -433,6 +563,9 @@ class AgiDealView(BaseModel):
     # every card its description names - removed, added, or (for an upgrade)
     # as it will be afterwards - so the frontend can show each on hover
     mentions: list[CardView]
+    # a forged deal's own opening lines (forge.py), empty otherwise
+    greeting: str = ""
+    pitch: str = ""
 
     @classmethod
     def of(cls, deal: AgiDeal, deck: list[Card]) -> AgiDealView:
@@ -444,6 +577,8 @@ class AgiDealView(BaseModel):
             description=deal.description,
             cards=[CardView.of(c) for c in deal.add],
             mentions=[CardView.of(c) for c in removed + deal.add + upgraded],
+            greeting=deal.greeting,
+            pitch=deal.pitch,
         )
 
 
@@ -460,8 +595,23 @@ class ChooseNodeRequest(BaseModel):
     node_id: str
 
 
+def _what_if(combat, player, card) -> list[list[int | None] | None]:
+    """HandCardView.what_if: a permanent lands in the background wherever it
+    is aimed, so its one answer goes to every line."""
+    if not combat.program_mode:
+        return []
+    lines = range(len(combat.program))
+    if card.type in PERMANENT_CARD_TYPES:
+        once = program_what_if(combat, player, card, 0)
+        return [once for _ in lines]
+    return [program_what_if(combat, player, card, line) for line in lines]
+
+
 def _run_view(run_id: str, session: RunSession) -> RunView:
     run = session.run
+    # Every request answers with this view, so it is where the run summary
+    # catches up on what the request changed in the deck and the credits.
+    note_changes(run)
     node = run.nodes[run.current_node_id]
     node_resolved = (
         node.visited
@@ -505,6 +655,8 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         pending_combat = PendingCombatView(
             enemy_name=combat.enemy.name,
             enemy_description=combat.enemy.description,
+            enemy_taunt=combat.enemy.taunt,
+            enemy_phase_taunts=combat.enemy.phase_taunts,
             enemy_attack_name=combat.enemy.attack_name,
             enemy_attack=combat.enemy.attack,
             enemy_hp=combat.enemy_hp,
@@ -521,8 +673,11 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             incoming_max=incoming_max,
             boss=combat.boss,
             enemy_phase=combat.phase,
+            omega_law=None if (law := active_law(combat)) is None else LAW_TEXT[law],
+            omega_style=None if combat.omega_style is None else LABELS[combat.omega_style],
             enemy_phases=combat.boss_phases,
             enemy_strength=combat.enemy_strength,
+            final_boss=combat.enemy.id == FINAL_BOSS_ID,
             enemy_affix=None if combat.enemy.affix is None else combat.enemy.affix.value,
             enemy_affix_description=(
                 None if combat.enemy.affix is None else AFFIX_DESCRIPTIONS[combat.enemy.affix]
@@ -539,11 +694,14 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
                         for slot in range(len(combat.program))
                     ],
                     overflows=overflows(combat, card),
+                    toll=omega_toll(combat, card),
+                    what_if=_what_if(combat, run.player, card),
                     **CardView.of(card).model_dump(),
                 )
                 for i, card in enumerate(combat.hand)
             ],
             field=[None if card is None else CardView.of(card) for card in combat.field],
+            field_uninstalls=[uninstalls(combat, i) for i in range(len(combat.field))],
             program_mode=combat.program_mode,
             program=[None if card is None else CardView.of(card) for card in combat.program],
             program_glitched=combat.program_glitched,
@@ -554,14 +712,24 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             draw_count=len(combat.draw_pile),
             discard_count=len(combat.discard_pile),
             banished_count=len(combat.banished_pile),
+            draw_names=sorted(card.name for card in combat.draw_pile),
+            discard_names=[card.name for card in combat.discard_pile],
+            banished_names=[card.name for card in combat.banished_pile],
+            draw_cards=[CardView.of(c) for c in sorted(combat.draw_pile, key=lambda c: c.name)],
+            discard_cards=[CardView.of(c) for c in combat.discard_pile],
+            banished_cards=[CardView.of(c) for c in combat.banished_pile],
             token_limit=combat.token_limit,
             tokens_used=combat.tokens_used,
             token_regen=token_regen(combat) if combat.token_limit is not None else 0,
+            turn=combat.turn,
         )
 
     choices = []
+    switches = []
     if node_resolved and run.status is RunStatus.ONGOING:
         choices = [run.nodes[node_id] for node_id in available_choices(run)]
+    elif run.status is RunStatus.ONGOING and not start_pending(run):
+        switches = [run.nodes[node_id] for node_id in switch_choices(run)]
 
     return RunView(
         run_id=run_id,
@@ -575,6 +743,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         current_node=node,
         node_resolved=node_resolved,
         available_choices=choices,
+        switch_choices=switches,
         program_mode=run.program_mode,
         pending_event=pending_event,
         pending_combat=pending_combat,
@@ -593,6 +762,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         play_style=(style.value if (style := play_style(run.player.deck)) else None),
         style_counts={s.value: n for s, n in style_counts(run.player.deck).items()},
         nodes=run.nodes,
+        summary=None if run.status is RunStatus.ONGOING else RunSummaryView.of(run),
     )
 
 
@@ -711,7 +881,10 @@ def resolve_current_node(run_id: str) -> RunView:
     if run.card_reward is not None:
         raise HTTPException(status_code=409, detail="choose a card first")
     if start_pending(run):
-        raise HTTPException(status_code=409, detail="finish the start of the run first")
+        raise HTTPException(
+            status_code=409,
+            detail="answer the pending choice (start of the run or the AGI's offer) first",
+        )
 
     prefetch = session.prefetch
     if node.type is NodeType.EVENT:
@@ -743,7 +916,12 @@ def play_card_endpoint(run_id: str, request: PlayCardRequest) -> RunView:
 
     try:
         play_combat_card(
-            session.run, session.combat, request.hand_index, request.slot_index, session.rng
+            session.run,
+            session.combat,
+            request.hand_index,
+            request.slot_index,
+            session.rng,
+            request.banish_indices,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -765,6 +943,24 @@ def move_queued_endpoint(run_id: str, request: MoveQueuedRequest) -> RunView:
         move_queued(session.combat, request.from_slot, request.to_slot)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _run_view(run_id, session)
+
+
+@app.post("/runs/{run_id}/combat/take-back")
+def take_back_endpoint(run_id: str, request: TakeBackRequest) -> RunView:
+    """Take a queued line or a permanent back into the hand (combat.take_back)."""
+    session = _get_session_or_404(run_id)
+    if session.combat is None:
+        raise HTTPException(status_code=409, detail="no combat in progress")
+    try:
+        session.run.history.append(
+            take_back(session.combat, request.zone, request.index, session.rng)
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # An uninstalled Failsafe can finish the enemy off.
+    if session.run.player.hp <= 0 or session.combat.enemy_hp <= 0:
+        _finish_fight(session)
     return _run_view(run_id, session)
 
 
@@ -915,6 +1111,13 @@ def choose_next_node(run_id: str, request: ChooseNodeRequest) -> RunView:
     session = _get_session_or_404(run_id)
     run = session.run
     node = run.nodes[run.current_node_id]
+
+    # A jump only commits once its room is entered: until then the player
+    # may switch to any other room the jump could have gone to.
+    if not start_pending(run) and request.node_id in switch_choices(run):
+        switch_to(run, request.node_id)
+        session.prefetch.warm(run)
+        return _run_view(run_id, session)
 
     if (
         not node.visited

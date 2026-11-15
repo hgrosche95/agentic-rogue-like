@@ -1,7 +1,8 @@
 """Artifacts - passive, run-long bonuses.
 
-The player picks one of three at the start of a run and another one every
-ARTIFACT_EVERY_STEPS steps on the map. Unlike cards they never have to be
+The player picks one of three at the start of a run, and earns another
+pick by beating an elite or an act's boss (engine._finish_combat) - the
+harder fights a path goes through, the more artifacts it pays. Unlike cards they never have to be
 drawn or played: each one is a bag of numbers (see models.Artifact) that the
 engine and combat.py add up at fixed hook points - opening hand, every turn
 end, after a fight, at a rest site, ... So a new artifact is a new entry in
@@ -20,7 +21,6 @@ import random
 
 from .models import Artifact, PlayerState
 
-ARTIFACT_EVERY_STEPS = 3
 ARTIFACT_CHOICES = 3
 
 ARTIFACT_POOL: list[Artifact] = [
@@ -34,7 +34,7 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="self-healing-script",
         name="Self-Healing Script",
-        description="Heal 6 HP after every won fight.",
+        description="Heal 6 integrity after every won fight.",
         heal_after_combat=6,
     ),
     Artifact(
@@ -81,7 +81,7 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="titanium-chassis",
         name="Titanium Chassis",
-        description="+15 max HP.",
+        description="+15 max integrity.",
         max_hp=15,
     ),
     Artifact(
@@ -93,7 +93,7 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="medkit-exe",
         name="Medkit.exe",
-        description="Your heal cards heal 4 more HP.",
+        description="Your heal cards heal 4 more integrity.",
         heal_bonus=4,
     ),
     Artifact(
@@ -111,21 +111,23 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="sleep-mode",
         name="Sleep Mode",
-        description="Rest sites heal 15 more HP, and heal 3 HP after every won fight.",
+        description=(
+            "Safehouses heal 15 more integrity, and heal 3 integrity after every won fight."
+        ),
         rest_heal=15,
         heal_after_combat=3,
     ),
     Artifact(
         id="glass-cannon",
         name="Glass Cannon",
-        description="+4 ATK, but -12 max HP.",
+        description="+4 ATK, but -12 max integrity.",
         attack=4,
         max_hp=-12,
     ),
     Artifact(
         id="lag-spike",
         name="Lag Spike",
-        description="Enemies start every fight with 15% less HP.",
+        description="Enemies start every fight with 15% less integrity.",
         enemy_hp_percent=-15,
     ),
     Artifact(
@@ -151,8 +153,33 @@ ARTIFACT_POOL: list[Artifact] = [
     Artifact(
         id="vampire-process",
         name="Vampire Process",
-        description="Every attack card you play heals you 1 HP.",
+        description="Every attack card you play heals you 1 integrity.",
         lifesteal=1,
+    ),
+    # ---- bridges between two styles (style.py)
+    Artifact(
+        id="stack-trace",
+        name="Stack Trace",
+        description="Attacks deal +1 damage for every 4 cards in your Graveyard.",
+        graveyard_attack=1,
+    ),
+    Artifact(
+        id="logic-bomb",
+        name="Logic Bomb",
+        description="Whenever a card is banished, infect the enemy with 3 Malware.",
+        banish_malware=3,
+    ),
+    Artifact(
+        id="daemon-worm",
+        name="Daemon Worm",
+        description="Every time a Daemon fires, it also infects the enemy with 2 Malware.",
+        turret_malware=2,
+    ),
+    Artifact(
+        id="retained-state",
+        name="Retained State",
+        description="At the end of a round, keep up to 3 block per permanent on the field.",
+        retain_block=3,
     ),
 ]
 
@@ -174,7 +201,8 @@ VIBE_CODER_ARTIFACT_POOL: list[Artifact] = [
         id="lo-fi-beats",
         name="Lo-fi Beats",
         description=(
-            "1 more token frees up at the end of every turn. Heal 3 HP after every won fight."
+            "1 more token frees up at the end of every turn. "
+            "Heal 3 integrity after every won fight."
         ),
         token_regen=1,
         heal_after_combat=3,
@@ -204,7 +232,7 @@ PROGRAM_ARTIFACT_POOL: list[Artifact] = [
         name="Hot Path",
         description=(
             "The card in line 2 of your program runs as its upgraded version, but "
-            "enemies have 10% more HP."
+            "enemies have 10% more integrity."
         ),
         hot_path=2,
         enemy_hp_percent=10,
@@ -213,7 +241,8 @@ PROGRAM_ARTIFACT_POOL: list[Artifact] = [
         id="branch-predictor",
         name="Branch Predictor",
         description=(
-            "Once the enemy is at half HP or less, every further action in your program gets +3."
+            "Once the enemy is at half integrity or less, "
+            "every further action in your program gets +3."
         ),
         wounded_bonus=3,
     ),
@@ -249,6 +278,25 @@ PROGRAM_ARTIFACT_POOL: list[Artifact] = [
         extra_lines=1,
         extra_draw=1,
         extra_draw_every=2,
+    ),
+    Artifact(
+        id="main-thread",
+        name="Main Thread",
+        description=(
+            "The action in the first line of your program to run runs twice, but enemies "
+            "have 15% more integrity."
+        ),
+        main_thread=1,
+        enemy_hp_percent=15,
+    ),
+    Artifact(
+        id="garbage-free",
+        name="Garbage-Free",
+        description=(
+            "A card that would end your program only skips the line after it, and enemies' "
+            "garbage collectors find nothing to collect."
+        ),
+        garbage_free=1,
     ),
 ]
 

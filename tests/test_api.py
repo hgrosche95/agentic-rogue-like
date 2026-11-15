@@ -66,6 +66,14 @@ def _play_full_run(seed: int, character: str = "chronos") -> dict:
         if run["card_reward"] is not None:
             run = client.post(f"/runs/{run_id}/card-reward", json={"card_index": 0}).json()
 
+        # an elite or an act's boss leaves an artifact behind
+        if run["artifact_offer"] is not None:
+            run = client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0}).json()
+
+        # the AGI's forged card, once per act once the deck has a style - taken
+        if run["agi_deals"] is not None:
+            run = client.post(f"/runs/{run_id}/agi-deal", json={"deal_index": 0}).json()
+
         if run["shop"] is not None:
             run = client.post(f"/runs/{run_id}/shop/leave").json()
 
@@ -159,6 +167,66 @@ def test_card_reward_blocks_moving_on_until_picked() -> None:
     assert run["player"]["deck"][-1]["name"] == picked["name"]
     ids = [c["id"] for c in run["player"]["deck"]]
     assert len(ids) == len(set(ids))
+
+
+def _jumped(seed: int) -> tuple[str, dict]:
+    """Seeds where the first room has several ways on: the first jump taken
+    (to the first of them), its room not entered yet."""
+    run_id, run = _won_fight(seed)
+    client.post(f"/runs/{run_id}/card-reward", json={"card_index": None})
+    first, *_ = run["current_node"]["connections"]
+    run = client.post(f"/runs/{run_id}/choose-node", json={"node_id": first}).json()
+    return run_id, run
+
+
+def test_jumped_into_room_can_be_switched_until_entered() -> None:
+    run_id, run = _jumped(14)
+    first, *others = run["nodes"]["0-0"]["connections"]
+    assert run["current_node"]["id"] == first
+    assert not run["node_resolved"]
+    assert [n["id"] for n in run["switch_choices"]] == others
+
+    run = client.post(f"/runs/{run_id}/choose-node", json={"node_id": others[0]}).json()
+    assert run["current_node"]["id"] == others[0]
+    assert sorted(n["id"] for n in run["switch_choices"]) == sorted([first, *others[1:]])
+    # switching back and forth is no step of its own
+    run = client.post(f"/runs/{run_id}/choose-node", json={"node_id": first}).json()
+    assert run["current_node"]["id"] == first
+    assert not run["nodes"][others[0]]["visited"]
+
+    # entering commits the jump
+    run = _resolve(run_id).json()
+    assert run["switch_choices"] == []
+    switched = client.post(f"/runs/{run_id}/choose-node", json={"node_id": others[0]})
+    assert switched.status_code == 409
+
+
+def test_switch_only_goes_to_rooms_the_last_jump_could_reach() -> None:
+    run_id, run = _jumped(14)
+    onward = run["current_node"]["connections"][0]
+
+    # not a sibling: going on still needs the room entered first
+    response = client.post(f"/runs/{run_id}/choose-node", json={"node_id": onward})
+    assert response.status_code == 409
+    response = client.post(f"/runs/{run_id}/choose-node", json={"node_id": "0-0"})
+    assert response.status_code == 409
+
+
+def test_the_first_room_can_be_any_room_on_the_first_layer() -> None:
+    run = client.post("/runs", json={"seed": 1}).json()
+    run_id = run["run_id"]
+    first_layer = sorted(n["id"] for n in run["nodes"].values() if n["floor"] == 0)
+    assert len(first_layer) > 1
+    assert run["switch_choices"] == []  # not while the start of the run waits
+    client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0})
+    client.post(f"/runs/{run_id}/kit", json={"kit_index": 0})
+    run = client.post(f"/runs/{run_id}/agi-deal", json={"deal_index": None}).json()
+    assert sorted(n["id"] for n in run["switch_choices"]) == first_layer[1:]
+    run = client.post(f"/runs/{run_id}/choose-node", json={"node_id": first_layer[1]}).json()
+    assert run["current_node"]["id"] == first_layer[1]
+    run = _resolve(run_id).json()
+    assert run["nodes"][first_layer[1]]["visited"]
+    assert not run["nodes"]["0-0"]["visited"]
 
 
 def test_card_reward_can_be_skipped() -> None:

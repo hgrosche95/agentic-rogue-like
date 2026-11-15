@@ -60,7 +60,7 @@ function describeKind(
       return { label: "Overload", amount: range, title: `Releases a crushing overload for ${range} next` };
     case "purge":
       return {
-        label: "Purge",
+        label: "Banish",
         amount: range,
         title: `Destroys your rightmost permanent card, then hits for ${range}`,
       };
@@ -68,7 +68,7 @@ function describeKind(
       return {
         label: "Infect",
         amount: range,
-        title: `Hits for ${range} and leaves Malware on you - it costs HP every turn as it fades`,
+        title: `Hits for ${range} and leaves Malware on you - it costs integrity every turn as it fades`,
       };
     case "lock":
       return {
@@ -80,7 +80,7 @@ function describeKind(
       return {
         label: "Corrupt",
         amount: range,
-        title: `Hits for ${range} and shuffles useless Glitch cards into your draw pile`,
+        title: `Hits for ${range} and shuffles useless Glitch cards into your Source`,
       };
     case "interrupt":
       return {
@@ -94,12 +94,30 @@ function describeKind(
         amount: range,
         title: `Hits for ${range} and runs your program right to left this turn - control flow steers the lines to its left`,
       };
+    case "collect":
+      return {
+        label: "Garbage Collector",
+        amount: range,
+        title: `Hits for ${range} and throws your program's last line away before it runs - it goes to the Graveyard unused`,
+      };
+    case "race":
+      return {
+        label: "Race Condition",
+        amount: range,
+        title: `Hits for ${range} and swaps the first two lines of your program - what steers the next line may miss it`,
+      };
+    case "leak":
+      return {
+        label: "Memory Leak",
+        amount: range,
+        title: `Hits for ${range} and locks the first line that runs for your next turn`,
+      };
   }
 }
 
 // What each status does, for the badges' tooltips - see combat.STATUS_DESCRIPTIONS.
 export const STATUS_TEXT: Record<Status, string> = {
-  malware: "Loses that much HP at the end of each turn, then one stack fades.",
+  malware: "Loses that much integrity at the end of each turn, then one stack fades.",
   exposed: "Attack cards deal 50% more to it. Turns left.",
   throttled: "Deals 25% less. Turns left.",
 };

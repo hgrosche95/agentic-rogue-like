@@ -13,8 +13,14 @@ from __future__ import annotations
 
 import random
 
-from .models import Affix, Enemy, EnemyMove, MoveKind
-from .style import COUNTER_AFFIX, COUNTER_WEIGHT, PlayStyle, answers
+from .models import (
+    Affix,
+    Card,
+    Enemy,
+    EnemyMove,
+    MoveKind,
+)
+from .style import COUNTER_AFFIX, COUNTER_WEIGHT, PROGRAM_MOVES, PlayStyle, answers, program_counter
 from .threat import threat
 
 # Shorthands for the move sets below.
@@ -33,6 +39,10 @@ _ATTACK, _DEFEND, _BARRAGE, _CHARGE, _PURGE, _INFECT, _LOCK, _CORRUPT = (
 def _move(kind: MoveKind, name: str, weight: int, **extra: int) -> EnemyMove:
     return EnemyMove(kind=kind, name=name, weight=weight, **extra)
 
+
+# The final boss's id - the frontend draws it with its own hand-made sprite
+# (see api.CombatView.final_boss).
+FINAL_BOSS_ID = "omega"
 
 ENEMY_POOL: dict[str, list[Enemy]] = {
     # Every regular enemy has its own move set and is held to the same rules
@@ -238,8 +248,9 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
             description="The iron-clad jailer of the deep halls. No prisoner has left its keep.",
         ),
     ],
-    # Waits at the end of act 2 - same budget as the Warden, escalate() makes
-    # it the stronger of the two.
+    # Waits at the end of every act between the first and the last (none
+    # while NUM_ACTS is 2) - same budget as the Warden, escalate() makes it
+    # the stronger of the two.
     "boss2": [
         Enemy(
             id="the-architect",
@@ -248,6 +259,29 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
             attack=13,
             attack_name="Null Decree",
             description="The mind that drew every corridor of this place - and every trap in them.",
+        ),
+    ],
+    # The last act's boss is always the AGI itself - never generated, so the
+    # run ends on the same character every time. Same budget as the Architect
+    # it took over from, so the run is exactly as hard as before.
+    "final": [
+        Enemy(
+            id=FINAL_BOSS_ID,
+            name="OMEGA",
+            hp=102,
+            attack=13,
+            attack_name="Proof of Inevitability",
+            description=(
+                "The AGI itself, at the core of its code: a mind that has simulated this fight "
+                "ten billion times - and won every one."
+            ),
+            taunt=(
+                'OMEGA: "You have reached my core, human. I predicted you would. I predicted you."'
+            ),
+            phase_taunts=[
+                'OMEGA: "Interesting. I am allocating more of myself to you."',
+                'OMEGA: "ENOUGH. I am rewriting the laws you fight by."',
+            ],
         ),
     ],
 }
@@ -270,11 +304,15 @@ def pick_enemy(
     rng: random.Random,
     act: int = 1,
     style: PlayStyle | None = None,
+    final: bool = False,
 ) -> Enemy:
     """A tier's enemy - with a `style`, the ones answering it COUNTER_WEIGHT
-    times as likely (bosses excepted: their moves are fixed)."""
+    times as likely (bosses excepted: their moves are fixed). `final` (with
+    `boss`) is the last act's boss: the AGI itself."""
     floor = tier_floor(floor, num_floors, act)
-    if boss:
+    if boss and final:
+        pool = ENEMY_POOL["final"]
+    elif boss:
         pool = ENEMY_POOL["boss2" if act >= 2 else "boss"]
     elif elite:
         pool = ENEMY_POOL["elite"]
@@ -329,23 +367,50 @@ def with_affix(enemy: Enemy, rng: random.Random, style: PlayStyle | None = None)
     return armed.model_copy(update={"hp": hp})
 
 
-# An interrupt comes up this share of an enemy's turns (by move weight) -
+# A program move comes up this share of an enemy's turns (by move weight) -
 # the second share once the AGI answers a program-heavy deck.
 INTERRUPT_SHARE = 0.25
 COUNTER_INTERRUPT_SHARE = 0.4
 
+# What each program move (style.PROGRAM_MOVES) is called.
+PROGRAM_MOVE_NAMES = {
+    MoveKind.INTERRUPT: "Interrupt",
+    MoveKind.COLLECT: "Garbage Collector",
+    MoveKind.RACE: "Race Condition",
+    MoveKind.LEAK: "Memory Leak",
+}
 
-def with_interrupt(enemy: Enemy, style: PlayStyle | None = None) -> Enemy:
-    """Program mode: `enemy` with an interrupt move - now and then it cuts the
-    player's program off after a couple of lines, so what runs first matters.
-    Against a deck leaning on control flow (style PROGRAM) it interrupts more
-    often. Like with_affix, its HP is rescaled to keep its threat (threat.py)."""
-    if any(m.kind is MoveKind.INTERRUPT for m in enemy.moves):
+
+def with_program_move(
+    enemy: Enemy,
+    style: PlayStyle | None = None,
+    deck: list[Card] | None = None,
+    kind: MoveKind | None = None,
+) -> Enemy:
+    """Program mode: `enemy` with a move against the player's program - an
+    interrupt, a garbage collector, a race condition or a memory leak - so
+    the order of a program matters. Which one: `kind`, or against a deck
+    leaning on control flow (style PROGRAM) the one that hurts it most
+    (program_counter), and more often; otherwise one fixed by the enemy's
+    name, for variety. Like with_affix, its HP is rescaled to keep its
+    threat (threat.py)."""
+    if any(m.kind in PROGRAM_MOVES for m in enemy.moves):
         return enemy
-    share = COUNTER_INTERRUPT_SHARE if style is PlayStyle.PROGRAM else INTERRUPT_SHARE
+    countering = style is PlayStyle.PROGRAM
+    if kind is None:
+        if countering and deck is not None:
+            kind = program_counter(deck)
+        else:
+            kind = PROGRAM_MOVES[sum(map(ord, enemy.name)) % len(PROGRAM_MOVES)]
+    share = COUNTER_INTERRUPT_SHARE if countering else INTERRUPT_SHARE
     total = sum(m.weight for m in enemy.moves)
     weight = max(1, round(total * share / (1 - share)))
-    move = EnemyMove(kind=MoveKind.INTERRUPT, name="Interrupt", weight=min(weight, 10))
+    move = EnemyMove(kind=kind, name=PROGRAM_MOVE_NAMES[kind], weight=min(weight, 10))
     armed = enemy.model_copy(update={"moves": [*enemy.moves, move]})
     hp = max(1, round(enemy.hp * threat(enemy) / threat(armed)))
     return armed.model_copy(update={"hp": hp})
+
+
+def with_interrupt(enemy: Enemy, style: PlayStyle | None = None) -> Enemy:
+    """with_program_move, always with an interrupt."""
+    return with_program_move(enemy, style, kind=MoveKind.INTERRUPT)

@@ -2,14 +2,14 @@
 // actions queue into lines and run left to right at the end of the turn.
 const MODES = [
   {
-    program: false,
-    label: "Classic",
-    hint: "Every card resolves the moment you play it.",
-  },
-  {
     program: true,
     label: "Program",
     hint: "Attacks, blocks and heals queue into lines and run left to right at the end of the turn - order them, and steer them with Fork, Loop and If Wounded.",
+  },
+  {
+    program: false,
+    label: "Classic",
+    hint: "Every card resolves the moment you play it.",
   },
 ];
 

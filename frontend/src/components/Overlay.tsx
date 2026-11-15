@@ -1,9 +1,11 @@
-import { useEffect, type ReactNode } from "react";
+import { useContext, useEffect, type ReactNode } from "react";
+import { OverlayStageContext } from "../overlayStage";
 
 // A window over the current screen: the screen stays where it is, dimmed
 // behind it, instead of the content being pushed around. The top bar stays
 // above the backdrop, so deck, map and audio are reachable during a choice.
 // Choices the run can't go on without (a reward, an event) pass no onClose.
+// Inside an OverlayStage the window opens and folds shut with the stage.
 export function Overlay({
   children,
   onClose,
@@ -23,17 +25,26 @@ export function Overlay({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  const stage = useContext(OverlayStageContext);
 
   return (
     <div
-      className="overlay-backdrop"
+      className={`overlay-backdrop${stage?.phase === "leaving" ? " is-leaving" : ""}`}
       onClick={(event) => {
         if (onClose && event.target === event.currentTarget) onClose();
       }}
     >
-      <div className={`overlay-window ${className}`} role="dialog" aria-modal="true" aria-label={label}>
+      <div
+        key={stage?.id}
+        className={`overlay-window ${className}${stage ? ` is-staged is-${stage.phase}` : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+      >
         {children}
       </div>
+      {/* what's left of a folded window while the next one is on its way */}
+      {stage && stage.phase !== "open" && <span className="overlay-seam" aria-hidden="true" />}
     </div>
   );
 }

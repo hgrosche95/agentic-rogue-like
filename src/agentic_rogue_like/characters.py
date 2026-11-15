@@ -40,7 +40,8 @@ class CharacterProfile:
     description: str
     hp: int
     attack: int
-    deck: Callable[[], list[Card]]
+    # The starter deck - called with whether the run is in program mode.
+    deck: Callable[[bool], list[Card]]
     # What card rewards, the starting pick and shops offer him.
     reward_pool: list[Card]
     # What artifact offers and shops offer him.

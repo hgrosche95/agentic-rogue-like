@@ -6,6 +6,14 @@ import "@fontsource/rajdhani/500.css";
 import "@fontsource/rajdhani/600.css";
 import "@fontsource/rajdhani/700.css";
 import "./neon.css";
+import "./flair.css";
+import "./juice.css";
+import "./sockets.css";
+import "./faces.css";
+import "./table.css";
+import "./cardread.css";
+import "./alive.css";
+import "./phone.css";
 import {
   buyShopArtifact,
   removeShopCard,
@@ -18,6 +26,7 @@ import {
   chooseNextNode,
   createRun,
   moveQueued,
+  takeBack,
   endCombatTurn,
   leaveShop,
   listCharacters,
@@ -48,13 +57,18 @@ import { DeckButton, DeckView } from "./components/DeckView";
 import { DungeonMap } from "./components/DungeonMap";
 import { EndScreen } from "./components/EndScreen";
 import { EventPrompt } from "./components/EventPrompt";
+import { EventResult } from "./components/EventResult";
+import { eventOutcome, type EventOutcome } from "./eventOutcome";
 import { HistoryLog } from "./components/HistoryLog";
 import { IntroScreen } from "./components/IntroScreen";
 import { LoadingIndicator } from "./components/LoadingIndicator";
 import { Brand, TopBar } from "./components/PlayerStats";
 import { JumpPanel } from "./components/JumpPanel";
+import { ScreenWipe } from "./components/ScreenWipe";
 import { CloseButton, Overlay } from "./components/Overlay";
+import { OverlayStage } from "./components/OverlayStage";
 import { RUN_ID_KEY } from "./errors";
+import { hasSeenTutorial } from "./tutorial";
 import { layerLabel, numFloorsOf } from "./layers";
 import { ProgramModeContext } from "./program";
 import { RestScreen } from "./components/RestScreen";
@@ -63,6 +77,7 @@ import { ModePicker } from "./components/ModePicker";
 import { SettingPicker } from "./components/SettingPicker";
 import { DealScreen, KitScreen } from "./components/StartScreens";
 import { ShopScreen } from "./components/ShopScreen";
+import { TitleBackdrop } from "./components/TitleBackdrop";
 import { Tooltips } from "./components/RichText";
 
 const FALLBACK_SETTINGS = ["dungeon"];
@@ -118,7 +133,9 @@ function App() {
   const [selectedSetting, setSelectedSetting] = useState(FALLBACK_SETTINGS[0]);
   const [characters, setCharacters] = useState<CharacterView[]>(FALLBACK_CHARACTERS);
   const [selectedCharacter, setSelectedCharacter] = useState<Character>("chronos");
-  const [programMode, setProgramMode] = useState(false);
+  // program mode is the game's own idea - it starts selected once a first
+  // fight has been played; a newcomer starts on the plainer classic table
+  const [programMode, setProgramMode] = useState(() => hasSeenTutorial("classic") || hasSeenTutorial("program"));
   const [isMapOpen, setIsMapOpen] = useState(false);
   // Hovering a room on the map previews it in the next-jump panel.
   const [focusedJump, setFocusedJump] = useState<string | null>(null);
@@ -128,6 +145,8 @@ function App() {
   // Keep showing that fight - enemy at 0 HP - so the arena can play the enemy's
   // death and wait for the player to move on instead of cutting away at once.
   const [slainCombat, setSlainCombat] = useState<PendingCombatView | null>(null);
+  // what the event just chosen did, shown before the map comes back
+  const [eventDone, setEventDone] = useState<{ runId: string; outcome: EventOutcome } | null>(null);
   const combat = run?.pending_combat ?? slainCombat;
   const inCombat = Boolean(combat);
   // Entering or leaving a fight plays a jump through the rift (see
@@ -161,6 +180,21 @@ function App() {
   useEffect(() => {
     if (!inCombat) setIsMapOpen(false);
   }, [inCombat]);
+
+  // D opens the deck in a fight and closes it again (the other combat keys
+  // are CombatPanel's) - not over another window, nor while typing.
+  useEffect(() => {
+    if (!inCombat) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "d" || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select")) return;
+      if (!isDeckOpen && document.querySelector(".overlay-backdrop")) return;
+      sfx.play("click");
+      setIsDeckOpen(!isDeckOpen);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [inCombat, isDeckOpen]);
 
   useEffect(() => {
     listSettings()
@@ -206,13 +240,14 @@ function App() {
     if (!runId) return;
     getRun(runId)
       .then((stored) => {
-        if (stored.status === "ongoing") setRun((current) => current ?? stored);
-        else storeRunId(null);
+        // a finished run comes back too: its end screen stays until the
+        // player starts a new run
+        setRun((current) => current ?? stored);
       })
       .catch(() => storeRunId(null));
   }, []);
 
-  const runId = run !== null && run.status === "ongoing" ? run.run_id : null;
+  const runId = run?.run_id ?? null;
   useEffect(() => {
     // only forget the stored run once one was open here - not on first load
     if (runId !== null) storeRunId(runId);
@@ -273,31 +308,35 @@ function App() {
       <main className="game is-title">
         <Tooltips />
         <AudioControls className="is-floating" />
+        <TitleBackdrop />
         <Brand />
         <p className="title-tagline">A deckbuilder: hack your way down into a rogue AGI's code</p>
-        <CharacterPicker
-          characters={characters}
-          selected={selectedCharacter}
-          onSelect={(character) => {
-            sfx.play("select");
-            setSelectedCharacter(character);
-          }}
-          disabled={isLoading}
-        />
-        <SettingPicker
-          settings={settings}
-          selected={selectedSetting}
-          onSelect={setSelectedSetting}
-          disabled={isLoading}
-        />
-        <ModePicker
-          program={programMode}
-          onSelect={(program) => {
-            sfx.play("select");
-            setProgramMode(program);
-          }}
-          disabled={isLoading}
-        />
+        {/* the run's settings, as one console: who, where, how */}
+        <section className="boot-panel" aria-label="Run setup">
+          <CharacterPicker
+            characters={characters}
+            selected={selectedCharacter}
+            onSelect={(character) => {
+              sfx.play("select");
+              setSelectedCharacter(character);
+            }}
+            disabled={isLoading}
+          />
+          <SettingPicker
+            settings={settings}
+            selected={selectedSetting}
+            onSelect={setSelectedSetting}
+            disabled={isLoading}
+          />
+          <ModePicker
+            program={programMode}
+            onSelect={(program) => {
+              sfx.play("select");
+              setProgramMode(program);
+            }}
+            disabled={isLoading}
+          />
+        </section>
         <button
           className="is-primary start-run"
           disabled={isLoading || selectedSetting.trim() === ""}
@@ -322,12 +361,6 @@ function App() {
 
   const numFloors = numFloorsOf(run.nodes);
 
-  function jumpTo(nodeId: string) {
-    sfx.play("map_select");
-    setFocusedJump(null);
-    runAction(() => chooseNextNode(run!.run_id, nodeId), "Going one layer deeper...");
-  }
-
   function enterRoom() {
     sfx.play("click");
     runAction(
@@ -336,15 +369,9 @@ function App() {
     );
   }
 
-  const mapProps = {
-    nodes: run.nodes,
-    currentNodeId: run.current_node.id,
-    reachableIds: run.available_choices.map((n) => n.id),
-    disabled: isLoading,
-    act: run.act,
-    onChoose: jumpTo,
-  };
   const ongoing = run.status === "ongoing";
+  // the event just chosen in this run, until its result is dismissed
+  const eventResult = eventDone?.runId === run.run_id ? eventDone : null;
   const canJump = ongoing && !slainCombat && run.node_resolved && run.available_choices.length > 0;
   const needsEnter =
     ongoing &&
@@ -356,12 +383,53 @@ function App() {
     !run.shop &&
     !run.rest &&
     !run.node_resolved;
+  // A jump only commits once its room is entered: until then the player can
+  // switch to any other room the jump could have gone to.
+  const switchChoices = needsEnter ? (run.switch_choices ?? []) : [];
+
+  function jumpTo(nodeId: string) {
+    sfx.play("map_select");
+    setFocusedJump(null);
+    runAction(
+      () => chooseNextNode(run!.run_id, nodeId),
+      needsEnter ? "Switching rooms..." : "Going one layer deeper...",
+    );
+  }
+
+  const mapProps = {
+    nodes: run.nodes,
+    currentNodeId: run.current_node.id,
+    reachableIds: (needsEnter ? switchChoices : run.available_choices).map((n) => n.id),
+    disabled: isLoading,
+    act: run.act,
+    numActs: run.num_acts,
+    onChoose: jumpTo,
+  };
 
   // cards show their token cost only to a character with a context window
   const showTokens = characters.some((c) => c.id === run.player.character && c.token_limit !== null);
 
+  // what fills the screen, for the wipe between screens
+  const screenKind =
+    run.status !== "ongoing"
+      ? "end"
+      : run.shop
+        ? "shop"
+        : run.rest
+          ? "rest"
+          : run.pending_event
+            ? "event"
+            : run.card_reward
+              ? "reward"
+              : run.artifact_offer
+                ? "artifact"
+                : inCombat
+                  ? "combat"
+                  : "map";
+
   const screen = (
     <main className={`game${inCombat ? " is-combat" : ""}`}>
+      <ScreenWipe kind={screenKind} />
       <TopBar
         player={run.player}
         floor={run.floor}
@@ -411,18 +479,25 @@ function App() {
           disabled={isLoading || slainCombat !== null}
           enemySlain={slainCombat !== null}
           onContinue={() => setSlainCombat(null)}
-          onPlayCard={(handIndex, slotIndex) =>
-            runAction(() => playCard(run.run_id, handIndex, slotIndex))
+          onPlayCard={(handIndex, slotIndex, banish) =>
+            runAction(() => playCard(run.run_id, handIndex, slotIndex, banish))
           }
           onEndTurn={(discard) => runAction(() => endCombatTurn(run.run_id, discard))}
           onMoveQueued={(fromSlot, toSlot) => runAction(() => moveQueued(run.run_id, fromSlot, toSlot))}
+          onTakeBack={(zone, index) => runAction(() => takeBack(run.run_id, zone, index))}
         />
       ) : (
         <div className="map-layout">
           <section className="panel map-panel">
             <div className="panel-head">
               <h2 className="panel-title">Call stack</h2>
-              <span className="panel-sub">{canJump ? "Select your next jump" : run.setting}</span>
+              <span className="panel-sub">
+                {canJump
+                  ? "Select your next jump"
+                  : switchChoices.length > 0
+                    ? "Switch rooms until you enter"
+                    : run.setting}
+              </span>
             </div>
             <DungeonMap {...mapProps} onHover={setFocusedJump} onEnter={needsEnter ? enterRoom : undefined} />
           </section>
@@ -432,6 +507,7 @@ function App() {
               current={run.current_node}
               needsEnter={needsEnter}
               choices={run.available_choices}
+              switchChoices={switchChoices}
               focusedId={focusedJump}
               numFloors={numFloors}
               act={run.act}
@@ -447,34 +523,57 @@ function App() {
         </div>
       )}
 
-      {/* choices open as windows over the map, which stays where it is */}
+      {/* choices open as windows over the map, which stays where it is; the
+          stage folds one shut before the next opens */}
+      <OverlayStage busy={isLoading}>
       {!combat && !ongoing && (
-        <Overlay label="Run over">
-          <EndScreen run={run} onRestart={() => setRun(null)} />
-        </Overlay>
-      )}
-      {!combat && ongoing && run.pending_event && (
-        <Overlay label="Anomaly">
-          <EventPrompt
-            event={run.pending_event}
-            disabled={isLoading}
-            onChoose={(optionIndex) => runAction(() => chooseEventOption(run.run_id, optionIndex))}
+        <Overlay key="end" label="Run over" className="is-wide">
+          <EndScreen
+            run={run}
+            onRestart={() => {
+              storeRunId(null);
+              setRun(null);
+            }}
           />
         </Overlay>
       )}
-      {!combat && ongoing && run.card_reward && !run.artifact_offer && (
-        <Overlay label="Choose a card" className="is-wide">
+      {!combat && ongoing && run.pending_event && (
+        <Overlay key={`event:${run.pending_event.description}`} label="Anomaly">
+          <EventPrompt
+            event={run.pending_event}
+            where={layerLabel(run.floor, numFloors, run.act)}
+            disabled={isLoading}
+            onChoose={(optionIndex) => {
+              const before = run;
+              const option = run.pending_event?.options.find((o) => o.index === optionIndex);
+              runAction(async () => {
+                const next = await chooseEventOption(before.run_id, optionIndex);
+                if (option) setEventDone({ runId: before.run_id, outcome: eventOutcome(before, next, option) });
+                return next;
+              });
+            }}
+          />
+        </Overlay>
+      )}
+      {!combat && ongoing && !run.pending_event && eventResult && (
+        <Overlay key="event-result" label="Anomaly resolved">
+          <EventResult outcome={eventResult.outcome} onContinue={() => setEventDone(null)} />
+        </Overlay>
+      )}
+      {!combat && ongoing && !eventResult && run.card_reward && !run.artifact_offer && (
+        <Overlay key="card" label="Choose a card" className="is-wide">
           <RewardScreen
             offer={run.card_reward}
             deckSize={run.player.deck.length}
+            deck={run.player.deck}
             disabled={isLoading}
             onPick={(cardIndex) => runAction(() => chooseCardReward(run.run_id, cardIndex))}
           />
         </Overlay>
       )}
       {/* at the start the artifact comes first, then the kit, then the AGI's deal */}
-      {!combat && ongoing && run.kit_offer && !run.artifact_offer && (
-        <Overlay label="Pack a starter kit" className="is-wide">
+      {!combat && ongoing && !eventResult && run.kit_offer && !run.artifact_offer && (
+        <Overlay key="kit" label="Pack a starter kit" className="is-wide">
           <KitScreen
             offer={run.kit_offer}
             disabled={isLoading}
@@ -482,8 +581,8 @@ function App() {
           />
         </Overlay>
       )}
-      {!combat && ongoing && run.agi_deals && (
-        <Overlay label="The AGI's offer" className="is-wide">
+      {!combat && ongoing && !eventResult && run.agi_deals && !run.card_reward && !run.artifact_offer && (
+        <Overlay key="deal" label="The AGI's offer" className="is-wide">
           <DealScreen
             deals={run.agi_deals}
             disabled={isLoading}
@@ -491,8 +590,8 @@ function App() {
           />
         </Overlay>
       )}
-      {!combat && ongoing && run.shop && (
-        <Overlay label="Black market" className="is-wide">
+      {!combat && ongoing && !eventResult && run.shop && (
+        <Overlay key="shop" label="Black market" className="is-wide">
           <ShopScreen
             shop={run.shop}
             gold={run.player.gold}
@@ -505,8 +604,8 @@ function App() {
           />
         </Overlay>
       )}
-      {!combat && ongoing && run.rest && (
-        <Overlay label="Safehouse" className="is-wide">
+      {!combat && ongoing && !eventResult && run.rest && (
+        <Overlay key="rest" label="Safehouse" className="is-wide">
           <RestScreen
             rest={run.rest}
             hp={run.player.hp}
@@ -519,8 +618,8 @@ function App() {
           />
         </Overlay>
       )}
-      {!combat && ongoing && run.artifact_offer && (
-        <Overlay label="Choose an artifact" className="is-wide">
+      {!combat && ongoing && !eventResult && run.artifact_offer && (
+        <Overlay key="artifact" label="Choose an artifact" className="is-wide">
           <ArtifactScreen
             offer={run.artifact_offer}
             owned={run.player.artifacts.length}
@@ -529,6 +628,7 @@ function App() {
           />
         </Overlay>
       )}
+      </OverlayStage>
 
       {inCombat && isMapOpen && (
         <Overlay label="Call stack" onClose={() => setIsMapOpen(false)} className="is-wide">

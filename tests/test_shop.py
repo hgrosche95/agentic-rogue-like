@@ -80,9 +80,9 @@ def test_buying_an_artifact_installs_it() -> None:
 
 def test_cannot_buy_without_enough_gold() -> None:
     run = _at_shop(gold=0)
-    with pytest.raises(ValueError, match="not enough gold"):
+    with pytest.raises(ValueError, match="not enough credits"):
         buy_card(run, 0)
-    with pytest.raises(ValueError, match="not enough gold"):
+    with pytest.raises(ValueError, match="not enough credits"):
         buy_artifact(run, 0)
     assert run.player.gold == 0
     assert not any(item.sold for item in run.shop.cards)
@@ -200,7 +200,7 @@ def test_every_removal_makes_the_next_shop_pricier() -> None:
 
 def test_removal_needs_gold_and_a_big_enough_deck() -> None:
     run = _at_shop(gold=REMOVAL_PRICE - 1)
-    with pytest.raises(ValueError, match="not enough gold"):
+    with pytest.raises(ValueError, match="not enough credits"):
         remove_card(run, 0)
     run.player.gold = 500
     del run.player.deck[MIN_DECK_SIZE:]

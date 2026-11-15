@@ -1,13 +1,9 @@
-import pytest
-
-from agentic_rogue_like.engine import choose_artifact, choose_deal, choose_kit, new_run
+from agentic_rogue_like.engine import choose_deal, choose_kit, new_run
 from agentic_rogue_like.models import Character, DealKind, Rarity
 
 
 def _at_kit(seed: int = 3, **kwargs):
-    run = new_run(seed, **kwargs)
-    choose_artifact(run, 0)
-    return run
+    return new_run(seed, **kwargs)
 
 
 def test_a_run_opens_with_three_kits_instead_of_a_card_pick() -> None:
@@ -18,13 +14,12 @@ def test_a_run_opens_with_three_kits_instead_of_a_card_pick() -> None:
     assert new_run(3).kit_offer == run.kit_offer  # seeded
 
 
-def test_the_artifact_comes_before_the_kit() -> None:
+def test_a_run_starts_without_an_artifact() -> None:
     run = new_run(3)
-    with pytest.raises(ValueError, match="artifact first"):
-        choose_kit(run, 0)
+    assert run.artifact_offer is None and not run.player.artifacts
 
 
-def test_a_kit_swaps_two_basic_attacks_and_a_basic_block_for_its_cards() -> None:
+def test_a_kit_swaps_a_basic_attack_and_two_basic_blocks_for_its_cards() -> None:
     run = _at_kit()
     kit = run.kit_offer[0]
     before = [c.name for c in run.player.deck]
@@ -33,10 +28,38 @@ def test_a_kit_swaps_two_basic_attacks_and_a_basic_block_for_its_cards() -> None
 
     after = [c.name for c in run.player.deck]
     assert len(after) == len(before) - 1
-    assert after.count("Exploit") == before.count("Exploit") - 2
-    assert after.count("Firewall") == before.count("Firewall") - 1
+    assert after.count("Exploit") == before.count("Exploit") - 1
+    assert after.count("Firewall") == before.count("Firewall") - 2
     assert all(c.name in after for c in kit.cards)
     assert run.kit_offer is None and run.agi_deals is not None
+
+
+def test_in_a_program_dr_chronos_keeps_two_firewalls() -> None:
+    run = _at_kit(program_mode=True)
+    before = [c.name for c in run.player.deck]
+
+    choose_kit(run, 0)
+
+    after = [c.name for c in run.player.deck]
+    assert after.count("Exploit") == before.count("Exploit") - 2
+    assert after.count("Firewall") == before.count("Firewall") - 1 == 2
+
+
+def test_a_kit_keeps_the_starter_decks_strategy_cards() -> None:
+    # It swaps plain basics only, so every strategy the starter deck shows
+    # (Ping, Undo, Garbage Collect, ...) survives it - and there are basics enough.
+    for character in Character:
+        for program_mode in (False, True):
+            run = _at_kit(character=character, program_mode=program_mode)
+            before = list(run.player.deck)
+            kit = run.kit_offer[0]
+
+            choose_kit(run, 0)
+
+            gone = [c for c in before if c not in run.player.deck]
+            assert len(gone) == len(before) + len(kit.cards) - len(run.player.deck)
+            assert {c.name for c in gone} <= {"Exploit", "Firewall", "Prompt", "Make It Safe"}
+            assert len(gone) == (3 if character is Character.CHRONOS else 2)
 
 
 def test_kits_only_come_from_the_runs_own_pool() -> None:
@@ -93,11 +116,11 @@ def test_forbidden_patch_costs_max_hp() -> None:
     assert after.deck[-1].rarity is Rarity.RARE
 
 
-def test_trojan_gift_brings_an_artifact_and_a_glitch() -> None:
-    before, after, deal = _take(DealKind.TROJAN)
-    assert len(after.artifacts) == len(before.artifacts) + 1
-    glitch = after.deck[-1]
-    assert glitch.name == "Glitch" and glitch.rarity is Rarity.STARTER
+def test_no_opening_deal_hands_out_an_artifact() -> None:
+    for seed in range(60):
+        run = _at_kit(seed)
+        choose_kit(run, 0)
+        assert all(d.artifact is None for d in run.agi_deals)
 
 
 def test_hotfix_upgrades_two_basics() -> None:
@@ -119,9 +142,8 @@ def test_api_walks_through_the_start_of_a_run() -> None:
     run = client.post("/runs", json={"seed": 4}).json()
     run_id = run["run_id"]
     assert len(run["kit_offer"]) == 3 and run["agi_deals"] is None
-    assert client.post(f"/runs/{run_id}/kit", json={"kit_index": 0}).status_code == 400
-
-    client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0})
+    assert run["artifact_offer"] is None
+    assert client.post(f"/runs/{run_id}/kit", json={"kit_index": 5}).status_code == 400
     assert client.post(f"/runs/{run_id}/resolve").status_code == 409
     run = client.post(f"/runs/{run_id}/kit", json={"kit_index": 1}).json()
     assert run["kit_offer"] is None and len(run["agi_deals"]) == 3

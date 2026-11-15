@@ -31,7 +31,7 @@ from .agent.event_agent import agent_enabled as event_agent_enabled
 from .agent.event_agent import generate_valid_event
 from .agent.narrator import narrate
 from .enemies import tier_floor
-from .engine import REST_SITUATION, SHOP_SITUATION
+from .engine import REST_SITUATION, SHOP_SITUATION, is_final_boss, switch_choices
 from .events import EVENT_POOL, GameEvent
 from .map_gen import NUM_FLOORS
 from .models import Enemy, NodeType, RunState, RunStatus
@@ -71,7 +71,13 @@ class Prefetch:
         if os.environ.get("ENCOUNTER_AGENT_ENABLED") != "1" or run.status is not RunStatus.ONGOING:
             return
 
-        upcoming = [run.current_node_id, *run.nodes[run.current_node_id].connections]
+        # The rooms the player can still switch to stay warm too, until the
+        # one they jumped into is entered.
+        upcoming = [
+            run.current_node_id,
+            *run.nodes[run.current_node_id].connections,
+            *switch_choices(run),
+        ]
 
         # Enemies for rooms the player walked past are dead weight. cancel()
         # only stops ones still queued; a running call just finishes unused.
@@ -83,7 +89,12 @@ class Prefetch:
         for node in (run.nodes[node_id] for node_id in upcoming):
             if node.visited:
                 continue
-            if node.type in _COMBAT_TYPES and node.id not in self.enemies:
+            # The final boss is fixed (engine.is_final_boss) - nothing to generate.
+            if (
+                node.type in _COMBAT_TYPES
+                and node.id not in self.enemies
+                and not is_final_boss(run, node)
+            ):
                 self.enemies[node.id] = _executor.submit(
                     generate_balanced_enemy,
                     # Placeholder - enemy_for_node() swaps in the rng-drawn id.
@@ -96,7 +107,8 @@ class Prefetch:
                     # The deck is as it will be on entering: warm() runs after
                     # every reward, on the step onto the map.
                     counter_hint=agent_hint(
-                        None if node.type is NodeType.BOSS else play_style(run.player.deck)
+                        None if node.type is NodeType.BOSS else play_style(run.player.deck),
+                        run.player.deck,
                     ),
                 )
             if node.type is NodeType.EVENT and event_agent_enabled() and node.id not in self.events:

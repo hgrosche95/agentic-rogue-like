@@ -1,5 +1,6 @@
 import type { CardType } from "../api";
 import { enemySprite, type EnemySpec, type EnemySprite } from "./enemySprite";
+import { FINAL_BOSS_CENTER, FinalBoss } from "./finalBoss";
 import { C, COLORS, RAMPS, RAMP } from "./palette";
 import { ENEMY_X, FLOOR, HEIGHT, KEYBOARD, MONITOR, PLAYER_X, RIFT_X, WIDTH } from "./layout";
 
@@ -57,6 +58,8 @@ const EV: Record<ArenaEvent, number> = {
   free_play: 8, // draw
   safeguard: 6, // armor
   opener: 5, // amplifier
+  quarantine: 14, // fortify - block off the enemy's malware
+  recycle: 7, // draw_bonus
   glitch: 8, // draw - flushing junk out of the hand
   // control flow borrows the amplifier's (it boosts what follows it)
   fork: 5,
@@ -64,6 +67,11 @@ const EV: Record<ArenaEvent, number> = {
   if_wounded: 5,
   pipe: 5,
   batch: 5,
+  try_catch: 5,
+  buffer: 5,
+  flush: 5,
+  guard: 5,
+  goto: 5,
   enemy_attack: 20,
   enemy_attack_blocked: 21,
   enemy_brace: 22,
@@ -130,6 +138,8 @@ export class PixelScene {
   shakeY = 0;
   private shake = 0;
   private shakeAmp = 0;
+  // hit-stop: steps the whole scene holds still on a heavy hit
+  private frozen = 0;
 
   private status: SceneStatus = { typing: false, block: 0, armor: 0, enemyBlock: 0, turrets: 0, amplifiers: 0, fortify: 0 };
   private playerVisible = true;
@@ -145,6 +155,8 @@ export class PixelScene {
   private enemyDead = false;
   private enemyAppear = 0;
   private enemyShield = 0; // 0..1, eased toward enemyBlock > 0
+  // the final boss draws and animates itself (finalBoss.ts)
+  private finalBoss: FinalBoss | null = null;
 
   // -- player pose (eased) and what is shown (sampled at ~12 fps)
   private hand = { fx: 14, fy: -24, bx: 11, by: -23 };
@@ -224,15 +236,38 @@ export class PixelScene {
   setEnemy(spec: EnemySpec | null) {
     if (!spec) {
       this.enemy = null;
+      this.finalBoss = null;
       return;
     }
     const sprite = enemySprite(spec);
     if (sprite === this.enemy) return;
     this.enemy = sprite;
+    this.finalBoss = spec.finalBoss ? this.newFinalBoss() : null;
     this.enemyCanvas = this.spriteCanvas(sprite, false);
     this.enemyFlashCanvas = this.spriteCanvas(sprite, true);
     this.enemyDead = false;
     this.enemyAppear = 24;
+  }
+
+  // the boss phase the server reports - the final boss transforms on a new one
+  setEnemyPhase(phase: number) {
+    this.finalBoss?.setPhase(phase);
+  }
+
+  private newFinalBoss(): FinalBoss {
+    const host = {
+      ctx: this.ctx,
+      rect: (x: number, y: number, w: number, h: number, c: number) => this.rect(x, y, w, h, c),
+      dither: (x: number, y: number, w: number, h: number, c: number) => this.dither(x, y, w, h, c),
+      spawn: (x: number, y: number, vx: number, vy: number, life: number, ramp: number, size?: number, grav?: number, color?: number) =>
+        this.spawn(x, y, vx, vy, life, ramp, size, grav, color),
+      burst: (x: number, y: number, n: number, ramp: number, speed: number) => this.burst(x, y, n, ramp, speed),
+      shake: (steps: number, amp: number) => this.shakeFor(steps, amp),
+      flash: (steps: number) => {
+        this.flash = Math.max(this.flash, steps);
+      },
+    };
+    return new FinalBoss(host, this.reducedMotion);
   }
 
   setStatus(status: SceneStatus) {
@@ -253,6 +288,11 @@ export class PixelScene {
 
   setNight(night: boolean) {
     this.night = night;
+  }
+
+  // an event is playing out (or waiting to)
+  get animating(): boolean {
+    return this.akind.some((kind) => kind !== 0);
   }
 
   trigger(event: ArenaEvent, delayMs = 0, param = 0) {
@@ -286,6 +326,10 @@ export class PixelScene {
   // --------------------------------------------------------------- update
 
   step() {
+    if (this.frozen > 0) {
+      this.frozen--;
+      return;
+    }
     this.tick++;
     const t = this.tick;
 
@@ -472,6 +516,7 @@ export class PixelScene {
       this.spawn(90 + hash(t) * 4, FLOOR - hash(t * 3) * 30, 0, -0.35, 16, RAMP.amber, 1, 0);
     }
 
+    this.finalBoss?.step(t);
     this.stepParticles();
     this.stepProjectiles();
     for (let i = 0; i < MAX_PULSES; i++) {
@@ -487,8 +532,20 @@ export class PixelScene {
 
   private enemyCenter(): [number, number] {
     const e = this.enemy;
+    if (this.finalBoss) return FINAL_BOSS_CENTER;
     if (!e) return [ENEMY_X, FLOOR - 14];
     return [ENEMY_X, FLOOR - e.h + Math.round((e.top + e.h) / 2)];
+  }
+
+  // A program line's hit landing (CombatPanel plays a program out line by
+  // line): the heavier, the longer the scene freezes and the harder it
+  // shakes. `weight` 0..1, the share of the enemy's HP the line took.
+  impact(weight: number) {
+    if (this.reducedMotion) return;
+    const w = Math.max(0, Math.min(1, weight));
+    if (w >= 0.12) this.frozen = Math.round(3 + w * 6);
+    this.shakeFor(Math.round(4 + w * 14), w >= 0.25 ? 3 : w >= 0.1 ? 2 : 1);
+    if (w >= 0.25) this.flash = Math.max(this.flash, 2);
   }
 
   private shakeFor(steps: number, amp: number) {
@@ -623,6 +680,8 @@ export class PixelScene {
       // -- the enemy's turn
       case EV.enemy_attack:
       case EV.enemy_attack_blocked: {
+        const blocked = kind === EV.enemy_attack_blocked;
+        if (this.finalBoss) return this.finalBoss.attack(age, blocked && this.wall > 0.3 ? 93 : chestX + 2, chestY, blocked);
         if (age < 8) this.ex = 3;
         if (age === 8) {
           this.ex = -7;
@@ -653,6 +712,7 @@ export class PixelScene {
           this.enemyFlash = 4;
           this.glitch = 12;
           this.ex = 4;
+          this.finalBoss?.hurt();
           this.burst(ecx - 4, ecy, 14, RAMP.cyan, 1.4);
           this.shakeFor(4, 1);
         }
@@ -772,6 +832,7 @@ export class PixelScene {
     const e = this.enemy;
     if (!e || this.enemyDead) return;
     this.enemyDead = true;
+    if (this.finalBoss) return this.finalBoss.die();
     this.flash = 2;
     this.shakeFor(10, 2);
     const ox = ENEMY_X - Math.floor(e.w / 2);
@@ -822,12 +883,14 @@ export class PixelScene {
     ctx.drawImage(this.bg, 0, 0);
     this.drawAmbient(t);
     if (this.tower > 0.05) this.drawTower();
-    if (this.enemy && !this.enemyDead) this.drawEnemy(t);
+    if (this.finalBoss) this.finalBoss.draw(this.ex, this.enemyFlash > 0, this.glitch, this.enemyShield);
+    else if (this.enemy && !this.enemyDead) this.drawEnemy(t);
     if (this.playerVisible) this.drawPlayer();
     if (this.wall > 0.05) this.drawWall(t);
     this.drawDrones(t);
     this.drawActionsFront();
     this.drawProjectiles();
+    this.finalBoss?.drawFront();
     this.drawParticles();
     if (this.sweep >= 0) {
       this.dither(0, HEIGHT - this.sweep, WIDTH, 3, C.cyanHi);
@@ -1242,8 +1305,14 @@ export class PixelScene {
     // goggles: strap and a glowing lens
     this.rect(hx - 4, oy - 31, 9, 1, C.cloth0);
     this.rect(hx + 1, oy - 32, 3, 3, C.brass);
-    const lens = this.rim > 0.5 ? C.white : C.amberHi;
+    // now and then the lens catches the light: a glint with a sparkle
+    const glint = !this.reducedMotion && this.tick % 420 < 8;
+    const lens = this.rim > 0.5 || glint ? C.white : C.amberHi;
     this.rect(hx + 2, oy - 31, 1, 1, lens);
+    if (glint && this.tick % 420 < 5) {
+      this.rect(hx + 4, oy - 34, 1, 1, C.white);
+      this.rect(hx + 5, oy - 35, 1, 1, C.amberHi);
+    }
     this.rect(hx + 4, oy - 32, 1, 2, C.brassDark);
     // moustache
     this.rect(hx + 2, oy - 28, 5, 1, C.white);

@@ -72,6 +72,15 @@ class Artifact(BaseModel):
     tail_call_every: int = 1  # ... on every Nth turn only
     pipeline: int = 0  # flat bonus for the action right after control flow
     compiler_bonus: int = 0  # the last line's action +this per card type that ran before it
+    main_thread: int = 0  # extra runs of the action in the first line to run
+    # a halting card (Segfault) only skips the line after it, and the enemy's
+    # garbage collector finds nothing to collect
+    garbage_free: int = 0
+    # Bridges between two play styles (see style.py):
+    graveyard_attack: int = 0  # attacks +this per STACK_TRACE_CARDS cards in the graveyard
+    banish_malware: int = 0  # Malware on the enemy for every card that gets banished
+    turret_malware: int = 0  # Malware on the enemy per turret, every time it fires
+    retain_block: int = 0  # block kept at the end of a round, per permanent on the field
 
 
 class CardType(StrEnum):
@@ -102,6 +111,9 @@ class CardType(StrEnum):
     TOKEN_REGEN = "token_regen"  # frees `value` used tokens at the end of every turn
     SAFEGUARD = "safeguard"  # hallucinating cards fizzle instead of backfiring
     OPENER = "opener"  # the first `value` cards of every turn cost no tokens
+    # Bridges between play styles (style.py):
+    QUARANTINE = "quarantine"  # end of turn: +value block per 2 Malware on the enemy
+    RECYCLE = "recycle"  # draw `value` card(s) whenever a card is banished (capped per turn)
     # Junk an enemy's corrupt move shuffles in: does nothing, gone once played.
     GLITCH = "glitch"
     # Control flow - program mode only (combat.run_program): they steer the
@@ -112,12 +124,32 @@ class CardType(StrEnum):
     # the Vibe-Coder's control flow
     PIPE = "pipe"  # the next action +value per action already run
     BATCH = "batch"  # frees `value` used tokens per action still to run after it
+    # registers and exceptions (combat.run_program)
+    TRY_CATCH = "try_catch"  # the lines after it can't be interrupted
+    BUFFER = "buffer"  # the next `value` actions store their damage instead of dealing it
+    FLUSH = "flush"  # deals the stored damage, +value percent
+    # the next action runs `value` more time(s) if the player has GUARD_BLOCK block
+    GUARD = "guard"
+    # jumps back to the first line once: the first `value` actions that ran
+    # before it run again, each from its own line
+    GOTO = "goto"
 
 
 # Control flow (program mode, combat.run_program): steers the actions around
 # it instead of doing anything itself.
 CONTROL_FLOW_TYPES = frozenset(
-    {CardType.FORK, CardType.LOOP, CardType.IF_WOUNDED, CardType.PIPE, CardType.BATCH}
+    {
+        CardType.FORK,
+        CardType.LOOP,
+        CardType.IF_WOUNDED,
+        CardType.PIPE,
+        CardType.BATCH,
+        CardType.TRY_CATCH,
+        CardType.BUFFER,
+        CardType.FLUSH,
+        CardType.GUARD,
+        CardType.GOTO,
+    }
 )
 
 PERMANENT_CARD_TYPES = frozenset(
@@ -132,6 +164,8 @@ PERMANENT_CARD_TYPES = frozenset(
         CardType.TOKEN_REGEN,
         CardType.SAFEGUARD,
         CardType.OPENER,
+        CardType.QUARANTINE,
+        CardType.RECYCLE,
     }
 )
 
@@ -157,6 +191,12 @@ class Scaling(StrEnum):
     PLAYED = "played"  # cards already played this turn
     EMPTY_SLOT = "empty_slot"  # empty field slots
     MALWARE = "malware"  # Malware stacks on the enemy
+    BLOCK = "block"  # the block the player has right now
+    # Program mode only, by where its line stands in the program as it runs
+    # (combat.run_program) - 0 outside a program:
+    LINES = "lines"  # the other queued lines (negative scale_value: fewer is better)
+    FIRST_LINE = "first_line"  # 1 if its line is the first to run
+    LAST_LINE = "last_line"  # 1 if its line is the last to run
 
 
 class Rarity(StrEnum):
@@ -177,6 +217,7 @@ class Card(BaseModel):
     # "off", so a plain Card(...) still behaves exactly like before.
     exhaust: bool = False  # one-shot: banished after use instead of discarded
     discard_cost: int = 0  # discard this many random other hand cards first
+    banish: int = 0  # banish this many other hand cards first - the player picks which
     hits: int = 1  # attacks only: the damage is dealt this many times
     draw: int = 0  # draw this many cards after the effect
     scaling: Scaling | None = None  # attacks and blocks only: +scale_value per ...
@@ -189,6 +230,12 @@ class Card(BaseModel):
     # Tokens it takes from the context window - only characters with one
     # (the Vibe-Coder, see characters.py) pay it, everyone else ignores it.
     token_cost: int = 1
+    # Program mode: the program ends right after this card's line has run -
+    # the lines after it don't run this turn (combat.run_program).
+    halts: bool = False
+    # Damage dealt to the enemy when this card gets banished - destroyed,
+    # banished, taken back from the field, or used up (combat._banish).
+    banish_damage: int = 0
 
 
 class Character(StrEnum):
@@ -255,12 +302,18 @@ class MoveKind(StrEnum):
     # Program mode, bosses only (combat._roll_boss_intent): a light hit, and
     # the player's program runs right to left this turn.
     REFACTOR = "refactor"
+    # Program mode only, each with a light hit (combat.run_program):
+    COLLECT = "collect"  # garbage collector: the last line to run is thrown away unrun
+    RACE = "race"  # race condition: the first two lines to run swap places
+    LEAK = "leak"  # memory leak: the first line to run stays locked next turn
 
 
 # Moves only the game hands out - enemies get them in program runs
 # (enemies.with_interrupt, the boss move set); move sets from the pool or
 # the agent never have them.
-PROGRAM_ONLY_MOVES = frozenset({MoveKind.INTERRUPT, MoveKind.REFACTOR})
+PROGRAM_ONLY_MOVES = frozenset(
+    {MoveKind.INTERRUPT, MoveKind.REFACTOR, MoveKind.COLLECT, MoveKind.RACE, MoveKind.LEAK}
+)
 
 
 # Default power (percent of the enemy's attack stat) per move kind - the
@@ -277,6 +330,9 @@ DEFAULT_MOVE_POWER: dict[MoveKind, int] = {
     MoveKind.CORRUPT: 50,
     MoveKind.INTERRUPT: 50,
     MoveKind.REFACTOR: 100,
+    MoveKind.COLLECT: 50,
+    MoveKind.RACE: 50,
+    MoveKind.LEAK: 50,
 }
 DEFAULT_BARRAGE_HITS = 3
 DEFAULT_INFECT_STACKS = 3
@@ -366,6 +422,9 @@ class Enemy(BaseModel):
     # Set when the AGI picked it to answer the player's style (style.py) -
     # opens the fight's log.
     taunt: str = ""
+    # Bosses only: a line for each phase from the second on, said as it
+    # enters it (combat._check_boss_phase).
+    phase_taunts: list[str] = Field(default_factory=list)
 
     @field_validator("moves")
     @classmethod
@@ -422,6 +481,7 @@ class DealKind(StrEnum):
     TROJAN = "trojan"  # an artifact, and a Glitch in the deck
     HOTFIX = "hotfix"  # upgrade basic cards
     BRIBE = "bribe"  # credits, and a Glitch in the deck
+    FORGED = "forged"  # mid-run: a card compiled for the player's style, for a price (forge.py)
 
 
 class AgiDeal(BaseModel):
@@ -437,6 +497,61 @@ class AgiDeal(BaseModel):
     artifact: Artifact | None = None
     max_hp: int = 0
     gold: int = 0
+    # A forged deal's own opening lines - empty for the opening offer, whose
+    # window has its own.
+    greeting: str = ""
+    pitch: str = ""
+
+
+class Combo(BaseModel):
+    """The best stretch of a run's damage (stats.offer_combo): one program run
+    in program mode, one turn's cards otherwise."""
+
+    damage: int
+    runs: int  # actions run (program) or cards played (classic)
+    cards: list[str]
+
+
+class KillingBlow(BaseModel):
+    enemy: str
+    move: str
+    # what the end screen needs to draw the enemy as it looked in the fight
+    enemy_max_hp: int = 0
+    enemy_attack: int = 0
+    final_boss: bool = False
+
+
+class RunStats(BaseModel):
+    """What the run summary shows once the run is over - kept as the run goes
+    (see stats.py). Every field defaults, so a run started before stats
+    existed still loads; it just reads zero for what it missed."""
+
+    # Unix timestamps: the run's start, and the fight that ended it.
+    started_at: float | None = None
+    ended_at: float | None = None
+    fights_won: int = 0
+    elites_defeated: int = 0
+    bosses_defeated: int = 0
+    turns: int = 0
+    damage_dealt: int = 0
+    damage_taken: int = 0
+    biggest_hit: int = 0
+    best_combo: Combo | None = None
+    cards_played: int = 0
+    # Plays per card name, and the card played most (the MVP) - Glitches
+    # count as plays but are never the MVP.
+    play_counts: dict[str, int] = Field(default_factory=dict)
+    mvp_card: Card | None = None
+    cards_added: int = 0
+    cards_removed: int = 0
+    cards_upgraded: int = 0
+    credits_earned: int = 0
+    credits_spent: int = 0
+    killed_by: KillingBlow | None = None
+    # The ledger stats.note_changes compares the run against: the deck's
+    # card ids (and whether each is upgraded) and the credits, as last seen.
+    seen_deck: dict[str, bool] = Field(default_factory=dict)
+    seen_gold: int = 0
 
 
 class RunState(BaseModel):
@@ -452,15 +567,20 @@ class RunState(BaseModel):
     player: PlayerState
     nodes: dict[str, MapNode] = Field(default_factory=dict)
     current_node_id: str | None = None
+    # The room the last jump left from - until the room jumped into is
+    # entered, the player may still switch to any other room reachable from
+    # there (engine.switch_choices).
+    previous_node_id: str | None = None
     history: list[str] = Field(default_factory=list)
     setting: str = DEFAULT_SETTING
     # Cards offered after a won fight, waiting for the player to pick one
     # (or skip) - the run can't move on to the next room until then.
     card_reward: list[Card] | None = None
-    # Map steps taken so far - every ARTIFACT_EVERY_STEPS of them (and once
-    # at the start) the player is offered artifacts, and has to pick one
-    # before the room they arrived in can be entered.
+    # Map steps taken so far.
     steps: int = 0
+    # Artifacts on offer - at the start, and after a won elite or act boss
+    # fight (engine._finish_combat): one has to be picked before the run
+    # moves on.
     artifact_offer: list[Artifact] | None = None
     # The shop the player is browsing - open from entering a SHOP room until
     # they leave it; the run can't move on while it is open.
@@ -470,7 +590,12 @@ class RunState(BaseModel):
     # The rest site the player is at, until they pick what to do there (see
     # engine.open_rest); the run can't move on while it is open.
     rest: RestSite | None = None
-    # The start of the run, after the first artifact: a starter kit to pick,
+    # The start of the run: a starter kit to pick,
     # then the AGI's opening deal to take or turn down (starts.py).
     kit_offer: list[StarterKit] | None = None
     agi_deals: list[AgiDeal] | None = None
+    # Whether the AGI has offered its forged card yet (forge.py) - once per
+    # run, as the first boss's reward.
+    forge_offered: bool = False
+    # For the summary at the end of the run (stats.py) - never read by play.
+    stats: RunStats = Field(default_factory=RunStats)

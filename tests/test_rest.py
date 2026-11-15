@@ -5,7 +5,13 @@ from fastapi.testclient import TestClient
 
 from agentic_rogue_like.api import app
 from agentic_rogue_like.artifacts import ARTIFACT_POOL
-from agentic_rogue_like.cards import CARD_UPGRADES, can_upgrade, starter_deck, upgrade_card
+from agentic_rogue_like.cards import (
+    CARD_UPGRADES,
+    REWARD_POOL,
+    can_upgrade,
+    starter_deck,
+    upgrade_card,
+)
 from agentic_rogue_like.combat import action_preview, player_armor, start_combat
 from agentic_rogue_like.engine import (
     REST_HEAL,
@@ -51,9 +57,9 @@ def test_upgrade_improves_the_card_and_marks_it() -> None:
 
 
 def test_some_cards_have_no_upgrade() -> None:
-    prefetch = next(c for c in starter_deck() if c.name == "Prefetch")
-    assert not can_upgrade(prefetch)
-    assert "Prefetch" not in CARD_UPGRADES
+    restore = next(c for c in REWARD_POOL if c.name == "System Restore")
+    assert not can_upgrade(restore)
+    assert "System Restore" not in CARD_UPGRADES
 
 
 def test_upgraded_overclock_and_encryption_are_stronger_in_combat() -> None:
@@ -65,8 +71,8 @@ def test_upgraded_overclock_and_encryption_are_stronger_in_combat() -> None:
     enemy = Enemy(id="e", name="E", hp=99, attack=5, attack_name="Hit")
 
     for amp, armor_card, damage, armor in (
-        (overclock, encryption, round((5 + 2) * 1.25), 1),
-        (upgrade_card(overclock), upgrade_card(encryption), round((5 + 2) * 1.4), 2),
+        (overclock, encryption, round((5 + 2) * 1.1), 1),
+        (upgrade_card(overclock), upgrade_card(encryption), round((5 + 2) * 1.2), 2),
     ):
         state, _ = start_combat(deck, enemy, random.Random(1))
         state.field[0], state.field[4] = amp, armor_card
@@ -118,8 +124,9 @@ def test_upgrade_replaces_the_card_in_the_deck() -> None:
 
 def test_upgrading_a_card_that_cant_be_upgraded_keeps_the_rest_site_open() -> None:
     run = _at_rest()
+    run.player.deck.append(next(c for c in REWARD_POOL if c.name == "System Restore"))
     with pytest.raises(ValueError):
-        rest_upgrade(run, _deck_index(run, "Prefetch"))
+        rest_upgrade(run, _deck_index(run, "System Restore"))
     assert run.rest is not None
 
 
@@ -167,7 +174,7 @@ def test_api_rest_offers_heal_upgrades_and_removal() -> None:
     assert rest["heal_amount"] == REST_HEAL
     assert rest["can_remove"]
     names = {u["card"]["name"]: u["upgraded"] for u in rest["upgrades"]}
-    assert "Prefetch" not in names
+    assert names["Prefetch"]["description"] == "Permanent. Draw 1 extra card each turn."
     assert names["Exploit"]["name"] == "Exploit+" and names["Exploit"]["value"] == 8
 
 

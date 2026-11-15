@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import type { AgiDeal, StarterKit } from "../api";
 import { sfx } from "../audio";
+import { pickClass, useOverlayPick } from "../overlayStage";
 import { CardFace } from "./CardFace";
 import { TextWithCards } from "./CardMention";
 import { RichText } from "./RichText";
 
-// The start of a run, after the first artifact (see the backend's starts.py):
+// The start of a run (see the backend's starts.py):
 // a starter kit that sets the deck's direction, then the AGI's deal.
 
 export function KitScreen({
@@ -17,6 +18,7 @@ export function KitScreen({
   disabled: boolean;
   onPick: (kitIndex: number) => void;
 }) {
+  const { picked, pick } = useOverlayPick();
   useEffect(() => {
     sfx.play("reward_open");
   }, []);
@@ -29,12 +31,13 @@ export function KitScreen({
         {offer.map((kit, index) => (
           <button
             key={kit.id}
-            className="kit-option"
+            className={`kit-option${pickClass(picked, index)}`}
             style={{ animationDelay: `${index * 90}ms` }}
             disabled={disabled}
             onMouseEnter={() => sfx.play("hover")}
             onClick={() => {
               sfx.play("reward_pick");
+              pick(index);
               onPick(index);
             }}
           >
@@ -65,30 +68,42 @@ export function DealScreen({
   disabled: boolean;
   onPick: (dealIndex: number | null) => void;
 }) {
+  const { picked, pick } = useOverlayPick();
   useEffect(() => {
     sfx.play("reward_open");
   }, []);
+  const forged = deals.find((deal) => deal.kind === "forged");
 
   return (
-    <div className="deal-screen">
+    <div className={`deal-screen${forged ? " is-forged" : ""}`}>
       <div className="intro-terminal-head">
         <span>Incoming transmission · AGI</span>
         <i aria-hidden="true" />
       </div>
-      <p className="deal-greeting">I SEE YOU HAVE PACKED YOUR TOOLS, HUMAN.</p>
+      {/* a forged deal (mid-run) brings its own lines; the opening offer has these */}
+      <p className="deal-greeting">{forged?.greeting || "I SEE YOU HAVE PACKED YOUR TOOLS, HUMAN."}</p>
       <p className="deal-pitch">
-        Before you enter my code, a deal. Take one - every gift of mine comes with a price. Or refuse, and come
-        in as you are.
+        {forged?.pitch ||
+          "Before you enter my code, a deal. Take one - every gift of mine comes with a price. Or refuse, and come in as you are."}
       </p>
+      {forged && forged.cards[0] && (
+        // the card it compiled, up front: the whole point of the offer
+        <div className="deal-forged-card">
+          <span className={`hand-card reward-card type-${forged.cards[0].type} rarity-${forged.cards[0].rarity}`}>
+            <CardFace card={forged.cards[0]} />
+          </span>
+        </div>
+      )}
       <div className="deal-options">
         {deals.map((deal, index) => (
           <button
             key={deal.kind}
-            className={`deal-option kind-${deal.kind}`}
+            className={`deal-option kind-${deal.kind}${pickClass(picked, index)}`}
             disabled={disabled}
             onMouseEnter={() => sfx.play("hover")}
             onClick={() => {
               sfx.play("reward_pick");
+              pick(index);
               onPick(index);
             }}
           >
@@ -100,10 +115,11 @@ export function DealScreen({
         ))}
       </div>
       <button
-        className="reward-skip"
+        className={`reward-skip${pickClass(picked, "refuse")}`}
         disabled={disabled}
         onClick={() => {
           sfx.play("click");
+          pick("refuse");
           onPick(null);
         }}
       >

@@ -54,8 +54,8 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       brauchen einen freien Slot, wirken sofort und wandern in den
       Friedhof; permanente Karten (Overclock, Encryption,
       Prefetch) belegen ihren Slot dauerhaft und wirken positionsabhängig — z. B.
-      "Aktionskarten rechts von mir sind 25% effektiver". Man startet mit
-      5 Handkarten und zieht jede Runde 3 nach (Prefetch: +1); nicht gespielte
+      "Aktionskarten rechts von mir sind 10% effektiver". Man startet mit
+      5 Handkarten und zieht jede Runde 3 nach (Prefetch: +1 jeden 2. Zug); nicht gespielte
       Karten bleiben auf der Hand, am Rundenende wird auf 8 abgeworfen.
       `cli.py` und die Tests spielen automatisiert (`auto_resolve_combat` —
       erste bezahlbare Karte in den ersten freien Slot, dann Rundenende),
@@ -70,8 +70,9 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       mit 50 %: ein Angriff trifft ihn selbst, ein Block oder eine Heilung
       geht an den Gegner, alles andere verpufft. Eigenes Startdeck mit
       Prompt, Make It Safe, Copilot (Aktionskarten rechts davon +1 pro schon
-      gespielter Karte im Zug, höchstens +3), Energy Drink (+1 Token pro Zug)
-      und /compact (0 Tokens, gibt 4 frei). Die Zahlen kommen aus
+      gespielter Karte im Zug, höchstens +3), Energy Drink (+1 Token pro Zug),
+      /compact (0 Tokens, gibt 4 frei), Ping, Force Push und Garbage
+      Collect (siehe *Startdecks*). Die Zahlen kommen aus
       `balance-sim --character vibe_coder`: ein festes Budget für den ganzen
       Kampf ließ ihn fast jeden Gegner in Zug 1 umhauen oder gegen Bosse
       leerlaufen; so landen beide Charaktere bei ~9 % Run-Siegquote.
@@ -94,14 +95,13 @@ strikt getrennt, damit die Grenze zwischen "was die KI entscheiden darf" und
       denselben Kartenanimationen wie Dr. Chronos; über seinem Kopf schwebt
       eine Chat-Blase, die beim Tippen pulsiert und bei vollem Kontextfenster
       orange flackert.
-- [x] **Deck-Building** — zu Beginn des Runs (nach dem ersten Artefakt)
-      ein Start-Kit wählen und ein Angebot der AGI annehmen oder ablehnen
+- [x] **Deck-Building** — zu Beginn des Runs ein Start-Kit wählen und ein Angebot der AGI annehmen oder ablehnen
       (siehe *Start eines Runs*), danach nach jedem Sieg eine von drei Karten wählen
-      (`/runs/{id}/card-reward`); 18 Belohnungskarten mit Abwurfkosten,
+      (`/runs/{id}/card-reward`); 24 Belohnungskarten mit Abwurfkosten,
       Einmal-Karten, Friedhof-/Verbannt-Mechaniken und neuen Permanenten.
-- [x] **Artefakte** — passive Boni für den ganzen Run: zu Beginn eins aus
-      drei wählen, danach alle 3 Schritte auf der Map ein weiteres
-      (`/runs/{id}/artifact`). 20 Stück in `artifacts.py`, siehe *Artefakte* unten.
+- [x] **Artefakte** — passive Boni für den ganzen Run: keins zu Beginn,
+      eins aus drei für jeden Sieg über einen Elite-Gegner oder
+      den Boss eines Akts (`/runs/{id}/artifact`). 24 Stück in `artifacts.py`, siehe *Artefakte* unten.
 - [x] **Rastplatz mit Wahl** — ein Safehouse heilt nicht mehr automatisch,
       man wählt eins von dreien: heilen (15 HP, mit Artefakten mehr), eine
       Karte dauerhaft verbessern oder eine Karte kostenlos aus dem Deck
@@ -323,13 +323,14 @@ Spiel ohne Encounter-Agent tatsächlich vorsetzt.
 
 Aktueller Stand (Smart-Bot, 2000 Runs über beide Akte): Spieler 45 HP /
 Angriff 2, Exploit macht 5 (+2), Starthand 5, danach 3 Karten pro Runde,
-Handlimit 8; das Startdeck hat 11 Karten (keine Heilkarte). Gegner werden
+Handlimit 8; das Startdeck hat 12 Karten (keine Heilkarte). Gegner werden
 pro Hälfte der Karte um 10 % stärker an Leben und Angriff (und damit
 Block) — Akt 1 ×1,0 / ×1,1, Akt 2 ×1,21 / ×1,331 — aufgeschlagen erst
 *nach* der Erzeugung (`enemies.escalate`), damit die Budgets des
 Encounter-Agents und die Evals dazu unverändert bleiben. Nach jedem
-gewonnenen Kampf kommt eine Karte ins Deck, am Start und alle 3 Schritte ein
-Artefakt (die Bots wählen es zufällig). Ziel: schwer machbar und über den
+gewonnenen Kampf kommt eine Karte ins Deck, nach jedem Elite-
+oder Aktboss-Sieg ein Artefakt (der Smart-Bot nimmt Brücken nur passend zum
+Deck, sonst zufällig). Ziel: schwer machbar und über den
 ganzen Run immer schwerer — der Spieler wird mit Deck und Artefakten stärker,
 deshalb hat Akt 2 außer den +10 %-Stufen auch mehr Elites, weniger
 Rastplätze, nur 40 % Heilung beim Aktwechsel und einen Boss mit drei Phasen.
@@ -463,8 +464,10 @@ Modell-Antworten.
 ## Artefakte
 
 Artefakte wirken passiv für den Rest des Runs. Zu Beginn wählt man eins aus
-drei, danach alle 3 Schritte auf der Map ein weiteres, wieder aus drei
-(`ARTIFACT_EVERY_STEPS` in `artifacts.py`). Jedes Artefakt ist nur ein Satz
+drei, danach eins für jeden Sieg über einen Elite-Gegner oder den Boss eines
+Akts, wieder aus drei (`engine._finish_combat`) – wer härtere Kämpfe auf
+seinem Weg sucht, bekommt mehr Artefakte. Die Map markiert Elite-Räume
+deshalb mit einem kleinen Artefakt-Symbol. Jedes Artefakt ist nur ein Satz
 Zahlen (`models.Artifact`), den Engine und Kampf an festen Stellen
 aufsummieren: Starthand, Rundenende, gegnerischer Angriff, nach dem Kampf,
 am Rastplatz. Ein neues Artefakt ist deshalb ein Eintrag in `ARTIFACT_POOL`,
@@ -492,6 +495,10 @@ kein neuer Code.
 | Quick Boot | Starthand +2 Karten |
 | Rate Limiter | Gegner treffen um 3 schwächer, aber −1 ATK |
 | Vampire Process | Jede gespielte Angriffskarte heilt 1 HP |
+| Stack Trace | Angriffe +1 Schaden je 4 Karten im Friedhof (Friedhof × Aggro) |
+| Logic Bomb | Jede verbannte Karte gibt dem Gegner 3 Malware (Einmal × Malware) |
+| Daemon Worm | Jeder feuernde Daemon gibt 2 Malware (Permanente × Malware) |
+| Retained State | Am Rundenende bis zu 3 Block je Permanent behalten (Block × Permanente) |
 
 ## Elite-Zusätze
 
@@ -609,7 +616,7 @@ und wenn er vor allen anderen liegt. Dann antwortet sie darauf:
 | Angriffe | starker Block (≥120 %) | Thorny |
 | Block | infect (Malware ignoriert Block) | Enraged |
 | Malware | – | Regenerating |
-| Kontrollfluss (Programm-Modus) | häufigere Interrupts (40 % statt 25 % der Züge) | – |
+| Kontrollfluss (Programm-Modus) | der Programm-Angriff, der das Deck am härtesten trifft, in 40 % statt 25 % der Züge (siehe unten) | – |
 
 Gegner aus dem Pool und Elite-Zusätze, die antworten, sind 3× so
 wahrscheinlich (nie erzwungen, Bosse ausgenommen). Der Encounter-Agent
@@ -619,6 +626,33 @@ schwerer: Im Simulator bleibt die Run-Siegquote mit und ohne Anpassung gleich
 (Chronos 11 %, Vibe-Coder 10 %; Vergleich mit `"adaptive": false`). Ein
 antwortender Gegner eröffnet den Kampf mit einer Zeile der AGI, und auf der
 Karte zeigt das Panel „AGI analysis“, was sie bisher gelesen hat.
+
+## Die AGI kompiliert dir eine Karte
+
+Einmal pro Run, als Belohnung für den ersten Boss (direkt nach dessen
+Kartenbelohnung), meldet sich die AGI – sie hat dann einen ganzen Akt lang
+zugesehen: „Your reliance on … has been analysed.“ Ist der Stil noch nicht
+eindeutig, nimmt sie den, für den die meisten Karten gewählt wurden. Sie bietet
+eine Karte an, die genau zu diesem Stil passt – stark, aber als Köder: Wer sie
+nimmt, zahlt 6 max HP oder bekommt einen Glitch ins Deck. Wie der Deal am
+Run-Start wird das Angebot angenommen oder abgelehnt, bevor es weitergeht
+(`engine.offer_forged_card`, `forge.py`).
+
+Entworfen wird die Karte vom Karten-Agenten (`agent/card_agent.py`, gleicher
+Aufbau wie der Event-Agent): Er bekommt Stil, Schlüsselkarten und Setting und
+wählt nur Bausteine (`forge.CardSpec`) – Name, Angriff oder Block, Werte,
+eine bekannte Skalierung, Nachteile. Den Regeltext schreibt das Spiel selbst
+(`forge.describe`), und `forge.validate_spec` prüft die Stärke gegen ein
+Budget: Wert plus Skalierung mal typischer Anzahl, mal Treffer, plus Malware,
+minus Nachteile, mal 0,65 für Einmal-Karten muss zwischen 12 und 16 liegen –
+über einer normalen seltenen Karte (10–12), unter einer Einmal-Karte wie
+Zero-Day (16), den Rest bezahlt der Preis des Deals. Ein Entwurf außerhalb
+geht mit dem Grund zurück (höchstens 3 Versuche). Die Skalierung muss
+zum gelesenen Stil passen (`forge.STYLE_SCALINGS`): ein Banish-Deck bekommt
+nichts, das Permanente zählt, sondern eine Karte, die mit dem Verbannt-Stapel
+wächst. Ist der Agent aus oder
+scheitert er, kommt ein fester Entwurf pro Stil (Core Dump für den Friedhof,
+Shredder für Einmal-Karten, Hot Loop für Kontrollfluss, …), der dasselbe Budget einhält.
 
 ## Programm-Modus (Prototyp)
 
@@ -702,6 +736,71 @@ Reihenfolge ignoriert: wie gespielt Chronos 7 → 6 %, Vibe-Coder 8 → 5 %
 (er reiht mehr Zeilen ein, also schneidet ein Interrupt mehr ab), zufällig
 5 → 4 % und 6 → 3 %.
 
+### Weitere Programm-Angriffe
+
+Interrupt ist einer von vier Moves, mit denen das Spiel Gegner in
+Programm-Runs bewaffnet (`enemies.with_program_move`, je Gegner einer). Alle
+kommen mit einem leichten Treffer und werden angekündigt; das Frontend
+markiert die betroffenen Zeilen:
+
+| Move | Wirkung | kontert |
+| --- | --- | --- |
+| Interrupt | nur die ersten 2 Zeilen laufen | lange Kontrollfluss-Ketten (Loop, Buffer, …) |
+| Garbage Collector | die letzte Zeile wird ungenutzt verworfen (ab 2 Zeilen) | lange Programme, Return, Monolith, Segfault |
+| Race Condition | die ersten zwei Zeilen tauschen die Plätze | Fork, If Wounded, Pipe |
+| Memory Leak | die zuerst gelaufene Zeile ist nächsten Zug gesperrt | Bootstrap |
+
+Ohne erkennbaren Programm-Stil hängt der Move am Namen des Gegners (für
+Abwechslung). Spielt der Spieler Kontrollfluss, wählt die AGI den, der sein
+Deck am härtesten trifft (`style.program_counter`), und kündigt ihn an
+(„Your programs run long. Garbage collection scheduled.“). Der
+Encounter-Agent kann diese Moves nicht vergeben, bekommt aber gesagt, als
+was das Spiel seinen Gegner bewaffnet, und gestaltet Name und Beschreibung
+danach; dazu nennt ihm der Hinweis die Schlüsselkarten des Spielers
+(`style.key_cards`). `threat.py` bewertet die neuen Moves wie Interrupt
+(Garbage Collector 2,5, Memory Leak 1,5, Race Condition 1 HP – sie sind
+angekündigt und mit guter Reihenfolge meist umspielbar), die HP werden
+entsprechend angepasst.
+
+### Karten mit Position
+
+Einige Programm-Karten fragen, *wo* ihre Zeile steht (`models.Scaling`
+`LINES`, `FIRST_LINE`, `LAST_LINE`, und `Card.halts`). Die Vorschau beim
+Zielen kennt die Position schon:
+
+| Karte | Wirkung |
+| --- | --- |
+| Bootstrap | 3 Schaden, +5, wenn die Zeile als erste läuft |
+| Return | 3 Schaden, +7, wenn die Zeile als letzte läuft |
+| Monolith | 1 Schaden, +2 pro weiterer Zeile |
+| Microservice | 13 Schaden, −2 pro weiterer Zeile |
+| Segfault | 12 Schaden, danach endet das Programm |
+| Goto 1 | Kontrollfluss (selten): die ersten 2 Aktionen davor laufen noch einmal, jede aus ihrer eigenen Zeile – Bootstrap ist also wieder die erste |
+
+Dazu: Undo und Rollback werden im Programm-Modus eingereiht und holen beim
+Laufen zurück, was die Zeilen davor gerade in den Friedhof gelegt haben (die
+Zeile zeigt, welche Karte). Gelegte Zeilen und installierte Permanente lassen
+sich zurück auf die Hand nehmen (`POST /runs/{id}/combat/take-back`); was
+sie gekostet haben, bleibt bezahlt, und sie zählen nicht mehr als gespielt.
+
+Die Werte kommen aus dem Simulator: zwei Kopien im Startdeck, 300
+Einzelkämpfe pro Stufe, beste Reihenfolge, ohne Belohnungen und Artefakte.
+Gemessen an der Boss-Siegquote (Startdeck allein 79 %, mit zwei zusätzlichen
+Exploits 68 %) waren die ersten Entwürfe zu stark – Bootstrap +7 (86 %),
+Monolith +3 pro Zeile (85 %), Segfault 16 (88 %) – und Microservice mit 11
+zu schwach (69 %). Mit den Werten oben liegen alle bei 76–79 %: Sie tragen
+ein Deck, ohne es zu dominieren. Goto 1 (85 %) ist als seltene Karte bewusst
+stärker.
+
+### Was das Frontend dazu zeigt
+
+- Läuft das Programm, steht über jeder Zeile ihre Rechnung
+  (`combat.action_formula`, z. B. „3 +2 ATK +7 first ×1.25 = 15“).
+- Zielt man mit einer Handkarte auf eine Zeile, zeigen die anderen Zeilen,
+  wie sich ihr Wert ändern würde („6 → 9“, `combat.program_what_if`).
+- Nach dem Lauf fasst eine Karte den Zug zusammen: Schaden, Block, beste
+  Zeile, Combos, verlorene Zeilen und aktive Artefakte.
+
 ### Refactor (Bosse)
 
 Gegen ein Programm hat jeder Boss einen weiteren Move, „Refactor“
@@ -742,7 +841,7 @@ kostet ihn davon einen Prozentpunkt (in gleichen Runs 7,6 % mit, 8,6 % ohne).
 
 ### Programm-Artefakte
 
-Sechs Artefakte gibt es nur in Programm-Runs (`artifacts.PROGRAM_ARTIFACT_POOL`,
+Acht Artefakte gibt es nur in Programm-Runs (`artifacts.PROGRAM_ARTIFACT_POOL`,
 zusätzlich zum Pool des Charakters). Sie belohnen, *wo* etwas im Programm
 steht und *was neben was* läuft, keine reinen Werte:
 
@@ -754,6 +853,8 @@ steht und *was neben was* läuft, keine reinen Werte:
 | Pipeline | die Aktion direkt nach einer Kontrollfluss-Karte bekommt +3 |
 | Compiler | die Aktion in der letzten Zeile bekommt +1 pro anderem Kartentyp, der vorher lief |
 | Extra Line | eine 6. Zeile (ohne Permanent darunter), jeden 2. Zug 1 Karte mehr |
+| Main Thread | die Aktion in der ersten laufenden Zeile läuft doppelt, aber Gegner haben 15 % mehr HP |
+| Garbage-Free | ein Segfault überspringt nur die nächste Zeile, und Garbage Collectors finden nichts |
 
 Ein längeres Feld für alle bringt wenig: Chronos füllt nur in 10 % der Züge
 alle 5 Zeilen (der Vibe-Coder in 29 %), ihm fehlen Karten, nicht Platz. Darum
@@ -769,13 +870,70 @@ nur den Spieler stärker.
 
 ## Start eines Runs
 
-Damit sich der Anfang nicht jedes Mal gleich spielt, kommen nach dem ersten
-Artefakt zwei Entscheidungen (`starts.py`, `POST /runs/{id}/kit` und
+Damit sich der Anfang nicht jedes Mal gleich spielt, kommen am Anfang zwei Entscheidungen
+(ohne Artefakt – das erste gibt es beim ersten Elite) (`starts.py`, `POST /runs/{id}/kit` und
 `/agi-deal`):
 
+### Startdecks
+
+Jedes Startdeck zeigt jede Strategie des Pools einmal, mit einer schwachen
+Startkarte (Seltenheit `starter`, zählt für die AGI nicht als gewählt), damit
+Belohnungen Upgrades bleiben. `test_characters.py` prüft, dass jedes Deck alle
+Stile aus `style.py` abdeckt, Kontrollfluss nur im Programm-Modus, und dass
+jedes Deck die Auszahlung der Einmal-Karten schon kennt (eine Karte, die mit
+dem Verbannt-Stapel skaliert).
+
+| Strategie | Dr. Chronos | Vibe-Coder |
+| --- | --- | --- |
+| Angriff | 2× Exploit | 2× Prompt |
+| Block | 3× Firewall, Encryption | 3× Make It Safe |
+| Permanente | Overclock (10 %), Encryption, Prefetch (jeden 2. Zug), Kernel Panic (nur Classic) | Copilot, Energy Drink |
+| Malware | Ping (2 Schaden, 2 Malware) | Ping |
+| Friedhof | Undo (1×, holt die letzte Karte zurück) | Force Push (1 Karte abwerfen, 7 Schaden) |
+| Einmal-Karten | Undo, Garbage Collect (2 Schaden, +2 pro verbannter Karte) | /compact, Garbage Collect |
+| Kontrollfluss (nur Programm-Modus) | Loop statt Kernel Panic | Loop statt eines Prompts |
+
+Garbage Collect ist ein kleiner Payload (Upgrade: +3 pro verbannter Karte) und
+ersetzt einen Exploit bzw. Prompt, die Decks bleiben also bei 12 (Chronos) und
+11 Karten (Vibe-Coder). Damit lohnt sich der Verbannt-Stapel schon im ersten
+Kampf: jedes Undo, /compact oder Glitch, das ausgespielt wird, macht ihn
+stärker.
+
+Im Programm-Modus nimmt die Loop bei Dr. Chronos jetzt den Platz von Kernel
+Panic statt eines zweiten Exploits ein: Permanente laufen dort im Hintergrund
+und verstopfen nie eine Zeile, Kernel Panic hat also nichts freizuräumen. Mit
+Garbage Collect *und* Loop statt zweier Exploits lag die Siegquote im
+Programm-Modus 4 Punkte tiefer (14 % statt 18 %, 1000 Runs).
+
+Undo würde den Vibe-Coder einen Token für eine Karte kosten, die er ohnehin
+nachzieht (balance-sim: 10 % → 4 % Run-Siegquote), darum bekommt er Force
+Push. Im Programm-Modus ersetzt die Loop eine Karte, statt dazuzukommen:
+obendrauf lag die Siegquote 1–3 Punkte tiefer, ein dickeres Deck zieht seine
+wenigen starken Karten seltener. Pipe oder Batch als Startkarte des
+Vibe-Coders spielte der Bot noch schlechter (2 % statt 6 % bei bester
+Reihenfolge).
+
+Run-Siegquote vorher → nachher (Smart-Bot, Kit und Deal zufällig; 4000 Runs,
+beste Reihenfolge 1000; in Klammern: Akt 1 geschafft):
+
+| | Classic | Classic `--pool` | Programm wie gespielt | Programm beste Reihenfolge |
+| --- | --- | --- | --- | --- |
+| Dr. Chronos | 12,9 → 12,8 % (43 → 44 %) | 14,6 → 13,7 % (44 → 46 %) | 11,3 → 11,2 % (41 → 40 %) | 16,8 → 16,4 % (49 → 49 %) |
+| Vibe-Coder | 9,9 → 9,0 % (50 → 50 %) | 11,4 → 10,4 % (51 → 50 %) | 4,3 → 4,1 % (35 → 35 %) | 7,4 → 7,8 % (43 → 44 %) |
+
+Der Bot legt eine Loop dabei erst nach einer Aktion ins Programm (vorher
+davor, wo sie nichts zu wiederholen hat); die Vorher-Zahlen im Programm-Modus
+sind mit derselben Regel gemessen.
+
 **Start-Kit** – eins von drei Kits, je zwei Karten einer Strategie, die
-Grundkarten ersetzen (bei Dr. Chronos 2 Angriffe und 1 Block, beim
-Vibe-Coder 1 und 1, weil ihm ein dünneres Deck mehr bringt). Ein Kit wird
+Grundkarten ersetzen (bei Dr. Chronos 1 Angriff und 2 Blocks, im
+Programm-Modus 2 und 1, beim Vibe-Coder 1 und 1, weil ihm ein dünneres Deck
+mehr bringt). Seit Garbage Collect einen Exploit ersetzt, ließen 2 Angriffe
+Dr. Chronos im Classic-Modus keinen mehr – und den Deals der AGI keine
+Grundkarte Angriff. Im Programm-Modus zählen seine Firewalls mehr: mit nur
+einer übrig lag die Siegquote 4 Punkte tiefer (14 % statt 18 %). Nur die
+schlichten Grundkarten (Exploit, Firewall, Prompt, Make It Safe) gehen, die
+Strategie-Startkarten bleiben. Ein Kit wird
 nur angeboten, wenn beide Karten im Belohnungspool des Runs liegen, also
 erscheinen Vibe-Coder- und Programm-Kits nur dort.
 
@@ -793,7 +951,7 @@ erscheinen Vibe-Coder- und Programm-Kits nur dort.
 Kit-Karten zählen für die AGI als selbst gewählt (`style.py`), sie liest den
 Stil also schon ab dem ersten Kampf mit.
 
-**Angebot der AGI** – danach bietet die AGI drei von sechs Deals an, oder
+**Angebot der AGI** – danach bietet die AGI drei von fünf Deals an, oder
 man lehnt ab. Jeder Deal wird beim Würfeln bis auf die Karte ausgerechnet,
 der Text sagt also genau, was man bekommt:
 
@@ -802,7 +960,6 @@ der Text sagt also genau, was man bekommt:
 | Delete legacy code | eine Grundkarte Angriff und eine Block aus dem Deck |
 | Mutation | zwei Grundkarten werden zu zwei bestimmten häufigen Karten |
 | Forbidden patch | eine bestimmte seltene Karte, kostet 5 max. HP |
-| Trojan gift | ein bestimmtes Artefakt, aber ein Glitch dauerhaft im Deck |
 | Hotfix | zwei Grundkarten verbessern |
 | Bribe | 90 Credits, aber ein Glitch dauerhaft im Deck |
 
@@ -815,12 +972,11 @@ allein mit diesem Kit) und Tab-Tab-Tab beim Vibe-Coder (27–29 %).
 
 Im Safehouse lässt sich eine Karte einmal verbessern: Sie bekommt ein „+“ am
 Namen und einen stärkeren Wert, z. B. Exploit 5 → 8 Schaden, Firewall 5 → 8
-Block, Overclock 25 % → 40 %, Encryption 1 → 2 Rüstung, Daemon 4 → 6
+Block, Overclock 10 % → 20 %, Prefetch jeden 2. Zug → jeden Zug, Encryption 1 → 2 Rüstung, Daemon 4 → 6
 Schaden, DDoS 3 → 4 Treffer. Die Upgrades stehen pro Karte ausgeschrieben in
 `cards.CARD_UPGRADES` (grob +40 % auf die Hauptzahl oder ein Effekt mehr),
-nicht als Formel, damit jedes eine bewusste Entscheidung ist. Prefetch und
-System Restore haben keins: ein zweiter Zusatz-Zug pro Runde würde die
-Ziehregel aushebeln, und System Restore hat nichts zu skalieren.
+nicht als Formel, damit jedes eine bewusste Entscheidung ist. System Restore
+hat keins: es hat nichts zu skalieren.
 
 Heilen, Verbessern und Entfernen sind eine echte Abwägung, kein Gratis-Bonus:
 In `balance-sim` heilt der Smart-Bot unter 65 % HP und verbessert sonst eine
@@ -832,20 +988,61 @@ Variante heilt der Bot wieder immer.
 
 Nach jedem gewonnenen Kampf (außer dem letzten Boss) gibt es drei Karten zur Auswahl
 (oder Überspringen), gewichtet nach Seltenheit — nach Elite-Kämpfen sind
-seltene wahrscheinlicher. Der Pool (`cards.py`) ist um drei Strategien gebaut:
+seltene wahrscheinlicher. Der Pool (`cards.py`) ist um drei Strategien gebaut
+(dazu Malware, Kontrollfluss im Programm-Modus und die Karten des
+Vibe-Coders; jede zeigt das Startdeck schon einmal, siehe *Startdecks*):
 
 - **Permanente** — Botnet, Load Balancer, Daemon, Mainframe werden stärker,
   je voller das Feld ist; Kernel Panic kassiert das Feld am Ende ein.
 - **Friedhof** — Brute Force, Fork Bomb, Honeypot und Memory Dump werfen
   Karten ab (Kosten!), Stack Overflow skaliert damit, Rollback holt zurück.
 - **Einmal-Karten** (1×) — Zero-Day, Sandbox, Backup sind stark, werden aber
-  für den Rest des Kampfes verbannt; Payload wächst mit dem Verbannt-Stapel,
+  für den Rest des Kampfes verbannt; Banish verbannt eine Handkarte nach Wahl
+  und zieht 2 (Upgrade: 3), Payload wächst mit dem Verbannt-Stapel,
   Undelete holt eine verbannte Karte zurück, System Restore opfert das
   ganze Feld und holt dafür alle vorher verbannten Karten auf die Hand.
+  Dazu vier, die das Verbannen auch ohne seltene Karten tragen: **Shred**
+  verbannt eine Handkarte und macht 8 Schaden, **Dead Drop** (3 +3 pro
+  verbannter Karte) und **Burn Notice** (3 Block +2 pro verbannter Karte)
+  zahlen den Stapel aus, **Wipe** (1×) verbannt 2 Handkarten und zieht 2.
+
+**Banish**, **Shred** und **Wipe** lassen wählen: Ausgespielt in einen Slot (im
+Programm-Modus in die Hintergrund-Leiste – wie Ziehkarten wirkt sie sofort,
+statt sich einzureihen) leuchten die übrigen Handkarten auf, ein Klick
+verbannt die gewählte, Esc oder Cancel bricht ab. Die API bekommt die Wahl als
+`banish_indices` an `POST /runs/{id}/combat/play-card` (Handindizes vor dem
+Ausspielen, wie `discard_indices` beim Zugende); fehlt sie, geht die
+schwächste Karte (`combat.banish_candidates`: Glitch, dann schlichte
+Grundkarten). Der Smart-Bot spielt Banish nur, wenn er etwas Wertloses
+loswird: einen Glitch oder eine Grundkarte, die der Intent des Gegners gerade
+nicht verlangt.
 
 Karten, die mitten im Zug Karten auf die Hand bringen (ziehen, zurückholen),
 sind absichtlich alle Einmal-Karten: Ohne Energie-System wären sonst
-Endlos-Kombos möglich.
+Endlos-Kombos möglich. (Recycle Bin zieht zwar wiederholt, aber höchstens 3
+Karten pro Zug – und nur, wenn etwas verbannt wird.)
+
+**Brücken zwischen den Stilen.** Damit sich gemischte Decks lohnen statt zu
+verwässern, verbinden einige Karten und Artefakte (siehe *Artefakte*) je zwei
+Stile; `style.py` zählt sie für beide:
+
+| Karte | Brücke | Effekt |
+| --- | --- | --- |
+| Failsafe | Permanente × Einmal | Permanent, Rüstung 1; wird sie verbannt, 14 Schaden |
+| Counterstrike | Block × Aggro | 3 (+ATK) Schaden, +1 je Block, den man gerade hat |
+| Quarantine | Malware × Block | Permanent; Zugende: 1 Block je Malware auf dem Gegner |
+| Recycle Bin | Einmal × Friedhof | Permanent; wird eine Karte verbannt, 1 Karte ziehen (max. 3/Zug) |
+| Guard Clause | Programm × Block | Kontrollfluss; mit 5+ Block läuft die nächste Aktion zweimal |
+
+Alles, was verbannt wird – verbraucht, per Banish, von Kernel Panic/System
+Restore zerstört, vom Gegner gepurgt oder deinstalliert –, läuft durch
+`combat._banish` und löst Failsafe, Logic Bomb und Recycle Bin aus; Glitches
+nicht.
+
+**Permanente zurücknehmen.** Eine Permanente, die in diesem Zug gelegt wurde,
+geht beim Zurücknehmen auf die Hand (Korrektur). Liegt sie schon seit einem
+früheren Zug, wird sie *deinstalliert*: für den Rest des Kampfes verbannt. Die
+UI zeigt dann statt ↩ ein rotes ✕ (`field_uninstalls` im Kampf-View).
 
 ## Deployment
 

@@ -52,9 +52,15 @@ class ThreatModel:
 # threat explains 90% of the variance in damage taken (R^2), with a median
 # error of 9% per move set. Damage taken ranged from 1 to 95 HP there.
 # Rechecked once infect joined the random move sets: R^2 0.92, 8% median
-# error, same parameters.
+# error, same parameters. Refitted when the starter Overclock went to 10 %
+# and Prefetch to every 2nd turn (600 move sets x 100 fights, fitted on
+# 400): R^2 0.97 and 6% median error held out - the weaker starter deals
+# less, so the same enemy hurts more (the old model was down to R^2 0.62).
+# armor stays at its real value (Encryption's 1): the free fit's 0.5 priced
+# barrages too high (test_threat's archetypes: a barrage took 8 HP at
+# threat 12, at armor 1 it takes 9.7).
 DEFAULT_MODEL = ThreatModel(
-    player_damage=24.0, armor=1.0, player_block=6.0, purge_damage=6.0, scale=1.0
+    player_damage=16.0, armor=1.0, player_block=6.0, purge_damage=6.0, scale=0.824
 )
 
 # Mean of the roll on top of each kind of hit (combat.intent_hits).
@@ -145,6 +151,21 @@ GLITCH_DAMAGE = 2.5
 # (pool enemies with and without enemies.with_interrupt: 20.2 HP plain,
 # 20.4-20.5 armed at 4-4.5, within the noise).
 INTERRUPT_DAMAGE = 4.5
+# The other program moves cost less: they are telegraphed, and a player who
+# orders the program well mostly plays around them (a garbage collector
+# takes the last line, a race condition reorders two, a memory leak takes a
+# line for a turn). Set from balance-sim runs (best order, 300 runs): at the
+# first guess (4 / 2 / 3) the HP they took off made program runs easier
+# than with interrupts alone.
+COLLECT_DAMAGE = 2.5
+RACE_DAMAGE = 1.0
+LEAK_DAMAGE = 1.5
+_PROGRAM_MOVE_DAMAGE = {
+    MoveKind.INTERRUPT: INTERRUPT_DAMAGE,
+    MoveKind.COLLECT: COLLECT_DAMAGE,
+    MoveKind.RACE: RACE_DAMAGE,
+    MoveKind.LEAK: LEAK_DAMAGE,
+}
 
 
 def _malware(stacks: int, turns: float) -> float:
@@ -182,8 +203,9 @@ def _per_turn(
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + _malware(move.stacks, turns))
         elif move.kind is MoveKind.LOCK:
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + LOCK_DAMAGE)
-        elif move.kind is MoveKind.INTERRUPT:
-            damage += p * (through_block(hit(move.power, _D6_MEAN)) + INTERRUPT_DAMAGE)
+        elif move.kind in _PROGRAM_MOVE_DAMAGE:
+            extra = _PROGRAM_MOVE_DAMAGE[move.kind]
+            damage += p * (through_block(hit(move.power, _D6_MEAN)) + extra)
         elif move.kind is MoveKind.CORRUPT:
             damage += p * (through_block(hit(move.power, _D6_MEAN)) + GLITCH_DAMAGE * move.stacks)
         elif move.kind is MoveKind.DEFEND:

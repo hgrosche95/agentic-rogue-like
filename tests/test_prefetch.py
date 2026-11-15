@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from agentic_rogue_like import prefetch
 from agentic_rogue_like.agent import encounter_agent, event_agent
 from agentic_rogue_like.api import app
-from agentic_rogue_like.engine import new_run
+from agentic_rogue_like.engine import move_to, new_run
 from agentic_rogue_like.events import EventEffect, EventOption, GameEvent
 from agentic_rogue_like.models import Enemy
 from agentic_rogue_like.sessions import get_session
@@ -105,7 +105,7 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
         if run["pending_event"] is not None:
             event_rooms += 1
             assert run["pending_event"]["description"] == PREFETCHED_EVENT_TEXT
-            assert run["pending_event"]["options"][0]["effects"] == "+40 gold, -5 HP"
+            assert run["pending_event"]["options"][0]["effects"] == "+40 credits, -5 integrity"
             run = client.post(f"/runs/{run_id}/event-choice", json={"option_index": 0}).json()
         while run["pending_combat"] is not None:
             combat = run["pending_combat"]
@@ -127,6 +127,10 @@ def test_non_combat_rooms_use_prefetched_narration(agent_enabled, monkeypatch) -
                 ).json()
         if run["card_reward"] is not None:
             run = client.post(f"/runs/{run_id}/card-reward", json={"card_index": None}).json()
+        if run["agi_deals"] is not None:  # the AGI's forged card after the first boss
+            run = client.post(f"/runs/{run_id}/agi-deal", json={"deal_index": None}).json()
+        if run["artifact_offer"] is not None:
+            run = client.post(f"/runs/{run_id}/artifact", json={"artifact_index": 0}).json()
         if run["shop"] is not None:
             run = client.post(f"/runs/{run_id}/shop/leave").json()
         if run["rest"] is not None:
@@ -154,6 +158,23 @@ def test_rooms_no_longer_reachable_are_dropped(agent_enabled) -> None:
 
         reachable = {run.current_node_id, *run.nodes[run.current_node_id].connections}
         assert set(cache.enemies) <= reachable
+
+
+def test_rooms_the_player_can_still_switch_to_stay_warm(agent_enabled) -> None:
+    run = new_run(seed=14)
+    cache = prefetch.Prefetch()
+    cache.warm(run)
+    assert "1-3" in cache.enemies
+
+    run.nodes["0-0"].visited = True
+    move_to(run, "1-0")
+    cache.warm(run)
+    assert "1-3" in cache.enemies
+
+    # once the room is entered, the jump is final
+    run.nodes["1-0"].visited = True
+    cache.warm(run)
+    assert "1-3" not in cache.enemies
 
 
 def test_failed_prefetch_falls_back_to_the_static_pool(agent_enabled, monkeypatch) -> None:

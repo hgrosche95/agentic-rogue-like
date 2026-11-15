@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ATTACKING_INTENTS,
   PERMANENT_CARD_TYPES,
@@ -8,20 +8,35 @@ import {
   type Status,
 } from "../api";
 import { cardSound, hitsOf, sfx } from "../audio";
-import { flyCard } from "../cardFlight";
+import { splitTaunt, useBanners } from "../banners";
+import { dissolveToBanished, flyCard } from "../cardFlight";
 import { ArtifactBar } from "./ArtifactBar";
+import { activeArtifactsLine } from "../artifactTimers";
 import { HERO } from "../characters";
 import { TYPING_MS, commandFor, type HackerCommand } from "../hackerCommands";
 import { useCardDrag } from "../hooks/useCardDrag";
+import { useHandFlip, useStableHandKeys } from "../hooks/useHandMotion";
 import { useHpExchange } from "../hooks/useHpExchange";
 import { ENEMY_HIT_MS, PLAYER_HIT_MS, useLagged } from "../hooks/useLagged";
+import { useSequence } from "../hooks/useSequence";
 import { describeIntent, rangeText, STATUS_TEXT } from "../readouts";
+import { StatChip } from "./StatChip";
+import { PileView } from "./DeckView";
+import { firingArtifacts } from "../artifactPulse";
+import { showTicks } from "../effectTicks";
+import { tempoMs } from "../tempo";
 import { CardFace, type Readout } from "./CardFace";
 import { CombatHelp, HelpButton } from "./CombatHelp";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
-import { programPlan, queues } from "../program";
-import { ProgramLines, ProgramOutput } from "./ProgramLines";
+import { HeroPortrait } from "./HeroPortrait";
+import { BossIntro, TurnBanner } from "./CombatBanners";
+import { banishCount, programPlan, queues, runsNow } from "../program";
+import { hasSeenTutorial } from "../tutorial";
+import { ProgramLines, ProgramOutput, TakeBack } from "./ProgramLines";
+import { TurnSummaryCard } from "./TurnSummaryCard";
+import { summarizeTurn, type TurnSummary } from "../turnSummary";
 import { SlotPreview } from "./SlotPreview";
+import { Tutorial } from "./Tutorial";
 
 // The Vibe-Coder's context window: one pip per token, lit while used; past
 // the window the extra pips glow red - every card from there may hallucinate.
@@ -32,7 +47,9 @@ function TokenMeter({ combat }: { combat: PendingCombatView }) {
   return (
     <span
       className={`token-meter${full ? " is-full" : ""}`}
-      title={`Context window: ${combat.tokens_used}/${limit} tokens used, ${combat.token_regen} free up at the end of the turn. Cards past the window may hallucinate.`}
+      tabIndex={0}
+      data-tip-term="Context window"
+      data-tip={`${combat.tokens_used}/${limit} tokens used, ${combat.token_regen} free up at the end of the turn. Cards past the window may hallucinate.`}
     >
       <span className="token-label">Context</span>
       <span className="token-pips" aria-hidden="true">
@@ -51,34 +68,146 @@ function TokenMeter({ combat }: { combat: PendingCombatView }) {
 function StatusBadges({ statuses }: { statuses: Partial<Record<Status, number>> }) {
   return (
     <>
-      {(Object.entries(statuses) as [Status, number][]).map(([status, left]) => (
-        <span key={status} className={`status-badge is-${status}`} title={STATUS_TEXT[status]}>
-          {status} {left}
-        </span>
+      {(["malware", "exposed", "throttled"] as Status[]).map((status) => (
+        <StatChip
+          key={status}
+          className={`status-badge is-${status}`}
+          icon={status}
+          label={status}
+          value={statuses[status] ?? 0}
+          tip={STATUS_TEXT[status]}
+          tipTerm={status}
+        />
       ))}
     </>
   );
 }
 
-function Pile({ label, count, kind }: { label: string; count: number; kind: string }) {
+// A shortcut key, next to what it does - left out on touch screens (CSS).
+function KeyHint({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <div className={`pile pile-${kind}`}>
-      <div className="pile-face">
+    <kbd className={`key-hint ${className}`} aria-hidden="true">
+      {children}
+    </kbd>
+  );
+}
+
+// `term`: the keyword (keywords.ts) the pile's tooltip explains
+// A pile with its count. When the count changes it bumps and shows by how
+// much ("+1", "−2") for a moment - cards visibly arriving or leaving.
+// What a pile holds, for its tooltip: the Graveyard and Banished pile their latest
+// cards first, the Source pile what is left in it - counted, without its order.
+const PEEK_CARDS = 5;
+
+function peekLines(names: string[], ordered: boolean): string[] {
+  if (!ordered) {
+    const counts = new Map<string, number>();
+    for (const name of names) counts.set(name, (counts.get(name) ?? 0) + 1);
+    return [...counts].map(([name, n]) => (n > 1 ? `${n}× ${name}` : name));
+  }
+  const latest = names.slice(-PEEK_CARDS).reverse();
+  return names.length > PEEK_CARDS ? [...latest, `+${names.length - PEEK_CARDS} more`] : latest;
+}
+
+function Pile({
+  label,
+  count,
+  kind,
+  term,
+  names,
+  onOpen,
+}: {
+  label: string;
+  count: number;
+  kind: string;
+  term: string;
+  names?: string[];
+  // clicked (or Enter): open a look at the whole pile
+  onOpen?: () => void;
+}) {
+  const [last, setLast] = useState(count);
+  const [delta, setDelta] = useState<{ n: number; id: number } | null>(null);
+  if (count !== last) {
+    // derived during render, React's pattern for state that follows a prop
+    setLast(count);
+    setDelta({ n: count - last, id: (delta?.id ?? 0) + 1 });
+  }
+  return (
+    <div
+      className={`pile pile-${kind}`}
+      data-keyword={term}
+      data-tip-list={names ? peekLines(names, kind !== "deck").join("\n") : undefined}
+      data-tip-list-label={kind === "deck" ? "in it, shuffled" : "latest first"}
+      tabIndex={0}
+      role={onOpen ? "button" : undefined}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (onOpen && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+    >
+      <div key={delta?.id ?? 0} className={`pile-face${delta ? " is-bumped" : ""}`}>
         <span className="pile-count">{count}</span>
+        {delta && (
+          <b className={`pile-delta${delta.n < 0 ? " is-minus" : ""}`} aria-hidden="true">
+            {delta.n > 0 ? `+${delta.n}` : `−${-delta.n}`}
+          </b>
+        )}
       </div>
       <span className="pile-label">{label}</span>
     </div>
   );
 }
 
-function HpBar({ hp, max, side }: { hp: number; max: number; side: "player" | "enemy" }) {
-  const percent = Math.max(0, Math.min(100, (hp / max) * 100));
+// `ghost`: where the HP will be - what the queued program takes off the
+// enemy, what the telegraphed hit takes off the player - shown as a pulsing
+// stretch of the bar.
+// `block`: shown on the bar itself - a shield at its start with the number,
+// and the bar framed in the shield's colour - so it reads with the HP it
+// protects instead of as one chip among many.
+function HpBar({
+  hp,
+  max,
+  side,
+  ghost,
+  block = 0,
+  marks = [],
+}: {
+  hp: number;
+  max: number;
+  side: "player" | "enemy";
+  ghost?: number;
+  block?: number;
+  // HP shares (0..1) marked on the bar - a boss's next phases
+  marks?: number[];
+}) {
+  const pct = (value: number) => Math.max(0, Math.min(100, (value / max) * 100));
+  const percent = pct(hp);
+  const after = ghost === undefined ? percent : pct(Math.min(ghost, hp));
+  // the HP left once it lands, in words - and whether nothing is left
+  const forecast = ghost === undefined ? null : Math.max(0, Math.min(ghost, hp));
+  const changes = forecast !== null && forecast < hp;
+  const lethal = changes && forecast === 0;
   return (
-    <span className={`hud-bar is-${side}`}>
-      <span style={{ width: `${percent}%` }} />
+    <span className={`hp-row${block > 0 ? " has-block" : ""}`}>
+      <StatChip className="hp-shield" icon="block" label="" value={block} tip={`${block} block: soaks that much of the next hit, then it is gone.`} tipTerm="Block" />
+    <span className={`hud-bar is-${side}${lethal ? " is-lethal" : ""}${block > 0 ? " is-shielded" : ""}`}>
+      {/* slid along rather than resized, so the bar's motion stays off layout */}
+      <span style={{ transform: `translateX(${percent - 100}%)` }} />
+      {after < percent && <i className="hud-ghost" style={{ left: `${after}%`, width: `${percent - after}%` }} />}
+      {marks.map((mark) => (
+        <i key={mark} className="hud-mark" style={{ left: `${mark * 100}%` }} />
+      ))}
       <em>
-        {hp} / {max}
+        {/* one run of text: em centres its content as a grid */}
+        <span>
+          {hp}
+          {changes && <b className="hud-forecast">→ {forecast}</b>} / {max}
+        </span>
       </em>
+    </span>
     </span>
   );
 }
@@ -109,8 +238,29 @@ function fanStyle(index: number, count: number): CSSProperties {
 }
 
 // how long each program line stays lit while the program runs - long enough
-// for its card animation to play out before the next line starts
+// for its card animation to play out before the next line starts (at the
+// normal tempo, see tempo.ts)
 const PROGRAM_STEP_MS = 1100;
+// how long the turn summary stays up after the program has run
+const SUMMARY_MS = 6000;
+
+// how long a turn banner stays up - and an overclock's, with or without the
+// boss's line to read
+const TURN_BANNER_MS = 850;
+const PHASE_BANNER_MS = 1300;
+// where a boss's next phases begin, as HP shares (combat.PHASE_HP_PERCENT)
+const PHASE_MARKS: Record<number, number[]> = { 2: [0.5], 3: [0.5, 0.25] };
+// how long the table glitches when a boss enters its next phase
+const PHASE_SHIFT_MS = 1100;
+const PHASE_TAUNT_MS = 2300;
+
+// Keys pressed into an input, or on a button focused from the keyboard
+// (Space and Enter press that button), aren't combat shortcuts.
+function ownKeys(event: KeyboardEvent): boolean {
+  const target = event.target instanceof HTMLElement ? event.target : null;
+  if (target?.closest("input, textarea, select, [contenteditable='true']")) return true;
+  return (event.key === " " || event.key === "Enter") && target?.matches("button:focus-visible") === true;
+}
 
 export function CombatPanel({
   combat,
@@ -123,6 +273,7 @@ export function CombatPanel({
   onPlayCard,
   onEndTurn,
   onMoveQueued,
+  onTakeBack,
   onContinue,
 }: {
   combat: PendingCombatView;
@@ -132,9 +283,10 @@ export function CombatPanel({
   log: string[];
   disabled: boolean;
   enemySlain?: boolean;
-  onPlayCard: (handIndex: number, slotIndex: number) => void;
+  onPlayCard: (handIndex: number, slotIndex: number, banishIndices?: number[]) => void;
   onEndTurn: (discardIndices: number[]) => void;
   onMoveQueued?: (fromSlot: number, toSlot: number) => void;
+  onTakeBack?: (zone: "program" | "field", index: number) => void;
   onContinue?: () => void;
 }) {
   const [selectedHandIndex, setSelectedHandIndex] = useState<number | null>(null);
@@ -150,38 +302,181 @@ export function CombatPanel({
   const setDiscarding = (picks: number[] | null) =>
     setDiscardChoice(picks === null ? null : { on: combat, picks });
   const excess = Math.max(0, combat.hand.length - combat.max_hand_size);
-  const exchange = useHpExchange(player.hp, combat.enemy_hp);
+  // A card that banishes hand cards (Banish), played into a slot, first asks
+  // which: the play waits here until they are picked - for the table it was
+  // played on, like the discard picks; null while not choosing.
+  const [banishChoice, setBanishChoice] = useState<{
+    on: PendingCombatView;
+    handIndex: number;
+    slotIndex: number;
+    slot: HTMLElement;
+    picks: number[];
+  } | null>(null);
+  const banishing = banishChoice?.on === combat ? banishChoice : null;
+  const banishCard = banishing ? combat.hand.find((c) => c.hand_index === banishing.handIndex) : undefined;
+  const banishNeeded = banishCard ? banishCount(combat, banishCard) : 0;
+  // picking cards from the hand - to discard or to banish - holds the rest of the table
+  const choosing = discarding !== null || banishing !== null;
+  const rawExchange = useHpExchange(player.hp, combat.enemy_hp);
   // the bars move when the hit lands, not when the server answers
-  const shownPlayerHp = useLagged(player.hp, PLAYER_HIT_MS);
-  const shownEnemyHp = useLagged(combat.enemy_hp, ENEMY_HIT_MS);
+  const shownPlayerHp = useLagged(player.hp, tempoMs(PLAYER_HIT_MS));
+  const laggedEnemyHp = useLagged(combat.enemy_hp, tempoMs(ENEMY_HIT_MS));
+  // Program mode plays the program out line by line before the turn goes to
+  // the server: the enemy's bar follows the lines (`programHp`, for the table
+  // it was run on, until the server's own HP has caught up), and the server's
+  // answer then only shows what the program didn't already (`programDone`:
+  // the HP it took, credited to the next HP exchange).
+  const [programHp, setProgramHp] = useState<{ on: PendingCombatView; hp: number } | null>(null);
+  const [programDone, setProgramDone] = useState<{ after: number; hp: number } | null>(null);
+  const shownEnemyHp =
+    programHp && (programHp.on === combat || laggedEnemyHp !== combat.enemy_hp) ? programHp.hp : laggedEnemyHp;
+  const exchange =
+    rawExchange && programDone && rawExchange.id === programDone.after + 1 && rawExchange.enemyDelta < 0
+      ? { ...rawExchange, enemyDelta: Math.min(0, rawExchange.enemyDelta + programDone.hp) }
+      : rawExchange;
   const [commands, setCommands] = useState<HackerCommand[]>([]);
   const [typing, setTyping] = useState(false);
   // Program mode: the line lit up while the program runs, before the end of
   // the turn goes to the server - and the queued card picked up to move,
   // which, like the discard picks, belongs to the table it was picked on.
   const [running, setRunning] = useState<number | null>(null);
+  // the lines that have run already, dimmed as the program moves on - for the
+  // table they ran on: the server's answer clears them out of the lines
+  const [spent, setSpent] = useState<{ on: PendingCombatView; lines: number[] } | null>(null);
+  const spentLines = spent?.on === combat ? spent.lines : [];
   const [helpOpen, setHelpOpen] = useState(false);
+  // what the program's last run came to, shown over the board for a while
+  const [turnSummary, setTurnSummary] = useState<TurnSummary | null>(null);
+  useEffect(() => {
+    if (!turnSummary) return;
+    const timer = window.setTimeout(() => setTurnSummary(null), tempoMs(SUMMARY_MS));
+    return () => window.clearTimeout(timer);
+  }, [turnSummary]);
+  // The coach marks: shown in the first fight of each mode, again from the
+  // help sheet (a new key starts them over); they follow the cards played
+  // and turns ended.
+  const [tutorialRun, setTutorialRun] = useState(() =>
+    hasSeenTutorial(combat.program_mode ? "program" : "classic") ? 0 : 1,
+  );
+  const [moves, setMoves] = useState({ plays: 0, turns: 0 });
   const [moveChoice, setMoveChoice] = useState<{ on: PendingCombatView; line: number } | null>(null);
   const movingLine = moveChoice?.on === combat ? moveChoice.line : null;
   const setMovingLine = (line: number | null) => setMoveChoice(line === null ? null : { on: combat, line });
   const busy = disabled || typing || running !== null;
   const programMode = combat.program_mode;
   // the order the program runs in - reversed by a refactor, cut by an interrupt
-  const { queuedLines, cutAfter, reversed, runningLines, cutLines } = programPlan(combat, enemySlain);
+  const { queuedLines, cutAfter, reversed, cutLines } = programPlan(combat, enemySlain);
   const hotLine = (player.artifacts.find((a) => a.hot_path > 0)?.hot_path ?? 0) - 1;
   // The card just played, shown as already gone from the hand (and, for a
   // permanent card, as lying in its slot) until the server answers, so the
   // table doesn't sit still through the typing and the round trip and then
   // jump. Once nothing is in flight any more it is dropped - the server's
   // state has replaced it, or the move failed and the card stays in hand.
-  const [played, setPlayed] = useState<{ handIndex: number; slotIndex: number } | null>(null);
-  const pending = busy ? played : null;
+  // It belongs to the table it was played on, like the discard picks: the
+  // killing blow leaves the table disabled for good, and the card left in
+  // hand by then must not stay hidden.
+  const [played, setPlayed] = useState<{ on: PendingCombatView; handIndex: number; slotIndex: number } | null>(
+    null,
+  );
+  const pending = busy && played?.on === combat ? played : null;
   const pendingCard = pending && combat.hand.find((c) => c.hand_index === pending.handIndex);
   const handRef = useRef<HTMLDivElement>(null);
+  // the hand as it is laid out: the card just played has already left it
+  const handKeys = useStableHandKeys(combat.hand);
+  const laidOut = combat.hand.filter((card) => card.hand_index !== pending?.handIndex);
+  useHandFlip(handRef, laidOut.map((card) => handKeys[combat.hand.indexOf(card)]).join(" "));
   const arenaRef = useRef<ArenaHandle>(null);
+  const fieldRef = useRef<HTMLDivElement>(null);
+  // The permanents' last pictures, so one that leaves the field without
+  // coming back to the hand (destroyed, banished, uninstalled) can be shown
+  // coming apart on its way to the Banished pile (cardFlight.dissolveToBanished).
+  const fieldShots = useRef(new Map<string, { ghost: HTMLElement; rect: DOMRect }>());
+  const banishedBefore = useRef(combat.banished_count);
+  useLayoutEffect(() => {
+    const root = fieldRef.current;
+    if (!root) return;
+    const now = new Map<string, { ghost: HTMLElement; rect: DOMRect }>();
+    root.querySelectorAll<HTMLElement>("[data-field-card]").forEach((el) => {
+      const id = el.dataset.fieldCard;
+      if (id) now.set(id, { ghost: el.cloneNode(true) as HTMLElement, rect: el.getBoundingClientRect() });
+    });
+    // only while the Banished pile grew - a fight that ends clears the field too
+    if (combat.banished_count > banishedBefore.current) {
+      const inHand = new Set(combat.hand.map((card) => card.id));
+      for (const [id, shot] of fieldShots.current) {
+        if (!now.has(id) && !inHand.has(id)) dissolveToBanished(shot.ghost, shot.rect);
+      }
+    }
+    banishedBefore.current = combat.banished_count;
+    fieldShots.current = now;
+  }, [combat]);
+  // Dr. Chronos typing a card in, the program running: skippable
+  const sequence = useSequence();
   // What the table looked like when the turn was ended, to tell once the
   // server answers whether the daemon fired and the enemy's blow got through.
   const endTurnFrom = useRef<{ combat: PendingCombatView; hp: number } | null>(null);
+  // A boss walks on with a title card - once, as its fight opens; then (or
+  // right away in any other fight) the first turn's banner. Each new turn
+  // gets one after the enemy's blow has landed, and an overclock gets the
+  // boss's line for it.
+  const { banner, show: showBanner } = useBanners();
+  const [bossIntro, setBossIntro] = useState(() => combat.boss && combat.turn === 1 && !enemySlain);
+  // the turn banner names the artifacts that only work on this turn - read
+  // through a ref, so a new player object doesn't make a new callback (and
+  // re-run the effects that show the banner)
+  const artifactsRef = useRef(player.artifacts);
+  useEffect(() => {
+    artifactsRef.current = player.artifacts;
+  });
+  const yourTurn = useCallback(
+    (turn: number, delayMs: number) => {
+      const active = activeArtifactsLine(artifactsRef.current, turn);
+      showBanner(
+        { kind: "player", title: "Your turn", sub: active ? `Turn ${turn} · ${active}` : `Turn ${turn}`, ms: TURN_BANNER_MS },
+        delayMs,
+      );
+    },
+    [showBanner],
+  );
+  // the table as the fight opened, and the turn and phase last called out
+  const opening = useRef({ turn: combat.turn, intro: bossIntro });
+  const shownTurn = useRef(combat.turn);
+  const shownPhase = useRef(combat.enemy_phase);
+
+  useEffect(() => {
+    if (!opening.current.intro) yourTurn(opening.current.turn, 300);
+  }, [yourTurn]);
+
+  useEffect(() => {
+    const from = shownTurn.current;
+    shownTurn.current = combat.turn;
+    if (combat.turn > from && !enemySlain) yourTurn(combat.turn, PLAYER_HIT_MS + 450);
+  }, [combat.turn, enemySlain, yourTurn]);
+
+  // a boss entering its next phase shakes the whole table for a moment
+  const [phaseShift, setPhaseShift] = useState(0);
+  useEffect(() => {
+    if (!phaseShift) return;
+    const timer = window.setTimeout(() => setPhaseShift(0), PHASE_SHIFT_MS + ENEMY_HIT_MS + 150);
+    return () => window.clearTimeout(timer);
+  }, [phaseShift]);
+
+  useEffect(() => {
+    const from = shownPhase.current;
+    shownPhase.current = combat.enemy_phase;
+    if (!combat.boss || combat.enemy_phase <= from || enemySlain) return;
+    setPhaseShift((n) => n + 1);
+    const taunt = combat.enemy_phase_taunts[combat.enemy_phase - 2];
+    showBanner(
+      {
+        kind: "phase",
+        title: `Phase ${combat.enemy_phase}`,
+        sub: taunt ? splitTaunt(taunt).line : `${combat.enemy_name} overclocks`,
+        ms: taunt ? PHASE_TAUNT_MS : PHASE_BANNER_MS,
+      },
+      ENEMY_HIT_MS + 150,
+    );
+  }, [combat.boss, combat.enemy_phase, combat.enemy_phase_taunts, combat.enemy_name, enemySlain, showBanner]);
 
   useEffect(() => {
     const before = endTurnFrom.current;
@@ -197,9 +492,9 @@ export function CombatPanel({
     });
     if (daemon) sfx.play("daemon_tick");
     if (!attacked) return;
-    sfx.play("enemy_attack", { delayMs: 150 });
+    sfx.play("enemy_attack", { delayMs: tempoMs(150) });
     // a hit through the block is voiced by the HP exchange (useHpExchange)
-    if (player.hp >= before.hp && before.combat.player_block > 0) sfx.play("block_absorb", { delayMs: 300 });
+    if (player.hp >= before.hp && before.combat.player_block > 0) sfx.play("block_absorb", { delayMs: tempoMs(300) });
   }, [combat, player.hp, enemySlain]);
 
   function endTurn() {
@@ -210,32 +505,91 @@ export function CombatPanel({
       return;
     }
     if (discarding !== null && discarding.length !== excess) return;
+    setMoves((m) => ({ ...m, turns: m.turns + 1 }));
     const picks = discarding ?? [];
+    const steps = combat.program_preview?.steps ?? [];
+    const taken = combat.enemy_hp - (steps.at(-1)?.enemy_hp ?? combat.enemy_hp);
     const finish = () => {
       endTurnFrom.current = { combat, hp: player.hp };
+      if (programMode) setTurnSummary(summarizeTurn(combat, player.artifacts));
+      // the enemy's move, called out while the server works the turn out -
+      // unless the program has already taken it down
+      if (!(combat.program_preview && combat.program_preview.enemy_hp <= 0)) {
+        const move = describeIntent(
+          combat.enemy_intent,
+          combat.enemy_intent_min,
+          combat.enemy_intent_max,
+          combat.enemy_intent_hits,
+          combat.enemy_intent_name,
+        );
+        showBanner({ kind: "enemy", title: "Enemy turn", sub: `${move.label} ${move.amount}`, ms: TURN_BANNER_MS });
+      } else if (combat.program.some((card) => card !== null)) {
+        // a program that takes the enemy down in one run gets its own call
+        showBanner({ kind: "phase", title: "Clean exit", sub: "Program terminated the target", ms: PHASE_BANNER_MS });
+      }
+      setProgramDone(taken > 0 ? { after: rawExchange?.id ?? 0, hp: taken } : null);
       onEndTurn(picks);
       setDiscarding(null);
     };
     setMovingLine(null);
-    if (runningLines.length === 0) {
+    setProgramHp(null);
+    // the lines that run, up to and including an interrupt's cut
+    const cutAt = steps.findIndex((s) => s.outcome === "cut");
+    const shown = (cutAt < 0 ? steps : steps.slice(0, cutAt + 1)).filter((s) => s.outcome !== "skipped");
+    if (shown.length === 0) {
       finish();
       return;
     }
-    // Run the program: each queued line lights up in turn, then the server
-    // works the turn out and the HP bars move as usual.
-    runningLines.forEach((line, step) => {
-      window.setTimeout(() => {
-        const card = combat.program[line];
-        setRunning(line);
-        if (!card) return;
-        sfx.play(cardSound(card.type), { hits: hitsOf(card.description) });
-        arenaRef.current?.cardPlayed(card.type, card.value);
-      }, step * PROGRAM_STEP_MS);
+    // Run the program: each line lights up in turn and lands - its damage
+    // over the enemy, its block over Dr. Chronos, a shake as heavy as the hit -
+    // then the server works the turn out. Skipped (see skipAnimation), the
+    // lines still left all land at once - their numbers up, without a sound
+    // and an animation each.
+    shown.forEach((step, i) => {
+      sequence.after(tempoMs(i * PROGRAM_STEP_MS), () => {
+        const live = !sequence.skipping.current;
+        setRunning(step.slot);
+        setSpent({ on: combat, lines: shown.slice(0, i).map((s) => s.slot) });
+        if (step.outcome === "cut" || step.outcome === "collected") {
+          const halted = steps.some((s) => s.outcome === "ran" && combat.program[s.slot]?.halts);
+          const cutBy = step.outcome === "collected" ? "Collected" : halted ? "Exit" : "Interrupt";
+          arenaRef.current?.programHit({ dealt: 0, runs: 0, block: 0, heal: 0, weight: 0, cut: true, cutBy });
+          sfx.play("error");
+          return;
+        }
+        const card = combat.program[step.slot];
+        if (card && step.runs > 0 && live) {
+          sfx.play(cardSound(card.type), { hits: hitsOf(card.description) });
+          arenaRef.current?.cardPlayed(card.type, card.value);
+        } else if (card && live) {
+          sfx.play(cardSound(card.type));
+        }
+        arenaRef.current?.programHit({
+          dealt: step.dealt,
+          runs: step.runs,
+          block: step.block,
+          heal: step.heal,
+          weight: step.damage / combat.enemy_max_hp,
+          combo: step.combo,
+        });
+        if (step.damage > 0) {
+          sequence.after(tempoMs(ENEMY_HIT_MS), () => setProgramHp({ on: combat, hp: step.enemy_hp }));
+        }
+      });
     });
-    window.setTimeout(() => {
+    // the last hit lands before the turn moves on
+    sequence.after(tempoMs((shown.length - 1) * PROGRAM_STEP_MS + ENEMY_HIT_MS + 250), () => {
       setRunning(null);
+      setSpent({ on: combat, lines: shown.map((s) => s.slot) });
       finish();
-    }, runningLines.length * PROGRAM_STEP_MS);
+    });
+  }
+
+  // A click on the arena or Space while Dr. Chronos types or the program
+  // runs: the rest of it happens at once.
+  // False when nothing was running.
+  function skipAnimation(): boolean {
+    return sequence.skip();
   }
 
   // Program mode: pick a queued card up, then put it on another line - an
@@ -251,9 +605,31 @@ export function CombatPanel({
     if (movingLine !== line) onMoveQueued?.(movingLine, line);
   }
 
+  // A card on the field back into the hand: a queued line or a permanent.
+  function takeBack(zone: "program" | "field", index: number) {
+    sfx.play("select");
+    setSelectedHandIndex(null);
+    setMovingLine(null);
+    onTakeBack?.(zone, index);
+  }
+
   function selectCard(handIndex: number) {
     sfx.play("select");
     setMovingLine(null);
+    if (banishing !== null) {
+      if (handIndex === banishing.handIndex) return;
+      const picks = banishing.picks.includes(handIndex)
+        ? banishing.picks.filter((i) => i !== handIndex)
+        : [...banishing.picks, handIndex];
+      if (picks.length < banishNeeded) {
+        setBanishChoice({ ...banishing, picks });
+        return;
+      }
+      // enough picked: the play goes through
+      setBanishChoice(null);
+      playIntoSlot(banishing.slotIndex, banishing.slot, banishing.handIndex, undefined, picks);
+      return;
+    }
     if (discarding !== null) {
       if (discarding.includes(handIndex)) setDiscarding(discarding.filter((i) => i !== handIndex));
       else if (discarding.length < excess) setDiscarding([...discarding, handIndex]);
@@ -262,48 +638,98 @@ export function CombatPanel({
     setSelectedHandIndex((current) => (current === handIndex ? null : handIndex));
   }
 
+  // Program mode, a click on a hand card plays it where it goes: an action
+  // into the first free line, anything else into the background. Dragging it
+  // still picks the line - and the number keys pick the card, then a line.
+  function clickHandCard(handIndex: number) {
+    const card = combat.hand.find((c) => c.hand_index === handIndex);
+    const free = programMode && !choosing && movingLine === null && selectedHandIndex === null;
+    const target = card && free ? autoTarget(card) : null;
+    if (target) {
+      sfx.play("select");
+      playIntoSlot(target.slot, target.el, handIndex);
+      return;
+    }
+    selectCard(handIndex);
+  }
+
+  function autoTarget(card: HandCardView): { slot: number; el: HTMLElement } | null {
+    const board = fieldRef.current;
+    if (!board) return null;
+    if (!queues(combat, card)) {
+      const el = board.querySelector<HTMLElement>(".program-background");
+      return el ? { slot: 0, el } : null;
+    }
+    const line = combat.program.findIndex((c, i) => c === null && !combat.locked_slots.includes(i));
+    const lines = board.querySelectorAll<HTMLElement>(".program-line");
+    const el = line < 0 ? null : lines[line]?.querySelector<HTMLElement>(".field-slot");
+    return el ? { slot: line, el } : null;
+  }
+
   // `from` is where the card's flight into the slot starts: the card in the
-  // hand, or the dragged copy where it was dropped.
-  function playIntoSlot(slotIndex: number, slot: HTMLElement, handIndex = selectedHandIndex, from?: HTMLElement) {
+  // hand, or the dragged copy where it was dropped. `banish`: the hand cards
+  // a banishing card takes - left out, they are asked for first.
+  function playIntoSlot(
+    slotIndex: number,
+    slot: HTMLElement,
+    handIndex = selectedHandIndex,
+    from?: HTMLElement,
+    banish?: number[],
+  ) {
     if (handIndex === null) return;
     endTurnFrom.current = null;
-    const card = from ?? handRef.current?.querySelector<HTMLElement>(`[data-hand-index="${handIndex}"]`);
-    if (card) flyCard(card, slot);
-    setSelectedHandIndex(null);
-    setPlayed({ handIndex, slotIndex });
     const played = combat.hand.find((c) => c.hand_index === handIndex);
+    if (played && banish === undefined && banishCount(combat, played) > 0) {
+      setSelectedHandIndex(null);
+      setBanishChoice({ on: combat, handIndex, slotIndex, slot, picks: [] });
+      return;
+    }
+    const card = from ?? handRef.current?.querySelector<HTMLElement>(`[data-hand-index="${handIndex}"]`);
+    // a queued line or a permanent stays where it lands; an action burns out there
+    const stays = played !== undefined && (queues(combat, played) || PERMANENT_CARD_TYPES.includes(played.type));
+    // into the program's background: to the hint, where its socket shows up
+    // an action goes on into its pile once it has burnt out in the slot
+    const pile = stays || !played ? undefined : played.exhaust ? "banished" : "graveyard";
+    if (card) flyCard(card, slot.querySelector<HTMLElement>(".background-hint") ?? slot, stays, pile);
+    setSelectedHandIndex(null);
+    setPlayed({ on: combat, handIndex, slotIndex });
+    setMoves((m) => ({ ...m, plays: m.plays + 1 }));
     if (!played) {
-      onPlayCard(handIndex, slotIndex);
+      onPlayCard(handIndex, slotIndex, banish);
       return;
     }
     // Dr. Chronos types the card in as a command first; it only goes to the
     // server - and hits - once he is done typing.
-    const text = commandFor(played, combat.enemy_name);
+    const banishedNames = (banish ?? []).flatMap((i) => combat.hand.find((c) => c.hand_index === i)?.name ?? []);
+    const text = commandFor(played, combat.enemy_name, banishedNames);
     setCommands((sent) => [...sent, { at: log.length, text }]);
     setTyping(true);
-    sfx.play("typing", { durationMs: TYPING_MS });
+    sfx.play("typing", { durationMs: tempoMs(TYPING_MS) });
     // A card that queues into the program only runs at the end of the turn,
     // so its animation waits for "Run program" (see endTurn).
     const runsNow = !queues(combat, played);
-    window.setTimeout(() => {
+    sequence.after(tempoMs(TYPING_MS + 150), () => {
       setTyping(false);
       // Enter, and the command runs
       sfx.play("enter");
       if (runsNow) {
-        sfx.play(cardSound(played.type), { hits: hitsOf(played.description), delayMs: 40 });
+        sfx.play(cardSound(played.type, (banish?.length ?? 0) > 0), {
+          hits: hitsOf(played.description),
+          delayMs: 40,
+        });
         arenaRef.current?.cardPlayed(played.type, played.value);
       }
-      onPlayCard(handIndex, slotIndex);
-    }, TYPING_MS + 150);
+      onPlayCard(handIndex, slotIndex, banish);
+    });
   }
 
   const drag = useCardDrag({
-    enabled: !busy && discarding === null,
+    enabled: !busy && !choosing,
     onDrop: (handIndex, slotIndex, slot, from) => playIntoSlot(slotIndex, slot, handIndex, from),
   });
   // Program mode: drag a queued card onto another line to move it there.
   const lineDrag = useCardDrag({
-    enabled: !busy && discarding === null,
+    enabled: !busy && !choosing,
     onDrop: (fromLine, toLine) => {
       setMovingLine(null);
       if (fromLine !== toLine) {
@@ -313,11 +739,86 @@ export function CombatPanel({
     },
   });
 
+  // Keyboard play: 1-9 pick hand card N, then 1-9 the line (or slot) it goes
+  // to, B the program's background; Space or Enter end the turn (Space first
+  // skips an animation still running); Esc lets go of a pick. Re-bound on
+  // every commit (a layout effect: before the next key can come in), so it
+  // always sees the table as it is now.
+  useLayoutEffect(() => {
+    // the n-th line or slot, while it takes a click
+    const target = (n: number) => {
+      const slots = fieldRef.current?.querySelectorAll<HTMLElement>(
+        programMode ? ".program-line > .field-slot" : ".field > .field-slot",
+      );
+      const slot = slots?.[n];
+      return slot instanceof HTMLButtonElement && !slot.disabled ? slot : null;
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || ownKeys(event)) return;
+      // a window over the fight (deck, map, help) has the keys
+      if (helpOpen || document.querySelector(".overlay-backdrop")) return;
+      const key = event.key.toLowerCase();
+      if (key === " " || key === "enter") {
+        event.preventDefault();
+        if (event.repeat || (key === " " && skipAnimation())) return;
+        if (enemySlain) {
+          sfx.play("click");
+          onContinue?.();
+        } else if (!busy && banishing === null && (discarding === null || discarding.length === excess)) {
+          endTurn();
+        }
+        return;
+      }
+      if (key === "escape") {
+        if (selectedHandIndex !== null || movingLine !== null) sfx.play("click");
+        setSelectedHandIndex(null);
+        setMovingLine(null);
+        if (discarding !== null && !busy) setDiscarding(null);
+        if (banishing !== null && !busy) setBanishChoice(null);
+        return;
+      }
+      if (busy || enemySlain) return;
+      if (key === "b" && programMode && selectedHandIndex !== null) {
+        const background = fieldRef.current?.querySelector<HTMLButtonElement>(".background-drop");
+        if (background && !background.disabled) background.click();
+        return;
+      }
+      if (!/^[1-9]$/.test(key)) return;
+      const n = Number(key) - 1;
+      if (!choosing && (selectedHandIndex !== null || movingLine !== null)) {
+        const slot = target(n);
+        if (slot) {
+          slot.click();
+          return;
+        }
+        if (movingLine !== null) return;
+      }
+      // no line to put the picked card on there: pick another card instead
+      const card = laidOut[n];
+      if (card) selectCard(card.hand_index);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  // a hand card while cards are picked: picked, pickable, or the banishing card itself
+  const handPick = (handIndex: number): string => {
+    if (banishing !== null) {
+      if (handIndex === banishing.handIndex) return " is-selected is-banisher";
+      return banishing.picks.includes(handIndex) ? " is-discarding is-banishing" : " is-pickable";
+    }
+    if (discarding === null) return "";
+    return discarding.includes(handIndex) ? " is-discarding" : " is-pickable";
+  };
+
   // the card being aimed (selected or dragged) and the slot it is aimed at
-  const aimedIndex = discarding === null ? (drag.dragging ?? selectedHandIndex) : null;
+  const aimedIndex = !choosing ? (drag.dragging ?? selectedHandIndex) : null;
   const aimedCard = aimedIndex === null ? undefined : combat.hand.find((c) => c.hand_index === aimedIndex);
   const aimedSlot = drag.dragging !== null ? drag.hoverSlot : pointedSlot;
   const aimedLow = aimedCard && readoutOf(aimedCard, null);
+  // program mode: the lines as they'd come out with the aimed card in the
+  // line (or the background) pointed at
+  const whatIf = aimedCard && aimedSlot !== null ? (aimedCard.what_if?.[aimedSlot] ?? null) : null;
   const attacking = ATTACKING_INTENTS.includes(combat.enemy_intent);
   const intent = describeIntent(
     combat.enemy_intent,
@@ -327,11 +828,100 @@ export function CombatPanel({
     combat.enemy_intent_name,
   );
 
+  // the artifacts the newest log lines show at work flash once
+  const [logSeen, setLogSeen] = useState(log.length);
+  const [artifactPulse, setArtifactPulse] = useState<{ ids: string[]; id: number } | null>(null);
+  if (log.length !== logSeen) {
+    setLogSeen(log.length);
+    const ids = log.length > logSeen ? firingArtifacts(log.slice(logSeen), player.artifacts) : [];
+    if (ids.length > 0) setArtifactPulse({ ids, id: (artifactPulse?.id ?? 0) + 1 });
+  }
+
+  // ...and every permanent or artifact that acted on its own shows what it did
+  const ticked = useRef(log.length);
+  useEffect(() => {
+    if (log.length > ticked.current) showTicks(log.slice(ticked.current), player.artifacts);
+    ticked.current = log.length;
+  }, [log, player.artifacts]);
+
+  // a look into one of the piles, opened by clicking it
+  const [openPile, setOpenPile] = useState<"source" | "graveyard" | "banished" | null>(null);
+
+  // under a quarter of his HP: the edges of the screen pulse red
+  const critical = !enemySlain && player.hp > 0 && player.hp <= player.max_hp * 0.25;
+
+  // what ending the turn now leads to, under the button's label
+  const endTurnNote = !attacking
+    ? `next: ${intent.label.toLowerCase()}`
+    : combat.incoming_max === 0
+      ? "you block it all"
+      : combat.incoming_max >= player.hp
+        ? `lethal: ${rangeText(combat.incoming_min, combat.incoming_max)}`
+        : `you take ${rangeText(combat.incoming_min, combat.incoming_max)}`;
+  // nothing left that could go anywhere - the button calls, calmly
+  const turnDone =
+    !busy &&
+    !enemySlain &&
+    !choosing &&
+    (combat.hand.length === 0 ||
+      (programMode
+        ? combat.program.every((c, i) => c !== null || combat.locked_slots.includes(i)) &&
+          !combat.hand.some((c) => PERMANENT_CARD_TYPES.includes(c.type))
+        : combat.field.every((c, i) => c !== null || combat.locked_slots.includes(i))));
+
   return (
-    <div className="combat-panel">
-      {helpOpen && <CombatHelp programMode={programMode} onClose={() => setHelpOpen(false)} />}
+    <div
+      className={`combat-panel${programMode ? " is-program" : ""}${choosing ? " is-discarding" : ""}${phaseShift ? " is-phase-shift" : ""}${critical ? " is-critical" : ""}${combat.boss && combat.enemy_phase > 1 ? ` boss-phase-${combat.enemy_phase}` : ""}`}
+    >
+      {critical && <div className="low-hp-vignette" aria-hidden="true" />}
+      {openPile === "source" && (
+        <PileView
+          title="Source"
+          cards={combat.draw_cards ?? []}
+          note="shuffled - drawn in an order you can't see"
+          onClose={() => setOpenPile(null)}
+        />
+      )}
+      {openPile === "graveyard" && (
+        <PileView title="Graveyard" cards={combat.discard_cards ?? []} ordered onClose={() => setOpenPile(null)} />
+      )}
+      {openPile === "banished" && (
+        <PileView title="Banished" cards={combat.banished_cards ?? []} ordered onClose={() => setOpenPile(null)} />
+      )}
+      {helpOpen && (
+        <CombatHelp
+          programMode={programMode}
+          onClose={() => setHelpOpen(false)}
+          onTutorial={() => {
+            setHelpOpen(false);
+            setTutorialRun((n) => n + 1);
+          }}
+        />
+      )}
+      {tutorialRun > 0 && !enemySlain && (
+        <Tutorial
+          key={tutorialRun}
+          mode={programMode ? "program" : "classic"}
+          plays={moves.plays}
+          turns={moves.turns}
+        />
+      )}
+      {bossIntro && (
+        <BossIntro
+          name={combat.enemy_name}
+          kicker={combat.final_boss ? "Final boss" : "Boss"}
+          tag={`${combat.final_boss ? "The AGI" : "Core AI"} · ${era}`}
+          quote={combat.enemy_taunt || combat.enemy_description}
+          finalBoss={combat.final_boss}
+          onDone={() => {
+            setBossIntro(false);
+            yourTurn(combat.turn, 150);
+          }}
+        />
+      )}
       {/* the HUD plates sit in the scene's top corners, clear of the monitor */}
-      <div className="arena-wrap">
+      {/* a click on the arena cuts an animation short */}
+      <div className="arena-wrap" onPointerDown={() => skipAnimation()}>
         <CombatArena
           ref={arenaRef}
           status={{
@@ -352,39 +942,53 @@ export function CombatPanel({
             intentMax: combat.enemy_intent_max,
             intentHits: combat.enemy_intent_hits,
             intentName: combat.enemy_intent_name,
+            finalBoss: combat.final_boss,
+            phase: combat.enemy_phase,
           }}
           exchange={exchange}
           log={log}
+          turn={combat.turn}
           commands={commands}
           typing={typing}
           slain={enemySlain}
           onContinue={onContinue}
           hero={player.character}
           contextFull={combat.token_limit !== null && combat.tokens_used >= combat.token_limit}
-        />
+          playerMaxHp={player.max_hp}
+        >
+          {banner && <TurnBanner key={banner.id} banner={banner} />}
+        </CombatArena>
 
         <div className="vs-hud is-player">
-          <div className="vs-body">
+          <div className="vs-body has-portrait">
+            <HeroPortrait arena={arenaRef} />
             <span className="hud-name">
               {HERO[player.character].name} <small>Human · {era}</small>
             </span>
-            <HpBar hp={shownPlayerHp} max={player.max_hp} side="player" />
+            <HpBar
+              hp={shownPlayerHp}
+              max={player.max_hp}
+              side="player"
+              ghost={attacking && !enemySlain && running === null ? player.hp - combat.incoming_max : undefined}
+              block={combat.player_block}
+            />
             <div className="hud-meta">
               {attacking && !enemySlain && (
                 <span
-                  className={`incoming-badge${combat.incoming_max === 0 ? " is-safe" : ""}`}
+                  className={`incoming-badge${combat.incoming_max === 0 ? " is-safe" : combat.incoming_max >= player.hp ? " is-lethal" : ""}`}
                   title="What the enemy's attack does to you if you end the turn now - after block and armor"
                 >
                   {combat.incoming_max === 0
                     ? "Fully blocked"
-                    : `Incoming ${rangeText(combat.incoming_min, combat.incoming_max)}`}
+                    : combat.incoming_max >= player.hp
+                      ? `Lethal ${rangeText(combat.incoming_min, combat.incoming_max)}`
+                      : `Incoming ${rangeText(combat.incoming_min, combat.incoming_max)}`}
                 </span>
               )}
-              {combat.player_block > 0 && <span className="block-badge">Block {combat.player_block}</span>}
-              {combat.armor > 0 && <span className="armor-badge">Armor {combat.armor}</span>}
+              <StatChip className="armor-badge" icon="armor" label="Armor" value={combat.armor} />
               <StatusBadges statuses={combat.player_status} />
               {combat.token_limit !== null && <TokenMeter combat={combat} />}
-              <ArtifactBar artifacts={player.artifacts} compact />
+              <ArtifactBar artifacts={player.artifacts} compact turn={combat.turn} pulse={artifactPulse ?? undefined} />
             </div>
           </div>
         </div>
@@ -399,12 +1003,25 @@ export function CombatPanel({
                 {combat.enemy_description}
               </p>
             )}
-            <HpBar hp={shownEnemyHp} max={combat.enemy_max_hp} side="enemy" />
+            <HpBar
+              hp={shownEnemyHp}
+              max={combat.enemy_max_hp}
+              side="enemy"
+              block={enemySlain ? 0 : combat.enemy_block}
+              marks={combat.boss ? PHASE_MARKS[combat.enemy_phases]?.slice(combat.enemy_phase - 1) : undefined}
+              ghost={
+                programMode && running === null && queuedLines.length > 0 && combat.program_preview
+                  ? combat.program_preview.enemy_hp
+                  : undefined
+              }
+            />
             <div className="hud-meta">
               {!enemySlain && (
                 <span
                   className={`intent-badge type-${combat.enemy_intent} ${attacking ? "is-hit" : "is-guard"}`}
-                  title={intent.title}
+                  tabIndex={0}
+                  data-tip-term={`Intent · ${intent.label}`}
+                  data-tip={`${intent.title.replace(`${intent.label}: `, "")}.`}
                 >
                   <IntentIcon intent={combat.enemy_intent} />
                   {intent.label} {intent.amount}
@@ -424,19 +1041,36 @@ export function CombatPanel({
                   className={`phase-badge${combat.enemy_phase > 1 ? " is-enraged" : ""}`}
                   title={[
                     combat.enemy_phase > 1
-                      ? `Overclocked: +${combat.enemy_strength} attack, and it purges permanents.`
-                      : "Overclocks into phase 2 at half HP.",
+                      ? `Overclocked: +${combat.enemy_strength} attack, and it banishes permanents.`
+                      : "Overclocks into phase 2 at half integrity.",
                     combat.enemy_phases > 2 && combat.enemy_phase < 3
-                      ? "Phase 3 at a quarter HP: stronger again, no more bracing, 4-hit barrages."
+                      ? "Phase 3 at a quarter integrity: stronger again, no more bracing, 4-hit barrages."
                       : "",
                   ].join(" ")}
                 >
+                  <span className="phase-pips" aria-label={`Phase ${combat.enemy_phase} of ${combat.enemy_phases}`}>
+                    {Array.from({ length: combat.enemy_phases }, (_, i) => (
+                      <i key={i} className={i < combat.enemy_phase ? "is-reached" : undefined} />
+                    ))}
+                  </span>
                   Phase {combat.enemy_phase}/{combat.enemy_phases}
                   {combat.enemy_strength > 0 && ` · +${combat.enemy_strength} ATK`}
                 </span>
               )}
-              {combat.enemy_block > 0 && (
-                <span className="block-badge enemy-block-badge">Block {combat.enemy_block}</span>
+              {combat.omega_style && combat.enemy_phase >= 2 && !combat.omega_law && !enemySlain && (
+                <span
+                  className="omega-badge"
+                  tabIndex={0}
+                  data-tip-term="Adapted"
+                  data-tip={`OMEGA has studied your ${combat.omega_style} and plays more of the moves that hurt it. At a quarter integrity it rewrites a law of the fight.`}
+                >
+                  Answers your {combat.omega_style}
+                </span>
+              )}
+              {combat.omega_law && !enemySlain && (
+                <span className="law-badge" tabIndex={0} data-tip-term="OMEGA's law" data-tip={combat.omega_law}>
+                  Law: {combat.omega_law}
+                </span>
               )}
               {!enemySlain && <StatusBadges statuses={combat.enemy_status} />}
               {enemySlain && <span className="intent-badge is-defeated">Defeated</span>}
@@ -447,7 +1081,10 @@ export function CombatPanel({
 
       {/* the stack stands on the arena floor */}
       <div className="combat-row">
-        <div className="field-zone">
+        {/* a dragged card dropped anywhere on (or near) the zone goes to the
+            nearest slot that takes it - see useCardDrag */}
+        <div className="field-zone" ref={fieldRef} data-drop-zone="">
+          {turnSummary && <TurnSummaryCard summary={turnSummary} onClose={() => setTurnSummary(null)} />}
           <div className="zone-head">
             <span className="zone-label zone-title">
               {programMode ? `Program · runs ${reversed ? "right to left" : "left to right"}` : "Execution stack"}
@@ -458,18 +1095,26 @@ export function CombatPanel({
                 }}
               />
             </span>
-            {programMode && <ProgramOutput combat={combat} playerHp={player.hp} />}
-            {programMode && cutAfter !== null && !enemySlain && (
-              <span
-                className="interrupt-note"
-                title="The enemy cuts your program off: queued lines after these don't run this turn"
-              >
-                Interrupt after {cutAfter} line{cutAfter === 1 ? "" : "s"}
-              </span>
-            )}
             <span className="zone-label">
               Hand {combat.hand.length}/{combat.max_hand_size}
             </span>
+            {/* a row of its own, one line high whatever it says - so the table
+                below doesn't jump when the server's preview comes back */}
+            {programMode && (
+              <span className="program-status">
+                <ProgramOutput combat={combat} playerHp={player.hp} />
+                {cutAfter !== null && !enemySlain && (
+                  <span
+                    className="interrupt-note"
+                    tabIndex={0}
+                    data-tip-term="Interrupt"
+                    data-tip="The enemy cuts your program off: queued lines after these don't run this turn - they go to the Graveyard unused."
+                  >
+                    Interrupt after {cutAfter} line{cutAfter === 1 ? "" : "s"}
+                  </span>
+                )}
+              </span>
+            )}
           </div>
           {programMode ? (
             <ProgramLines
@@ -477,15 +1122,24 @@ export function CombatPanel({
               hotLine={hotLine}
               running={running}
               cutLines={cutLines}
+              spentLines={spentLines}
               movingLine={movingLine}
-              locked={busy || discarding !== null}
+              locked={busy || choosing}
               pending={pending && pendingCard ? { slotIndex: pending.slotIndex, card: pendingCard } : null}
               aimedCard={aimedCard}
               aimedLow={aimedLow?.value}
               cardSelected={selectedHandIndex !== null}
               handHoverSlot={drag.hoverSlot}
               lineDrag={lineDrag}
+              live={
+                running === null
+                  ? null
+                  : { dealt: programHp?.on === combat ? combat.enemy_hp - programHp.hp : 0, lines: spentLines.length + 1 }
+              }
+              reversed={reversed}
               onPickLine={pickLine}
+              onTakeBack={takeBack}
+              whatIf={whatIf}
               onPlay={(line, slot) => playIntoSlot(line, slot)}
               onPoint={(line, over) => setPointedSlot((s) => (over ? line : s === line ? null : s))}
             />
@@ -506,16 +1160,22 @@ export function CombatPanel({
                   key={slotIndex}
                   data-slot-index={slotIndex}
                   className={`field-slot is-empty${aimedCard ? " is-targetable" : ""}${drag.hoverSlot === slotIndex ? " is-drop-target" : ""}`}
-                  disabled={busy || selectedHandIndex === null || discarding !== null}
+                  disabled={busy || selectedHandIndex === null || choosing}
                   onClick={(event) => playIntoSlot(slotIndex, event.currentTarget)}
                   onPointerEnter={() => setPointedSlot(slotIndex)}
                   onPointerLeave={() => setPointedSlot((s) => (s === slotIndex ? null : s))}
                 >
-                  <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} />
+                  <SlotPreview index={slotIndex} card={aimedCard} low={aimedLow?.value} slots={combat.field.length} />
                 </button>
               ) : (
-                <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`}>
+                <div key={slotIndex} className={`field-slot is-occupied type-${card.type}`} data-field-card={card.id}>
                   <CardFace card={card} onField />
+                  <TakeBack
+                    name={card.name}
+                    uninstall={combat.field_uninstalls?.[slotIndex] ?? false}
+                    disabled={busy || choosing || enemySlain}
+                    onClick={() => takeBack("field", slotIndex)}
+                  />
                 </div>
               );
             })}
@@ -525,24 +1185,61 @@ export function CombatPanel({
       </div>
 
       <div className="battlefield">
-        <Pile label="Source" count={combat.draw_count} kind="deck" />
+        <Pile
+          label="Source"
+          count={combat.draw_count}
+          kind="deck"
+          term="source"
+          names={combat.draw_names}
+          onOpen={() => setOpenPile("source")}
+        />
 
         <div className="hand-zone">
+          {/* over the hand limit: hard to miss, or the turn seems stuck */}
+          {discarding !== null && (
+            <div className="discard-banner" role="status">
+              <span>
+                Hand over the limit - pick {excess} card{excess === 1 ? "" : "s"} to discard
+              </span>
+              <b className={discarding.length === excess ? "is-done" : undefined}>
+                {discarding.length}/{excess}
+              </b>
+            </div>
+          )}
+          {banishing !== null && banishCard && (
+            <div className="discard-banner is-banish" role="status">
+              <span>
+                {banishCard.name} - pick {banishNeeded} card{banishNeeded === 1 ? "" : "s"} to banish
+              </span>
+              <b>
+                {banishing.picks.length}/{banishNeeded}
+              </b>
+            </div>
+          )}
           <div className="hand" ref={handRef}>
             {combat.hand.map((card: HandCardView, i) => (
               <button
-                key={card.hand_index}
+                key={handKeys[i]}
+                data-flip-key={handKeys[i]}
                 data-hand-index={card.hand_index}
-                style={fanStyle(i, combat.hand.length)}
-                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${discarding?.includes(card.hand_index) ? " is-discarding" : ""}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}`}
+                style={fanStyle(laidOut.indexOf(card), laidOut.length)}
+                className={`hand-card type-${card.type}${selectedHandIndex === card.hand_index ? " is-selected" : ""}${pending?.handIndex === card.hand_index ? " is-played" : ""}${handPick(card.hand_index)}${drag.dragging === card.hand_index ? " is-dragged" : ""}${card.overflows ? " is-overflowing" : ""}${runsNow(combat, card) ? " is-instant" : ""}`}
                 disabled={busy}
                 onMouseEnter={() => sfx.play("hover")}
                 onPointerDown={(event) => drag.onPointerDown(event, card.hand_index)}
                 onClick={() => {
-                  if (!drag.consumeClick()) selectCard(card.hand_index);
+                  if (!drag.consumeClick()) clickHandCard(card.hand_index);
                 }}
               >
                 <CardFace card={card} readout={readoutOf(card, aimedIndex === card.hand_index ? aimedSlot : null)} />
+                {card.toll > 0 && (
+                  <span className="toll-badge" title="What playing it costs in this fight">
+                    −{card.toll} integrity
+                  </span>
+                )}
+                {laidOut.indexOf(card) >= 0 && laidOut.indexOf(card) < 9 && (
+                  <KeyHint className="is-hand">{laidOut.indexOf(card) + 1}</KeyHint>
+                )}
               </button>
             ))}
           </div>
@@ -560,11 +1257,14 @@ export function CombatPanel({
               }}
             >
               Continue
+              <KeyHint>Space</KeyHint>
             </button>
           ) : (
+            // busy: still shown at work (a sweep of light), never just dead
             <button
-              className="end-turn-button"
-              disabled={busy || (discarding !== null && discarding.length !== excess)}
+              className={`end-turn-button${busy ? " is-busy" : ""}${turnDone ? " is-done" : ""}${discarding !== null ? (discarding.length === excess ? " is-ready" : " is-waiting") : banishing !== null ? " is-waiting" : ""}`}
+              disabled={busy || banishing !== null || (discarding !== null && discarding.length !== excess)}
+              aria-busy={busy}
               onClick={endTurn}
             >
               {discarding !== null
@@ -572,16 +1272,41 @@ export function CombatPanel({
                 : queuedLines.length > 0
                   ? "Run program"
                   : "End turn"}
+              <KeyHint>Space</KeyHint>
+              <small className="end-turn-note">{endTurnNote}</small>
             </button>
           )}
-          {discarding !== null && (
-            <button className="end-turn-button is-cancel" disabled={busy} onClick={() => setDiscarding(null)}>
+          {choosing && (
+            <button
+              className="end-turn-button is-cancel"
+              disabled={busy}
+              onClick={() => {
+                sfx.play("click");
+                setDiscarding(null);
+                setBanishChoice(null);
+              }}
+            >
               Cancel
+              <KeyHint>Esc</KeyHint>
             </button>
           )}
           <div className="side-piles">
-            <Pile label="Cache" count={combat.discard_count} kind="graveyard" />
-            <Pile label="Purged" count={combat.banished_count} kind="banished" />
+            <Pile
+              label="Graveyard"
+              count={combat.discard_count}
+              kind="graveyard"
+              term="graveyard"
+              names={combat.discard_names}
+              onOpen={() => setOpenPile("graveyard")}
+            />
+            <Pile
+              label="Banished"
+              count={combat.banished_count}
+              kind="banished"
+              term="banished"
+              names={combat.banished_names}
+              onOpen={() => setOpenPile("banished")}
+            />
           </div>
         </div>
       </div>
@@ -590,7 +1315,12 @@ export function CombatPanel({
         {enemySlain
           ? "Enemy defeated."
           : running !== null
-            ? `Running line ${running + 1}...`
+            ? <>
+                Running line {running + 1}...<KeyHint>Space</KeyHint>
+                <span className="key-only">to skip</span>
+              </>
+          : banishing !== null && banishCard
+            ? `${banishCard.name}: click ${banishNeeded === 1 ? "the card" : `${banishNeeded} cards`} to banish for the rest of the fight - Esc to cancel.`
           : discarding !== null
             ? `Hand limit is ${combat.max_hand_size}: pick ${excess} card(s) to discard (${discarding.length}/${excess}).`
             : selectedHandIndex !== null &&
@@ -599,7 +1329,7 @@ export function CombatPanel({
             : movingLine !== null
             ? `Moving line ${movingLine + 1}: click another line - an occupied one swaps.`
             : programMode && selectedHandIndex === null
-            ? "Attacks, blocks and heals queue into the lines; permanents run in the background and boost the whole program. Drag a queued card to move it."
+            ? "Attacks, blocks and heals queue into the lines; permanents run in the background and boost the whole program; Instant cards (⚡) take effect the moment you play them. Drag a queued card to move it."
             : programMode && aimedCard && queues(combat, aimedCard)
             ? "Choose a program line - it runs at the end of the turn, left to right."
             : programMode && aimedCard && PERMANENT_CARD_TYPES.includes(aimedCard.type)

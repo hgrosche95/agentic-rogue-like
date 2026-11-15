@@ -1,15 +1,15 @@
 """The start of a run: a starter kit, then the AGI's opening deal.
 
 Every run used to open with the same eleven cards, so the first fights all
-played alike. Now, right after the first artifact, the player picks one of
+played alike. Now the run opens with the player picking one of
 three kits - two cards of one strategy that replace basic cards (see
 _KIT_REPLACES) - and so commits to a way of playing from the first room on.
 Then the AGI makes an offer: one of three deals, or none. The deals are
 worked out down to the card when they are rolled, so the player sees exactly
 what they trade.
 
-Both are rolled from their own seeded rngs (like the artifact offers in
-engine.new_run), so they don't shift the run rng's sequence.
+Both are rolled from their own seeded rngs, so they don't shift the run
+rng's sequence. No deal hands out an artifact: the run starts without one.
 """
 
 from __future__ import annotations
@@ -17,11 +17,10 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass
 
-from .artifacts import gain_artifact, roll_artifact_offer
+from .artifacts import gain_artifact
 from .cards import can_upgrade, reward_card, upgrade_card
 from .models import (
     AgiDeal,
-    Artifact,
     Card,
     CardType,
     Character,
@@ -30,6 +29,7 @@ from .models import (
     Rarity,
     StarterKit,
 )
+from .style import PlayStyle, card_styles
 
 KIT_CHOICES = 3
 DEAL_CHOICES = 3
@@ -101,14 +101,30 @@ KITS = (
 # What a kit takes out of the starter deck. The Vibe-Coder draws a card for
 # every card he plays, so a thinner deck pays off more for him: balance-sim put
 # him 5 points above Dr. Chronos with the same swap, and 3 with one basic fewer.
+# Dr. Chronos gives up a block more than an attack - his Garbage Collect
+# already took an Exploit's place, and two would leave him no basic attack for
+# the AGI's deals - except in a program: there his Firewalls are worth more
+# (balance-sim: 4 points lower with only one of them left, 1 higher with two).
 _KIT_REPLACES: dict[Character, tuple[tuple[CardType, int], ...]] = {
-    Character.CHRONOS: ((CardType.ATTACK, 2), (CardType.BLOCK, 1)),
+    Character.CHRONOS: ((CardType.ATTACK, 1), (CardType.BLOCK, 2)),
     Character.VIBE_CODER: ((CardType.ATTACK, 1), (CardType.BLOCK, 1)),
+}
+_PROGRAM_KIT_REPLACES: dict[Character, tuple[tuple[CardType, int], ...]] = {
+    **_KIT_REPLACES,
+    Character.CHRONOS: ((CardType.ATTACK, 2), (CardType.BLOCK, 1)),
 }
 
 
 def _basics(deck: list[Card], card_type: CardType) -> list[Card]:
-    return [c for c in deck if c.rarity is Rarity.STARTER and c.type is card_type]
+    """The plain starter cards of `card_type` - not the starter deck's
+    strategy cards (Ping, ...), which stay to show what else the deck can do."""
+    return [
+        c
+        for c in deck
+        if c.rarity is Rarity.STARTER
+        and c.type is card_type
+        and card_styles(c) <= {PlayStyle.AGGRO, PlayStyle.TURTLE}
+    ]
 
 
 def roll_kits(rng: random.Random, pool: list[Card]) -> list[StarterKit]:
@@ -121,10 +137,11 @@ def roll_kits(rng: random.Random, pool: list[Card]) -> list[StarterKit]:
     ]
 
 
-def apply_kit(player: PlayerState, kit: StarterKit) -> list[Card]:
+def apply_kit(player: PlayerState, kit: StarterKit, program_mode: bool = False) -> list[Card]:
     """Swap the basics out for the kit's cards; returns the cards removed."""
     removed: list[Card] = []
-    for card_type, count in _KIT_REPLACES[player.character]:
+    replaces = _PROGRAM_KIT_REPLACES if program_mode else _KIT_REPLACES
+    for card_type, count in replaces[player.character]:
         removed += _basics(player.deck, card_type)[-count:]
     for card in removed:
         player.deck.remove(card)
@@ -133,7 +150,7 @@ def apply_kit(player: PlayerState, kit: StarterKit) -> list[Card]:
     return removed
 
 
-def _glitch(deck: list[Card]) -> Card:
+def glitch_card(deck: list[Card]) -> Card:
     """A dead card for good: it does nothing and is used up for the fight
     when played, but comes back every fight. STARTER, so the AGI's style
     reading (style.py) never counts it as a choice."""
@@ -157,7 +174,6 @@ def roll_deals(
     rng: random.Random,
     player: PlayerState,
     pool: list[Card],
-    artifact_pool: list[Artifact],
 ) -> list[AgiDeal]:
     deck = player.deck
     attacks = _basics(deck, CardType.ATTACK)
@@ -165,7 +181,6 @@ def roll_deals(
     commons = [c for c in pool if c.rarity is Rarity.COMMON]
     rares = [c for c in pool if c.rarity is Rarity.RARE]
     upgradable = [c for c in attacks + blocks if can_upgrade(c)]
-    artifacts = roll_artifact_offer(rng, player.artifacts, count=1, pool=artifact_pool)
 
     deals: list[AgiDeal] = []
     if attacks and blocks:
@@ -197,22 +212,10 @@ def roll_deals(
                 kind=DealKind.FORBIDDEN,
                 name="Forbidden patch",
                 description=(
-                    f"Take {rare.name} ({rare.description}) - for {FORBIDDEN_MAX_HP} max HP."
+                    f"Take {rare.name} ({rare.description}) - for {FORBIDDEN_MAX_HP} max integrity."
                 ),
                 add=[rare],
                 max_hp=-FORBIDDEN_MAX_HP,
-            )
-        )
-    if artifacts:
-        artifact = artifacts[0]
-        deals.append(
-            AgiDeal(
-                kind=DealKind.TROJAN,
-                name="Trojan gift",
-                description=f"Install {artifact.name} ({artifact.description}) - "
-                "but a Glitch hides in your deck.",
-                artifact=artifact,
-                add=[_glitch(deck)],
             )
         )
     if len(upgradable) >= 2:
@@ -231,7 +234,7 @@ def roll_deals(
             name="Bribe",
             description=f"Take {BRIBE_GOLD} credits - but a Glitch hides in your deck.",
             gold=BRIBE_GOLD,
-            add=[_glitch(deck)],
+            add=[glitch_card(deck)],
         )
     )
     return rng.sample(deals, min(DEAL_CHOICES, len(deals)))

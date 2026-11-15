@@ -88,15 +88,88 @@ export function NodeBadge({ type, size = 22 }: { type: NodeType; size?: number }
   );
 }
 
-// A trail between two rooms: a right-angled step along the direction the layers
-// run, like a path on a pixel board.
-function trail(from: { x: number; y: number }, to: { x: number; y: number }, horizontal: boolean): string {
-  if (horizontal) {
-    const mx = Math.round((from.x + to.x) / 2);
-    return `M ${from.x} ${from.y} H ${mx} V ${to.y} H ${to.x}`;
+// A trail between two rooms: one straight line, room to room. Right-angled
+// steps all bent at the same spot between two layers, so the trails of a
+// layer ran together into one bar and hid which room led to which.
+function trail(from: { x: number; y: number }, to: { x: number; y: number }, _horizontal: boolean): string {
+  return `M ${from.x} ${from.y} L ${to.x} ${to.y}`;
+}
+
+// Corner brackets around the room you stand in, with its NOW tag above.
+function MapCursor({
+  at,
+  r,
+  floor,
+  label,
+  enterable,
+}: {
+  at: { x: number; y: number };
+  r: number;
+  floor: number;
+  label: string;
+  enterable: boolean;
+}) {
+  const d = r + 9;
+  const arm = 7;
+  const corners = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ];
+  return (
+    <g
+      className={`map-cursor${enterable ? " is-enterable" : ""}`}
+      style={{ transform: `translate(${at.x}px, ${at.y}px)`, "--f": floor } as CSSProperties}
+      aria-hidden="true"
+    >
+      <g className="map-cursor-frame">
+        {corners.map(([sx, sy]) => (
+          <path key={`${sx}${sy}`} d={`M ${sx * d} ${sy * (d - arm)} V ${sy * d} H ${sx * (d - arm)}`} />
+        ))}
+      </g>
+      {/* the tag bobs by a CSS transform, so the attribute sits on a wrapper */}
+      <g transform={`translate(0 ${-r * 1.25 - 16})`}>
+        <g className="map-now">
+          <rect x={-22} y={-9} width={44} height={17} />
+          <text>{label}</text>
+        </g>
+      </g>
+    </g>
+  );
+}
+
+// What a room ahead holds, for the card shown while it is pointed at.
+function roomPreview(
+  node: MapNode,
+  currentFloor: number,
+  act: number,
+  numActs: number,
+): { title: string; line: string; loot?: string; distance: string } {
+  const style = NODE_STYLE[node.type];
+  const jumps = node.floor - currentFloor;
+  const distance = jumps <= 0 ? "this jump" : jumps === 1 ? "next jump" : `${jumps} jumps away`;
+  // deeper layers hold stronger constructs (enemies.escalate)
+  const depth = node.floor <= 2 ? "a light one" : node.floor <= 5 ? "a solid one" : "a heavy one";
+  switch (node.type) {
+    case "combat":
+      return { title: style.label, line: `A construct - ${depth} at this depth.`, distance };
+    case "elite":
+      return { title: style.label, line: "A hardened construct with an affix.", loot: "drops an artifact", distance };
+    case "boss":
+      return {
+        title: style.label,
+        line: act < numActs ? "The act's core: phases, barrages, overloads." : "The AGI itself. Three phases.",
+        loot: act < numActs ? "drops an artifact" : undefined,
+        distance,
+      };
+    case "shop":
+      return { title: style.label, line: "Cards and artifacts for credits, one card removal.", distance };
+    case "rest":
+      return { title: style.label, line: "Heal, upgrade a card or delete one.", distance };
+    default:
+      return { title: style.label, line: "Something odd - a choice with a price.", distance };
   }
-  const my = Math.round((from.y + to.y) / 2);
-  return `M ${from.x} ${from.y} V ${my} H ${to.x} V ${to.y}`;
 }
 
 export function DungeonMap({
@@ -108,6 +181,7 @@ export function DungeonMap({
   onEnter,
   disabled,
   act = 1,
+  numActs = 2,
 }: {
   nodes: Record<string, MapNode>;
   currentNodeId: string;
@@ -118,8 +192,12 @@ export function DungeonMap({
   onEnter?: () => void;
   disabled: boolean;
   act?: number;
+  // the act whose boss is the last - its fight ends the run, no artifact
+  numActs?: number;
 }) {
   const isHorizontal = useIsHorizontal();
+  // the room under the pointer, for the route to it
+  const [pointed, setPointed] = useState<string | null>(null);
 
   const { byFloor, maxRows, numFloors } = useMemo(() => {
     const byFloor = new Map<number, MapNode[]>();
@@ -160,7 +238,61 @@ export function DungeonMap({
 
   const reachable = new Set(reachableIds);
   const allNodes = Object.values(nodes);
-  const currentFloor = nodes[currentNodeId]?.floor ?? 0;
+  const current = nodes[currentNodeId];
+  const currentFloor = current?.floor ?? 0;
+  // Where the trails on are drawn from: the room you stand in once it is
+  // entered - before that, the room the jump left, while it can be switched.
+  const pickPending = current !== undefined && !current.visited;
+  const originId = pickPending
+    ? allNodes.find((n) => n.visited && n.connections.includes(currentNodeId))?.id
+    : currentNodeId;
+
+  // Everything still ahead: the rooms the trails lead to from where you
+  // stand (or from the room the pending pick left). The rest of the layers
+  // to come is out of reach and steps back, so the ways you can still go
+  // stand out.
+  const ahead = new Set<string>();
+  if (originId) {
+    const queue = [originId];
+    while (queue.length > 0) {
+      const id = queue.pop() as string;
+      for (const next of nodes[id]?.connections ?? []) {
+        if (!ahead.has(next)) {
+          ahead.add(next);
+          queue.push(next);
+        }
+      }
+    }
+  }
+  const onWay = (id: string) => id === originId || ahead.has(id);
+  // A room pointed at: every way there from here lights up.
+  const route = new Set<string>();
+  if (pointed && ahead.has(pointed) && originId) {
+    const leadsThere = (id: string, seen: Map<string, boolean>): boolean => {
+      if (id === pointed) return true;
+      if (seen.has(id)) return seen.get(id) as boolean;
+      seen.set(id, false);
+      const there = (nodes[id]?.connections ?? []).some((next) => ahead.has(next) && leadsThere(next, seen));
+      seen.set(id, there);
+      return there;
+    };
+    const seen = new Map<string, boolean>();
+    for (const id of [originId, ...ahead]) if (leadsThere(id, seen)) route.add(id);
+  }
+
+  // the jump just made: a packet runs the trail from the room it left
+  const [jump, setJump] = useState<{ from: string; to: string; id: number } | null>(null);
+  const [lastCurrent, setLastCurrent] = useState(currentNodeId);
+  if (currentNodeId !== lastCurrent) {
+    setLastCurrent(currentNodeId);
+    if (nodes[lastCurrent]?.connections.includes(currentNodeId) || pickPending) {
+      const from = nodes[lastCurrent]?.connections.includes(currentNodeId) ? lastCurrent : originId;
+      if (from) setJump({ from, to: currentNodeId, id: (jump?.id ?? 0) + 1 });
+    }
+  }
+
+  const preview = pointed && nodes[pointed] ? roomPreview(nodes[pointed], currentFloor, act, numActs) : null;
+  const previewAt = pointed && nodes[pointed] ? pos(nodes[pointed]) : null;
 
   return (
     <div className={`dungeon-map${disabled ? " is-busy" : ""}`}>
@@ -193,11 +325,43 @@ export function DungeonMap({
             const target = nodes[targetId];
             if (!target) return null;
             const walked = node.visited && target.visited;
-            const isNext = node.id === currentNodeId && reachable.has(targetId);
-            const classes = ["map-path", walked && "is-walked", isNext && "is-next"].filter(Boolean).join(" ");
+            const isNext = node.id === originId && reachable.has(targetId);
+            const isAhead = onWay(node.id) && ahead.has(targetId);
+            const onRoute = route.has(node.id) && route.has(targetId);
+            const classes = [
+              "map-path",
+              walked && "is-walked",
+              isNext && "is-next",
+              isAhead && "is-ahead",
+              onRoute && "is-route",
+              !walked && !isAhead && "is-cut",
+            ]
+              .filter(Boolean)
+              .join(" ");
             return <path key={`${node.id}->${targetId}`} d={trail(from, pos(target), isHorizontal)} className={classes} />;
           });
         })}
+        {jump && nodes[jump.from] && nodes[jump.to] && (
+          <g key={jump.id} className="map-packet" aria-hidden="true">
+            <path id={`packet-${jump.id}`} d={trail(pos(nodes[jump.from]), pos(nodes[jump.to]), isHorizontal)} fill="none" />
+            <circle r="6">
+              <animateMotion dur="0.55s" fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1" keyTimes="0;1">
+                <mpath href={`#packet-${jump.id}`} />
+              </animateMotion>
+              <animate attributeName="opacity" values="1;1;0" keyTimes="0;0.8;1" dur="0.8s" fill="freeze" />
+            </circle>
+            <circle r="12" className="map-packet-glow">
+              <animateMotion dur="0.55s" fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1" keyTimes="0;1">
+                <mpath href={`#packet-${jump.id}`} />
+              </animateMotion>
+              <animate attributeName="opacity" values="0.6;0.6;0" keyTimes="0;0.8;1" dur="0.8s" fill="freeze" />
+            </circle>
+          </g>
+        )}
+        {/* the picked trail on top of the ones it shares a stretch with */}
+        {pickPending && originId && current && (
+          <path className="map-path is-picked" d={trail(pos(nodes[originId]), pos(current), isHorizontal)} />
+        )}
 
         {allNodes.map((node) => {
           const { x, y } = pos(node);
@@ -205,8 +369,9 @@ export function DungeonMap({
           const isReachable = reachable.has(node.id);
           const isEnterable = isCurrent && onEnter !== undefined;
           const isVisited = node.visited && !isCurrent;
-          // rooms in eras already behind you that you never entered
-          const isPassed = !node.visited && !isCurrent && node.floor <= currentFloor;
+          // rooms in eras already behind you that you never entered (the
+          // ones the pick can still switch to are not behind you yet)
+          const isPassed = !node.visited && !isCurrent && !isReachable && node.floor <= currentFloor;
           const style = NODE_STYLE[node.type];
           const r = node.type === "boss" ? BOSS_R : NODE_R;
           const classes = [
@@ -217,6 +382,9 @@ export function DungeonMap({
             isPassed && "is-passed",
             isReachable && "is-reachable",
             isEnterable && "is-enterable",
+            // a later room no trail from here leads to
+            !isCurrent && !node.visited && node.floor > currentFloor && !ahead.has(node.id) && "is-cut",
+            route.has(node.id) && node.id !== originId && "is-on-route",
           ]
             .filter(Boolean)
             .join(" ");
@@ -238,11 +406,13 @@ export function DungeonMap({
               tabIndex={interactive ? 0 : undefined}
               aria-label={`${isEnterable ? "Enter " : ""}${style.label}, ${layerLabel(node.floor, numFloors, act)}`}
               onMouseEnter={() => {
+                if (ahead.has(node.id)) setPointed(node.id);
                 if (!interactive) return;
                 sfx.play("hover");
                 if (isReachable) onHover?.(node.id);
               }}
               onMouseLeave={() => {
+                setPointed((p) => (p === node.id ? null : p));
                 if (interactive && isReachable) onHover?.(null);
               }}
               onFocus={() => {
@@ -264,17 +434,43 @@ export function DungeonMap({
                 <g transform={node.type === "boss" ? "scale(1.3)" : undefined}>
                   {isVisited ? <path className="map-node-check" d="M -6 0 L -1.5 5 L 7 -6" /> : <NodeIcon type={node.type} />}
                 </g>
+                {/* the harder fights pay an artifact: a gem on their corner */}
+                {!node.visited && (node.type === "elite" || (node.type === "boss" && act < numActs)) && (
+                  <g className="map-node-loot" transform={`translate(${r - 1} ${-r + 1})`}>
+                    <title>Drops an artifact</title>
+                    <path d="M0 -5.5 L4.5 0 L0 5.5 L-4.5 0 Z" />
+                  </g>
+                )}
               </g>
-              {isCurrent && (
-                <g className="map-now" transform={`translate(0 ${-r * 1.25 - 16})`}>
-                  <rect x={-22} y={-9} width={44} height={17} />
-                  <text>NOW</text>
-                </g>
-              )}
             </g>
           );
         })}
+
+        {/* One marker for where you stand, drawn over the rooms and placed by a
+            CSS transform, so it glides over when the pick is switched (or a
+            jump made) instead of popping up on the other room. */}
+        {current && (
+          <MapCursor
+            at={pos(current)}
+            r={current.type === "boss" ? BOSS_R : NODE_R}
+            floor={current.floor}
+            label={pickPending && reachable.size > 0 ? "NEXT" : "NOW"}
+            enterable={onEnter !== undefined}
+          />
+        )}
       </svg>
+      {preview && previewAt && (
+        <div
+          className={`map-preview type-${nodes[pointed as string].type}`}
+          style={{ left: `${(previewAt.x / width) * 100}%`, top: `${(previewAt.y / height) * 100}%` }}
+          aria-hidden="true"
+        >
+          <b>{preview.title}</b>
+          <span>{preview.line}</span>
+          {preview.loot && <em>◆ {preview.loot}</em>}
+          <small>{preview.distance}</small>
+        </div>
+      )}
 
       <div className="map-legend">
         {(Object.keys(NODE_STYLE) as NodeType[]).map((type) => (
@@ -283,6 +479,12 @@ export function DungeonMap({
             {NODE_STYLE[type].label}
           </span>
         ))}
+        <span className="legend-item">
+          <svg className="legend-loot" viewBox="-6 -6 12 12" width={12} height={12} aria-hidden="true">
+            <path d="M0 -5.5 L4.5 0 L0 5.5 L-4.5 0 Z" />
+          </svg>
+          Artifact
+        </span>
       </div>
     </div>
   );

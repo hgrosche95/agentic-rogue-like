@@ -25,13 +25,22 @@ from agentic_rogue_like.combat import (
     move_queued,
     play_card,
     program_preview,
+    program_what_if,
     start_combat,
+    take_back,
 )
-from agentic_rogue_like.enemies import ENEMY_POOL, with_interrupt
+from agentic_rogue_like.enemies import (
+    ENEMY_POOL,
+    PROGRAM_MOVES,
+    program_counter,
+    with_interrupt,
+    with_program_move,
+)
 from agentic_rogue_like.engine import _room_enemy, available_choices, move_to, new_run, resolve_node
 from agentic_rogue_like.models import (
     Artifact,
     Card,
+    CardType,
     Character,
     Enemy,
     EnemyMove,
@@ -41,7 +50,7 @@ from agentic_rogue_like.models import (
     RunStatus,
 )
 from agentic_rogue_like.sessions import get_session
-from agentic_rogue_like.style import PlayStyle, agent_hint, answers, play_style
+from agentic_rogue_like.style import PlayStyle, agent_hint, answers, play_style, taunt
 from agentic_rogue_like.threat import threat
 
 
@@ -226,6 +235,86 @@ def test_the_bot_finds_the_better_order() -> None:
     assert names == ["Fork", "Exploit"]
 
 
+def test_undo_runs_as_a_line_and_fetches_what_ran_before_it() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", "Undo")
+    # queued, not played on the spot
+    assert [c and c.name for c in state.program[:2]] == ["Exploit", "Undo"]
+    preview = program_preview(state, player)
+    assert preview.steps[1].retrieved == ["Exploit"]
+
+    end_turn(state, player, random.Random(2))
+    assert state.enemy.hp - state.enemy_hp == 5
+    assert "Exploit" in [c.name for c in state.hand]
+    # one-shot: used up once it ran
+    assert any(c.name == "Undo" for c in state.banished_pile)
+
+
+def test_first_and_last_line_cards_pay_off_in_their_place() -> None:
+    # Bootstrap: +5 as the first line to run, Return: +7 as the last
+    assert _damage_dealt("Bootstrap", "Exploit") == 8 + 5
+    assert _damage_dealt("Exploit", "Bootstrap") == 5 + 3
+    assert _damage_dealt("Exploit", "Return") == 5 + 10
+    assert _damage_dealt("Return", "Exploit") == 3 + 5
+    # alone in the program it is both first and last
+    assert _damage_dealt("Return", slots=[2]) == 10
+
+
+def test_line_count_cards_scale_with_the_programs_length() -> None:
+    assert _damage_dealt("Monolith") == 1
+    assert _damage_dealt("Monolith", "Firewall", "Firewall") == 1 + 4
+    assert _damage_dealt("Microservice") == 13
+    assert _damage_dealt("Microservice", "Firewall", "Firewall") == 13 - 4
+
+
+def test_segfault_ends_the_program() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", "Segfault", "Exploit")
+    steps = program_preview(state, player).steps
+    assert [s.outcome for s in steps] == ["ran", "ran", "cut"]
+    end_turn(state, player, random.Random(2))
+    assert state.enemy.hp - state.enemy_hp == 5 + 12
+    # the line it cut never ran, so it isn't used up
+    assert sum(c.name == "Exploit" for c in state.discard_pile) == 2
+
+
+def test_the_hand_preview_knows_where_the_line_will_stand() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", slots=[2])
+    bootstrap = _card("Bootstrap")
+    assert action_preview(state, bootstrap, player, 0) == 8  # first
+    assert action_preview(state, bootstrap, player, 4) == 3  # after the Exploit
+    assert state.line_position is None
+
+
+def test_take_back_returns_a_queued_line_or_a_permanent() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", "Overclock", slots=[2, 0])
+    plays = state.plays_this_turn
+
+    take_back(state, "program", 2)
+    assert state.program == [None] * 5
+    take_back(state, "field", 0)
+    assert state.field == []
+    assert sorted(c.name for c in state.hand) == ["Exploit", "Overclock"]
+    # taken back, they no longer count as played (Copilot)
+    assert state.plays_this_turn == plays - 2
+
+    with pytest.raises(ValueError, match="no queued card"):
+        take_back(state, "program", 2)
+    with pytest.raises(ValueError, match="no card on the field"):
+        take_back(state, "field", 0)
+
+
+def test_take_back_frees_a_classic_slot() -> None:
+    state, player = _fight(program_mode=False)
+    _queue(state, player, "Overclock", slots=[3])
+    take_back(state, "field", 3)
+    assert state.field == [None] * 5
+    with pytest.raises(ValueError, match="only a program"):
+        take_back(state, "program", 0)
+
+
 def test_api_runs_a_program() -> None:
     client = TestClient(app)
     run_id = client.post("/runs", json={"seed": 3, "program_mode": True}).json()["run_id"]
@@ -245,6 +334,12 @@ def test_api_runs_a_program() -> None:
     assert preview["enemy_hp"] < get_session(run_id).combat.enemy_hp
     bad = client.post(f"/runs/{run_id}/combat/move-queued", json={"from_slot": 0, "to_slot": 2})
     assert bad.status_code == 400
+
+    back = client.post(f"/runs/{run_id}/combat/take-back", json={"zone": "program", "index": 3})
+    assert back.json()["pending_combat"]["program"] == [None] * 5
+    assert [c["name"] for c in back.json()["pending_combat"]["hand"]] == ["Exploit"]
+    again = client.post(f"/runs/{run_id}/combat/take-back", json={"zone": "program", "index": 3})
+    assert again.status_code == 400
 
 
 def test_a_program_run_plays_out_on_its_own() -> None:
@@ -275,7 +370,8 @@ def test_hot_path_runs_its_line_upgraded() -> None:
 
 
 def test_branch_predictor_boosts_what_runs_after_half_hp() -> None:
-    names = ("Exploit", "Exploit", "Exploit")
+    # (a Firewall between them, or three attacks in a row would be a Burst)
+    names = ("Exploit", "Firewall", "Exploit", "Exploit")
     assert _damage_dealt(*names, hp=20) == 15
     assert _damage_dealt(*names, hp=20, artifact="Branch Predictor") == 18
 
@@ -326,7 +422,7 @@ def test_the_preview_shows_what_the_program_will_do() -> None:
 
 def test_ship_it_counts_every_card_played_this_turn() -> None:
     # Queued first, it still runs after two other cards were played.
-    assert _damage_dealt("Ship It", "Exploit", "Exploit") == 20
+    assert _damage_dealt("Ship It", "Exploit", "Exploit") == 20 + 5  # and a Burst
 
 
 def test_the_bot_stops_once_the_program_is_lethal() -> None:
@@ -335,6 +431,23 @@ def test_the_bot_stops_once_the_program_is_lethal() -> None:
     smart_bot(state, player, random.Random(1))
     assert sum(c is not None for c in state.program) == 1
     assert len(state.hand) == 1
+
+
+def test_the_bot_banishes_junk_only() -> None:
+    glitch = Card(
+        id="g", name="Glitch", type=CardType.GLITCH, value=0, exhaust=True, description=""
+    )
+    state, player = _fight(program_mode=False)
+    state.hand = [_card("Banish"), _card("Zero-Day"), glitch]
+    smart_bot(state, player, random.Random(1))
+    assert [c.name for c in state.banished_pile[:2]] == ["Glitch", "Banish"]
+
+    # Nothing worth banishing: the Banish waits until it is alone in hand,
+    # and then only draws - the Zero-Day gets played, not banished.
+    state, player = _fight(program_mode=False)
+    state.hand = [_card("Banish"), _card("Zero-Day")]
+    smart_bot(state, player, random.Random(1))
+    assert [c.name for c in state.banished_pile[:2]] == ["Zero-Day", "Banish"]
 
 
 def test_the_vibe_coder_gets_a_sixth_line() -> None:
@@ -415,13 +528,13 @@ def test_with_interrupt_keeps_the_threat() -> None:
     assert with_interrupt(armed) == armed
 
 
-def test_only_program_runs_meet_interrupts() -> None:
+def test_only_program_runs_meet_program_moves() -> None:
     for program_mode in (False, True):
         run = new_run(2, program_mode=program_mode)
         node = run.nodes[available_choices(run)[0]]
         node = node.model_copy(update={"type": NodeType.COMBAT})
         enemy = _room_enemy(run, node, random.Random(1))
-        has = any(m.kind is MoveKind.INTERRUPT for m in enemy.moves)
+        has = any(m.kind in PROGRAM_MOVES for m in enemy.moves)
         assert has is program_mode
 
 
@@ -458,7 +571,7 @@ def test_only_bosses_against_a_program_refactor() -> None:
 
 def test_pipe_pays_for_the_actions_before_it() -> None:
     assert _damage_dealt("Exploit", "Exploit", "Pipe", "Exploit") == 5 + 5 + (5 + 4)
-    assert _damage_dealt("Pipe", "Exploit", "Exploit", "Exploit") == 15
+    assert _damage_dealt("Pipe", "Exploit", "Exploit", "Exploit") == 15 + 5  # and a Burst
 
 
 def test_batch_frees_tokens_for_the_actions_after_it() -> None:
@@ -489,7 +602,10 @@ def test_control_flow_is_a_style_the_agi_answers_with_interrupts() -> None:
     for i, card in enumerate(deck):
         card.id = f"c{i}"
     assert play_style(deck) is PlayStyle.PROGRAM
-    assert agent_hint(PlayStyle.PROGRAM) is None  # the game answers it itself
+    # the game arms the enemy itself; the agent only hears the role to theme it for
+    hint = agent_hint(PlayStyle.PROGRAM, deck)
+    assert "race condition" in hint and "Fork" in hint
+    assert "only the usual moves" in hint
 
     enemy = ENEMY_POOL["mid"][0]
 
@@ -501,3 +617,222 @@ def test_control_flow_is_a_style_the_agi_answers_with_interrupts() -> None:
     assert share(answered) > share(plain)
     assert abs(threat(answered) - threat(enemy)) / threat(enemy) < 0.05
     assert answers(answered, PlayStyle.PROGRAM)
+
+
+def test_the_preview_plays_out_line_by_line() -> None:
+    state, player = _interrupting()
+    _queue(state, player, "Fork", "Exploit", "Firewall")
+    steps = program_preview(state, player).steps
+    assert [(s.name, s.outcome) for s in steps] == [
+        ("Fork", "ran"),
+        ("Exploit", "ran"),
+        ("Firewall", "cut"),
+    ]
+    fork, exploit, firewall = steps
+    assert (fork.runs, fork.dealt) == (0, 0)
+    assert (exploit.runs, exploit.damage, exploit.enemy_hp) == (2, 10, 90)
+    assert (firewall.runs, firewall.block) == (0, 0)
+    assert state.program[0] is not None  # still only a preview
+
+
+def test_banish_resolves_on_the_spot_in_a_program() -> None:
+    # Card flow, like Phishing: it banishes and draws right away, so the
+    # drawn cards can still be queued this turn - and it takes no line.
+    state, player = _fight()
+    _queue(state, player, "Exploit")
+    state.hand = [_card("Banish"), _card("Firewall")]
+    play_card(state, 0, 0, player, random.Random(1), banish=[1])
+
+    assert [c.name for c in state.banished_pile] == ["Firewall", "Banish"]
+    assert len(state.hand) == 2
+    assert [c.name for c in state.program if c] == ["Exploit"]
+
+
+def test_api_banishes_the_chosen_card() -> None:
+    client = TestClient(app)
+    run_id = client.post("/runs", json={"seed": 3, "program_mode": True}).json()["run_id"]
+    run = get_session(run_id).run
+    run.artifact_offer = run.kit_offer = None
+    client.post(f"/runs/{run_id}/resolve")
+    get_session(run_id).combat.hand = [_card("Banish"), _card("Exploit"), _card("Firewall")]
+
+    view = client.get(f"/runs/{run_id}").json()["pending_combat"]
+    assert [c["banish"] for c in view["hand"]] == [1, 0, 0]
+    url = f"/runs/{run_id}/combat/play-card"
+    bad = client.post(url, json={"hand_index": 0, "slot_index": 0, "banish_indices": [0]})
+    assert bad.status_code == 400
+    response = client.post(url, json={"hand_index": 0, "slot_index": 0, "banish_indices": [2]})
+    assert response.json()["pending_combat"]["banished_count"] == 2
+    assert [c.name for c in get_session(run_id).combat.banished_pile] == ["Firewall", "Banish"]
+    # the piles' names, for the UI's peek at them
+    view = response.json()["pending_combat"]
+    assert view["banished_names"] == ["Firewall", "Banish"]
+    assert view["draw_names"] == sorted(view["draw_names"])
+    assert len(view["draw_names"]) == view["draw_count"]
+    assert [c["name"] for c in view["banished_cards"]] == ["Firewall", "Banish"]
+    assert [c["name"] for c in view["draw_cards"]] == view["draw_names"]
+
+
+# ---- registers, exceptions and named combos
+
+
+def test_try_catch_keeps_an_interrupt_from_cutting_the_lines_after_it() -> None:
+    state, player = _interrupting()
+    _queue(state, player, "Try/Catch", "Exploit", "Firewall", "Exploit")
+    end_turn(state, player, random.Random(2))
+    assert state.enemy_hp == 90  # both Exploits ran, past the cut after line 2
+
+
+def test_buffer_holds_damage_back_until_a_flush_lets_it_out() -> None:
+    # the Exploit stores its 5; the Flush deals them +50%
+    assert _damage_dealt("Buffer", "Exploit", "Flush") == 7
+    # stored and never flushed: lost
+    assert _damage_dealt("Buffer", "Exploit") == 0
+    # a fork doubles what goes into the buffer
+    assert _damage_dealt("Buffer", "Fork", "Exploit", "Flush") == 15
+
+
+def test_named_combos_pay_out_once_per_run() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", "Exploit", "Exploit")
+    steps = program_preview(state, player).steps
+    assert [s.combo for s in steps] == [None, None, "Burst"]
+    assert state.enemy.hp - program_preview(state, player).enemy_hp == 15 + 5
+    # a block, an attack, a block: block on top
+    state, player = _fight()
+    _queue(state, player, "Firewall", "Exploit", "Firewall")
+    assert program_preview(state, player).player_block == 5 + 5 + 6
+
+
+def test_a_program_that_gets_five_lines_through_is_a_clean_run() -> None:
+    state, player = _fight()
+    _queue(state, player, "Exploit", "Firewall", "Exploit", "Firewall", "Exploit")
+    steps = program_preview(state, player).steps
+    assert steps[-1].combo == "Clean Run"
+    assert state.enemy.hp - program_preview(state, player).enemy_hp == 15 + 5
+
+
+# ---- program moves: garbage collector, race condition, memory leak
+
+
+def test_a_garbage_collector_throws_the_last_line_away() -> None:
+    state, player = _fight()
+    state.enemy_intent = EnemyIntentType.COLLECT
+    _queue(state, player, "Exploit", "Return")
+    steps = program_preview(state, player).steps
+    assert [s.outcome for s in steps] == ["ran", "collected"]
+    end_turn(state, player, random.Random(2))
+    assert state.enemy.hp - state.enemy_hp == 5
+    # alone, a line is left alone
+    state, player = _fight()
+    state.enemy_intent = EnemyIntentType.COLLECT
+    _queue(state, player, "Exploit")
+    assert program_preview(state, player).steps[0].outcome == "ran"
+
+
+def test_a_race_condition_swaps_the_first_two_lines() -> None:
+    state, player = _fight()
+    state.enemy_intent = EnemyIntentType.RACE
+    _queue(state, player, "Fork", "Exploit")  # swapped, the Fork comes too late
+    steps = program_preview(state, player).steps
+    assert [s.name for s in steps] == ["Exploit", "Fork"]
+    end_turn(state, player, random.Random(2))
+    assert state.enemy.hp - state.enemy_hp == 5
+
+
+def test_a_memory_leak_locks_the_first_line_for_the_next_turn() -> None:
+    state, player = _fight()
+    state.enemy_intent = EnemyIntentType.LEAK
+    _queue(state, player, "Exploit", "Exploit", slots=[1, 3])
+    end_turn(state, player, random.Random(2))
+    assert state.locked_slots == [1]
+
+
+def test_the_agi_picks_the_program_move_that_hurts_the_deck() -> None:
+    def deck(*names: str) -> list[Card]:
+        return [_card(n) for n in names]
+
+    assert program_counter(deck("Monolith", "Return", "Fork")) is MoveKind.COLLECT
+    assert program_counter(deck("Bootstrap", "Bootstrap")) is MoveKind.LEAK
+    assert program_counter(deck("Fork", "If Wounded")) is MoveKind.RACE
+    assert program_counter(deck("Loop", "Buffer")) is MoveKind.INTERRUPT
+
+    enemy = ENEMY_POOL["mid"][0]
+    armed = with_program_move(enemy, PlayStyle.PROGRAM, deck("Bootstrap", "Bootstrap"))
+    assert any(m.kind is MoveKind.LEAK for m in armed.moves)
+    assert answers(armed, PlayStyle.PROGRAM)
+    # without a program style: one move, fixed by the enemy, for variety
+    plain = with_program_move(enemy)
+    assert sum(m.kind in PROGRAM_MOVES for m in plain.moves) == 1
+    assert with_program_move(plain) is plain
+
+
+# ---- Goto 1
+
+
+def test_goto_runs_the_first_actions_again_from_their_own_lines() -> None:
+    # Bootstrap is the first line both times: 8 + 5, then again 8 + 5
+    assert _damage_dealt("Bootstrap", "Exploit", "Goto 1") == 26
+    # only the first 2 actions come back (and the three Exploits are a Burst: +5)
+    assert _damage_dealt("Exploit", "Exploit", "Exploit", "Goto 1") == 15 + 5 + 10
+    # with nothing before it, it idles
+    assert _damage_dealt("Goto 1", "Exploit") == 5
+
+
+# ---- Main Thread, Garbage-Free
+
+
+def test_main_thread_runs_the_first_line_twice() -> None:
+    assert _damage_dealt("Exploit", "Firewall", artifact="Main Thread") == 10
+    # control flow in the first line: nothing to run twice
+    assert _damage_dealt("Loop", "Exploit", artifact="Main Thread") == 5
+
+
+def test_garbage_free_softens_segfault_and_stops_the_collector() -> None:
+    assert _damage_dealt("Segfault", "Exploit", "Exploit", artifact="Garbage-Free") == 12 + 5
+    state, player = _fight(artifact="Garbage-Free")
+    state.enemy_intent = EnemyIntentType.COLLECT
+    _queue(state, player, "Exploit", "Exploit")
+    assert [s.outcome for s in program_preview(state, player).steps] == ["ran", "ran"]
+
+
+# ---- the formula a line shows as it runs
+
+
+def test_a_line_spells_out_how_it_reaches_its_number() -> None:
+    state, player = _fight()
+    player.attack = 2
+    _queue(state, player, "Overclock", "Bootstrap", "Firewall", "Return", slots=[0, 0, 1, 2])
+    by_name = {s.name: s for s in program_preview(state, player).steps}
+    assert by_name["Bootstrap"].formula == "3 +2 ATK +5 first ×1.1 = 11"
+    assert by_name["Return"].formula == "3 +2 ATK +7 last ×1.1 = 13"
+    assert by_name["Firewall"].formula == "5 ×1.1 = 6"
+    # what it says is what it deals (no combo here)
+    assert by_name["Bootstrap"].dealt == 11
+
+
+# ---- what-if: aiming a card shows what it does to the other lines
+
+
+def test_what_if_shows_the_other_lines_change() -> None:
+    state, player = _fight()
+    _queue(state, player, "Monolith", "Exploit", slots=[0, 1])
+    # a third line: Monolith gets +2 more
+    assert program_what_if(state, player, _card("Firewall"), 2)[:3] == [5, 5, 5]
+    # a Fork in front of the Exploit doubles it - but line 1 is taken
+    assert program_what_if(state, player, _card("Fork"), 0) is None
+    # a permanent goes into the background: Overclock boosts every line
+    assert program_what_if(state, player, _card("Overclock"), 3)[:2] == [3, 6]
+    # card flow changes no line
+    assert program_what_if(state, player, _card("Phishing"), 2) is None
+
+
+def test_the_agi_names_the_program_move_it_armed_the_enemy_with() -> None:
+    deck = [_card(n) for n in ("Monolith", "Monolith", "Return")]
+    armed = with_program_move(ENEMY_POOL["mid"][0], PlayStyle.PROGRAM, deck)
+    assert taunt(PlayStyle.PROGRAM, armed) == (
+        'AGI: "Your programs run long. Garbage collection scheduled."'
+    )
+    # other styles: the general line, plus the cards the agent hears about
+    assert "Adapting" in taunt(PlayStyle.AGGRO)
+    assert "Their key cards: Monolith" in agent_hint(PlayStyle.PROGRAM, deck)

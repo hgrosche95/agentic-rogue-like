@@ -1,5 +1,6 @@
 import { createPortal } from "react-dom";
 import { CloseButton, Overlay } from "./Overlay";
+import { RichText } from "./RichText";
 
 // The "i" next to the stack: how a fight works - above all program mode,
 // whose rules nothing on the table explains by itself.
@@ -7,7 +8,7 @@ const PROGRAM_RULES: [string, string][] = [
   ["Queue", "Attacks, blocks, heals and Final Strike go into a line - nothing happens yet."],
   [
     "Run",
-    "Run program runs the lines left to right, then the enemy acts. Above the lines you see what the program will do: the enemy's HP and block, your block.",
+    "Run program runs the lines left to right, then the enemy acts. Above the lines you see what the program will do: the enemy's integrity and block, your block.",
   ],
   [
     "Background",
@@ -17,17 +18,17 @@ const PROGRAM_RULES: [string, string][] = [
   ["Move", "Drag a queued card onto another line - or click it, then the line. An occupied line swaps."],
   [
     "Control flow",
-    "Fork: the next action runs twice. Loop: the last action to its left runs again. If Wounded: the next action runs twice if the enemy is at half HP or less by then. Vibe-Coder only - Pipe: the next action gets a bonus for every action that already ran. Batch: frees tokens for every action still to run.",
+    "Fork: the next action runs twice. Loop: the last action to its left runs again. If Wounded: the next action runs twice if the enemy is at half integrity or less by then. Vibe-Coder only - Pipe: the next action gets a bonus for every action that already ran. Batch: frees tokens for every action still to run.",
   ],
   [
     "Interrupt",
-    "An enemy announcing an Interrupt lets only your first lines run - the cut ones are greyed out and go to the graveyard unused. Put what matters first.",
+    "An enemy announcing an Interrupt lets only your first lines run - the cut ones are greyed out and go to the Graveyard unused. Put what matters first.",
   ],
   [
     "Refactor",
     "A boss announcing a Refactor runs your program right to left this turn - Fork and Loop then steer the lines to their left.",
   ],
-  ["Hot Path", "With the Hot Path artifact, the card in its gold line runs as its upgraded version."],
+  ["Hot Path", "With the Hot Path artifact, the card in its golden line runs as its upgraded version."],
 ];
 
 const CLASSIC_RULES: [string, string][] = [
@@ -42,12 +43,25 @@ const CLASSIC_RULES: [string, string][] = [
 const SHARED_RULES: [string, string][] = [
   ["Hand", "Unplayed cards stay in your hand, up to its limit - over it, you discard when ending the turn."],
   [
+    "Keys",
+    "1-9 picks a card (the number on its top edge), then 1-9 the slot for it. Space or Enter ends the turn, Esc lets go of a picked card, D opens your deck. Program mode: B puts a picked permanent on the background bus.",
+  ],
+  [
     "Context",
     "Vibe-Coder only: cards cost tokens. Past the window they may hallucinate and backfire - a red outline marks a queued one that will.",
   ],
 ];
 
-export function CombatHelp({ programMode, onClose }: { programMode: boolean; onClose: () => void }) {
+// `onTutorial`: walks the player through the fight again (Tutorial).
+export function CombatHelp({
+  programMode,
+  onClose,
+  onTutorial,
+}: {
+  programMode: boolean;
+  onClose: () => void;
+  onTutorial?: () => void;
+}) {
   const rules = [...(programMode ? PROGRAM_RULES : CLASSIC_RULES), ...SHARED_RULES];
   // Portalled out of the combat panel: an ancestor there would otherwise
   // become the fixed backdrop's containing block, and it would scroll away.
@@ -63,10 +77,17 @@ export function CombatHelp({ programMode, onClose }: { programMode: boolean; onC
           {rules.map(([term, text]) => (
             <div key={term}>
               <dt>{term}</dt>
-              <dd>{text}</dd>
+              <dd>
+                <RichText text={text} />
+              </dd>
             </div>
           ))}
         </dl>
+        {onTutorial && (
+          <button type="button" className="help-replay" onClick={onTutorial}>
+            Show the tutorial again
+          </button>
+        )}
       </section>
     </Overlay>,
     document.body,

@@ -41,7 +41,7 @@ export function SettingPicker({
 
   return (
     <div className="setting-picker">
-      <p className="setting-picker-label">Pick a setting for the encounter agent</p>
+      <p className="setting-picker-label">Pick a world - the AI writes its enemies and events for it</p>
       <div className="choice-buttons">
         {settings.map((setting) => (
           <button

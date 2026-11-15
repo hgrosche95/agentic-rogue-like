@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import type { Artifact } from "../api";
 import { sfx } from "../audio";
+import { pickClass, useOverlayPick } from "../overlayStage";
 import { ArtifactIcon } from "./ArtifactIcon";
 import { RichText } from "./RichText";
 
@@ -15,6 +16,7 @@ export function ArtifactScreen({
   disabled: boolean;
   onPick: (artifactIndex: number) => void;
 }) {
+  const { picked, pick } = useOverlayPick();
   useEffect(() => {
     sfx.play("reward_open");
   }, []);
@@ -31,12 +33,13 @@ export function ArtifactScreen({
         {offer.map((artifact, index) => (
           <button
             key={artifact.id}
-            className="artifact-card"
+            className={`artifact-card${pickClass(picked, index)}`}
             style={{ animationDelay: `${index * 90}ms` }}
             disabled={disabled}
             onMouseEnter={() => sfx.play("hover")}
             onClick={() => {
               sfx.play("reward_pick");
+              pick(index);
               onPick(index);
             }}
           >

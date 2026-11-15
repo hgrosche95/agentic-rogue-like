@@ -55,7 +55,7 @@ def _choose_artifact(offer: list[Artifact]) -> int:
 def _browse_shop(run: RunState) -> None:
     shop = run.shop
     while shop is not None:
-        print(f"\nBlack market - you have {run.player.gold} gold:")
+        print(f"\nBlack market - you have {run.player.gold} credits:")
         items = [
             ("card", i, item.card.name, item.card.description, item)
             for i, item in enumerate(shop.cards)
@@ -65,7 +65,7 @@ def _browse_shop(run: RunState) -> None:
             for i, item in enumerate(shop.artifacts)
         ]
         for n, (_, _, name, description, item) in enumerate(items, start=1):
-            price = "sold" if item.sold else f"{item.price} gold"
+            price = "sold" if item.sold else f"{item.price} credits"
             print(f"  {n}. {name} ({price}) - {description}")
         print(f"  {len(items) + 1}. Leave")
         choice = _prompt_index(len(items) + 1)
@@ -83,8 +83,8 @@ def _choose_rest(run: RunState) -> RestAction:
     deck = run.player.deck
     upgradable = upgradable_indices(run)
     options: list[str] = ["heal"]
-    print(f"\nA place to rest - {run.player.hp}/{run.player.max_hp} HP. Choose one:")
-    print(f"  1. Rest - heal {run.rest.heal_amount} HP")
+    print(f"\nA place to rest - {run.player.hp}/{run.player.max_hp} integrity. Choose one:")
+    print(f"  1. Rest - heal {run.rest.heal_amount} integrity")
     if upgradable:
         options.append("upgrade")
         print(f"  {len(options)}. Upgrade a card")
@@ -153,4 +153,4 @@ def main() -> None:
     print("\n--- Run over ---")
     print(f"Result: {run.status.value}")
     print(f"Reached floor {run.floor}")
-    print(f"Gold collected: {run.player.gold}")
+    print(f"Credits collected: {run.player.gold}")

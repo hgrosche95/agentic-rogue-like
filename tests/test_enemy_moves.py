@@ -139,7 +139,7 @@ def test_purge_is_only_rolled_with_a_permanent_on_the_field() -> None:
 
     assert state.field[2] is None
     assert ARMOR in state.banished_pile
-    assert any("purges your Armor" in line for line in log)
+    assert any("banishes your Armor" in line for line in log)
 
 
 def test_named_moves_show_up_in_the_log() -> None:

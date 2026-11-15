@@ -8,6 +8,7 @@ their own payoff card, so a run can lean into one of them:
 - permanents: Botnet, Load Balancer, Mainframe hit harder the fuller the field;
 - graveyard: Memory Dump/Brute Force/Fork Bomb fill it, Stack Overflow and Rollback use it;
 - one-shot cards: Zero-Day/Sandbox/Backup are strong but banished after use,
+  Banish banishes a hand card of the player's choice on top,
   Payload grows with the banished pile, Undelete brings one card back and
   System Restore all of them - at the price of the whole field.
 
@@ -24,8 +25,70 @@ import random
 from .models import Card, CardType, Rarity, Scaling, Status
 
 
-def starter_deck() -> list[Card]:
-    """A fresh set of Card instances - callers must not share these across runs."""
+# The starter decks show every strategy of the pool once, each with a weak
+# STARTER-rarity card, so a new run already hints at what a deck can become
+# and a reward is still an upgrade: Ping (Malware) for both, Undo (graveyard,
+# and one-shot - it is banished after use) for Dr. Chronos, Force Push
+# (graveyard) next to /compact (one-shot) for the Vibe-Coder - an Undo costs
+# him a token for a card he would draw anyway - and a Loop in program mode.
+# Garbage Collect, in both, is the one-shot payoff: a small Payload, so the
+# banished pile counts for something from the first fight on.
+# test_characters.py checks every starter deck covers the styles style.py
+# reads; style.py never counts STARTER cards as the player's choice.
+def _ping() -> Card:
+    return Card(
+        id="ping-0",
+        name="Ping",
+        type=CardType.ATTACK,
+        value=2,
+        applies=Status.MALWARE,
+        applies_amount=2,
+        description="Deal 2 (+ATK) damage. Infect it with 2 Malware.",
+    )
+
+
+def _undo() -> Card:
+    return Card(
+        id="undo-0",
+        name="Undo",
+        type=CardType.RETRIEVE,
+        value=1,
+        exhaust=True,
+        description="One-shot. Return the last card from your Graveyard to your hand.",
+    )
+
+
+def _garbage_collect() -> Card:
+    return Card(
+        id="garbage-collect-0",
+        name="Garbage Collect",
+        type=CardType.ATTACK,
+        value=2,
+        scaling=Scaling.BANISHED,
+        scale_value=2,
+        description="Deal 2 (+ATK) damage, +2 per banished card.",
+    )
+
+
+def _starter_copy(name: str) -> Card:
+    """A control flow card from the program pools as a STARTER card - the
+    same card, it just doesn't count as the player's choice (style.py)."""
+    template = next(c for c in PROGRAM_REWARD_POOL + VIBE_CODER_PROGRAM_POOL if c.name == name)
+    return template.model_copy(
+        update={"id": f"{template.id}-0", "rarity": Rarity.STARTER}, deep=True
+    )
+
+
+def starter_deck(program_mode: bool = False) -> list[Card]:
+    """A fresh set of Card instances - callers must not share these across runs.
+
+    Garbage Collect takes the place of one Exploit. `program_mode`: a Loop
+    instead of Kernel Panic - control flow only does something in a program
+    (combat.run_program), and a program's permanents run in the background,
+    so there is never a clogged field for Kernel Panic to clear. Added on
+    top, balance-sim put program runs 1-3 points lower (a thicker deck draws
+    its few strong cards less often); in place of an Exploit, 4 lower next
+    to Garbage Collect."""
     cards = [
         Card(
             id=f"strike-{i}",
@@ -34,8 +97,9 @@ def starter_deck() -> list[Card]:
             value=5,
             description="Deal 5 (+ATK) damage.",
         )
-        for i in range(4)
+        for i in range(2)
     ]
+    cards += [_ping(), _garbage_collect()]
     cards += [
         Card(
             id=f"defend-{i}",
@@ -51,8 +115,8 @@ def starter_deck() -> list[Card]:
             id="amplifier-0",
             name="Overclock",
             type=CardType.AMPLIFIER,
-            value=25,
-            description="Permanent. Action cards played to its right are 25% more effective.",
+            value=10,
+            description="Permanent. Action cards played to its right are 10% more effective.",
         )
     )
     cards.append(
@@ -70,27 +134,31 @@ def starter_deck() -> list[Card]:
             name="Prefetch",
             type=CardType.DRAW_BONUS,
             value=1,
-            description="Permanent. Draw 1 extra card each turn.",
+            description="Permanent. Every 2nd turn, draw 1 extra card.",
         )
     )
-    cards.append(
-        Card(
-            id="final-strike-0",
-            name="Kernel Panic",
-            type=CardType.FINAL_STRIKE,
-            value=5,
-            description=(
-                "Destroy all permanent cards on the field. Deal 5 damage to "
-                "the enemy for each one destroyed."
-            ),
+    if not program_mode:
+        cards.append(
+            Card(
+                id="final-strike-0",
+                name="Kernel Panic",
+                type=CardType.FINAL_STRIKE,
+                value=5,
+                description="Destroy all permanent cards. Deal 5 damage for each one.",
+            )
         )
-    )
+    cards.append(_undo())
+    if program_mode:
+        cards.append(_starter_copy("Loop"))
     return cards
 
 
-def vibe_coder_starter_deck() -> list[Card]:
+def vibe_coder_starter_deck(program_mode: bool = False) -> list[Card]:
     """The Vibe-Coder's starter deck (see characters.py) - weaker single cards
-    than starter_deck(), since every card he plays draws him a new one."""
+    than starter_deck(), since every card he plays draws him a new one.
+
+    Garbage Collect and, in `program_mode`, a Loop take the place of a
+    Prompt each, like starter_deck()."""
     cards = [
         Card(
             id=f"prompt-{i}",
@@ -99,7 +167,19 @@ def vibe_coder_starter_deck() -> list[Card]:
             value=4,
             description="Deal 4 (+ATK) damage.",
         )
-        for i in range(4)
+        for i in range(1 if program_mode else 2)
+    ]
+    cards += [
+        _ping(),
+        _garbage_collect(),
+        Card(
+            id="force-push-0",
+            name="Force Push",
+            type=CardType.ATTACK,
+            value=7,
+            discard_cost=1,
+            description="Discard 1 random card. Deal 7 (+ATK) damage.",
+        ),
     ]
     cards += [
         Card(
@@ -144,6 +224,8 @@ def vibe_coder_starter_deck() -> list[Card]:
             description="One-shot. Costs no tokens. Frees 4 used tokens.",
         )
     )
+    if program_mode:
+        cards.append(_starter_copy("Loop"))
     return cards
 
 
@@ -196,7 +278,7 @@ REWARD_POOL: list[Card] = [
         scaling=Scaling.GRAVEYARD,
         scale_value=2,
         rarity=Rarity.UNCOMMON,
-        description="Deal 1 (+ATK) damage, +2 per card in your graveyard.",
+        description="Deal 1 (+ATK) damage, +2 per card in your Graveyard.",
     ),
     Card(
         id="payload",
@@ -288,7 +370,7 @@ REWARD_POOL: list[Card] = [
         value=10,
         exhaust=True,
         rarity=Rarity.UNCOMMON,
-        description="One-shot. Heal 10 HP.",
+        description="One-shot. Heal 10 integrity.",
     ),
     # ---- card flow
     Card(
@@ -299,6 +381,60 @@ REWARD_POOL: list[Card] = [
         exhaust=True,
         rarity=Rarity.COMMON,
         description="One-shot. Draw 2 cards.",
+    ),
+    Card(
+        id="purge",
+        name="Banish",
+        type=CardType.DRAW,
+        value=2,
+        banish=1,
+        exhaust=True,
+        rarity=Rarity.COMMON,
+        description="One-shot. Banish a card from your hand. Draw 2 cards.",
+    ),
+    # ---- the banish style beyond the rares: an enabler that hits, payoffs
+    # in attack and defense, and a big dig. balance-sim, two copies in the
+    # starter deck (boss fights won; the deck alone 60 %, with two more
+    # Exploits 52 %): Shred 52, Dead Drop 49, Burn Notice 57, Wipe 75 % -
+    # Wipe at "draw 3" was 80, Banish-style "banish 1, draw 2" 92.
+    Card(
+        id="shred",
+        name="Shred",
+        type=CardType.ATTACK,
+        value=8,
+        banish=1,
+        rarity=Rarity.COMMON,
+        description="Banish a card from your hand. Deal 8 (+ATK) damage.",
+    ),
+    Card(
+        id="dead-drop",
+        name="Dead Drop",
+        type=CardType.ATTACK,
+        value=3,
+        scaling=Scaling.BANISHED,
+        scale_value=3,
+        rarity=Rarity.COMMON,
+        description="Deal 3 (+ATK) damage, +3 per banished card.",
+    ),
+    Card(
+        id="burn-notice",
+        name="Burn Notice",
+        type=CardType.BLOCK,
+        value=3,
+        scaling=Scaling.BANISHED,
+        scale_value=2,
+        rarity=Rarity.UNCOMMON,
+        description="Gain 3 block, +2 per banished card.",
+    ),
+    Card(
+        id="wipe",
+        name="Wipe",
+        type=CardType.DRAW,
+        value=2,
+        banish=2,
+        exhaust=True,
+        rarity=Rarity.UNCOMMON,
+        description="One-shot. Banish 2 cards from your hand. Draw 2 cards.",
     ),
     Card(
         id="memory-dump",
@@ -318,7 +454,7 @@ REWARD_POOL: list[Card] = [
         value=2,
         exhaust=True,
         rarity=Rarity.COMMON,
-        description="One-shot. Return the last 2 cards from your graveyard to your hand.",
+        description="One-shot. Return the last 2 cards from your Graveyard to your hand.",
     ),
     Card(
         id="undelete",
@@ -359,7 +495,7 @@ REWARD_POOL: list[Card] = [
         value=4,
         token_cost=2,
         rarity=Rarity.UNCOMMON,
-        description="Permanent. Deal 4 damage to the enemy at the end of each turn.",
+        description="Permanent. End of turn: deal 4 damage to the enemy.",
     ),
     Card(
         id="mainframe",
@@ -367,7 +503,7 @@ REWARD_POOL: list[Card] = [
         type=CardType.FORTIFY,
         value=1,
         rarity=Rarity.UNCOMMON,
-        description="Permanent. At the end of each turn gain 1 block per permanent card.",
+        description="Permanent. End of turn: gain 1 block per permanent card.",
     ),
     Card(
         id="fork-bomb",
@@ -378,6 +514,46 @@ REWARD_POOL: list[Card] = [
         discard_cost=2,
         rarity=Rarity.COMMON,
         description="Discard 2 random cards. Hit twice for 3 (+ATK) damage.",
+    ),
+    # ---- bridges: each one pays off for two styles at once (style.py), so
+    # a deck that mixes them is rewarded instead of diluted.
+    Card(
+        id="failsafe",
+        name="Failsafe",
+        type=CardType.ARMOR,
+        value=1,
+        banish_damage=14,
+        rarity=Rarity.UNCOMMON,
+        description=(
+            "Permanent. Reduce incoming damage by 1. When it is banished, deal 14 damage."
+        ),
+    ),
+    Card(
+        id="counterstrike",
+        name="Counterstrike",
+        type=CardType.ATTACK,
+        value=3,
+        scaling=Scaling.BLOCK,
+        scale_value=1,
+        rarity=Rarity.UNCOMMON,
+        description="Deal 3 (+ATK) damage, +1 per block you have.",
+    ),
+    Card(
+        id="quarantine",
+        name="Quarantine",
+        type=CardType.QUARANTINE,
+        value=2,
+        rarity=Rarity.UNCOMMON,
+        description="Permanent. End of turn: gain 1 block per Malware on the enemy.",
+    ),
+    Card(
+        id="recycle-bin",
+        name="Recycle Bin",
+        type=CardType.RECYCLE,
+        value=1,
+        token_cost=2,
+        rarity=Rarity.RARE,
+        description="Permanent. Whenever a card is banished, draw 1 card (at most 3 per turn).",
     ),
 ]
 
@@ -411,7 +587,7 @@ VIBE_CODER_REWARD_POOL: list[Card] = [
         token_cost=0,
         rarity=Rarity.COMMON,
         description=(
-            "One-shot. Costs no tokens. Return the last card from your graveyard to your hand."
+            "One-shot. Costs no tokens. Return the last card from your Graveyard to your hand."
         ),
     ),
     Card(
@@ -468,7 +644,8 @@ VIBE_CODER_REWARD_POOL: list[Card] = [
 # they do nothing themselves but steer the queued actions to their right
 # when the program runs at the end of the turn (combat.run_program) - which
 # is what makes the order of a program matter. Reusable: none of them puts
-# a card into the hand on its own, so no loop can run away.
+# a card into the hand on its own, so no loop can run away. Next to them the
+# attacks that only make sense in a program, by where their line stands.
 PROGRAM_REWARD_POOL: list[Card] = [
     Card(
         id="if-wounded",
@@ -476,7 +653,7 @@ PROGRAM_REWARD_POOL: list[Card] = [
         type=CardType.IF_WOUNDED,
         value=1,
         rarity=Rarity.COMMON,
-        description="Control flow. If the enemy is at half HP or less, the next action runs twice.",
+        description="Control flow. Enemy at half integrity or less: the next action runs twice.",
     ),
     Card(
         id="loop",
@@ -494,6 +671,108 @@ PROGRAM_REWARD_POOL: list[Card] = [
         token_cost=2,
         rarity=Rarity.RARE,
         description="Control flow. The next action to its right runs twice.",
+    ),
+    # Registers and exceptions: Buffer holds the next action's damage back,
+    # Flush lets everything held back out at once - more than it went in -
+    # and Try/Catch is the answer to an interrupting enemy.
+    Card(
+        id="try-catch",
+        name="Try/Catch",
+        type=CardType.TRY_CATCH,
+        value=0,
+        rarity=Rarity.COMMON,
+        description="Control flow. The lines after it can't be interrupted.",
+    ),
+    Card(
+        id="buffer",
+        name="Buffer",
+        type=CardType.BUFFER,
+        value=1,
+        rarity=Rarity.UNCOMMON,
+        description="Control flow. The next action stores its damage instead of dealing it.",
+    ),
+    Card(
+        id="flush",
+        name="Flush",
+        type=CardType.FLUSH,
+        value=50,
+        rarity=Rarity.UNCOMMON,
+        description="Control flow. Deals all stored damage, +50%.",
+    ),
+    Card(
+        id="goto",
+        name="Goto 1",
+        type=CardType.GOTO,
+        value=2,
+        token_cost=2,
+        rarity=Rarity.RARE,
+        description=(
+            "Control flow. Jumps back to line 1 once: the first 2 actions before it run again."
+        ),
+    ),
+    # Attacks that care where their line stands (models.Scaling): first or
+    # last to run, in a long program or a short one - and Segfault, which
+    # hits hard but ends the program on the spot. Their numbers come from
+    # balance-sim: two copies in the starter deck win as many boss fights
+    # as the deck without them (README, "Karten mit Position").
+    Card(
+        id="bootstrap",
+        name="Bootstrap",
+        type=CardType.ATTACK,
+        value=3,
+        scaling=Scaling.FIRST_LINE,
+        scale_value=5,
+        rarity=Rarity.COMMON,
+        description="Deal 3 (+ATK) damage, +5 if its line is the first to run.",
+    ),
+    Card(
+        id="return",
+        name="Return",
+        type=CardType.ATTACK,
+        value=3,
+        scaling=Scaling.LAST_LINE,
+        scale_value=7,
+        rarity=Rarity.COMMON,
+        description="Deal 3 (+ATK) damage, +7 if its line is the last to run.",
+    ),
+    Card(
+        id="microservice",
+        name="Microservice",
+        type=CardType.ATTACK,
+        value=13,
+        scaling=Scaling.LINES,
+        scale_value=-2,
+        rarity=Rarity.COMMON,
+        description="Deal 13 (+ATK) damage, -2 for every other queued line.",
+    ),
+    Card(
+        id="monolith",
+        name="Monolith",
+        type=CardType.ATTACK,
+        value=1,
+        scaling=Scaling.LINES,
+        scale_value=2,
+        rarity=Rarity.UNCOMMON,
+        description="Deal 1 (+ATK) damage, +2 for every other queued line.",
+    ),
+    Card(
+        id="segfault",
+        name="Segfault",
+        type=CardType.ATTACK,
+        value=12,
+        halts=True,
+        rarity=Rarity.UNCOMMON,
+        description="Deal 12 (+ATK) damage. The program ends after its line.",
+    ),
+    # a bridge to blocking (style.py): a program that raises block first
+    # gets its next action twice
+    Card(
+        id="guard-clause",
+        name="Guard Clause",
+        type=CardType.GUARD,
+        value=1,
+        rarity=Rarity.UNCOMMON,
+        description="Control flow. You have 5+ block: the next action runs twice.",
     ),
 ]
 
@@ -568,16 +847,28 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "Exploit": {"value": 8, "description": "Deal 8 (+ATK) damage."},
     "Firewall": {"value": 8, "description": "Gain 8 block until your next turn."},
     "Overclock": {
-        "value": 40,
-        "description": "Permanent. Action cards played to its right are 40% more effective.",
+        "value": 20,
+        "description": "Permanent. Action cards played to its right are 20% more effective.",
     },
     "Encryption": {"value": 2, "description": "Permanent. Reduce incoming damage by 2."},
+    # draws every turn instead of every 2nd: the upgraded flag is what
+    # combat.cards_per_turn reads
+    "Prefetch": {"upgraded": True, "description": "Permanent. Draw 1 extra card each turn."},
     "Kernel Panic": {
         "value": 7,
-        "description": (
-            "Destroy all permanent cards on the field. Deal 7 damage to "
-            "the enemy for each one destroyed."
-        ),
+        "description": "Destroy all permanent cards. Deal 7 damage for each one.",
+    },
+    "Ping": {
+        "applies_amount": 3,
+        "description": "Deal 2 (+ATK) damage. Infect it with 3 Malware.",
+    },
+    "Garbage Collect": {
+        "scale_value": 3,
+        "description": "Deal 2 (+ATK) damage, +3 per banished card.",
+    },
+    "Undo": {
+        "value": 2,
+        "description": "One-shot. Return the last 2 cards from your Graveyard to your hand.",
     },
     # ---- reward pool
     "Brute Force": {"value": 15, "description": "Discard 1 random card. Deal 15 (+ATK) damage."},
@@ -589,17 +880,22 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     },
     "Stack Overflow": {
         "scale_value": 3,
-        "description": "Deal 1 (+ATK) damage, +3 per card in your graveyard.",
+        "description": "Deal 1 (+ATK) damage, +3 per card in your Graveyard.",
     },
     "Payload": {"scale_value": 5, "description": "Deal 2 (+ATK) damage, +5 per banished card."},
     "Honeypot": {"value": 11, "description": "Discard 1 random card. Gain 11 block."},
     "Sandbox": {"value": 21, "description": "One-shot. Gain 21 block."},
-    "Backup": {"value": 14, "description": "One-shot. Heal 14 HP."},
+    "Backup": {"value": 14, "description": "One-shot. Heal 14 integrity."},
     "Phishing": {"value": 3, "description": "One-shot. Draw 3 cards."},
+    "Shred": {"value": 11, "description": "Banish a card from your hand. Deal 11 (+ATK) damage."},
+    "Dead Drop": {"scale_value": 4, "description": "Deal 3 (+ATK) damage, +4 per banished card."},
+    "Burn Notice": {"scale_value": 3, "description": "Gain 3 block, +3 per banished card."},
+    "Wipe": {"value": 3, "description": "One-shot. Banish 2 cards from your hand. Draw 3 cards."},
+    "Banish": {"value": 3, "description": "One-shot. Banish a card from your hand. Draw 3 cards."},
     "Memory Dump": {"value": 5, "description": "One-shot. Discard your hand, then draw 5 cards."},
     "Rollback": {
         "value": 3,
-        "description": "One-shot. Return the last 3 cards from your graveyard to your hand.",
+        "description": "One-shot. Return the last 3 cards from your Graveyard to your hand.",
     },
     "Undelete": {
         "value": 2,
@@ -611,11 +907,11 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     },
     "Daemon": {
         "value": 6,
-        "description": "Permanent. Deal 6 damage to the enemy at the end of each turn.",
+        "description": "Permanent. End of turn: deal 6 damage to the enemy.",
     },
     "Mainframe": {
         "value": 2,
-        "description": "Permanent. At the end of each turn gain 2 block per permanent card.",
+        "description": "Permanent. End of turn: gain 2 block per permanent card.",
     },
     "Fork Bomb": {
         "value": 5,
@@ -641,6 +937,25 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
         "applies_amount": 9,
         "description": "One-shot. Deal 0 (+ATK) damage. Infect it with 9 Malware.",
     },
+    "Failsafe": {
+        "banish_damage": 20,
+        "description": (
+            "Permanent. Reduce incoming damage by 1. When it is banished, deal 20 damage."
+        ),
+    },
+    "Counterstrike": {"value": 7, "description": "Deal 7 (+ATK) damage, +1 per block you have."},
+    "Quarantine": {
+        "value": 3,
+        "description": (
+            "Permanent. End of turn: gain 1.5 block per Malware on the enemy (rounded down)."
+        ),
+    },
+    "Guard Clause": {
+        "draw": 1,
+        "description": (
+            "Control flow. You have 5+ block: the next action runs twice. Draw 1 card."
+        ),
+    },
     # ---- the Vibe-Coder's cards (characters.py). Where tokens are the
     # bottleneck, an upgrade may make a card cheaper instead of stronger.
     "Prompt": {"value": 7, "description": "Deal 7 (+ATK) damage."},
@@ -657,11 +972,12 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
         "description": "Permanent. Frees 2 tokens at the end of each turn.",
     },
     "/compact": {"value": 6, "description": "One-shot. Costs no tokens. Frees 6 used tokens."},
+    "Force Push": {"value": 10, "description": "Discard 1 random card. Deal 10 (+ATK) damage."},
     "YOLO Deploy": {"value": 19, "description": "Discard 1 random card. Deal 19 (+ATK) damage."},
     "Copy-Paste": {
         "value": 2,
         "description": (
-            "One-shot. Costs no tokens. Return the last 2 cards from your graveyard to your hand."
+            "One-shot. Costs no tokens. Return the last 2 cards from your Graveyard to your hand."
         ),
     },
     "Vibe Check": {
@@ -692,8 +1008,34 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
     "If Wounded": {
         "draw": 1,
         "description": (
-            "Control flow. If the enemy is at half HP or less, the next action runs twice. "
-            "Draw 1 card."
+            "Control flow. Enemy at half integrity or less: "
+            "the next action runs twice. Draw 1 card."
+        ),
+    },
+    "Bootstrap": {
+        "scale_value": 8,
+        "description": "Deal 3 (+ATK) damage, +8 if its line is the first to run.",
+    },
+    "Return": {
+        "scale_value": 10,
+        "description": "Deal 3 (+ATK) damage, +10 if its line is the last to run.",
+    },
+    "Microservice": {
+        "value": 16,
+        "description": "Deal 16 (+ATK) damage, -2 for every other queued line.",
+    },
+    "Monolith": {
+        "scale_value": 3,
+        "description": "Deal 1 (+ATK) damage, +3 for every other queued line.",
+    },
+    "Segfault": {
+        "value": 17,
+        "description": "Deal 17 (+ATK) damage. The program ends after its line.",
+    },
+    "Goto 1": {
+        "value": 3,
+        "description": (
+            "Control flow. Jumps back to line 1 once: the first 3 actions before it run again."
         ),
     },
     "Loop": {
@@ -715,6 +1057,15 @@ CARD_UPGRADES: dict[str, dict[str, object]] = {
         "draw": 1,
         "description": "Control flow. The next action to its right runs twice. Draw 1 card.",
     },
+    "Try/Catch": {
+        "draw": 1,
+        "description": "Control flow. The lines after it can't be interrupted. Draw 1 card.",
+    },
+    "Buffer": {
+        "value": 2,
+        "description": "Control flow. The next 2 actions store their damage instead of dealing it.",
+    },
+    "Flush": {"value": 100, "description": "Control flow. Deals all stored damage, doubled."},
 }
 
 

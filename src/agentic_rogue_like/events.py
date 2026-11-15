@@ -161,12 +161,12 @@ def validate_event(event: GameEvent) -> None:
         value = option_value(option)
         if value > EVENT_MAX_VALUE:
             raise EventViolation(
-                f"option {option.label!r} is worth {value:.0f} gold, more than the "
+                f"option {option.label!r} is worth {value:.0f} credits, more than the "
                 f"{EVENT_MAX_VALUE} allowed - raise its cost or lower its reward"
             )
         if value < EVENT_MIN_VALUE:
             raise EventViolation(
-                f"option {option.label!r} is worth {value:.0f} gold, less than the "
+                f"option {option.label!r} is worth {value:.0f} credits, less than the "
                 f"{EVENT_MIN_VALUE} allowed - nobody would pick it"
             )
 
@@ -178,11 +178,11 @@ def _describe(effects: list[EventEffect]) -> str:
     parts = []
     for e in effects:
         if e.kind is EffectKind.GOLD:
-            parts.append(f"{e.amount:+d} gold")
+            parts.append(f"{e.amount:+d} credits")
         elif e.kind is EffectKind.HP:
-            parts.append(f"{e.amount:+d} HP")
+            parts.append(f"{e.amount:+d} integrity")
         elif e.kind is EffectKind.MAX_HP:
-            parts.append(f"{e.amount:+d} max HP")
+            parts.append(f"{e.amount:+d} max integrity")
         elif e.kind is EffectKind.ADD_CARD:
             article = "an" if e.rarity is Rarity.UNCOMMON else "a"
             parts.append(f"{article} {e.rarity.value} card")
@@ -229,16 +229,16 @@ def _apply(effect: EventEffect, player: PlayerState, pool: list[Card], rng: rand
     if kind is EffectKind.GOLD:
         paid = max(amount, -player.gold)
         player.gold += paid
-        return f"You {'gain' if paid >= 0 else 'pay'} {abs(paid)} gold."
+        return f"You {'gain' if paid >= 0 else 'pay'} {abs(paid)} credits."
     if kind is EffectKind.HP:
         before = player.hp
         player.hp = max(1, min(player.max_hp, player.hp + amount))
         change = player.hp - before
-        return f"You {'recover' if change >= 0 else 'lose'} {abs(change)} HP."
+        return f"You {'recover' if change >= 0 else 'lose'} {abs(change)} integrity."
     if kind is EffectKind.MAX_HP:
         player.max_hp = max(1, player.max_hp + amount)
         player.hp = min(player.max_hp, player.hp + max(amount, 0))
-        return f"Your max HP {'rises' if amount > 0 else 'drops'} by {abs(amount)}."
+        return f"Your max integrity {'rises' if amount > 0 else 'drops'} by {abs(amount)}."
     if kind is EffectKind.ADD_CARD:
         options = [c for c in pool if c.rarity is effect.rarity]
         card = reward_card(rng.choice(options), player.deck)

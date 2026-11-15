@@ -12,7 +12,13 @@ export function HistoryLog({ history }: { history: string[] }) {
   return (
     <section className="panel history-log">
       <div className="panel-head">
-        <h2 className="panel-title">System log</h2>
+        {/* a terminal following the run's log file */}
+        <h2 className="panel-title">
+          <span className="log-prompt" aria-hidden="true">
+            ~/agi $ tail -f{" "}
+          </span>
+          system.log
+        </h2>
         {history.length > RECENT_LINES && (
           <button
             type="button"

@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import { QUEUED_TYPES, type Card, type PendingCombatView } from "./api";
+import { PERMANENT_CARD_TYPES, QUEUED_TYPES, type Card, type PendingCombatView } from "./api";
 
 // Program mode's rules as the frontend needs them (see the backend's
 // combat.run_program) - shared by CombatPanel and ProgramLines.
@@ -7,6 +7,19 @@ import { QUEUED_TYPES, type Card, type PendingCombatView } from "./api";
 // Whether playing `card` queues it into the program (combat.QUEUED_TYPES).
 export function queues(combat: PendingCombatView, card: Card): boolean {
   return combat.program_mode && QUEUED_TYPES.includes(card.type);
+}
+
+// Program mode: whether playing `card` takes effect right away - card flow,
+// which neither queues into a line nor installs in the background. The hand
+// marks these, so nobody plays one expecting it to wait for the program.
+export function runsNow(combat: PendingCombatView, card: Card): boolean {
+  return combat.program_mode && !queues(combat, card) && !PERMANENT_CARD_TYPES.includes(card.type);
+}
+
+// How many other hand cards playing `card` banishes (combat.banish_count):
+// its `banish`, or fewer if the hand doesn't hold that many besides it.
+export function banishCount(combat: PendingCombatView, card: Card): number {
+  return Math.max(0, Math.min(card.banish, combat.hand.length - 1));
 }
 
 // The order the queued lines will run in, and which of them run: a
@@ -20,7 +33,6 @@ export function programPlan(combat: PendingCombatView, enemySlain: boolean) {
     queuedLines,
     cutAfter,
     reversed,
-    runningLines: cutAfter === null ? runOrder : runOrder.slice(0, cutAfter),
     cutLines: cutAfter === null ? [] : runOrder.slice(cutAfter),
   };
 }
@@ -31,9 +43,12 @@ export const ProgramModeContext = createContext(false);
 
 export function cardText(card: Card, program: boolean): string {
   if (!program) return card.description;
-  return card.description
+  const text = card.description
     .replace("Action cards played to its right are", "Every action in the program is")
     .replace("Action cards played to its right get", "Every action in the program gets");
+  // Undo, Rollback: a line - they fetch back once the program runs. (Undelete
+  // and the other card flow run the moment they are played: their text stays.)
+  return card.type === "retrieve" ? text.replace("Return the last", "When its line runs, return the last") : text;
 }
 
 export function useCardText(card: Card): string {

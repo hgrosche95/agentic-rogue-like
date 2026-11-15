@@ -27,6 +27,9 @@ export type CardType =
   | "token_regen"
   | "safeguard"
   | "opener"
+  // bridges between play styles
+  | "quarantine"
+  | "recycle"
   // junk an enemy's corrupt move shuffles in
   | "glitch"
   // control flow - program mode only
@@ -35,7 +38,13 @@ export type CardType =
   | "if_wounded"
   // the Vibe-Coder's control flow
   | "pipe"
-  | "batch";
+  | "batch"
+  // registers and exceptions
+  | "try_catch"
+  | "buffer"
+  | "flush"
+  | "guard"
+  | "goto";
 
 export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "amplifier",
@@ -48,16 +57,31 @@ export const PERMANENT_CARD_TYPES: readonly CardType[] = [
   "token_regen",
   "safeguard",
   "opener",
+  "quarantine",
+  "recycle",
 ];
 
 // Program mode: what queues into the program instead of resolving on the
 // spot (combat.QUEUED_TYPES), and the control flow among it.
-export const CONTROL_FLOW_TYPES: readonly CardType[] = ["fork", "loop", "if_wounded", "pipe", "batch"];
+export const CONTROL_FLOW_TYPES: readonly CardType[] = [
+  "fork",
+  "loop",
+  "if_wounded",
+  "pipe",
+  "batch",
+  "try_catch",
+  "buffer",
+  "flush",
+  "guard",
+  "goto",
+];
 export const QUEUED_TYPES: readonly CardType[] = [
   "attack",
   "block",
   "heal",
   "final_strike",
+  // Undo, Rollback: run as a line, they fetch back what ran before them
+  "retrieve",
   ...CONTROL_FLOW_TYPES,
 ];
 
@@ -72,6 +96,8 @@ export interface Card {
   rarity: Rarity;
   // one-shot: banished for the rest of the fight after it is played
   exhaust: boolean;
+  // hand cards it banishes when played - the player picks them (Banish)
+  banish: number;
   // attacks only: the damage is dealt this many times
   hits: number;
   // scaling attacks: the bonus per permanent / graveyard / banished card
@@ -83,6 +109,8 @@ export interface Card {
   upgraded: boolean;
   // what it takes from a context window - only the Vibe-Coder has one
   token_cost: number;
+  // program mode: the program ends after its line (Segfault)
+  halts: boolean;
 }
 
 // Who a run is played as - see characters.py.
@@ -106,6 +134,13 @@ export interface Artifact {
   description: string;
   // program mode: the line (1-based) whose card runs upgraded - 0 if none
   hot_path: number;
+  // the effects that work every Nth turn only (models.Artifact, artifactTimers.ts)
+  extra_draw?: number;
+  extra_draw_every?: number;
+  turn_block?: number;
+  turn_block_every?: number;
+  tail_call?: number;
+  tail_call_every?: number;
 }
 
 export interface PlayerState {
@@ -145,6 +180,11 @@ export interface HandCardView extends Card {
   preview: (number | null)[];
   // playing it now would push past the context window - it may hallucinate
   overflows: boolean;
+  // HP playing it costs in the final fight (OMEGA's tax, its toll on the AGI's card)
+  toll: number;
+  // program mode, per line it could go into: what every line would then come
+  // out with (combat.program_what_if) - null where it can't go
+  what_if: ((number | null)[] | null)[];
 }
 
 // attack/defend for every enemy, the rest only for bosses
@@ -161,7 +201,13 @@ export type EnemyIntentType =
   // program mode: cuts the program off after a few lines
   | "interrupt"
   // program mode, bosses: the program runs right to left
-  | "refactor";
+  | "refactor"
+  // program mode: the last line is thrown away unrun
+  | "collect"
+  // program mode: the first two lines to run swap places
+  | "race"
+  // program mode: the first line to run stays locked next turn
+  | "leak";
 
 // How the player plays, read from their chosen cards - see style.py.
 export type PlayStyle = "permanents" | "graveyard" | "one_shot" | "aggro" | "turtle" | "malware" | "program";
@@ -180,12 +226,19 @@ export const ATTACKING_INTENTS: EnemyIntentType[] = [
   "corrupt",
   "interrupt",
   "refactor",
+  "collect",
+  "race",
+  "leak",
 ];
 
 export interface PendingCombatView {
   enemy_name: string;
   // one line of flavor text, may be empty
   enemy_description: string;
+  // the line it opens the fight with ("" if none), and a boss's line for
+  // each phase from the second on
+  enemy_taunt: string;
+  enemy_phase_taunts: string[];
   enemy_attack_name: string;
   // the base attack stat - what the enemy's look is built from
   enemy_attack: number;
@@ -212,7 +265,12 @@ export interface PendingCombatView {
   boss: boolean;
   enemy_phase: number;
   enemy_phases: number;
+  // the final boss: the law it rewrote (from phase 3 on), the style it answers
+  omega_law: string | null;
+  omega_style: string | null;
   enemy_strength: number;
+  // the run's final boss, the AGI itself - drawn with its own sprite
+  final_boss: boolean;
   // elites: their affix and what it does, else null; whether rage is on
   enemy_affix: "armored" | "regenerating" | "enraged" | "thorny" | null;
   enemy_affix_description: string | null;
@@ -224,6 +282,18 @@ export interface PendingCombatView {
   locked_slots: number[];
   hand: HandCardView[];
   field: (Card | null)[];
+  // per field slot: taking it back banishes it (it has run since an earlier
+  // turn) instead of returning it to the hand
+  field_uninstalls: boolean[];
+  // the piles' cards by name: Graveyard and Banished in order (latest last), the
+  // Source pile sorted
+  draw_names: string[];
+  discard_names: string[];
+  banished_names: string[];
+  // the cards themselves, for a look into a pile (same order)
+  draw_cards: Card[];
+  discard_cards: Card[];
+  banished_cards: Card[];
   player_block: number;
   armor: number;
   max_hand_size: number;
@@ -235,6 +305,8 @@ export interface PendingCombatView {
   tokens_used: number;
   // used tokens freed at the end of the turn
   token_regen: number;
+  // the player's turn in this fight, from 1
+  turn: number;
   // Program mode: queued actions per line (may be longer than `field`),
   // which of them will hallucinate, and where the fight will stand once the
   // program has run. Null / empty in a classic run.
@@ -249,6 +321,33 @@ export interface ProgramPreview {
   enemy_block: number;
   player_hp: number;
   player_block: number;
+  // line by line, in the order they run
+  steps: ProgramStep[];
+}
+
+// What one queued line does when the program runs (the backend's
+// combat.ProgramStep): ran, cut by an interrupt, or skipped (enemy down).
+export interface ProgramStep {
+  slot: number;
+  name: string;
+  type: CardType;
+  outcome: "ran" | "cut" | "collected" | "skipped";
+  // how often its action ran - a fork's target twice, a loop its repeats
+  runs: number;
+  damage: number;
+  dealt: number;
+  block: number;
+  heal: number;
+  hurt: number;
+  enemy_hp: number;
+  enemy_block: number;
+  // the named combo it completed (combat.COMBOS)
+  combo: string | null;
+  // a retrieve line (Undo): the cards it fetched back to the hand
+  retrieved: string[];
+  // attacks and blocks: how its first run reaches its number, e.g.
+  // "3 +2 ATK +7 first = 12" (combat.action_formula)
+  formula: string | null;
 }
 
 export interface ShopCard {
@@ -299,13 +398,16 @@ export interface RunView {
   current_node: MapNode;
   node_resolved: boolean;
   available_choices: MapNode[];
+  // until the room just jumped into is entered: the other rooms that jump
+  // could have gone to - chooseNextNode switches to one of them
+  switch_choices: MapNode[];
   pending_event: PendingEventView | null;
   pending_combat: PendingCombatView | null;
   card_reward: Card[] | null;
   artifact_offer: Artifact[] | null;
   // program mode for the whole run - card texts read differently there
   program_mode: boolean;
-  // the start of the run, after the first artifact: a kit, then the AGI's deal
+  // the start of the run: a kit, then the AGI's deal
   kit_offer: StarterKit[] | null;
   agi_deals: AgiDeal[] | null;
   shop: ShopView | null;
@@ -314,6 +416,49 @@ export interface RunView {
   play_style: PlayStyle | null;
   style_counts: Partial<Record<PlayStyle, number>>;
   nodes: Record<string, MapNode>;
+  // once the run is over (victory or defeat): the run in numbers
+  summary: RunSummary | null;
+}
+
+// The best stretch of damage: one program run in program mode, one turn's
+// cards in classic play (`runs`: actions run, or cards played).
+export interface Combo {
+  damage: number;
+  runs: number;
+  cards: string[];
+}
+
+// The run in numbers, kept as it went (the backend's stats.py).
+export interface RunSummary {
+  // null for a run started before the server kept stats
+  duration_seconds: number | null;
+  fights_won: number;
+  elites_defeated: number;
+  bosses_defeated: number;
+  turns: number;
+  damage_dealt: number;
+  damage_taken: number;
+  biggest_hit: number;
+  best_combo: Combo | null;
+  cards_played: number;
+  // the card played most, and how often
+  mvp_card: Card | null;
+  mvp_plays: number;
+  cards_added: number;
+  cards_removed: number;
+  cards_upgraded: number;
+  credits_earned: number;
+  credits_spent: number;
+  artifacts_collected: number;
+  // a defeat: the enemy, and the move (or Malware, Thorns, ...) that took the last HP
+  killed_by: {
+    enemy: string;
+    move: string;
+    // to draw it as it was in the fight (0 for a run from before)
+    enemy_max_hp: number;
+    enemy_attack: number;
+    final_boss: boolean;
+  } | null;
 }
 
 // Runs only live in the API's memory (sessions.py): a restart or an idle
@@ -336,11 +481,15 @@ export interface StarterKit {
 // One of the AGI's opening deals; `cards` is what taking it adds to the deck,
 // `mentions` every card its description names (an upgrade as it will be).
 export interface AgiDeal {
-  kind: "strip" | "mutate" | "forbidden" | "trojan" | "hotfix" | "bribe";
+  // "forged": mid-run, a card the AGI compiled for the player's style (forge.py)
+  kind: "strip" | "mutate" | "forbidden" | "trojan" | "hotfix" | "bribe" | "forged";
   name: string;
   description: string;
   cards: Card[];
   mentions: Card[];
+  // a forged deal's own opening lines, empty for the opening offer
+  greeting: string;
+  pitch: string;
 }
 
 // The server's answer never arrived (or the network dropped it). The move
@@ -502,10 +651,17 @@ export function restRemove(runId: string, index: number): Promise<RunView> {
   });
 }
 
-export function playCard(runId: string, handIndex: number, slotIndex: number): Promise<RunView> {
+// `banishIndices`: the hand cards a banishing card (Banish) takes - exactly
+// banishCount of them (program.ts).
+export function playCard(
+  runId: string,
+  handIndex: number,
+  slotIndex: number,
+  banishIndices: number[] = [],
+): Promise<RunView> {
   return request<RunView>(`/runs/${runId}/combat/play-card`, {
     method: "POST",
-    body: JSON.stringify({ hand_index: handIndex, slot_index: slotIndex }),
+    body: JSON.stringify({ hand_index: handIndex, slot_index: slotIndex, banish_indices: banishIndices }),
   });
 }
 
@@ -513,6 +669,15 @@ export function endCombatTurn(runId: string, discardIndices: number[] = []): Pro
   return request<RunView>(`/runs/${runId}/combat/end-turn`, {
     method: "POST",
     body: JSON.stringify({ discard_indices: discardIndices }),
+  });
+}
+
+// Take a card off the field back into the hand: a queued line ("program") or
+// a permanent ("field": its slot, or its place in the background).
+export function takeBack(runId: string, zone: "program" | "field", index: number): Promise<RunView> {
+  return request<RunView>(`/runs/${runId}/combat/take-back`, {
+    method: "POST",
+    body: JSON.stringify({ zone, index }),
   });
 }
 
