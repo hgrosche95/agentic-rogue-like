@@ -1,21 +1,24 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { typingInterval, type HackerCommand } from "../hackerCommands";
+import { isAgiLine, TYPE_INTERVAL_MS, useTyped } from "../typing";
+import { AgiText } from "./AgiText";
 
 const VISIBLE_LINES = 4;
-const TYPE_INTERVAL_MS = 14;
 
 interface MonitorLine {
   text: string;
   isCommand: boolean;
 }
 
-type LineKind = "hit" | "hurt" | "block" | "heal" | "malware" | "banish" | "foe" | "command" | "plain";
+type LineKind = "agi" | "hit" | "hurt" | "block" | "heal" | "malware" | "banish" | "foe" | "command" | "plain";
 
 // What a history line is about, read from combat.py's wording - for its
 // icon and colour. The player's own losses come first: "You block 3 and
 // take 5 damage" is a hurt, not a block.
 function lineKind(text: string, isCommand = false): LineKind {
   if (isCommand) return "command";
+  // the AGI speaking (agent/voice.py) - before anything its words could match
+  if (isAgiLine(text)) return "agi";
   if (/You are at \d+ integrity|You take \d+|of your integrity|cost you \d+ integrity/.test(text)) return "hurt";
   if (/\bbanish(?:es|ed)?\b|uninstall/i.test(text)) return "banish";
   if (/Malware|infect/i.test(text)) return "malware";
@@ -65,6 +68,12 @@ function KindIcon({ kind }: { kind: LineKind }) {
         </>
       )}
       {kind === "command" && <path d="M4 6l4 4-4 4M10 15h6" />}
+      {kind === "agi" && (
+        <>
+          <rect x="3" y="4" width="14" height="10" />
+          <path d="M7 14v3.5l3.5-3.5" />
+        </>
+      )}
       {kind === "plain" && <circle cx="10" cy="10" r="1.6" className="fill" />}
     </svg>
   );
@@ -76,6 +85,7 @@ const TOKENS =
 
 function colorize(text: string, kind: LineKind): ReactNode[] {
   if (kind === "command") return [text];
+  if (kind === "agi") return [<AgiText key="agi" text={text} />];
   const out: ReactNode[] = [];
   let at = 0;
   for (const match of text.matchAll(TOKENS)) {
@@ -128,19 +138,8 @@ function Line({ line, text, typing, age = 0 }: { line: MonitorLine; text: string
 // Types the line out character by character, like a terminal. Keyed by its
 // index in the parent, so a new line remounts it and starts from zero again.
 function TypedLine({ line, interval, onDone }: { line: MonitorLine; interval: number; onDone?: () => void }) {
-  const [shown, setShown] = useState(0);
-  const { text } = line;
-
-  useEffect(() => {
-    if (shown >= text.length) {
-      onDone?.();
-      return;
-    }
-    const timer = setTimeout(() => setShown(shown + 1), interval);
-    return () => clearTimeout(timer);
-  }, [shown, text, interval, onDone]);
-
-  return <Line line={line} text={text.slice(0, shown)} typing={shown < text.length} />;
+  const shown = useTyped(line.text, interval, onDone);
+  return <Line line={line} text={line.text.slice(0, shown)} typing={shown < line.text.length} />;
 }
 
 // Weaves Dr. Chronos' typed commands in front of the history lines they cause.
@@ -177,6 +176,10 @@ export function CombatMonitor({
   // before the log answers.
   const [typedCommand, setTypedCommand] = useState(-1);
   const merged = mergeLines(lines, commands);
+  // The AGI's lines type themselves out even when more lines follow in the
+  // same answer - every one that arrives after the monitor came up, once.
+  const [firstNew] = useState(merged.length);
+  const [typedAgi, setTypedAgi] = useState<ReadonlySet<number>>(() => new Set());
   const visible = merged.slice(-VISIBLE_LINES);
   const firstIndex = merged.length - visible.length;
   const last = merged.length - 1;
@@ -221,6 +224,16 @@ export function CombatMonitor({
   );
 
   function renderLine(line: MonitorLine, index: number) {
+    if (!line.isCommand && isAgiLine(line.text) && index >= firstNew && !typedAgi.has(index)) {
+      return (
+        <TypedLine
+          key={index}
+          line={line}
+          interval={TYPE_INTERVAL_MS}
+          onDone={() => setTypedAgi((done) => (done.has(index) ? done : new Set(done).add(index)))}
+        />
+      );
+    }
     if (line.isCommand && index > typedCommand && index >= last - 1) {
       return (
         <TypedLine
