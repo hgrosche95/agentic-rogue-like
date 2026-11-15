@@ -27,9 +27,11 @@ from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
 
+    from .act_pack import ActPack
+
 from ..enemies import pick_enemy, tier_floor
 from ..models import DEFAULT_SETTING, Card, Enemy
-from ..style import PlayStyle, agent_hint
+from ..style import COUNTER_WEIGHT, PlayStyle, agent_hint, answers
 from . import usage
 from .budgets import budget_for
 from .encounter_schema import (
@@ -309,6 +311,8 @@ def enemy_for_node(
     style: PlayStyle | None = None,
     final: bool = False,
     deck: list[Card] | None = None,
+    act_pack: Callable[[], ActPack | None] | None = None,
+    pack_rng: random.Random | None = None,
 ) -> Enemy:
     """Agent-generated enemy, degrading to the static pool if the agent can't deliver.
 
@@ -339,6 +343,17 @@ def enemy_for_node(
     from the static pool (enemies.ENEMY_POOL["final"]), never generated -
     the run ends on the same character every time, and no LLM call waits
     in front of it.
+
+    `act_pack`, if given, is where regular and elite enemies come from instead
+    of a call per room: the web API generates the whole act's enemies in one
+    background call (prefetch.py, agent/act_pack.py) and hands in a getter
+    that returns the pack once it is done, None while it isn't. An enemy of
+    the room's tier is drawn from it - the ones answering `style`
+    COUNTER_WEIGHT times as likely, like the static pool - and removed, so
+    no two rooms get the same one. The draw uses `pack_rng`, seeded per room
+    by the caller, so it never shifts `rng`'s other draws. A pack that is
+    not done yet, failed, or has run out of the tier means the static pool,
+    never a live call. Bosses ignore it.
     """
     if boss and final:
         return pick_enemy(
@@ -351,6 +366,27 @@ def enemy_for_node(
             final=True,
         )
     if os.environ.get("ENCOUNTER_AGENT_ENABLED") != "1":
+        return pick_enemy(
+            floor=floor,
+            num_floors=num_floors,
+            elite=elite,
+            boss=boss,
+            rng=rng,
+            act=act,
+            style=style,
+        )
+
+    if act_pack is not None and not boss:
+        tier = "elite" if elite else _regular_tier(floor, num_floors, act)
+        drawn = _draw_from_pack(
+            act_pack,
+            tier,
+            enemy_id,
+            style,
+            pack_rng if pack_rng is not None else random.Random(enemy_id),
+        )
+        if drawn is not None:
+            return drawn
         return pick_enemy(
             floor=floor,
             num_floors=num_floors,
@@ -384,3 +420,33 @@ def enemy_for_node(
             act=act,
             style=style,
         )
+
+
+def _regular_tier(floor: int, num_floors: int, act: int) -> str:
+    """A regular room's tier in an act pack - the same split pick_enemy and
+    budget_for make (act 2 on has no early tier, see enemies.tier_floor)."""
+    return "early" if tier_floor(floor, num_floors, act) < num_floors // 2 else "mid"
+
+
+def _draw_from_pack(
+    act_pack: Callable[[], ActPack | None],
+    tier: str,
+    enemy_id: str,
+    style: PlayStyle | None,
+    rng: random.Random,
+) -> Enemy | None:
+    """One enemy of `tier` out of the pack, removed from it - None if the pack
+    isn't there (not done, failed) or holds no enemy of that tier any more."""
+    try:
+        pack = act_pack()
+    except Exception:
+        logger.warning("act pack failed, using static pool", exc_info=True)
+        return None
+    if pack is None:
+        return None
+    enemies: list[Enemy] = getattr(pack, tier)
+    if not enemies:
+        return None
+    weights = [COUNTER_WEIGHT if answers(e, style) else 1 for e in enemies]
+    (index,) = rng.choices(range(len(enemies)), weights=weights)
+    return enemies.pop(index).model_copy(update={"id": enemy_id}, deep=True)
