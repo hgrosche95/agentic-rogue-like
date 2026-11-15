@@ -15,11 +15,11 @@ from .agent.card_agent import card_for_style
 from .agent.encounter_agent import enemy_for_node
 from .agent.event_agent import event_for_room
 from .agent.narrator import narrate
-from .agent.voice import fallback_voice
+from .agent.voice import VoiceTrigger, fallback_voice, pick_line
 from .artifacts import gain_artifact, heal, roll_artifact_offer, total
 from .cards import can_upgrade, reward_card, roll_card_reward, upgrade_card
 from .characters import CHARACTERS, artifact_pool, reward_pool
-from .combat import CombatState, auto_resolve_combat
+from .combat import CombatState, CombatVoice, auto_resolve_combat, voice_lines
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
@@ -374,10 +374,12 @@ def _finish_combat(
     if not victory:
         run.history.append("You have fallen.")
         run.status = RunStatus.DEFEAT
+        _say_once(run, node, VoiceTrigger.DEFEAT)
         return
     run.history.append("Victory!")
     if node.type is NodeType.BOSS and run.act >= NUM_ACTS:
         run.status = RunStatus.VICTORY
+        _say_once(run, node, VoiceTrigger.VICTORY)
         return
     reward = rng.randint(15, 35)
     if node.type is NodeType.BOSS:
@@ -402,6 +404,33 @@ def _finish_combat(
             run.history.append("It leaves an artifact behind - pick one to install.")
     if node.type is NodeType.BOSS:
         advance_act(run)
+
+
+def _voice_seed(run: RunState, node: MapNode) -> str:
+    """What the AGI's line picks in this room are seeded from (voice.pick_line)."""
+    return f"{run.seed}-voice-{run.act}-{node.id}"
+
+
+def _say_once(run: RunState, node: MapNode, trigger: VoiceTrigger) -> None:
+    """The AGI's line for a trigger that ends the run - it can only happen once."""
+    if (line := pick_line(run.voice, _voice_seed(run, node), trigger)) is not None:
+        run.history.append(line)
+
+
+def _combat_voice(run: RunState, node: MapNode, enemy: Enemy) -> CombatVoice | None:
+    """The AGI's lines for the fight in `node` - None for a run without any.
+
+    An elite fight opens with elite_start. style_detected was already said as
+    the enemy's taunt (_room_enemy), so it counts as said."""
+    if not run.voice:
+        return None
+    style = None if node.type is NodeType.BOSS else play_style(run.player.deck)
+    return CombatVoice(
+        lines=run.voice,
+        seed=_voice_seed(run, node),
+        opening=[VoiceTrigger.ELITE_START] if node.type is NodeType.ELITE else [],
+        fired=[VoiceTrigger.STYLE_DETECTED] if answers(enemy, style) else [],
+    )
 
 
 def choose_card_reward(run: RunState, index: int | None) -> None:
@@ -469,7 +498,8 @@ def _room_enemy(
 
     Once the player's deck shows a clear style (style.play_style), the AGI
     prefers enemies and affixes that answer it - and an enemy that does opens
-    its fight with a taunt. An elite's affix comes from its own rng, seeded
+    its fight with a taunt: the run voice's style_detected line (style.taunt
+    for a run without one). An elite's affix comes from its own rng, seeded
     per room, so it never shifts the run rng's other draws - and so does the
     draw out of an `act_pack` (agent/encounter_agent.enemy_for_node).
     """
@@ -497,7 +527,8 @@ def _room_enemy(
     if run.program_mode and not boss:
         enemy = with_program_move(enemy, style, run.player.deck)
     if style is not None and answers(enemy, style):
-        enemy = enemy.model_copy(update={"taunt": taunt(style, enemy)})
+        line = pick_line(run.voice, _voice_seed(run, node), VoiceTrigger.STYLE_DETECTED)
+        enemy = enemy.model_copy(update={"taunt": line or taunt(style, enemy)})
     if is_final_boss(run, node):
         enemy = omega_taunts(enemy, run.player.deck, run.stats)
     return escalate(enemy, node.floor, NUM_FLOORS, run.act)
@@ -530,6 +561,7 @@ def start_combat_node(
         boss_phases=boss_phases(run.act),
         character=run.player.character,
         program_mode=run.program_mode,
+        voice=_combat_voice(run, node, enemy),
     )
     if is_final_boss(run, node):
         adapt_omega(state, run.player.deck)
@@ -550,6 +582,7 @@ def play_combat_card(
     card = state.hand[hand_index] if 0 <= hand_index < len(state.hand) else None
     dealt = state.tally.damage_dealt
     run.history.append(_play_combat_card(state, hand_index, slot_index, run.player, rng, banish))
+    run.history.extend(voice_lines(state))
     record_play(run, state, card, state.tally.damage_dealt - dealt)
 
 
@@ -559,6 +592,7 @@ def end_combat_turn(
     """Raises ValueError (via combat.end_turn) if `discard` doesn't bring the
     hand down to exactly the hand limit."""
     run.history.extend(_end_combat_turn(state, run.player, rng, discard))
+    run.history.extend(voice_lines(state))
     if not state.program_mode:
         close_turn(state)
 
@@ -614,6 +648,7 @@ def resolve_node(
             boss=node.type is NodeType.BOSS,
             boss_phases=boss_phases(run.act),
             program_mode=run.program_mode,
+            voice=_combat_voice(run, node, enemy),
         )
         run.history.extend(log)
         _finish_combat(run, node, enemy.name, victory, rng)

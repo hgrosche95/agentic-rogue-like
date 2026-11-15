@@ -53,6 +53,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+from .agent.voice import VoiceTrigger, pick_line
 from .artifacts import every_nth_turn, heal, total
 from .cards import can_upgrade, upgrade_card
 from .characters import profile
@@ -280,6 +281,36 @@ def offer_combo(best: Combo | None, combo: Combo | None) -> Combo | None:
     return best
 
 
+# When the AGI speaks up mid-fight (CombatVoice): the player drops below this
+# share of their max HP for the first time, loses this much in one enemy
+# turn, or one card of theirs deals this much.
+LOW_HP_PERCENT = 30
+BIG_HIT_TAKEN = 12
+BIG_HIT_DEALT = 15
+
+
+class CombatVoice(BaseModel):
+    """The AGI's lines for one fight (agent/voice.py, RunState.voice).
+
+    `say` queues a trigger's line - each trigger at most once per fight -
+    and the caller that owns the log (start_combat, engine's play and turn
+    wrappers, auto_resolve_combat) flushes the queue with voice_lines. Which
+    line is picked comes from its own rng (voice.pick_line, seeded from
+    `seed` and the trigger), so a fight plays out exactly the same with or
+    without a voice: only the log differs.
+    """
+
+    lines: dict[str, list[str]]
+    # The run and room the fight is in - what makes each pick its own.
+    seed: str
+    # Said as the fight opens, after the enemy's own lines.
+    opening: list[VoiceTrigger] = Field(default_factory=list)
+    fired: list[VoiceTrigger] = Field(default_factory=list)
+    pending: list[str] = Field(default_factory=list)
+    # The player's damage_taken when the enemy's part of the turn began.
+    taken_mark: int = 0
+
+
 class CombatState(BaseModel):
     enemy: Enemy
     enemy_hp: int
@@ -347,6 +378,36 @@ class CombatState(BaseModel):
     omega_law: Law | None = None
     trap_cost: int = 0
     tally: FightTally = Field(default_factory=FightTally)
+    # None: the AGI says nothing this fight (balance-sim, old saves).
+    voice: CombatVoice | None = None
+
+
+def say(state: CombatState, trigger: VoiceTrigger) -> None:
+    """Queue the AGI's line for `trigger` - once per fight, and only with a voice."""
+    voice = state.voice
+    if voice is None or trigger in voice.fired:
+        return
+    voice.fired.append(trigger)
+    if (line := pick_line(voice.lines, voice.seed, trigger)) is not None:
+        voice.pending.append(line)
+
+
+def voice_lines(state: CombatState) -> list[str]:
+    """The AGI's queued lines, for the log - the queue is emptied."""
+    if state.voice is None or not state.voice.pending:
+        return []
+    lines, state.voice.pending = state.voice.pending, []
+    return lines
+
+
+def _check_low_hp(state: CombatState, player: PlayerState, hp_before: int) -> None:
+    """The player just fell below LOW_HP_PERCENT of their max HP (and lives)."""
+
+    def low(hp: int) -> bool:
+        return hp * 100 < player.max_hp * LOW_HP_PERCENT
+
+    if 0 < player.hp and low(player.hp) and not low(hp_before):
+        say(state, VoiceTrigger.PLAYER_LOW_HP)
 
 
 def _draw(state: CombatState, count: int, rng: random.Random) -> int:
@@ -669,6 +730,7 @@ def _check_boss_phase(state: CombatState) -> str:
         and state.enemy_hp * 100 <= state.enemy.hp * PHASE_HP_PERCENT[state.phase + 1]
     ):
         state.phase += 1
+        say(state, VoiceTrigger.BOSS_PHASE)
         strength = max(1, round(state.enemy.attack * PHASE_STRENGTH_FACTOR))
         state.enemy_strength += strength
         block = round(state.enemy.attack * PHASE_BLOCK_FACTOR)
@@ -735,6 +797,7 @@ def start_combat(
     boss_phases: int = 2,
     character: Character = Character.CHRONOS,
     program_mode: bool = False,
+    voice: CombatVoice | None = None,
 ) -> tuple[CombatState, list[str]]:
     """Shuffle a *copy* of `deck` into the draw pile and draw an opening hand.
 
@@ -742,6 +805,7 @@ def start_combat(
     below are the combat-scoped working copy that gets folded back once the
     fight ends. `boss` switches on the boss move set, with `boss_phases`
     phases (2 or 3). `character` sets the card flow (see characters.py).
+    `voice`: the AGI's lines for this fight (CombatVoice), None for none.
     """
     artifacts = list(artifacts or [])
     hero = profile(character)
@@ -771,6 +835,7 @@ def start_combat(
         turn_draw_modifier=hero.turn_draw_modifier,
         free_plays=total(artifacts, "opening_free_plays"),
         program_mode=program_mode,
+        voice=voice,
     )
     if program_mode:
         lines = FIELD_SIZE + hero.extra_program_lines + total(artifacts, "extra_lines")
@@ -784,6 +849,9 @@ def start_combat(
         log.append(enemy.description)
     if enemy.affix is not None:
         log.append(f"It is {enemy.affix.value}: {AFFIX_DESCRIPTIONS[enemy.affix]}")
+    for trigger in voice.opening if voice is not None else []:
+        say(state, trigger)
+    log.extend(voice_lines(state))
     if boss:
         later = " and again at a quarter" if boss_phases >= 3 else ""
         log.append(
@@ -793,6 +861,7 @@ def start_combat(
     if opening := total(artifacts, "opening_damage"):
         _, dealt = _damage_enemy(state, opening)
         log.append(f"Your artifacts strike first for {dealt} damage.{_check_boss_phase(state)}")
+    log.extend(voice_lines(state))
     return state, log
 
 
@@ -833,7 +902,25 @@ def play_card(
     banish: list[int] | None = None,
 ) -> str:
     """`banish`: for a card that banishes hand cards (Banish), the hand
-    indices - before the play - of the cards it takes (see _banish_choice)."""
+    indices - before the play - of the cards it takes (see _banish_choice).
+
+    What the play makes the AGI say is queued on the voice (voice_lines)."""
+    hp_before, dealt_before = player.hp, state.tally.damage_dealt
+    line = _play_card(state, hand_index, slot_index, player, rng, banish)
+    if state.tally.damage_dealt - dealt_before >= BIG_HIT_DEALT:
+        say(state, VoiceTrigger.BIG_HIT_DEALT)
+    _check_low_hp(state, player, hp_before)
+    return line
+
+
+def _play_card(
+    state: CombatState,
+    hand_index: int,
+    slot_index: int,
+    player: PlayerState,
+    rng: random.Random,
+    banish: list[int] | None = None,
+) -> str:
     if not 0 <= hand_index < len(state.hand):
         raise ValueError(f"hand_index {hand_index} is out of range")
     if not 0 <= slot_index < len(state.program):
@@ -1425,7 +1512,11 @@ def _run_line(
     `bonus` on top of the Copilots' (Pipeline)."""
     multiplier = _amplifier_multiplier(state, slot)
     bonus += _chain_bonus(state, slot)
+    dealt_before = state.tally.damage_dealt
     line = _apply_action_effect(state, card, multiplier, player, rng, bonus)
+    # A program line is one card too (classic plays are seen in play_card).
+    if state.tally.damage_dealt - dealt_before >= BIG_HIT_DEALT:
+        say(state, VoiceTrigger.BIG_HIT_DEALT)
     if card.applies is not None and state.enemy_hp > 0:
         line += " " + _afflict(state, card.applies, card.applies_amount)
     if card.draw:
@@ -1860,7 +1951,26 @@ def end_turn(
     rng: random.Random,
     discard: list[int] | None = None,
 ) -> list[str]:
-    """`discard`: hand indices to discard down to MAX_HAND_SIZE (see _discard_excess)."""
+    """`discard`: hand indices to discard down to MAX_HAND_SIZE (see _discard_excess).
+
+    What the turn makes the AGI say is queued on the voice (voice_lines)."""
+    hp_before = player.hp
+    if state.voice is not None:
+        state.voice.taken_mark = state.tally.damage_taken
+    log = _end_turn(state, player, rng, discard)
+    voice = state.voice
+    if voice is not None and state.tally.damage_taken - voice.taken_mark >= BIG_HIT_TAKEN:
+        say(state, VoiceTrigger.BIG_HIT_TAKEN)
+    _check_low_hp(state, player, hp_before)
+    return log
+
+
+def _end_turn(
+    state: CombatState,
+    player: PlayerState,
+    rng: random.Random,
+    discard: list[int] | None = None,
+) -> list[str]:
     log: list[str] = []
     if line := _discard_excess(state, discard):
         log.append(line)
@@ -1870,6 +1980,9 @@ def end_turn(
         log.extend(run_program(state, player, rng))
         if state.enemy_hp <= 0 or player.hp <= 0:
             return log
+    # What the player's own program cost them is not the enemy's hit.
+    if state.voice is not None:
+        state.voice.taken_mark = state.tally.damage_taken
 
     # Permanents that act on their own resolve before the enemy does, so a
     # Daemon can finish a fight and a Mainframe's block is up in time.
@@ -2176,6 +2289,7 @@ def auto_resolve_combat(
     boss: bool = False,
     boss_phases: int = 2,
     program_mode: bool = False,
+    voice: CombatVoice | None = None,
 ) -> tuple[bool, list[str]]:
     """Play out a full fight non-interactively: dump the hand into the first
     empty field slot each turn, then end the turn, until someone runs out of HP.
@@ -2190,6 +2304,7 @@ def auto_resolve_combat(
         boss_phases=boss_phases,
         character=player.character,
         program_mode=program_mode,
+        voice=voice,
     )
 
     for _ in range(MAX_AUTO_TURNS):
@@ -2207,11 +2322,13 @@ def auto_resolve_combat(
             if play is None:
                 break
             log.append(play_card(state, *play, player, rng))
+            log.extend(voice_lines(state))
             # A thorny elite or a hallucination can take the player down mid-turn.
             if state.enemy_hp <= 0 or player.hp <= 0:
                 break
         if state.enemy_hp <= 0 or player.hp <= 0:
             break
         log.extend(end_turn(state, player, rng))
+        log.extend(voice_lines(state))
 
     return state.enemy_hp <= 0, log

@@ -13,13 +13,15 @@ actual fight). The schema does not enforce those rules itself: Groq rejects
 a tool call outside the schema as a whole, and one bad line should cost one
 line, not the voice.
 
-Nothing in combat says these lines yet.
+Combat says them (combat.say, engine._finish_combat): each trigger at most
+once per fight, the line picked by pick_line.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import random
 from enum import StrEnum
 from typing import Any
 
@@ -187,3 +189,15 @@ def generate_voice(setting: str = DEFAULT_SETTING) -> dict[str, list[str]]:
     if proposal is None:
         return fallback_voice()
     return merge_with_fallbacks(proposal)
+
+
+def pick_line(voice: dict[str, list[str]], seed: str, trigger: VoiceTrigger) -> str | None:
+    """One of the trigger's lines, as the log shows it (AGI: "...") - None
+    if the run has none for it. The pick comes from its own rng, seeded from
+    `seed` (the run and room) and the trigger, so saying it never shifts any
+    other random number of the run."""
+    lines = voice.get(trigger.value)
+    if not lines:
+        return None
+    line = random.Random(f"{seed}-{trigger.value}").choice(lines)
+    return f'AGI: "{line}"'
