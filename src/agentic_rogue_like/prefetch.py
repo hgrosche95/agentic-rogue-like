@@ -13,10 +13,15 @@ before, which keeps the test suite network-free. The trade-off is extra LLM
 calls: rooms the player could have picked but didn't were generated for
 nothing.
 
-Nothing here decides a fallback: a prefetched enemy is handed to
-enemy_for_node() as a callable, so a failed generation lands in the same
-static-pool fallback as a live one, and a prefetched narration is whatever
-narrate() returned (None on any failure).
+Regular and elite enemies are not generated per room: the first warm() of
+an act starts one generate_act_pack call (agent/act_pack.py) for all of the
+act's enemies, and enemy_for_node() draws each room's enemy out of that pack.
+Only bosses (other than the fixed final one) still get a call of their own.
+
+Nothing here decides a fallback: a prefetched enemy - or the act pack - is
+handed to enemy_for_node() as a callable, so a failed generation lands in the
+same static-pool fallback as a live one, and a prefetched narration is
+whatever narrate() returned (None on any failure).
 """
 
 from __future__ import annotations
@@ -26,6 +31,7 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 
+from .agent.act_pack import ActPack, generate_act_pack
 from .agent.encounter_agent import generate_balanced_enemy
 from .agent.event_agent import agent_enabled as event_agent_enabled
 from .agent.event_agent import generate_valid_event
@@ -35,9 +41,7 @@ from .engine import REST_SITUATION, SHOP_SITUATION, is_final_boss, switch_choice
 from .events import EVENT_POOL, GameEvent
 from .map_gen import NUM_FLOORS
 from .models import Enemy, NodeType, RunState, RunStatus
-from .style import agent_hint, play_style
-
-_COMBAT_TYPES = (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS)
+from .style import agent_hint
 
 # Shared by all runs. The work is waiting on HTTP, not CPU, so a handful of
 # threads is plenty for a hobby deployment.
@@ -58,8 +62,10 @@ def _situations(node_type: NodeType) -> list[str]:
 
 @dataclass
 class Prefetch:
-    # Keyed by node id: each combat room gets its own enemy.
+    # Keyed by node id: each boss room gets its own enemy.
     enemies: dict[str, Future[Enemy]] = field(default_factory=dict)
+    # Keyed by act: one pack holds all of an act's regular and elite enemies.
+    act_packs: dict[int, Future[ActPack]] = field(default_factory=dict)
     # Keyed by situation text: the setting is fixed for a run, so a
     # narration is interchangeable between rooms of the same kind.
     flavors: dict[str, Future[str | None]] = field(default_factory=dict)
@@ -86,12 +92,21 @@ class Prefetch:
                 if node_id not in upcoming:
                     pending.pop(node_id).cancel()
 
+        # Exactly one pack call per act, on its first warm(); a finished act's
+        # pack is dead weight like a room walked past.
+        for act in list(self.act_packs):
+            if act != run.act:
+                self.act_packs.pop(act).cancel()
+        if run.act not in self.act_packs:
+            self.act_packs[run.act] = _executor.submit(generate_act_pack, run.setting, run.act)
+
         for node in (run.nodes[node_id] for node_id in upcoming):
             if node.visited:
                 continue
-            # The final boss is fixed (engine.is_final_boss) - nothing to generate.
+            # Regular and elite rooms draw from the act pack; the final boss
+            # is fixed (engine.is_final_boss) - nothing to generate.
             if (
-                node.type in _COMBAT_TYPES
+                node.type is NodeType.BOSS
                 and node.id not in self.enemies
                 and not is_final_boss(run, node)
             ):
@@ -101,15 +116,11 @@ class Prefetch:
                     enemy_id="prefetched",
                     floor=tier_floor(node.floor, NUM_FLOORS, run.act),
                     num_floors=NUM_FLOORS,
-                    elite=node.type is NodeType.ELITE,
-                    boss=node.type is NodeType.BOSS,
+                    elite=False,
+                    boss=True,
                     setting=run.setting,
-                    # The deck is as it will be on entering: warm() runs after
-                    # every reward, on the step onto the map.
-                    counter_hint=agent_hint(
-                        None if node.type is NodeType.BOSS else play_style(run.player.deck),
-                        run.player.deck,
-                    ),
+                    # Bosses' moves are fixed, so they answer no style.
+                    counter_hint=agent_hint(None, run.player.deck),
                 )
             if node.type is NodeType.EVENT and event_agent_enabled() and node.id not in self.events:
                 self.events[node.id] = _executor.submit(generate_valid_event, run.setting)
@@ -119,9 +130,15 @@ class Prefetch:
 
     def cancel_all(self) -> None:
         """Drop everything still queued, e.g. when the run's session is evicted."""
-        for future in [*self.enemies.values(), *self.flavors.values(), *self.events.values()]:
+        for future in [
+            *self.enemies.values(),
+            *self.act_packs.values(),
+            *self.flavors.values(),
+            *self.events.values(),
+        ]:
             future.cancel()
         self.enemies.clear()
+        self.act_packs.clear()
         self.flavors.clear()
         self.events.clear()
 
@@ -134,6 +151,19 @@ class Prefetch:
         """The prefetched enemy for `node_id` as a blocking getter, or None if none was started."""
         future = self.enemies.pop(node_id, None)
         return None if future is None else future.result
+
+    def act_pack(self, act: int) -> Callable[[], ActPack | None] | None:
+        """The act's pack as a getter that never waits: the pack once its call
+        is done (raising what the call raised), None while it is still
+        running - or None instead of a getter if no pack was started."""
+        future = self.act_packs.get(act)
+        if future is None:
+            return None
+
+        def ready() -> ActPack | None:
+            return future.result() if future.done() else None
+
+        return ready
 
     def narrator(self, setting: str, situation: str) -> str | None:
         """Drop-in for narrate(): uses (and uses up) a prefetched line, else calls live."""
