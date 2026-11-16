@@ -2,6 +2,9 @@
 
 export type Feature = "horns" | "circuits" | "tentacles" | "fins" | "stripes";
 
+// How an enemy is built - the same values as the backend's BodyShape enum.
+export type BodyShape = "blob" | "swarm" | "brute" | "machine" | "ghost" | "serpent";
+
 export interface Theme {
   hues: number[];
   sat: number;
