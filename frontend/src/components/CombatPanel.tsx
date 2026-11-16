@@ -937,6 +937,9 @@ export function CombatPanel({
             maxHp: combat.enemy_max_hp,
             attack: combat.enemy_attack,
             setting,
+            // what it looks like: null from the API means "draw it the old way"
+            bodyShape: combat.enemy_body_shape ?? undefined,
+            feature: combat.enemy_feature ?? undefined,
             intent: combat.enemy_intent,
             intentMin: combat.enemy_intent_min,
             intentMax: combat.enemy_intent_max,

@@ -23,6 +23,7 @@ import { tempoMs } from "../tempo";
 import { agiWords, isAgiLine, useTyped } from "../typing";
 import { CombatMonitor } from "./CombatMonitor";
 import { PixelStage } from "./PixelStage";
+import { type BodyShape, type Feature } from "./enemyShape";
 
 // The combat arena is a pixel-art scene drawn procedurally on a canvas (see
 // pixel/scene.ts): Dr. Chronos at his keyboard in the lab, the rift, and the
@@ -36,6 +37,11 @@ export interface ArenaEnemy {
   maxHp: number;
   attack: number;
   setting: string;
+  // what the enemy looks like: the body's shape and its standout feature.
+  // Absent for the enemies that predate these fields, which then draw from
+  // their name and the setting as before.
+  bodyShape?: BodyShape;
+  feature?: Feature;
   // what it does next - shown above its head
   intent: EnemyIntentType;
   intentMin: number;
@@ -371,10 +377,10 @@ export function CombatArena({
     sceneRef.current?.setContextFull(contextFull);
   }, [contextFull]);
 
-  const { name, maxHp, attack, setting, finalBoss, phase = 1 } = enemy;
+  const { name, maxHp, attack, setting, bodyShape, feature, finalBoss, phase = 1 } = enemy;
   useEffect(() => {
-    sceneRef.current?.setEnemy({ name, maxHp, attack, setting, finalBoss });
-  }, [name, maxHp, attack, setting, finalBoss]);
+    sceneRef.current?.setEnemy({ name, maxHp, attack, setting, bodyShape, feature, finalBoss });
+  }, [name, maxHp, attack, setting, bodyShape, feature, finalBoss]);
   useEffect(() => {
     sceneRef.current?.setEnemyPhase(phase);
   }, [phase]);

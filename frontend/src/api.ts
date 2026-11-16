@@ -1,6 +1,8 @@
 // Types mirror the Pydantic response models in src/agentic_rogue_like/api.py -
 // keep the two in sync by hand for now, there's no shared schema generation yet.
 
+import { type BodyShape, type Feature } from "./components/enemyShape";
+
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 export type RunStatus = "ongoing" | "victory" | "defeat";
@@ -238,6 +240,9 @@ export interface PendingCombatView {
   // the line it opens the fight with ("" if none), and a boss's line for
   // each phase from the second on
   enemy_taunt: string;
+  // what the enemy looks like (BodyShape / Feature), null if unknown
+  enemy_body_shape?: BodyShape | null;
+  enemy_feature?: Feature | null;
   enemy_phase_taunts: string[];
   enemy_attack_name: string;
   // the base attack stat - what the enemy's look is built from
