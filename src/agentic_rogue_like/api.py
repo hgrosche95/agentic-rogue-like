@@ -212,6 +212,9 @@ class PendingCombatView(BaseModel):
     # boss, the line it says entering each phase from the second on - the
     # UI's boss intro and phase banners show them.
     enemy_taunt: str = ""
+    # what the enemy looks like (models.BodyShape / Feature), None if unknown
+    enemy_body_shape: str | None = None
+    enemy_feature: str | None = None
     enemy_phase_taunts: list[str] = []
     enemy_attack_name: str
     # The enemy's base attack stat - what its look is built from.
@@ -657,6 +660,8 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_name=combat.enemy.name,
             enemy_description=combat.enemy.description,
             enemy_taunt=combat.enemy.taunt,
+            enemy_body_shape=combat.enemy.body_shape,
+            enemy_feature=combat.enemy.feature,
             enemy_phase_taunts=combat.enemy.phase_taunts,
             enemy_attack_name=combat.enemy.attack_name,
             enemy_attack=combat.enemy.attack,

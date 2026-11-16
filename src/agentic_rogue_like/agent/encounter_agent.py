@@ -134,7 +134,10 @@ MOVESET_MOVE_RULES = (
 )
 MOVESET_NAME_RULES = (
     "attack_name is its signature attack. "
-    "Keep the description under 150 characters and every name under 40 characters."
+    "Keep the description under 150 characters and every name under 40 characters. "
+    "Pick its body_shape (blob, swarm, brute, machine, ghost or serpent) and its feature "
+    "(horns, circuits, tentacles, fins or stripes) to fit its name - a rat swarm is a swarm, "
+    "a gargoyle a brute with horns."
 )
 
 
@@ -182,12 +185,43 @@ def _plain_prompt(state: EncounterState) -> str:
     return prompt
 
 
+# How much of a rejected tool call's message goes back to the model.
+MAX_REJECTION_CHARS = 300
+# Groq's error codes for an answer the model got wrong: a tool call off its
+# schema, or output that isn't a tool call at all (gpt-oss now and then
+# writes out its reasoning instead).
+_MODEL_MISTAKES = frozenset({"tool_use_failed", "output_parse_failed"})
+
+
+def rejected_tool_call(exc: Exception) -> str | None:
+    """The reason, if `exc` is the provider turning down the model's answer
+    because it broke the schema or was no tool call at all (Groq: 400
+    _MODEL_MISTAKES) - a mistake of the model's, worth another try like a
+    budget violation. None for anything else (network, auth, rate limit),
+    which stays an error."""
+    body = getattr(exc, "body", None)
+    error = body.get("error", body) if isinstance(body, dict) else None
+    if not isinstance(error, dict) or error.get("code") not in _MODEL_MISTAKES:
+        return None
+    message = str(error.get("message") or "the tool call did not match its schema")
+    return message[:MAX_REJECTION_CHARS]
+
+
 def generate_enemy(state: EncounterState) -> EncounterState:
     schema = MovesetProposal if _with_moves(state) else EnemyProposal
-    # usage.invoke_structured(): the call is accounted for (see agent/usage.py),
-    # and the proposal comes back exactly as a plain invoke() handed it out.
-    proposal = usage.invoke_structured(_model(), schema, _build_prompt(state), "encounter")
-    return {**state, "proposal": proposal, "attempt": state["attempt"] + 1}
+    attempt = state["attempt"] + 1
+    try:
+        # usage.invoke_structured(): the call is accounted for (see
+        # agent/usage.py), and the proposal comes back exactly as a plain
+        # invoke() handed it out.
+        proposal = usage.invoke_structured(_model(), schema, _build_prompt(state), "encounter")
+    except Exception as exc:
+        # A tool call the provider turned down for its schema costs one
+        # attempt, not the whole agent: it goes back as the error to fix.
+        if (reason := rejected_tool_call(exc)) is None:
+            raise
+        return {**state, "proposal": None, "attempt": attempt, "last_error": reason}
+    return {**state, "proposal": proposal, "attempt": attempt}
 
 
 def fit_to_budget(proposal: EnemyProposal, budget: EnemyBudget) -> EnemyProposal:
@@ -226,7 +260,10 @@ def fit_to_budget(proposal: EnemyProposal, budget: EnemyBudget) -> EnemyProposal
 
 def validate_budget(state: EncounterState) -> EncounterState:
     """Check the proposal against its budget, fixing what can be fixed here
-    (fit_to_budget); what can't goes to the retry loop with its message."""
+    (fit_to_budget); what can't goes to the retry loop with its message.
+    No proposal (a rejected tool call, see generate_enemy) keeps its error."""
+    if state["proposal"] is None:
+        return state
     try:
         proposal = fit_to_budget(state["proposal"], state["budget"])
     except BudgetViolation as exc:
@@ -295,7 +332,16 @@ def generate_balanced_enemy(
         attack=proposal.attack,
         attack_name=proposal.attack_name,
         **({} if moves is None else {"moves": moves}),
+        **_looks(proposal),
     )
+
+
+def _looks(proposal: EnemyProposal) -> dict[str, Any]:
+    """A move set proposal's body_shape and feature, for the Enemy - nothing
+    for the plain schema, which has neither."""
+    if not isinstance(proposal, MovesetProposal):
+        return {}
+    return {"body_shape": proposal.body_shape, "feature": proposal.feature}
 
 
 def enemy_for_node(

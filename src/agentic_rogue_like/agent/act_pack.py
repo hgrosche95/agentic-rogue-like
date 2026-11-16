@@ -136,6 +136,8 @@ def _enemy(proposal: MovesetProposal, enemy_id: str) -> Enemy:
         attack=proposal.attack,
         attack_name=proposal.attack_name,
         moves=proposal_moves(proposal),
+        body_shape=proposal.body_shape,
+        feature=proposal.feature,
     )
 
 

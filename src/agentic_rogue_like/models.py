@@ -407,6 +407,27 @@ class Affix(StrEnum):
     THORNY = "thorny"  # every attack card played against it hurts the player
 
 
+class BodyShape(StrEnum):
+    """How an enemy is built - what the arena draws it as (with its Feature)."""
+
+    BLOB = "blob"
+    SWARM = "swarm"
+    BRUTE = "brute"
+    MACHINE = "machine"
+    GHOST = "ghost"
+    SERPENT = "serpent"
+
+
+class Feature(StrEnum):
+    """The one thing that stands out on an enemy's body."""
+
+    HORNS = "horns"
+    CIRCUITS = "circuits"
+    TENTACLES = "tentacles"
+    FINS = "fins"
+    STRIPES = "stripes"
+
+
 class Enemy(BaseModel):
     id: str
     name: str
@@ -425,6 +446,11 @@ class Enemy(BaseModel):
     # Bosses only: a line for each phase from the second on, said as it
     # enters it (combat._check_boss_phase).
     phase_taunts: list[str] = Field(default_factory=list)
+    # What it looks like: the static pool sets both, the encounter agent
+    # picks them with its move set. None where nobody said (the plain
+    # schema bosses and the fine-tuned Ollama model generate).
+    body_shape: BodyShape | None = None
+    feature: Feature | None = None
 
     @field_validator("moves")
     @classmethod

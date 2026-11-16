@@ -18,9 +18,19 @@ proposal stays inside its floor's balance budget. Two schemas:
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, ValidationError, ValidationInfo, field_validator
+from enum import StrEnum
+from typing import Annotated, Any
 
-from ..models import PROGRAM_ONLY_MOVES, Enemy, EnemyMove, MoveKind
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    ValidationInfo,
+    WithJsonSchema,
+    field_validator,
+)
+
+from ..models import PROGRAM_ONLY_MOVES, BodyShape, Enemy, EnemyMove, Feature, MoveKind
 from ..threat import threat
 
 # How far a move set's HP may stray from the budget's HP range, as fractions
@@ -134,10 +144,72 @@ class MoveProposal(BaseModel):
         return None if hits == 1 else hits
 
 
+def _spellings(enum: type[StrEnum]) -> dict[str, str]:
+    """Every way the model may spell a value -> the value: as it is, and
+    with or without its plural "s" ("circuit" for circuits, "blobs" for blob)."""
+    out: dict[str, str] = {}
+    for member in enum:
+        value = member.value
+        out[value] = value
+        out[value[:-1] if value.endswith("s") else value + "s"] = value
+    return out
+
+
+_BODY_SHAPES = _spellings(BodyShape)
+_FEATURES = _spellings(Feature)
+
+
+def _looks_schema(spellings: dict[str, str], description: str) -> WithJsonSchema:
+    """The JSON schema the model is held to for a look: every spelling
+    _spellings accepts. Groq checks a tool call against it before anything
+    of ours runs and rejects the whole call for one near miss ("circuit"),
+    so it lists the variants; the validator below maps them back."""
+    return WithJsonSchema(
+        {
+            "anyOf": [{"type": "string", "enum": sorted(spellings)}, {"type": "null"}],
+            "default": None,
+            "description": description,
+        }
+    )
+
+
+def _normalize_look(value: Any, spellings: dict[str, str]) -> Any:
+    """A spelling variant (any case, singular or plural) -> its value; anything
+    else is left for the enum to reject."""
+    if isinstance(value, str):
+        return spellings.get(value.strip().lower(), value)
+    return value
+
+
 class MovesetProposal(EnemyProposal):
     """An EnemyProposal with its own move set."""
 
     moves: list[MoveProposal] = Field(min_length=2, max_length=4)
+    # What it looks like, from fixed lists - an unknown value fails the schema
+    # (a spelling variant of a known one doesn't, see _spellings). Optional,
+    # so a model that leaves them out still lands a valid enemy.
+    body_shape: Annotated[
+        BodyShape | None,
+        _looks_schema(
+            _BODY_SHAPES, "How it is built: blob, swarm, brute, machine, ghost or serpent."
+        ),
+    ] = None
+    feature: Annotated[
+        Feature | None,
+        _looks_schema(
+            _FEATURES, "What stands out on its body: horns, circuits, tentacles, fins or stripes."
+        ),
+    ] = None
+
+    @field_validator("body_shape", mode="before")
+    @classmethod
+    def _known_body_shape(cls, value: Any) -> Any:
+        return _normalize_look(value, _BODY_SHAPES)
+
+    @field_validator("feature", mode="before")
+    @classmethod
+    def _known_feature(cls, value: Any) -> Any:
+        return _normalize_look(value, _FEATURES)
 
 
 class BudgetViolation(Exception):
