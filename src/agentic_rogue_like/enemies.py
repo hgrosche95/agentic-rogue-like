@@ -15,9 +15,11 @@ import random
 
 from .models import (
     Affix,
+    BodyShape,
     Card,
     Enemy,
     EnemyMove,
+    Feature,
     MoveKind,
 )
 from .style import COUNTER_AFFIX, COUNTER_WEIGHT, PROGRAM_MOVES, PlayStyle, answers, program_counter
@@ -59,6 +61,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="rat-swarm",
             name="Rat Swarm",
+            body_shape=BodyShape.SWARM,
+            feature=Feature.STRIPES,
             hp=31,
             attack=8,
             attack_name="Swarm Bite",
@@ -71,6 +75,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="cave-slime",
             name="Cave Slime",
+            body_shape=BodyShape.BLOB,
+            feature=Feature.TENTACLES,
             hp=44,
             attack=7,
             attack_name="Acid Splash",
@@ -83,6 +89,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="goblin-lookout",
             name="Goblin Lookout",
+            body_shape=BodyShape.BRUTE,
+            feature=Feature.HORNS,
             hp=31,
             attack=8,
             attack_name="Rusty Shiv",
@@ -95,6 +103,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="skeleton",
             name="Skeleton",
+            body_shape=BodyShape.GHOST,
+            feature=Feature.STRIPES,
             hp=32,
             attack=9,
             attack_name="Bone Club",
@@ -107,6 +117,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="gremlin",
             name="Gremlin",
+            body_shape=BodyShape.MACHINE,
+            feature=Feature.CIRCUITS,
             hp=33,
             attack=8,
             attack_name="Wrench Whack",
@@ -121,6 +133,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="bandit",
             name="Bandit",
+            body_shape=BodyShape.BRUTE,
+            feature=Feature.STRIPES,
             hp=50,
             attack=10,
             attack_name="Dagger Strike",
@@ -134,6 +148,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="wild-boar",
             name="Wild Boar",
+            body_shape=BodyShape.BRUTE,
+            feature=Feature.HORNS,
             hp=49,
             attack=11,
             attack_name="Gore",
@@ -146,6 +162,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="rust-monster",
             name="Rust Monster",
+            body_shape=BodyShape.BRUTE,
+            feature=Feature.TENTACLES,
             hp=46,
             attack=10,
             attack_name="Corroding Bite",
@@ -158,6 +176,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="cultist",
             name="Cultist",
+            body_shape=BodyShape.GHOST,
+            feature=Feature.TENTACLES,
             hp=65,
             attack=9,
             attack_name="Dark Bolt",
@@ -171,6 +191,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="plague-doctor",
             name="Plague Doctor",
+            body_shape=BodyShape.GHOST,
+            feature=Feature.STRIPES,
             hp=51,
             attack=10,
             attack_name="Bone Saw",
@@ -184,6 +206,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="corrupted-scribe",
             name="Corrupted Scribe",
+            body_shape=BodyShape.BLOB,
+            feature=Feature.TENTACLES,
             hp=56,
             attack=10,
             attack_name="Quill Stab",
@@ -199,6 +223,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="ogre",
             name="Ogre",
+            body_shape=BodyShape.BRUTE,
+            feature=Feature.HORNS,
             hp=62,
             attack=12,
             attack_name="Club Smash",
@@ -212,6 +238,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="gargoyle",
             name="Gargoyle",
+            body_shape=BodyShape.BRUTE,
+            feature=Feature.HORNS,
             hp=65,
             attack=12,
             attack_name="Stone Claw",
@@ -225,6 +253,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="mimic",
             name="Mimic",
+            body_shape=BodyShape.BLOB,
+            feature=Feature.TENTACLES,
             hp=56,
             attack=13,
             attack_name="Gnash",
@@ -242,6 +272,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="the-warden",
             name="The Warden",
+            body_shape=BodyShape.MACHINE,
+            feature=Feature.STRIPES,
             hp=98,
             attack=13,
             attack_name="Iron Verdict",
@@ -255,6 +287,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id="the-architect",
             name="The Architect",
+            body_shape=BodyShape.MACHINE,
+            feature=Feature.CIRCUITS,
             hp=102,
             attack=13,
             attack_name="Null Decree",
@@ -268,6 +302,8 @@ ENEMY_POOL: dict[str, list[Enemy]] = {
         Enemy(
             id=FINAL_BOSS_ID,
             name="OMEGA",
+            body_shape=BodyShape.MACHINE,
+            feature=Feature.CIRCUITS,
             hp=102,
             attack=13,
             attack_name="Proof of Inevitability",
