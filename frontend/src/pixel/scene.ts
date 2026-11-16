@@ -92,6 +92,11 @@ const MAX_PARTICLES = 700;
 const MAX_PROJECTILES = 24;
 const MAX_ACTIONS = 16;
 const MAX_PULSES = 6;
+// A heavy hit (heavyHit): the whole scene shakes this long (steps of
+// STEP_MS - 12 is 200 ms) by at most HEAVY_SHAKE_PX logical pixels, which is
+// also the cap for every other shake.
+const HEAVY_SHAKE_STEPS = 12;
+const HEAVY_SHAKE_PX = 2;
 
 // the cable from the keyboard down the pult and along the floor into the rift
 const CABLE: [number, number][] = [];
@@ -544,13 +549,25 @@ export class PixelScene {
     if (this.reducedMotion) return;
     const w = Math.max(0, Math.min(1, weight));
     if (w >= 0.12) this.frozen = Math.round(3 + w * 6);
-    this.shakeFor(Math.round(4 + w * 14), w >= 0.25 ? 3 : w >= 0.1 ? 2 : 1);
+    this.shakeFor(Math.round(4 + w * 14), w >= 0.1 ? 2 : 1);
     if (w >= 0.25) this.flash = Math.max(this.flash, 2);
+  }
+
+  // A hit of 10 or more as it lands (CombatArena): the scene shakes for
+  // 200 ms, and - on the enemy - it jerks back and blinks white. Nothing
+  // with reduced motion: the damage number says it on its own there.
+  heavyHit(side: "enemy" | "player") {
+    if (this.reducedMotion) return;
+    this.shakeFor(HEAVY_SHAKE_STEPS, HEAVY_SHAKE_PX);
+    if (side !== "enemy") return;
+    this.enemyFlash = Math.max(this.enemyFlash, 8);
+    this.ex = 7;
+    this.finalBoss?.hurt();
   }
 
   private shakeFor(steps: number, amp: number) {
     this.shake = Math.max(this.shake, steps);
-    this.shakeAmp = Math.max(this.shake > 0 ? this.shakeAmp : 0, amp);
+    this.shakeAmp = Math.min(HEAVY_SHAKE_PX, Math.max(this.shake > 0 ? this.shakeAmp : 0, amp));
   }
 
   // One step of a running action; returns true once it is over.
@@ -708,10 +725,12 @@ export class PixelScene {
         return age > 20;
       }
       case EV.enemy_hurt: {
-        if (age === 0) {
-          this.enemyFlash = 4;
+        // with reduced motion a hit shows as its number alone (CombatArena)
+        if (age === 0 && !this.reducedMotion) {
+          // max: a heavyHit landing in the same step keeps its longer blink
+          this.enemyFlash = Math.max(this.enemyFlash, 4);
           this.glitch = 12;
-          this.ex = 4;
+          this.ex = Math.max(this.ex, 4);
           this.finalBoss?.hurt();
           this.burst(ecx - 4, ecy, 14, RAMP.cyan, 1.4);
           this.shakeFor(4, 1);
@@ -833,6 +852,8 @@ export class PixelScene {
     if (!e || this.enemyDead) return;
     this.enemyDead = true;
     if (this.finalBoss) return this.finalBoss.die();
+    // reduced motion: it is simply gone, no shower of pixels
+    if (this.reducedMotion) return;
     this.flash = 2;
     this.shakeFor(10, 2);
     const ox = ENEMY_X - Math.floor(e.w / 2);

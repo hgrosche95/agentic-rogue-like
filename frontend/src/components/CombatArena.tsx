@@ -197,7 +197,8 @@ function IntentMarker({ enemy }: { enemy: ArenaEnemy }) {
 // over Dr. Chronos, the fork/loop multiplier, or the interrupt's cut.
 interface ProgramFx {
   id: number;
-  kind: "damage" | "combo" | "block" | "heal" | "cut";
+  // guard: block the enemy raised, over the enemy
+  kind: "damage" | "combo" | "block" | "guard" | "heal" | "cut";
   text: string;
   // how many of its kind are up already - they stack instead of overlapping
   stack: number;
@@ -207,6 +208,10 @@ interface ProgramFx {
 
 const PROGRAM_FX_MS = 2000;
 
+// A hit of this much damage or more shakes the scene and makes the enemy
+// jerk back and blink (PixelScene.heavyHit).
+const HEAVY_HIT = 10;
+
 // Numbers on Dr. Chronos' side go on his body, like the enemy's on its own:
 // over his head they would float up into the HUD plate hanging there.
 const PLAYER_FX_TOP = FLOOR - 34;
@@ -215,7 +220,7 @@ function ProgramFxPopup({ fx, enemyTop }: { fx: ProgramFx; enemyTop: number }) {
   if (fx.kind === "cut") {
     return <span className="arena-cut">{fx.text}</span>;
   }
-  const onEnemy = fx.kind === "damage" || fx.kind === "combo";
+  const onEnemy = fx.kind === "damage" || fx.kind === "combo" || fx.kind === "guard";
   // on the enemy's body, clear of the intent marker over its head
   const top = onEnemy ? enemyTop + 14 - (fx.kind === "combo" ? 14 : 0) - fx.stack * 9 : PLAYER_FX_TOP - fx.stack * 9;
   return (
@@ -327,6 +332,7 @@ export function CombatArena({
   hero = "chronos",
   contextFull = false,
   playerMaxHp = 50,
+  programMode = false,
   turn,
   children,
   ref,
@@ -346,6 +352,8 @@ export function CombatArena({
   contextFull?: boolean;
   // scales how hard a hit on Dr. Chronos lands on the stage
   playerMaxHp?: number;
+  // program mode puts up the player's block per line itself (programHit)
+  programMode?: boolean;
   children?: ReactNode;
   ref?: Ref<ArenaHandle>;
 }) {
@@ -413,6 +421,7 @@ export function CombatArena({
       window.setTimeout(() => {
         scene?.trigger("enemy_hurt");
         scene?.impact(hit.weight);
+        if (hit.dealt >= HEAVY_HIT) scene?.heavyHit("enemy");
         sfx.play("impact");
         shake("enemy", hit.weight);
         showFx("damage", `-${hit.dealt}`, hit.weight);
@@ -444,6 +453,7 @@ export function CombatArena({
       timers.push(
         window.setTimeout(() => {
           scene.impact(weight);
+          if (-exchange.enemyDelta >= HEAVY_HIT) scene.heavyHit("enemy");
           shake("enemy", weight);
         }, tempoMs(ENEMY_HIT_MS)),
       );
@@ -451,11 +461,26 @@ export function CombatArena({
     if (exchange.playerDelta < 0) {
       scene.trigger("player_hurt", PLAYER_HIT_MS);
       const weight = -exchange.playerDelta / Math.max(1, playerMaxHp);
-      timers.push(window.setTimeout(() => shake("player", weight * 2), tempoMs(PLAYER_HIT_MS)));
+      timers.push(
+        window.setTimeout(() => {
+          if (-exchange.playerDelta >= HEAVY_HIT) scene.heavyHit("player");
+          shake("player", weight * 2);
+        }, tempoMs(PLAYER_HIT_MS)),
+      );
     }
     if (exchange.playerDelta > 0) scene.trigger("player_healed", 350);
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, [exchange, maxHp, playerMaxHp, shake]);
+
+  // Block raised shows as a blue number over whoever raised it - the
+  // player's only outside program mode, where each line puts up its own.
+  const lastBlock = useRef({ player: status.block, enemy: status.enemyBlock });
+  useEffect(() => {
+    const before = lastBlock.current;
+    lastBlock.current = { player: status.block, enemy: status.enemyBlock };
+    if (!programMode && status.block > before.player) showFx("block", `+${status.block - before.player}`);
+    if (status.enemyBlock > before.enemy) showFx("guard", `+${status.enemyBlock - before.enemy}`);
+  }, [status.block, status.enemyBlock, programMode, showFx]);
 
   // The enemy comes apart once the killing blow has landed.
   useEffect(() => {
