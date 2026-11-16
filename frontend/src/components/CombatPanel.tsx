@@ -924,6 +924,7 @@ export function CombatPanel({
       <div className="arena-wrap" onPointerDown={() => skipAnimation()}>
         <CombatArena
           ref={arenaRef}
+          programMode={programMode}
           status={{
             block: combat.player_block,
             armor: combat.armor,
