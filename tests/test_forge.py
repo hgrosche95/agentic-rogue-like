@@ -190,3 +190,7 @@ def test_the_card_agent_only_hears_the_scalings_of_the_style(monkeypatch) -> Non
     assert by_agent and card.name == "Shred Storm"
     assert "banished (typically" in model.prompts[0] and "permanent (" not in model.prompts[0]
     assert "doesn't fit a deck that leans on one-shot cards" in model.prompts[1]
+
+
+def test_card_build_graph_is_cached() -> None:
+    assert card_agent.build_graph() is card_agent.build_graph()

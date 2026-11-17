@@ -18,6 +18,7 @@ import logging
 import os
 import random
 from collections.abc import Callable
+from functools import cache
 from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
@@ -99,6 +100,7 @@ def _route(state: EventState) -> str:
     return "give_up" if state["attempt"] >= MAX_ATTEMPTS else "retry"
 
 
+@cache
 def build_graph() -> CompiledStateGraph:
     from langgraph.graph import END, StateGraph
 

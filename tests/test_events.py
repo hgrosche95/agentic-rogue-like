@@ -210,3 +210,7 @@ def test_effect_kinds_are_all_covered_by_the_pool() -> None:
         for e in option.effects + option.fail_effects
     }
     assert used == set(EffectKind)
+
+
+def test_event_build_graph_is_cached() -> None:
+    assert event_agent.build_graph() is event_agent.build_graph()

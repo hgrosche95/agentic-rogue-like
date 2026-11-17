@@ -22,6 +22,7 @@ import logging
 import os
 import random
 from collections.abc import Callable
+from functools import cache
 from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 
 if TYPE_CHECKING:
@@ -280,6 +281,7 @@ def _route_after_validation(state: EncounterState) -> str:
     return "retry"
 
 
+@cache
 def build_graph() -> CompiledStateGraph:
     # Same lazy-import reasoning as _model() above, for langgraph.
     from langgraph.graph import END, StateGraph

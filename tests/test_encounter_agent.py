@@ -510,3 +510,7 @@ def test_enemy_retry_counts_each_attempt(monkeypatch) -> None:
 
     assert result["attempt"] == encounter_agent.MAX_ATTEMPTS
     assert usage.totals()["encounter"] == {"calls": 3, "input_tokens": 30, "output_tokens": 3}
+
+
+def test_build_graph_is_cached() -> None:
+    assert encounter_agent.build_graph() is encounter_agent.build_graph()
