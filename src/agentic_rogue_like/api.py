@@ -889,7 +889,7 @@ def resolve_current_node(run_id: str) -> RunView:
     # start_combat_node / resolve_node), not once it finishes - so this is
     # the right guard even while an event/combat is still in progress. A
     # laxer check here would let a second /resolve call quietly restart a
-    # combat mid-fight and hand the player a brand new hand and full energy.
+    # combat mid-fight and hand the player a brand new hand.
     if node.visited:
         raise HTTPException(status_code=409, detail="node already resolved")
     if run.artifact_offer is not None:

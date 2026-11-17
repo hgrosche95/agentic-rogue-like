@@ -1,8 +1,9 @@
-"""The terminal-playable core loop - Phase 1, no LLM involved yet.
+"""The terminal-playable core loop.
 
 Ties map generation, combat and events together into a single playable run.
-This is the loop the encounter agent (Phase 2) plugs into later: it only
-replaces *where node content comes from*, not this loop's structure.
+Node content (which enemy, which event, which card, which flavor text) comes
+from the agent modules, each degrading to the static pools when the agent
+can't deliver - the loop's structure is the same either way.
 """
 
 from __future__ import annotations
