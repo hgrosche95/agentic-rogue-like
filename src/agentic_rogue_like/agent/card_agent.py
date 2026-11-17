@@ -15,6 +15,7 @@ never the run.
 from __future__ import annotations
 
 import logging
+from functools import cache
 from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
@@ -105,6 +106,7 @@ def _route(state: CardState) -> str:
     return "give_up" if state["attempt"] >= MAX_ATTEMPTS else "retry"
 
 
+@cache
 def build_graph() -> CompiledStateGraph:
     from langgraph.graph import END, StateGraph
 

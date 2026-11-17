@@ -1,8 +1,8 @@
 """Per-floor-tier balance envelopes the encounter agent must generate inside of.
 
 Mirrors the early/mid/elite/boss tiering enemies.py already uses for its
-static pool - budget_for() has the same signature as pick_enemy() so it can
-slot into engine.py the same way once Phase 2 wires the agent in.
+static pool - budget_for() has the same signature as pick_enemy(), which the
+encounter agent falls back to when it can't generate.
 """
 
 from __future__ import annotations

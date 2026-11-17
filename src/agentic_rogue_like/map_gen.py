@@ -1,7 +1,7 @@
 """Procedural node-map generation - the deterministic backbone every run is built on.
 
-Later, node *content* (which enemy, which event) comes from the encounter
-agent (Phase 2); this module only decides the map's shape.
+Node *content* (which enemy, which event) comes from the encounter agent;
+this module only decides the map's shape.
 """
 
 from __future__ import annotations
