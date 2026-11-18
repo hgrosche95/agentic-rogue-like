@@ -401,3 +401,61 @@ def test_client_errors_are_logged_and_capped(caplog) -> None:
             client.post("/client-errors", json={"message": "again"})
     assert caplog.text.count("again") == api.CLIENT_ERRORS_PER_MINUTE - 1
     api._client_error_times.clear()
+
+
+def test_verdict_generated_once_and_stored(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from agentic_rogue_like.agent import verdict
+    from agentic_rogue_like.sessions import get_session
+
+    run = _play_full_run(1)
+    run_id = run["run_id"]
+    calls = SimpleNamespace(count=0)
+
+    def _stub(_run) -> str:
+        calls.count += 1
+        return "Stub verdict."
+
+    monkeypatch.setattr(verdict, "generate_verdict", _stub)
+
+    first = client.get(f"/runs/{run_id}/verdict")
+    second = client.get(f"/runs/{run_id}/verdict")
+
+    assert first.status_code == 200 and second.status_code == 200
+    assert first.json() == {"verdict": "Stub verdict."}
+    assert second.json() == {"verdict": "Stub verdict."}
+    assert calls.count == 1
+    assert get_session(run_id).run.verdict == "Stub verdict."
+
+
+def test_verdict_clips_long_model_text(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from agentic_rogue_like.agent import verdict
+
+    run = _play_full_run(2)
+    monkeypatch.setenv("ENCOUNTER_AGENT_ENABLED", "1")
+    model = SimpleNamespace(invoke=lambda prompt: SimpleNamespace(content="z" * 1000))
+    monkeypatch.setattr(verdict, "_model", lambda: model)
+
+    response = client.get(f"/runs/{run['run_id']}/verdict")
+
+    assert response.status_code == 200
+    assert len(response.json()["verdict"]) <= 400
+
+
+def test_verdict_ongoing_run_returns_409() -> None:
+    run = client.post("/runs", json={"seed": 1}).json()
+
+    response = client.get(f"/runs/{run['run_id']}/verdict")
+
+    assert response.status_code == 409
+
+
+def test_verdict_unknown_run_returns_404() -> None:
+    import uuid
+
+    response = client.get(f"/runs/{uuid.uuid4()}/verdict")
+
+    assert response.status_code == 404
