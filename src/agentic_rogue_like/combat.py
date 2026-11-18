@@ -1888,8 +1888,7 @@ def _apply_action_effect(
         state.hand.extend(returning)
         return (
             f"You play {card.name}, wiping {len(destroyed)} permanent card(s) and "
-            f"restoring {_names(returning)} from Banished."
-            + _banish(state, destroyed, rng)
+            f"restoring {_names(returning)} from Banished." + _banish(state, destroyed, rng)
         )
 
     if card.type is CardType.COMPACT:
