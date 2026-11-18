@@ -1,21 +1,50 @@
 """The run summary's numbers (models.RunStats), kept as the run goes.
 
 Nothing here feeds back into play. Fights count themselves on their
-CombatState (combat.FightTally) and are folded in once they end
-(record_fight); what changes outside a fight - cards gained, removed and
-upgraded, credits earned and spent - is read off the run itself
-(note_changes), so the shop, the rest site, events and rewards need no hook
-of their own. Only interactive fights (engine.start_combat_node and on) are
-counted: auto_resolve_combat keeps its CombatState to itself.
+CombatState (combat.FightTally) and are folded in once they end:
+interactively (record_fight), or in one go, where the caller hands
+auto_resolve_combat the tally to count into and folds it itself
+(fold_tally, engine.resolve_node). What changes outside a fight - cards
+gained, removed and upgraded, credits earned and spent - is read off the run
+itself (note_changes), so the shop, the rest site, events and rewards need no
+hook of their own.
+
+TIERS and tier_for - which enemy tier a room is scaled for - live here too,
+so the run's stats and `balance-sim` (balance_sim.py) read one definition.
 """
 
 from __future__ import annotations
 
 import time
 
-from .combat import CombatState, offer_combo
-from .enemies import FINAL_BOSS_ID
-from .models import Card, CardType, Combo, KillingBlow, MapNode, NodeType, RunState, RunStatus
+from .combat import CombatState, FightTally, offer_combo
+from .enemies import FINAL_BOSS_ID, tier_floor
+from .map_gen import NUM_FLOORS
+from .models import (
+    Card,
+    CardType,
+    Combo,
+    DefeatedEnemy,
+    Enemy,
+    KillingBlow,
+    MapNode,
+    NodeType,
+    RunState,
+    RunStatus,
+)
+
+# The tiers a fight is scaled for - the same names the balance simulator's
+# enemy budgets use (agent/budgets.py).
+TIERS = ("early", "mid", "elite", "boss")
+
+
+def tier_for(floor: int, node_type: NodeType, act: int = 1) -> str:
+    """The tier an enemy in this room is scaled for (see enemies.escalate)."""
+    if node_type is NodeType.BOSS:
+        return "boss"
+    if node_type is NodeType.ELITE:
+        return "elite"
+    return "early" if tier_floor(floor, NUM_FLOORS, act) < NUM_FLOORS // 2 else "mid"
 
 
 def begin(run: RunState) -> None:
@@ -72,35 +101,70 @@ def record_play(run: RunState, state: CombatState, card: Card, dealt: int) -> No
         )
 
 
-def close_turn(state: CombatState) -> None:
+def close_turn(tally: FightTally) -> None:
     """Classic play: the turn's cards are one combo, offered as the best."""
-    tally = state.tally
     tally.best_combo = offer_combo(tally.best_combo, tally.turn_combo)
     tally.turn_combo = None
 
 
-def record_fight(run: RunState, state: CombatState, node: MapNode, victory: bool) -> None:
-    """Fold a finished fight into the run's stats - after engine._finish_combat,
-    so a fight that ended the run also stamps its end."""
-    close_turn(state)
-    stats, tally = run.stats, state.tally
-    stats.turns += state.turn
+def fold_tally(
+    run: RunState, tally: FightTally, node: MapNode, enemy: Enemy, victory: bool
+) -> None:
+    """Fold a finished fight's tally into the run's stats.
+
+    A won fight names its enemy in `defeated` - with the tier the room was
+    scaled for and the act it was fought in; a lost one names its killer in
+    `killed_by` instead. Never both.
+
+    Only the auto path counts its plays per card on the tally (interactive
+    play goes through record_play), so its card_plays join play_counts.
+
+    The run's end stamp is not set here - see stamp_end."""
+    close_turn(tally)
+    stats = run.stats
+    stats.turns += tally.turns
     stats.damage_dealt += tally.damage_dealt
     stats.damage_taken += tally.damage_taken
     stats.biggest_hit = max(stats.biggest_hit, tally.biggest_hit)
     stats.best_combo = offer_combo(stats.best_combo, tally.best_combo)
+    for name, count in tally.card_plays.items():
+        stats.play_counts[name] = stats.play_counts.get(name, 0) + count
     if victory:
         stats.fights_won += 1
         stats.elites_defeated += node.type is NodeType.ELITE
         stats.bosses_defeated += node.type is NodeType.BOSS
-    else:
-        move = tally.killed_by or state.enemy.attack_name
-        stats.killed_by = KillingBlow(
-            enemy=state.enemy.name,
-            move=move,
-            enemy_max_hp=state.enemy.hp,
-            enemy_attack=state.enemy.attack,
-            final_boss=state.enemy.id == FINAL_BOSS_ID,
+        stats.defeated.append(
+            DefeatedEnemy(
+                name=enemy.name,
+                tier=tier_for(node.floor, node.type, run.act),
+                act=run.act,
+            )
         )
-    if run.status is not RunStatus.ONGOING:
-        stats.ended_at = time.time()
+    else:
+        move = tally.killed_by or enemy.attack_name
+        stats.killed_by = KillingBlow(
+            enemy=enemy.name,
+            move=move,
+            enemy_max_hp=enemy.hp,
+            enemy_attack=enemy.attack,
+            final_boss=enemy.id == FINAL_BOSS_ID,
+        )
+
+
+def stamp_end(run: RunState) -> None:
+    """Stamp the run's end time - once the status left ONGOING, first call wins.
+
+    Run it after the transition (engine._finish_combat), not from fold_tally:
+    the auto path folds while the run is still ONGOING."""
+    if run.status is not RunStatus.ONGOING and run.stats.ended_at is None:
+        run.stats.ended_at = time.time()
+
+
+def record_fight(run: RunState, state: CombatState, node: MapNode, victory: bool) -> None:
+    """Fold a finished interactive fight into the run's stats.
+
+    Called after engine._finish_combat: the fight's turn count is the state's
+    own, and stamp_end marks a run this fight ended."""
+    state.tally.turns = state.turn
+    fold_tally(run, state.tally, node, state.enemy, victory)
+    stamp_end(run)

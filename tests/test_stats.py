@@ -3,14 +3,22 @@ import random
 from fastapi.testclient import TestClient
 from test_api import _play_full_run
 
+from agentic_rogue_like import engine
 from agentic_rogue_like.api import app
 from agentic_rogue_like.cards import PROGRAM_REWARD_POOL, REWARD_POOL, starter_deck, upgrade_card
-from agentic_rogue_like.combat import EnemyIntentType, end_turn, start_combat
+from agentic_rogue_like.combat import (
+    EnemyIntentType,
+    FightTally,
+    auto_resolve_combat,
+    end_turn,
+    start_combat,
+)
 from agentic_rogue_like.engine import (
     end_combat_turn,
     finalize_combat,
     new_run,
     play_combat_card,
+    resolve_node,
     start_combat_node,
 )
 from agentic_rogue_like.models import Enemy, NodeType, RunState, RunStatus, Status
@@ -41,6 +49,104 @@ def test_old_runs_load_without_stats() -> None:
     run = RunState.model_validate(data)
 
     assert run.stats.fights_won == 0 and run.stats.started_at is None
+
+
+def test_old_runs_load_without_defeated() -> None:
+    data = new_run(1).model_dump()
+    data["stats"].pop("defeated", None)
+
+    run = RunState.model_validate(data)
+
+    assert run.stats.defeated == []
+
+
+def test_won_fight_records_defeated_enemy() -> None:
+    from agentic_rogue_like.stats import tier_for
+
+    run = _started()
+    rng = random.Random(1)
+    state = start_combat_node(run, rng)
+    node = run.nodes[run.current_node_id]
+    state.enemy_hp = 7
+    state.hand = [_card("Exploit"), _card("Exploit")]
+    play_combat_card(run, state, 0, 0, rng)
+    play_combat_card(run, state, 0, 1, rng)
+    finalize_combat(run, state, rng)
+
+    assert len(run.stats.defeated) == 1
+    entry = run.stats.defeated[0]
+    assert entry.name == state.enemy.name
+    assert entry.act == run.act
+    assert entry.tier == tier_for(node.floor, node.type, run.act)
+
+
+def test_lost_fight_adds_no_defeated() -> None:
+    run = _started()
+    rng = random.Random(1)
+    state = start_combat_node(run, rng)
+    state.hand = []
+    state.enemy_intent = EnemyIntentType.ATTACK
+    state.enemy_move = None
+    run.player.hp = 1
+    end_combat_turn(run, state, rng, discard=[])
+    finalize_combat(run, state, rng)
+
+    assert run.stats.defeated == []
+    # killed_by stays a KillingBlow, whose enemy field holds the name
+    assert run.stats.killed_by.enemy == state.enemy.name
+
+
+def _auto_fight(monkeypatch, enemy: Enemy, hp: int | None = None) -> RunState:
+    run = _started()
+    if hp is not None:
+        run.player.hp = hp
+    monkeypatch.setattr(engine, "_room_enemy", lambda *args, **kwargs: enemy.model_copy(deep=True))
+    resolve_node(run, random.Random(3))
+    return run
+
+
+def test_auto_resolved_win_updates_stats(monkeypatch) -> None:
+    enemy = Enemy(id="e", name="Foe", hp=8, attack=1, attack_name="Hit")
+    run = _auto_fight(monkeypatch, enemy)
+
+    stats = run.stats
+    assert stats.fights_won == 1
+    assert stats.turns >= 1
+    assert stats.damage_dealt >= enemy.hp
+    assert 0 < stats.biggest_hit <= stats.damage_dealt
+    assert sum(stats.play_counts.values()) >= 1
+    assert stats.defeated[0].name == enemy.name
+
+
+def test_auto_resolved_loss_sets_killed_by(monkeypatch) -> None:
+    enemy = Enemy(id="e", name="Brute", hp=9999, attack=50, attack_name="Smash")
+    run = _auto_fight(monkeypatch, enemy, hp=1)
+
+    stats = run.stats
+    assert stats.fights_won == 0
+    assert stats.killed_by.enemy == enemy.name
+    assert stats.damage_taken >= 1
+
+
+def test_auto_resolved_loss_stamps_ended_at(monkeypatch) -> None:
+    enemy = Enemy(id="e", name="Brute", hp=9999, attack=50, attack_name="Smash")
+    run = _auto_fight(monkeypatch, enemy, hp=1)
+
+    stats = run.stats
+    assert run.status is RunStatus.DEFEAT
+    assert stats.ended_at is not None and stats.ended_at >= stats.started_at
+
+
+def test_auto_resolve_without_tally_unchanged() -> None:
+    enemy = Enemy(id="e", name="Foe", hp=30, attack=4, attack_name="Hit")
+
+    def fight(tally: FightTally | None) -> tuple[bool, list[str]]:
+        run = _started()
+        return auto_resolve_combat(
+            run.player.deck, enemy.model_copy(deep=True), run.player, random.Random(5), tally=tally
+        )
+
+    assert fight(FightTally()) == fight(None)
 
 
 def test_deck_and_credit_changes_are_counted_but_not_the_start() -> None:

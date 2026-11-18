@@ -20,7 +20,7 @@ from .agent.voice import VoiceTrigger, fallback_voice, pick_line
 from .artifacts import gain_artifact, heal, roll_artifact_offer, total
 from .cards import can_upgrade, reward_card, roll_card_reward, upgrade_card
 from .characters import CHARACTERS, artifact_pool, reward_pool
-from .combat import CombatState, CombatVoice, auto_resolve_combat, voice_lines
+from .combat import CombatState, CombatVoice, FightTally, auto_resolve_combat, voice_lines
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
@@ -44,7 +44,7 @@ from .models import (
 from .omega import adapt_omega, omega_taunts
 from .shop import MIN_DECK_SIZE, leave_shop, roll_shop
 from .starts import apply_deal, apply_kit, roll_deals, roll_kits
-from .stats import begin, close_turn, record_fight, record_play
+from .stats import begin, close_turn, fold_tally, record_fight, record_play, stamp_end
 from .style import PlayStyle, answers, key_cards, play_style, style_counts, taunt
 
 if TYPE_CHECKING:
@@ -595,7 +595,7 @@ def end_combat_turn(
     run.history.extend(_end_combat_turn(state, run.player, rng, discard))
     run.history.extend(voice_lines(state))
     if not state.program_mode:
-        close_turn(state)
+        close_turn(state.tally)
 
 
 def finalize_combat(run: RunState, state: CombatState, rng: random.Random) -> None:
@@ -641,6 +641,7 @@ def resolve_node(
 
     if node.type in (NodeType.COMBAT, NodeType.ELITE, NodeType.BOSS):
         enemy = _room_enemy(run, node, rng)
+        tally = FightTally()
         victory, log = auto_resolve_combat(
             run.player.deck,
             enemy,
@@ -650,9 +651,15 @@ def resolve_node(
             boss_phases=boss_phases(run.act),
             program_mode=run.program_mode,
             voice=_combat_voice(run, node, enemy),
+            tally=tally,
         )
         run.history.extend(log)
+        # Folded before _finish_combat, which moves the run to the next act at
+        # an act boss: the entry names the act and tier the fight was in.
+        fold_tally(run, tally, node, enemy, victory)
         _finish_combat(run, node, enemy.name, victory, rng)
+        # The end stamp has to follow the status transition _finish_combat makes.
+        stamp_end(run)
         if run.card_reward is not None:
             offer = run.card_reward
             choose_card_reward(

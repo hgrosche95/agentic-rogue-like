@@ -148,6 +148,22 @@ def _won_fight(seed: int) -> tuple[str, dict]:
     return run_id, run
 
 
+def test_run_response_includes_stats() -> None:
+    resp = client.post("/runs", json={"seed": 1}).json()
+
+    assert resp["stats"]["fights_won"] == 0
+    assert resp["stats"]["defeated"] == []
+    assert resp["stats"]["killed_by"] is None
+    assert resp["summary"] is None
+
+
+def test_stats_after_won_fight() -> None:
+    _, resp = _won_fight(3)
+
+    assert resp["stats"]["fights_won"] == 1
+    assert len(resp["stats"]["defeated"]) == 1
+
+
 def test_card_reward_blocks_moving_on_until_picked() -> None:
     run_id, run = _won_fight(3)
     assert run["status"] == "ongoing"
