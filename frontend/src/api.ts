@@ -393,6 +393,13 @@ export interface ShopView {
 
 export interface RunView {
   run_id: string;
+  // The run's seed, added to the view so the end screen can offer to copy it
+  // and replay the same run. models.RunState.seed is a required int and
+  // RunView.seed follows it (api.py), so a current server always sends one;
+  // the type stays nullable here for a server that predates the field, whose
+  // answer has none - the end screen then leaves the "Copy seed" button out
+  // rather than copying `undefined`.
+  seed: number | null;
   status: RunStatus;
   act: number;
   num_acts: number;
@@ -421,6 +428,10 @@ export interface RunView {
   play_style: PlayStyle | null;
   style_counts: Partial<Record<PlayStyle, number>>;
   nodes: Record<string, MapNode>;
+  // the run in numbers as it stands right now (models.RunStats, kept by
+  // stats.py) - live in every response, so fights_won / turns / damage /
+  // defeated / killed_by can be shown mid-run, not only on the end screen
+  stats: RunStats;
   // once the run is over (victory or defeat): the run in numbers
   summary: RunSummary | null;
 }
@@ -456,14 +467,51 @@ export interface RunSummary {
   credits_spent: number;
   artifacts_collected: number;
   // a defeat: the enemy, and the move (or Malware, Thorns, ...) that took the last HP
-  killed_by: {
-    enemy: string;
-    move: string;
-    // to draw it as it was in the fight (0 for a run from before)
-    enemy_max_hp: number;
-    enemy_attack: number;
-    final_boss: boolean;
-  } | null;
+  killed_by: KillingBlow | null;
+}
+
+// models.KillingBlow. HP and attack let the end screen draw the killer as it
+// stood in the fight (they are 0 for a run from before the stats were kept).
+export interface KillingBlow {
+  enemy: string;
+  move: string;
+  enemy_max_hp: number;
+  enemy_attack: number;
+  final_boss: boolean;
+}
+
+// models.DefeatedEnemy: an enemy the run beat, the tier it was fought at
+// (stats.TIERS: "early", "mid", "elite", "boss") and its act.
+export interface DefeatedEnemy {
+  name: string;
+  tier: string;
+  act: number;
+}
+
+// models.RunStats: what the run collected as it went (stats.py). `seen_deck`
+// and `seen_gold` are left out - they are the ledger note_changes compares
+// the deck and the credits against, and mean nothing to the client. The other
+// fields the model carries (timestamps, combo, deck deltas, credits) are not
+// read here either, so they are left out too.
+export interface RunStats {
+  fights_won: number;
+  elites_defeated: number;
+  bosses_defeated: number;
+  turns: number;
+  damage_dealt: number;
+  damage_taken: number;
+  biggest_hit: number;
+  cards_played: number;
+  // plays per card name - the end screen ranks the three most-played off this
+  play_counts: Record<string, number>;
+  // the card played most: models.RunStats keeps the Card itself (mvp_card:
+  // Card | None), and api.py's RunView puts that very model in `stats`
+  // unconverted - so the wire shape here is the Card, not a bare name. (The
+  // summary's mvp_card is the other thing: RunSummaryView rebuilds it as a
+  // CardView and adds mvp_plays, which the model has no room for.)
+  mvp_card: Card | null;
+  defeated: DefeatedEnemy[];
+  killed_by: KillingBlow | null;
 }
 
 // Runs only live in the API's memory (sessions.py): a restart or an idle
@@ -551,6 +599,16 @@ export function listCharacters(): Promise<CharacterView[]> {
 
 export function getRun(runId: string): Promise<RunView> {
   return request<RunView>(`/runs/${runId}`);
+}
+
+// The AGI's verdict on a finished run (agent/verdict.py). A run still underway
+// answers 409, and the text is only made on the first call - the end screen
+// treats 409 (and every other failure bar the 404) as "no verdict", so the
+// caller catches instead of showing an error screen.
+export function getVerdict(runId: string): Promise<{ verdict: string }> {
+  // with the agent gate on this is one model call (verdict.generate_verdict),
+  // which can take as long as the encounter agent's waits
+  return request<{ verdict: string }>(`/runs/${runId}/verdict`, undefined, SLOW_TIMEOUT_MS);
 }
 
 export function createRun(

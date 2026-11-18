@@ -1,12 +1,5 @@
 import { useState } from "react";
-
-const SETTING_LABELS: Record<string, string> = {
-  dungeon: "Dungeon",
-  cyberpunk: "Cyberpunk",
-  "alien planet": "Alien Planet",
-  "pirate seas": "Pirate Seas",
-  "haunted carnival": "Haunted Carnival",
-};
+import { SETTING_LABELS } from "../settings";
 
 const MAX_CUSTOM_SETTING_LENGTH = 40;
 

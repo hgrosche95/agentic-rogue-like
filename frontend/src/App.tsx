@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import "./App.css";
 import "@fontsource/orbitron/500.css";
 import "@fontsource/orbitron/700.css";
@@ -253,6 +253,19 @@ function App() {
     if (runId !== null) storeRunId(runId);
   }, [runId]);
 
+  // The server lost this run for good: put the message up and drop back to the
+  // title screen - nothing left to retry against. Shared by runAction's catch
+  // and the end screen's verdict fetch, whose request is not a runAction and
+  // cannot reach this catch.
+  // useCallback keeps the handler stable across renders, so the end screen can
+  // keep it in its fetch effect's deps without refiring the verdict call
+  const handleRunLost = useCallback((err: Error) => {
+    setError(err.message);
+    sfx.play("error");
+    setRun(null);
+    setSlainCombat(null);
+  }, []);
+
   async function runAction(action: () => Promise<RunView>, label = "Loading...") {
     setLoadingLabel(label);
     setIsLoading(true);
@@ -267,12 +280,11 @@ function App() {
       );
       setRun(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      sfx.play("error");
-      // nothing left to retry against - back to the title screen
       if (err instanceof RunLostError) {
-        setRun(null);
-        setSlainCombat(null);
+        handleRunLost(err);
+      } else {
+        setError(err instanceof Error ? err.message : String(err));
+        sfx.play("error");
       }
       // The move may have gone through without its answer: take the server's
       // word for where the run stands now.
@@ -534,6 +546,7 @@ function App() {
               storeRunId(null);
               setRun(null);
             }}
+            onRunLost={handleRunLost}
           />
         </Overlay>
       )}

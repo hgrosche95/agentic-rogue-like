@@ -437,6 +437,9 @@ class RunSummaryView(BaseModel):
 
 class RunView(BaseModel):
     run_id: str
+    # The run's seed (models.RunState.seed) - the end screen offers to copy it
+    # so the exact same run can be replayed.
+    seed: int
     status: RunStatus
     act: int
     num_acts: int
@@ -746,6 +749,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
 
     return RunView(
         run_id=run_id,
+        seed=run.seed,
         status=run.status,
         act=run.act,
         num_acts=NUM_ACTS,
