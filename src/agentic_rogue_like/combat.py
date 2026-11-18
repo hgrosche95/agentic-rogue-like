@@ -263,7 +263,15 @@ class FightTally(BaseModel):
 
     damage_dealt: int = 0  # HP the enemy lost
     damage_taken: int = 0  # HP the player lost
+    # The fight's turn count (the turn being played counts). Not kept ticking
+    # alongside CombatState.turn - the fight's end stamps it from there
+    # (auto_resolve_combat; stats.record_fight for an interactive fight).
+    turns: int = 1
     biggest_hit: int = 0
+    # Plays per card name - only the auto path fills it
+    # (auto_resolve_combat); interactive play counts its cards in
+    # stats.record_play instead.
+    card_plays: dict[str, int] = Field(default_factory=dict)
     # The best program run so far - in classic play the best turn, and the
     # turn being played (engine.play_combat_card / end_combat_turn).
     best_combo: Combo | None = None
@@ -2289,10 +2297,17 @@ def auto_resolve_combat(
     boss_phases: int = 2,
     program_mode: bool = False,
     voice: CombatVoice | None = None,
+    tally: FightTally | None = None,
 ) -> tuple[bool, list[str]]:
     """Play out a full fight non-interactively: dump the hand into the first
     empty field slot each turn, then end the turn, until someone runs out of HP.
     It never plays past the context window - no gambling on hallucinations.
+
+    `tally`: count the fight into this FightTally (stats.py folds it into the
+    run) instead of the fight's own; before returning, its turn count is
+    stamped from the fight's turn number. Nothing in play reads the tally, so
+    the fight - rng draws, log lines, who wins - comes out the same either
+    way.
     """
     state, log = start_combat(
         deck,
@@ -2305,6 +2320,8 @@ def auto_resolve_combat(
         program_mode=program_mode,
         voice=voice,
     )
+    if tally is not None:
+        state.tally = tally
 
     for _ in range(MAX_AUTO_TURNS):
         if state.enemy_hp <= 0 or player.hp <= 0:
@@ -2320,7 +2337,10 @@ def auto_resolve_combat(
             )
             if play is None:
                 break
+            played = state.hand[play[0]]
             log.append(play_card(state, *play, player, rng))
+            plays = state.tally.card_plays
+            plays[played.name] = plays.get(played.name, 0) + 1
             log.extend(voice_lines(state))
             # A thorny elite or a hallucination can take the player down mid-turn.
             if state.enemy_hp <= 0 or player.hp <= 0:
@@ -2330,4 +2350,6 @@ def auto_resolve_combat(
         log.extend(end_turn(state, player, rng))
         log.extend(voice_lines(state))
 
+    if tally is not None:
+        tally.turns = state.turn
     return state.enemy_hp <= 0, log

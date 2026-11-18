@@ -547,6 +547,16 @@ class KillingBlow(BaseModel):
     final_boss: bool = False
 
 
+class DefeatedEnemy(BaseModel):
+    """An enemy the run beat - which tier it was fought at (see stats.tier_for)
+    and in which act."""
+
+    name: str
+    # One of stats.TIERS: "early", "mid", "elite" or "boss".
+    tier: str
+    act: int
+
+
 class RunStats(BaseModel):
     """What the run summary shows once the run is over - kept as the run goes
     (see stats.py). Every field defaults, so a run started before stats
@@ -558,6 +568,9 @@ class RunStats(BaseModel):
     fights_won: int = 0
     elites_defeated: int = 0
     bosses_defeated: int = 0
+    # One entry per won fight - only wins land here, a lost fight names its
+    # enemy in killed_by instead.
+    defeated: list[DefeatedEnemy] = Field(default_factory=list)
     turns: int = 0
     damage_dealt: int = 0
     damage_taken: int = 0

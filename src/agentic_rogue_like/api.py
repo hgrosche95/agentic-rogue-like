@@ -101,6 +101,7 @@ from .models import (
     PlayerState,
     RestSite,
     RunState,
+    RunStats,
     RunStatus,
     Shop,
     StarterKit,
@@ -472,6 +473,12 @@ class RunView(BaseModel):
     # Every node in the run, not just the current/reachable ones - the
     # frontend draws the whole dungeon graph, not just the next step.
     nodes: dict[str, MapNode]
+    # The run in numbers as it stands right now (models.RunStats, kept by
+    # stats.py) - live in every response, so fights_won / turns / damage /
+    # defeated / killed_by can be shown mid-run, not only on the end screen.
+    # `seen_deck` and `seen_gold` are the ledger note_changes compares against
+    # and mean nothing to the client.
+    stats: RunStats
     # Once the run is over (victory or defeat): its summary.
     summary: RunSummaryView | None = None
 
@@ -768,6 +775,9 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
         play_style=(style.value if (style := play_style(run.player.deck)) else None),
         style_counts={s.value: n for s, n in style_counts(run.player.deck).items()},
         nodes=run.nodes,
+        # Filled after note_changes, so this response's stats already count
+        # what the request itself changed in the deck and the credits.
+        stats=run.stats,
         summary=None if run.status is RunStatus.ONGOING else RunSummaryView.of(run),
     )
 

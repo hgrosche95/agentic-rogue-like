@@ -98,7 +98,6 @@ from .enemies import (
     ENEMY_POOL,
     escalate,
     pick_enemy,
-    tier_floor,
     with_affix,
     with_program_move,
 )
@@ -123,10 +122,10 @@ from .models import (
 )
 from .omega import adapt_omega
 from .starts import apply_deal, apply_kit, roll_deals, roll_kits
+from .stats import TIERS, tier_for
 from .style import PlayStyle, card_styles, play_style, style_counts
 from .threat import DEFAULT_MODEL, ThreatModel, threat
 
-TIERS = ("early", "mid", "elite", "boss")
 REST_HEAL = 15  # mirrors engine.resolve_node's REST branch
 
 
@@ -242,14 +241,6 @@ def random_enemy(budget: EnemyBudget, tier: str, rng: random.Random) -> Enemy:
 # their own: mid and boss always sit in the map's second half, and an
 # elite is measured there too - its harder case.
 _TIER_FLOOR = {"early": 0, "mid": NUM_FLOORS // 2, "elite": NUM_FLOORS // 2, "boss": NUM_FLOORS - 1}
-
-
-def tier_for(floor: int, node_type: NodeType, act: int = 1) -> str:
-    if node_type is NodeType.BOSS:
-        return "boss"
-    if node_type is NodeType.ELITE:
-        return "elite"
-    return "early" if tier_floor(floor, NUM_FLOORS, act) < NUM_FLOORS // 2 else "mid"
 
 
 # --------------------------------------------------------------------------- bots

@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from agentic_rogue_like.balance_sim import (
     TIERS,
     SimConfig,
@@ -17,6 +19,20 @@ def test_report_covers_every_tier_and_is_deterministic() -> None:
     assert first == second
     assert all(first.fresh[t] is not None for t in TIERS)
     assert 0.0 <= first.run_win_rate <= 1.0
+
+
+# Recorded on the code before the run statistics were added (naive bot, seed 1234).
+REFERENCE_FRESH = {"early": 1.0, "mid": 0.7, "elite": 0.6, "boss": 0.0}
+REFERENCE_IN_RUN = {"early": 0.84, "mid": 0.14285714285714285, "elite": 1.0, "boss": 1.0}
+REFERENCE_RUN_WIN_RATE = 0.0
+
+
+def test_win_rates_match_reference() -> None:
+    report = build_report(SimConfig(), naive_bot, fights=10, runs=10, seed=1234, bot_name="naive")
+    for tier in TIERS:
+        assert report.fresh[tier].win_rate == pytest.approx(REFERENCE_FRESH[tier], abs=1e-9)
+        assert report.in_run[tier].win_rate == pytest.approx(REFERENCE_IN_RUN[tier], abs=1e-9)
+    assert report.run_win_rate == pytest.approx(REFERENCE_RUN_WIN_RATE, abs=1e-9)
 
 
 def test_naive_bot_runs_too() -> None:
