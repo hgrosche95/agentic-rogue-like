@@ -42,9 +42,7 @@ def test_two_calls_sum() -> None:
     usage.record("encounter", 100, 20)
     usage.record("encounter", 50, 5)
 
-    assert usage.totals() == {
-        "encounter": {"calls": 2, "input_tokens": 150, "output_tokens": 25}
-    }
+    assert usage.totals() == {"encounter": {"calls": 2, "input_tokens": 150, "output_tokens": 25}}
 
 
 def test_purposes_separate() -> None:
@@ -78,9 +76,7 @@ def test_threadsafe() -> None:
     for thread in threads:
         thread.join()
 
-    assert usage.totals() == {
-        "x": {"calls": 8000, "input_tokens": 8000, "output_tokens": 16000}
-    }
+    assert usage.totals() == {"x": {"calls": 8000, "input_tokens": 8000, "output_tokens": 16000}}
 
 
 def test_invoke_structured_records() -> None:
@@ -92,9 +88,7 @@ def test_invoke_structured_records() -> None:
 
     assert model.calls == [(_Proposal, True)]  # token counts come from include_raw's raw reply
     assert parsed == "P"
-    assert usage.totals() == {
-        "encounter": {"calls": 1, "input_tokens": 10, "output_tokens": 3}
-    }
+    assert usage.totals() == {"encounter": {"calls": 1, "input_tokens": 10, "output_tokens": 3}}
 
 
 def test_invoke_structured_parsing_error() -> None:

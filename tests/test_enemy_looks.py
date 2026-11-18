@@ -224,6 +224,96 @@ def test_other_errors_still_raise(monkeypatch) -> None:
         )
 
 
+def _schema_error() -> ValidationError:
+    try:
+        EnemyProposal.model_validate({})
+    except ValidationError as exc:
+        return exc
+    raise AssertionError("an empty proposal must not validate")
+
+
+class _InvalidFirst:
+    """Fails the client-side schema check once, then answers."""
+
+    def __init__(self, proposal) -> None:
+        self.proposal = proposal
+        self.prompts: list[str] = []
+
+    def with_structured_output(self, schema, include_raw: bool = False):
+        return self
+
+    def invoke(self, prompt):
+        self.prompts.append(prompt)
+        if len(self.prompts) == 1:
+            return {"raw": SimpleNamespace(), "parsed": None, "parsing_error": _schema_error()}
+        return {"raw": SimpleNamespace(), "parsed": self.proposal, "parsing_error": None}
+
+
+class _AlwaysInvalid:
+    """Fails the client-side schema check on every call."""
+
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+
+    def with_structured_output(self, schema, include_raw: bool = False):
+        return self
+
+    def invoke(self, prompt):
+        self.prompts.append(prompt)
+        return {"raw": SimpleNamespace(), "parsed": None, "parsing_error": _schema_error()}
+
+
+def test_schema_validation_error_is_retried(monkeypatch) -> None:
+    model = _InvalidFirst(_proposal(body_shape="brute", feature="horns"))
+    monkeypatch.setattr(encounter_agent, "_model", lambda: model)
+    monkeypatch.delenv("ENCOUNTER_AGENT_MODEL_SOURCE", raising=False)
+
+    enemy = encounter_agent.generate_balanced_enemy(
+        "e1", floor=4, num_floors=8, elite=False, boss=False
+    )
+
+    assert enemy.name == "Gargoyle"
+    assert enemy.hp == 54
+    assert len(model.prompts) == 2
+    assert "rejected" in model.prompts[1] and "schema validation failed" in model.prompts[1]
+
+
+def test_schema_validation_error_exhausts_attempts(monkeypatch) -> None:
+    model = _AlwaysInvalid()
+    monkeypatch.setattr(encounter_agent, "_model", lambda: model)
+    monkeypatch.delenv("ENCOUNTER_AGENT_MODEL_SOURCE", raising=False)
+
+    with pytest.raises(encounter_agent.BudgetViolation) as caught:
+        encounter_agent.generate_balanced_enemy(
+            "e1", floor=4, num_floors=8, elite=False, boss=False
+        )
+
+    text = str(caught.value)
+    assert f"after {encounter_agent.MAX_ATTEMPTS} attempts" in text
+    assert "schema validation failed" in text
+    assert len(model.prompts) == encounter_agent.MAX_ATTEMPTS
+
+
+def test_schema_validation_reason_is_truncated(monkeypatch) -> None:
+    model = _AlwaysInvalid()
+    monkeypatch.setattr(encounter_agent, "_model", lambda: model)
+    monkeypatch.delenv("ENCOUNTER_AGENT_MODEL_SOURCE", raising=False)
+    state = {
+        "budget": encounter_agent.budget_for(floor=4, num_floors=8, elite=False, boss=False),
+        "setting": encounter_agent.DEFAULT_SETTING,
+        "attempt": 0,
+        "last_error": None,
+        "proposal": None,
+    }
+
+    result = encounter_agent.generate_enemy(state)
+
+    assert result["last_error"] is not None
+    assert len(result["last_error"]) <= encounter_agent.MAX_REJECTION_CHARS
+    assert result["proposal"] is None
+    assert result["attempt"] == 1
+
+
 @pytest.mark.parametrize(
     "code,retried",
     [("tool_use_failed", True), ("output_parse_failed", True), ("rate_limit_exceeded", False)],

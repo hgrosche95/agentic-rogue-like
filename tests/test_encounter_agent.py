@@ -282,9 +282,7 @@ def test_threat_violation_is_fed_back_with_a_fitting_hp(monkeypatch) -> None:
     # correctable threat violation says (see validate_proposal): the suggested
     # HP is out of range here, so the part the model can act on is "make the
     # moves stronger".
-    assert (
-        f"Change hp to about {fitting_hp}, or make the moves stronger" in model.prompts[1]
-    )
+    assert f"Change hp to about {fitting_hp}, or make the moves stronger" in model.prompts[1]
     assert enemy.hp == 30
 
 

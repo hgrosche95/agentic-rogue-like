@@ -25,6 +25,8 @@ from collections.abc import Callable
 from functools import cache
 from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 
+from pydantic import ValidationError
+
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
 
@@ -208,6 +210,17 @@ def rejected_tool_call(exc: Exception) -> str | None:
     return message[:MAX_REJECTION_CHARS]
 
 
+def _validation_reason(exc: ValidationError) -> str:
+    """The model's answer short enough to feed back: one line per schema error,
+    loc and message as "<loc>: <msg>", joined with '; ' - the same shape
+    proposal_moves() reads errors() in - and capped like a rejection."""
+    details = "; ".join(
+        ".".join(str(part) for part in error["loc"]) + ": " + error["msg"]
+        for error in exc.errors()
+    )
+    return f"schema validation failed: {details}"[:MAX_REJECTION_CHARS]
+
+
 def generate_enemy(state: EncounterState) -> EncounterState:
     schema = MovesetProposal if _with_moves(state) else EnemyProposal
     attempt = state["attempt"] + 1
@@ -216,6 +229,15 @@ def generate_enemy(state: EncounterState) -> EncounterState:
         # agent/usage.py), and the proposal comes back exactly as a plain
         # invoke() handed it out.
         proposal = usage.invoke_structured(_model(), schema, _build_prompt(state), "encounter")
+    except ValidationError as exc:
+        # The answer arrived, but parsing it against our own schema failed on
+        # the client side (usage.invoke_structured raises the parsing_error):
+        # a model mistake like a turned-down tool call - it costs one attempt
+        # and goes back as the error to fix, not the whole graph. An
+        # OllamaStructuredOutputError is not a ValidationError and stays an
+        # error in the branch below.
+        reason = _validation_reason(exc)
+        return {**state, "proposal": None, "attempt": attempt, "last_error": reason}
     except Exception as exc:
         # A tool call the provider turned down for its schema costs one
         # attempt, not the whole agent: it goes back as the error to fix.
