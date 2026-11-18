@@ -33,7 +33,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-from .agent import usage
+from .agent import usage, verdict
 from .cards import can_upgrade, upgrade_card
 from .characters import CHARACTERS
 from .combat import (
@@ -887,6 +887,24 @@ def create_run(request: NewRunRequest) -> RunView:
 @app.get("/runs/{run_id}")
 def get_run(run_id: str) -> RunView:
     return _run_view(run_id, _get_session_or_404(run_id))
+
+
+@app.get("/runs/{run_id}/verdict")
+def get_verdict(run_id: str) -> dict[str, str]:
+    """The AGI's verdict on a finished run (agent/verdict.py), for the end
+    screen. A run still underway has no verdict yet (409). The text is made
+    on the first call here and then kept in RunState.verdict on the session,
+    so every later call - a reload, a second player looking at the same run -
+    reads the stored text and never waits for the model again. Runs live in
+    this process only (sessions.py), so storing it on the run's RunState is
+    the store; like RunState.voice it disappears with the run."""
+    session = _get_session_or_404(run_id)
+    run = session.run
+    if run.status is RunStatus.ONGOING:
+        raise HTTPException(status_code=409, detail="run is still ongoing")
+    if run.verdict is None:
+        run.verdict = verdict.generate_verdict(run)
+    return {"verdict": run.verdict}
 
 
 @app.post("/runs/{run_id}/resolve")

@@ -640,5 +640,8 @@ class RunState(BaseModel):
     # new_run fills in the fallback lines, prefetch.py swaps in the generated
     # ones once they are back. Empty only for runs saved before it existed.
     voice: dict[str, list[str]] = Field(default_factory=dict)
+    # The AGI's verdict on the player once the run is over (agent/verdict.py)
+    # - None until it is generated, and for runs saved before it existed.
+    verdict: str | None = None
     # For the summary at the end of the run (stats.py) - never read by play.
     stats: RunStats = Field(default_factory=RunStats)
