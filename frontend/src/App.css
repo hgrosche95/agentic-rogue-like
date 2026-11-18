@@ -1527,6 +1527,212 @@ button.is-primary:hover:not(:disabled),
   color: var(--text-dim);
 }
 
+/* the result keeps its hard 4px contour where the neon layers give the rest of
+   the screen a glow - a glow blurs Silkscreen letters at headline size */
+.end-screen.run-summary .summary-head-text h2 {
+  text-shadow: 4px 4px 0 var(--px-ink);
+}
+
+/* who ended the run, spelled out under the result */
+.summary-killer-line {
+  font-family: var(--font-head);
+  font-size: clamp(1.1rem, 3vw, 1.5rem);
+  letter-spacing: 0.04em;
+  color: var(--danger);
+  text-shadow: 4px 4px 0 var(--px-ink);
+  overflow-wrap: anywhere;
+}
+
+.summary-killer-line b {
+  color: var(--gold);
+}
+
+/* the three cards played most: name, and how often it was played */
+.summary-played {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.summary-played li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.summary-played b {
+  font-family: var(--font-head);
+  font-size: 12px;
+  color: var(--gold);
+}
+
+/* the highlight that carries them takes the gold of the cards' counts */
+.summary-highlight.is-played {
+  --tile: var(--gold);
+}
+
+/* the enemies the run beat, as the sprites it fought with: a 4px ink frame per
+   enemy, like every other pixel frame on the screen */
+.summary-defeated {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  text-align: center;
+}
+
+.summary-defeated h3 {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.summary-defeated h3 span {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--text-dim);
+}
+
+.summary-defeated ul {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.summary-defeated li {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 5px 6px 4px;
+  background: var(--panel);
+  border: var(--px-border);
+  opacity: 0;
+  animation: summary-step 0.35s var(--ease-out, ease-out) calc(1s + var(--i) * 0.1s) forwards;
+}
+
+/* 1 CSS pixel per sprite pixel: the row passes scale 0.5, so keeping the 2px
+   step lands at the sprite's own resolution whole-numbered at every breakpoint
+   (the base rule's 3px on wide screens would push past it) - the killer keeps
+   its 2-3, and its red glow has no business on enemies the run beat */
+.summary-defeated .summary-killer-sprite {
+  width: calc(var(--w) * 2px);
+  height: calc(var(--h) * 2px);
+  image-rendering: pixelated;
+  filter: none;
+}
+
+.summary-defeated b {
+  font-family: var(--font-head);
+  font-size: 11px;
+  color: var(--gold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summary-defeated li {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* the AGI's closing words on the finished run: the intro terminal's look -
+   dark screen, blinking marker, its verdict typed at the intro's pace; a
+   click on the panel finishes the typing, as the intro's terminal does */
+.summary-verdict {
+  margin: 1.2rem 0 0;
+  padding: 0.9rem 1.1rem 1rem;
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--accent);
+  background: var(--px-ink);
+  border: var(--px-border);
+  box-shadow: var(--shadow-panel);
+  cursor: pointer;
+}
+
+.summary-verdict-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.55rem;
+  font-family: var(--font-head);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ai-red);
+}
+
+.summary-verdict-head i {
+  width: 8px;
+  height: 8px;
+  background: var(--ai-red);
+  animation: monitor-blink 1.2s steps(1) infinite;
+}
+
+/* .end-screen p gives every paragraph a closing margin - the verdict block
+   spaces itself instead */
+.summary-verdict p {
+  margin: 0;
+}
+
+/* the verdict block must also drop its blink when motion is reduced; the
+   typing itself is cut short by EndScreen's own usePrefersReducedMotion check */
+@media (prefers-reduced-motion: reduce) {
+  .summary-verdict-head i {
+    animation: none;
+  }
+}
+
+/* the whole deck at a glance: the cards themselves in their hand look, shrunk
+   whole-numbered (0.5 at the 132x182 base = 66x91). transform alone leaves the
+   layout box at full size, so the margins take back what the scale took off -
+   origin at the top so rows stack on the visual card edges, and the copies'
+   count badge scales along with the card */
+.end-deck-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 14px 12px;
+  padding: 0.5rem 0 0;
+}
+
+.end-deck-row .hand-card {
+  transform: scale(0.5);
+  transform-origin: top center;
+  margin: 0 -33px -91px;
+}
+
+/* the end screen's actions: a new run, and the seed that replays this one */
+.end-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.8rem;
+  margin-top: 1.4rem;
+}
+
 .reward-screen {
   text-align: center;
 }
