@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { sfx } from "../audio";
-import { splitTaunt, type Banner } from "../banners";
+import { type Banner } from "../banners";
+import { tempoMs } from "../tempo";
 
 // The fight's punctuation: a short banner over the rift when the turn
-// changes hands or a boss overclocks, and a cinematic title card when a boss
+// changes hands or a boss overclocks, and a full-width band when a boss
 // walks on. Banners never take the pointer and sit between the monitor and
-// the beams, so they don't hide a hit; the intro holds the screen for a few
-// seconds and gives way to any click or key.
+// the beams, so they don't hide a hit; the intro band holds the screen for a
+// couple of seconds and gives way to any click or key.
 
 function reducedMotion(): boolean {
   return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -33,23 +34,23 @@ export function TurnBanner({ banner }: { banner: Banner }) {
   );
 }
 
-// how long the intro holds before it lets go, and how long letting go takes
-const INTRO_MS = 2700;
+// how long the band holds before it lets go, and how long letting go takes -
+// with reduced motion the band is gone the instant it lets go
+const INTRO_MS = 2000;
 const INTRO_REDUCED_MS = 2000;
 const OUTRO_MS = 320;
 
+// A boss walks on: one hard-edged band across the whole viewport with the
+// boss's name in Silkscreen, its description underneath, and the fixed
+// "Core AI" line below that.
 export function BossIntro({
   name,
-  kicker,
-  tag,
-  quote,
+  description,
   finalBoss,
   onDone,
 }: {
   name: string;
-  kicker: string;
-  tag: string;
-  quote: string;
+  description: string;
   finalBoss: boolean;
   onDone: () => void;
 }) {
@@ -58,7 +59,6 @@ export function BossIntro({
   useEffect(() => {
     done.current = onDone;
   });
-  const { speaker, line } = splitTaunt(quote);
 
   useEffect(() => {
     sfx.play("boss_intro");
@@ -66,11 +66,15 @@ export function BossIntro({
 
   // hold, then let go - sooner on a click or key
   useEffect(() => {
+    const reduced = reducedMotion();
     if (leaving) {
-      const timer = window.setTimeout(() => done.current(), reducedMotion() ? 140 : OUTRO_MS);
+      const timer = window.setTimeout(() => done.current(), tempoMs(reduced ? 0 : OUTRO_MS));
       return () => window.clearTimeout(timer);
     }
-    const timer = window.setTimeout(() => setLeaving(true), reducedMotion() ? INTRO_REDUCED_MS : INTRO_MS);
+    const timer = window.setTimeout(
+      () => setLeaving(true),
+      tempoMs(reduced ? INTRO_REDUCED_MS : INTRO_MS),
+    );
     // Space, Enter and Esc skip it - and go no further, or Space would end
     // the turn underneath (capture phase, ahead of the table's own keys)
     const onKey = (event: KeyboardEvent) => {
@@ -94,20 +98,13 @@ export function BossIntro({
       aria-label={`${name} - boss`}
       onClick={() => setLeaving(true)}
     >
-      <span className="boss-intro-bar is-top" aria-hidden="true" />
-      <span className="boss-intro-bar is-bottom" aria-hidden="true" />
       <span className="boss-intro-scan" aria-hidden="true" />
-      <div className="boss-intro-card">
-        <span className="boss-intro-kicker">{kicker}</span>
+      <div className="boss-intro-band">
         <h2 className="boss-intro-name" data-text={name}>
           {name}
         </h2>
-        <span className="boss-intro-tag">{tag}</span>
-        {line && (
-          <p className="boss-intro-quote">
-            “{line}”{speaker && <cite>{speaker}</cite>}
-          </p>
-        )}
+        <p className="boss-intro-desc">{description}</p>
+        <span className="boss-intro-core">Core AI</span>
       </div>
       <span className="boss-intro-skip">Click or Space to skip</span>
     </div>,

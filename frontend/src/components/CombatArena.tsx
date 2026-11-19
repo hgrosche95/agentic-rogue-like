@@ -212,6 +212,15 @@ const PROGRAM_FX_MS = 2000;
 // jerk back and blink (PixelScene.heavyHit).
 const HEAVY_HIT = 10;
 
+// the sign naming a boss's new phase: its pop-in, its fringe flicker and the
+// flash on the scene (all at the combat tempo, see tempo.ts) - and how far
+// above the sprite's top edge the sign sits, in logical pixels: clear of the
+// intent marker that floats over the enemy's head
+const PHASE_SIGN_IN_MS = 280;
+const PHASE_SIGN_FRINGE_MS = 800;
+const PHASE_FLASH_MS = 120;
+const PHASE_SIGN_ABOVE = 26;
+
 // Numbers on Dr. Chronos' side go on his body, like the enemy's on its own:
 // over his head they would float up into the HUD plate hanging there.
 const PLAYER_FX_TOP = FLOOR - 34;
@@ -334,6 +343,7 @@ export function CombatArena({
   playerMaxHp = 50,
   programMode = false,
   turn,
+  phaseSign = null,
   children,
   ref,
 }: {
@@ -354,6 +364,10 @@ export function CombatArena({
   playerMaxHp?: number;
   // program mode puts up the player's block per line itself (programHit)
   programMode?: boolean;
+  // a boss entering its next phase: the small sign over its head (and the
+  // flash with it). CombatPanel shows it keyed by the phase, so a quick
+  // second change replaces the running sign instead of queueing one
+  phaseSign?: { phase: number; key: number } | null;
   children?: ReactNode;
   ref?: Ref<ArenaHandle>;
 }) {
@@ -376,6 +390,12 @@ export function CombatArena({
   const onScene = useCallback((scene: PixelScene) => {
     sceneRef.current = scene;
   }, []);
+  // the OS's own motion switch, read the way CombatPanel reads it: with it
+  // on, the phase flash is not mounted at all - the CSS in alive.css hides
+  // it there too, and drops the sign's animation to a hard pop
+  const [prefersReducedMotion] = useState(
+    () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
+  );
 
   useEffect(() => {
     sceneRef.current?.setHero(hero);
@@ -513,6 +533,33 @@ export function CombatArena({
         {programFx.map((fx) => (
           <ProgramFxPopup key={fx.id} fx={fx} enemyTop={top} />
         ))}
+        {phaseSign && (
+          <div
+            key={phaseSign.key}
+            className="phase-sign"
+            data-text={`Phase ${phaseSign.phase}`}
+            role="status"
+            aria-live="polite"
+            style={
+              {
+                left: pct.x(ENEMY_X),
+                top: pct.y(top - PHASE_SIGN_ABOVE),
+                "--sign-ms": `${tempoMs(PHASE_SIGN_IN_MS)}ms`,
+                "--fringe-ms": `${tempoMs(PHASE_SIGN_FRINGE_MS)}ms`,
+              } as CSSProperties
+            }
+          >
+            Phase {phaseSign.phase}
+          </div>
+        )}
+        {phaseSign && !prefersReducedMotion && (
+          <div
+            key={phaseSign.key}
+            className="arena-phase-flash"
+            style={{ "--flash-ms": `${tempoMs(PHASE_FLASH_MS)}ms` } as CSSProperties}
+            aria-hidden="true"
+          />
+        )}
         {children}
         {jolt && (
           <span

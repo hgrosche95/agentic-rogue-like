@@ -83,6 +83,13 @@ const EV: Record<ArenaEvent, number> = {
 };
 
 const STEP_MS = 1000 / 60;
+// how long the rift stays torn wide after a pulse arrives, in steps of STEP_MS,
+// and the same as milliseconds - the one source for that time. A caller waiting
+// for the rift to tear and settle (CombatPanel's boss intro) takes RIFT_WAIT_MS
+// below rather than counting steps, and waits 0 with reduced motion, where
+// nothing eases in.
+const RIFT_FLARE_STEPS = 8;
+export const RIFT_FLARE_MS = RIFT_FLARE_STEPS * STEP_MS;
 // the pose is re-sampled every POSE_EVERY steps: ~12 fps sprite animation
 const POSE_EVERY = 5;
 // steps until a card's hit lands (hooks/useLagged ENEMY_HIT_MS = 550 ms)
@@ -115,6 +122,11 @@ const CABLE: [number, number][] = [];
     for (let k = 0; k < n; k++) CABLE.push([Math.round(x0 + ((x1 - x0) * k) / n), Math.round(y0 + ((y1 - y0) * k) / n)]);
   }
 }
+// the time from a pulse leaving the keyboard to the rift closing again:
+// Math.ceil(CABLE.length / 3) steps for the pulse to run the cable (step()
+// ages it 3 segments at a time) plus the flare of RIFT_FLARE_STEPS steps.
+// CombatPanel's boss intro waits this long so the band comes in after the rift.
+export const RIFT_WAIT_MS = (Math.ceil(CABLE.length / 3) + RIFT_FLARE_STEPS) * STEP_MS;
 
 // cheap deterministic noise for flicker and jitter
 function hash(n: number): number {
@@ -529,7 +541,7 @@ export class PixelScene {
       this.pulseAge[i] += 3;
       if (this.pulseAge[i] >= CABLE.length) {
         this.pulseAge[i] = -1;
-        this.riftFlare = 8;
+        this.riftFlare = RIFT_FLARE_STEPS;
         this.burst(RIFT_X, FLOOR - 2, 8, RAMP.cyan, 1.2);
       }
     }

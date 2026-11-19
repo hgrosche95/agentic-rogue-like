@@ -928,6 +928,125 @@ button.is-busy:disabled {
   }
 }
 
+/* entering a phase: the scene flashes once and a small pixel sign names the
+   new phase over the boss (CombatArena's phaseSign). The times arrive as
+   --sign-ms / --fringe-ms / --flash-ms, already scaled by the combat tempo */
+.phase-sign {
+  position: absolute;
+  z-index: 3;
+  padding: 2px 8px 3px;
+  /* Silkscreen, the same face as the intro band's name (neon.css) - the
+     ::before/::after fringe copies inherit it */
+  font: 700 max(12px, 1.6cqw)/1.1 "Silkscreen", "Pixelify Sans", monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff;
+  background: #a3123f;
+  border: 2px solid var(--px-ink);
+  box-shadow: inset 2px 2px 0 var(--danger), inset -2px -2px 0 #4a0818, 2px 2px 0 var(--px-ink);
+  transform: translate(-50%, -100%);
+  animation: phase-sign-in var(--sign-ms, 280ms) steps(2, jump-none) both;
+}
+
+/* hard-edged fringe on the letters, as on the intro band's name: two copies
+   that blink a pixel off in cyan and red, no easing anywhere */
+.phase-sign::before,
+.phase-sign::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  opacity: 0;
+}
+
+.phase-sign::before {
+  color: var(--cyan);
+  animation: sign-fringe-a var(--fringe-ms, 800ms) steps(1) var(--sign-ms, 280ms) infinite;
+}
+
+.phase-sign::after {
+  color: var(--danger);
+  animation: sign-fringe-b var(--fringe-ms, 800ms) steps(1) var(--sign-ms, 280ms) infinite;
+}
+
+@keyframes phase-sign-in {
+  from {
+    opacity: 0;
+    translate: 0 5px;
+  }
+}
+
+@keyframes sign-fringe-a {
+  0%,
+  100% {
+    opacity: 0;
+    translate: none;
+  }
+  25% {
+    opacity: 0.85;
+    translate: -2px 1px;
+  }
+  60% {
+    opacity: 0;
+    translate: none;
+  }
+}
+
+@keyframes sign-fringe-b {
+  0%,
+  100% {
+    opacity: 0;
+    translate: none;
+  }
+  15% {
+    opacity: 0;
+    translate: none;
+  }
+  35% {
+    opacity: 0.85;
+    translate: 2px -1px;
+  }
+  75% {
+    opacity: 0;
+    translate: none;
+  }
+}
+
+/* the whole scene flashes once, hard, as the phase change lands */
+.arena-phase-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: #fff;
+  mix-blend-mode: screen;
+  animation: arena-phase-flash var(--flash-ms, 120ms) steps(1) both;
+}
+
+@keyframes arena-phase-flash {
+  0% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arena-phase-flash {
+    display: none;
+  }
+  .phase-sign,
+  .phase-sign::before,
+  .phase-sign::after {
+    animation: none;
+  }
+}
+
 /* ---------- the map: what a room ahead holds ---------- */
 .dungeon-map {
   position: relative;
