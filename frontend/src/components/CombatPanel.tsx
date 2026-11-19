@@ -25,6 +25,7 @@ import { PileView } from "./DeckView";
 import { firingArtifacts } from "../artifactPulse";
 import { showTicks } from "../effectTicks";
 import { tempoMs } from "../tempo";
+import { RIFT_WAIT_MS } from "../pixel/scene";
 import { CardFace, type Readout } from "./CardFace";
 import { CombatHelp, HelpButton } from "./CombatHelp";
 import { CombatArena, IntentIcon, type ArenaHandle } from "./CombatArena";
@@ -254,6 +255,12 @@ const PHASE_MARKS: Record<number, number[]> = { 2: [0.5], 3: [0.5, 0.25] };
 const PHASE_SHIFT_MS = 1100;
 const PHASE_TAUNT_MS = 2300;
 
+// the OS's own motion switch, read the way the pixel scene reads it
+// (pixel/scene.ts): with it on, nothing in a boss's opening eases in
+function reducedMotion(): boolean {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+}
+
 // Keys pressed into an input, or on a button focused from the keyboard
 // (Space and Enter press that button), aren't combat shortcuts.
 function ownKeys(event: KeyboardEvent): boolean {
@@ -421,6 +428,17 @@ export function CombatPanel({
   // boss's line for it.
   const { banner, show: showBanner } = useBanners();
   const [bossIntro, setBossIntro] = useState(() => combat.boss && combat.turn === 1 && !enemySlain);
+  // ...and only once the rift has torn and closed again: the band comes in
+  // after the pulse has run the cable and the flare has burned out
+  // (pixel/scene.ts RIFT_WAIT_MS), at the combat tempo - with reduced motion
+  // there is nothing to ease into, so the wait is 0 and the band is there
+  // right away.
+  const [introReady, setIntroReady] = useState(false);
+  useEffect(() => {
+    if (!bossIntro) return;
+    const timer = window.setTimeout(() => setIntroReady(true), tempoMs(reducedMotion() ? 0 : RIFT_WAIT_MS));
+    return () => window.clearTimeout(timer);
+  }, [bossIntro]);
   // the turn banner names the artifacts that only work on this turn - read
   // through a ref, so a new player object doesn't make a new callback (and
   // re-run the effects that show the banner)
@@ -461,22 +479,65 @@ export function CombatPanel({
     return () => window.clearTimeout(timer);
   }, [phaseShift]);
 
+  // the sign that names a boss's new phase, over the arena (CombatArena's
+  // phaseSign): the callout that used to be a title banner. Each change gives
+  // it a fresh key, so a quick second change replaces the running sign
+  // instead of queueing one behind it.
+  const [phaseSign, setPhaseSign] = useState<{ phase: number; key: number } | null>(null);
+  // timers that bring it in (with the enemy's hit) - kept out of the effect's
+  // own cleanup, because a fresh server answer re-runs that effect while the
+  // guard below already short-circuits it
+  const signTimers = useRef(new Set<number>());
+  useEffect(() => {
+    const timers = signTimers.current;
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, []);
+  // ...and let it go, again at the combat tempo
+  useEffect(() => {
+    if (!phaseSign) return;
+    const timer = window.setTimeout(() => setPhaseSign(null), tempoMs(PHASE_BANNER_MS));
+    return () => window.clearTimeout(timer);
+  }, [phaseSign]);
+
   useEffect(() => {
     const from = shownPhase.current;
     shownPhase.current = combat.enemy_phase;
     if (!combat.boss || combat.enemy_phase <= from || enemySlain) return;
     setPhaseShift((n) => n + 1);
-    const taunt = combat.enemy_phase_taunts[combat.enemy_phase - 2];
-    showBanner(
-      {
-        kind: "phase",
-        title: `Phase ${combat.enemy_phase}`,
-        sub: taunt ? splitTaunt(taunt).line : `${combat.enemy_name} overclocks`,
-        ms: taunt ? PHASE_TAUNT_MS : PHASE_BANNER_MS,
-      },
-      ENEMY_HIT_MS + 150,
-    );
-  }, [combat.boss, combat.enemy_phase, combat.enemy_phase_taunts, combat.enemy_name, enemySlain, showBanner]);
+    const phase = combat.enemy_phase;
+    const taunt = combat.enemy_phase_taunts[phase - 2];
+    if (taunt) {
+      // the taunt banner stays - and it plays the boss_phase sting. The phase
+      // number is on the sign now, so the taunt line takes the title slot it
+      // used to share with it, and the banner carries nothing below it
+      showBanner(
+        {
+          kind: "phase",
+          title: splitTaunt(taunt).line,
+          ms: PHASE_TAUNT_MS,
+        },
+        ENEMY_HIT_MS + 150,
+      );
+    } else {
+      // no taunt: the sign is the whole callout, so the sting the title
+      // banner used to play rides on it - exactly once per phase change
+      sfx.play("boss_phase", { delayMs: tempoMs(ENEMY_HIT_MS + 150) });
+    }
+    // only where the counter actually stepped past 1; a reload into a live
+    // fight starts at the current phase, so this never fires
+    if (phase > 1) {
+      signTimers.current.forEach((timer) => window.clearTimeout(timer));
+      signTimers.current.clear();
+      const timer = window.setTimeout(
+        () => {
+          signTimers.current.delete(timer);
+          setPhaseSign({ phase, key: Date.now() });
+        },
+        tempoMs(ENEMY_HIT_MS + 150),
+      );
+      signTimers.current.add(timer);
+    }
+  }, [combat.boss, combat.enemy_phase, combat.enemy_phase_taunts, enemySlain, showBanner]);
 
   useEffect(() => {
     const before = endTurnFrom.current;
@@ -906,12 +967,10 @@ export function CombatPanel({
           turns={moves.turns}
         />
       )}
-      {bossIntro && (
+      {bossIntro && introReady && (
         <BossIntro
           name={combat.enemy_name}
-          kicker={combat.final_boss ? "Final boss" : "Boss"}
-          tag={`${combat.final_boss ? "The AGI" : "Core AI"} · ${era}`}
-          quote={combat.enemy_taunt || combat.enemy_description}
+          description={combat.enemy_description}
           finalBoss={combat.final_boss}
           onDone={() => {
             setBossIntro(false);
@@ -959,6 +1018,7 @@ export function CombatPanel({
           hero={player.character}
           contextFull={combat.token_limit !== null && combat.tokens_used >= combat.token_limit}
           playerMaxHp={player.max_hp}
+          phaseSign={phaseSign}
         >
           {banner && <TurnBanner key={banner.id} banner={banner} />}
         </CombatArena>
