@@ -7,9 +7,9 @@ from fastapi.testclient import TestClient
 
 from agentic_rogue_like.agent.budgets import tier_budget
 from agentic_rogue_like.api import app
-from agentic_rogue_like.engine import new_run, start_combat_node
+from agentic_rogue_like.engine import finalize_combat, new_run, start_combat_node
 from agentic_rogue_like.models import EnemyMove, MoveKind, NemesisSpec, NodeType
-from agentic_rogue_like.nemesis import nemesis_enemy, nemesis_line
+from agentic_rogue_like.nemesis import nemesis_enemy, nemesis_line, spec_from_enemy
 from agentic_rogue_like.sessions import get_session
 from agentic_rogue_like.threat import threat
 
@@ -128,3 +128,40 @@ def test_a_nemesis_move_keeps_its_own_values() -> None:
     enemy = nemesis_enemy(_spec(moves=[{"kind": "barrage", "hits": 4, "power": 30}]))
     assert enemy is not None
     assert enemy.moves == [EnemyMove(kind=MoveKind.BARRAGE, hits=4, power=30)]
+
+
+# --------------------------------------------------------------- the way back
+
+
+def test_the_killer_comes_back_as_its_own_name_and_moves() -> None:
+    returned = nemesis_enemy(_spec())
+    assert returned is not None and returned.nemesis
+    # with the move program mode adds, as it would have fought there
+    returned = returned.model_copy(
+        update={"moves": [*returned.moves, EnemyMove(kind=MoveKind.INTERRUPT)]}
+    )
+
+    spec = spec_from_enemy(returned)
+
+    assert spec is not None
+    assert spec.name == "Cave Slime"  # no "Returned Returned ..."
+    assert MoveKind.INTERRUPT not in {m.kind for m in spec.moves}
+    assert new_run(1, nemesis=spec).nemesis == spec
+
+
+def test_the_final_boss_never_becomes_a_nemesis() -> None:
+    enemy = nemesis_enemy(_spec())
+    assert spec_from_enemy(enemy, final_boss=True) is None
+
+
+def test_a_lost_fight_leaves_the_killer_as_a_nemesis() -> None:
+    run = new_run(_elite_seed())
+    _enter(run, NodeType.ELITE)
+    state = start_combat_node(run, random.Random(1))
+    run.player.hp = 0
+
+    finalize_combat(run, state, random.Random(1))
+
+    killer = run.stats.killed_by
+    assert killer is not None and killer.nemesis is not None
+    assert killer.nemesis.name == state.enemy.name

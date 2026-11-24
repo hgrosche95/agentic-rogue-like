@@ -489,6 +489,8 @@ class Enemy(BaseModel):
     # schema bosses and the fine-tuned Ollama model generate).
     body_shape: BodyShape | None = None
     feature: Feature | None = None
+    # Last run's killer, back as act 1's first elite (nemesis.py).
+    nemesis: bool = False
 
     @field_validator("moves")
     @classmethod
@@ -619,6 +621,10 @@ class KillingBlow(BaseModel):
     enemy_max_hp: int = 0
     enemy_attack: int = 0
     final_boss: bool = False
+    # The killer as the client sends it back with its next run, to return as
+    # its nemesis (nemesis.py) - None for the final boss and for an enemy that
+    # makes no fightable elite.
+    nemesis: NemesisSpec | None = None
 
 
 class DefeatedEnemy(BaseModel):

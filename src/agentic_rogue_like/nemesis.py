@@ -11,8 +11,16 @@ an elite affix. The AGI opens the fight saying it brought it back.
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 from .agent.budgets import tier_budget
-from .models import Enemy, NemesisSpec
+from .models import (
+    MAX_NEMESIS_DESCRIPTION_LENGTH,
+    MAX_NEMESIS_NAME_LENGTH,
+    PROGRAM_ONLY_MOVES,
+    Enemy,
+    NemesisSpec,
+)
 from .threat import threat
 
 RETURNED_PREFIX = "Returned "
@@ -45,6 +53,7 @@ def nemesis_enemy(spec: NemesisSpec, enemy_id: str = "nemesis") -> Enemy | None:
         body_shape=spec.body_shape,
         feature=spec.feature,
         taunt=nemesis_line(spec.name),
+        nemesis=True,
     )
     for _ in range(_FIT_ROUNDS):
         value = threat(enemy)
@@ -62,3 +71,28 @@ def valid_nemesis(spec: NemesisSpec | None) -> NemesisSpec | None:
     if spec is None or nemesis_enemy(spec) is None:
         return None
     return spec
+
+
+def spec_from_enemy(enemy: Enemy, final_boss: bool = False) -> NemesisSpec | None:
+    """What the client keeps of the enemy that just killed the player, to send
+    back with its next run - its own name (a returned nemesis loses the
+    prefix again, so it never piles up), its look and its move set without
+    the moves the game adds in program mode. None for the final boss, which
+    is the AGI itself, and for anything that makes no fightable elite."""
+    if final_boss:
+        return None
+    name = enemy.name
+    while name.startswith(RETURNED_PREFIX):
+        name = name[len(RETURNED_PREFIX) :]
+    try:
+        spec = NemesisSpec(
+            name=name[:MAX_NEMESIS_NAME_LENGTH],
+            description=enemy.description[:MAX_NEMESIS_DESCRIPTION_LENGTH],
+            attack_name=enemy.attack_name[:MAX_NEMESIS_NAME_LENGTH],
+            moves=[m.model_copy() for m in enemy.moves if m.kind not in PROGRAM_ONLY_MOVES],
+            body_shape=enemy.body_shape,
+            feature=enemy.feature,
+        )
+    except ValidationError:
+        return None
+    return valid_nemesis(spec)

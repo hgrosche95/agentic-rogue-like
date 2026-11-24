@@ -226,6 +226,8 @@ class PendingCombatView(BaseModel):
     # what the enemy looks like (models.BodyShape / Feature), None if unknown
     enemy_body_shape: str | None = None
     enemy_feature: str | None = None
+    # Last run's killer, back for revenge (nemesis.py) - the UI badges it.
+    enemy_nemesis: bool = False
     enemy_phase_taunts: list[str] = []
     enemy_attack_name: str
     # The enemy's base attack stat - what its look is built from.
@@ -733,6 +735,7 @@ def _run_view(run_id: str, session: RunSession) -> RunView:
             enemy_taunt=combat.enemy.taunt,
             enemy_body_shape=combat.enemy.body_shape,
             enemy_feature=combat.enemy.feature,
+            enemy_nemesis=combat.enemy.nemesis,
             enemy_phase_taunts=combat.enemy.phase_taunts,
             enemy_attack_name=combat.enemy.attack_name,
             enemy_attack=combat.enemy.attack,
