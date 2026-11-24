@@ -24,6 +24,7 @@ from .combat import CombatState, CombatVoice, FightTally, auto_resolve_combat, v
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
+from .consumables import add_consumable, roll_drop
 from .enemies import clamp_difficulty, escalate, with_affix, with_program_move
 from .events import EventOption, GameEvent, apply_option
 from .forge import forged_deal
@@ -431,6 +432,14 @@ def _finish_combat(
         )
         if run.artifact_offer:
             run.history.append("It leaves an artifact behind - pick one to install.")
+    # Any won fight can leave a script behind: its own rng too (consumables.py),
+    # rolled before the act boss moves the run on, so the offer is named by the
+    # act and room the fight actually happened in.
+    if (script := roll_drop(run, node.id)) is not None:
+        if add_consumable(run.player, script):
+            run.history.append(f"Found script {script.name}.")
+        else:
+            run.history.append(f"Script {script.name} lost: no free slot.")
     if node.type is NodeType.BOSS:
         advance_act(run)
 

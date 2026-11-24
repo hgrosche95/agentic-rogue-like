@@ -2,7 +2,9 @@
 
 On entering the room the player sees SHOP_CARDS cards from the reward pool
 (weighted by rarity, like a card reward) and SHOP_ARTIFACTS artifacts they
-don't own yet, each with a price in gold. They can buy any of them they can
+don't own yet, each with a price in gold, and SHOP_SCRIPTS scripts from the
+fixed pool (consumables.py) at about SCRIPT_BASE_PRICE credits - a script is
+only for sale while the bag has a free slot (MAX_CONSUMABLES). They can buy any of them they can
 afford, as many as they like, pay to remove one card from their deck (once
 per shop, pricier with every removal in the run), and leave whenever they
 want - the shop stays open (RunState.shop) until they do.
@@ -20,7 +22,8 @@ import random
 from .artifacts import gain_artifact, roll_artifact_offer
 from .cards import reward_card, roll_card_reward
 from .characters import artifact_pool, reward_pool
-from .models import Rarity, RunState, Shop, ShopArtifact, ShopCard
+from .consumables import CONSUMABLE_POOL, SCRIPT_BASE_PRICE, SHOP_SCRIPTS, add_consumable
+from .models import MAX_CONSUMABLES, Rarity, RunState, Shop, ShopArtifact, ShopCard, ShopScript
 
 SHOP_CARDS = 4
 SHOP_ARTIFACTS = 2
@@ -57,9 +60,14 @@ def roll_shop(run: RunState) -> Shop:
             pool=artifact_pool(run),
         )
     ]
+    scripts = [
+        ShopScript(consumable=consumable, price=_price(SCRIPT_BASE_PRICE, rng))
+        for consumable in (rng.choice(CONSUMABLE_POOL) for _ in range(SHOP_SCRIPTS))
+    ]
     return Shop(
         cards=cards,
         artifacts=artifacts,
+        scripts=scripts,
         removal_price=REMOVAL_PRICE + REMOVAL_PRICE_STEP * run.cards_removed,
     )
 
@@ -110,6 +118,28 @@ def buy_artifact(run: RunState, index: int) -> None:
     item.sold = True
     run.history.append(
         f"You buy {item.artifact.name} for {item.price} credits: {item.artifact.description}"
+    )
+
+
+def buy_script(run: RunState, shop: Shop, index: int) -> None:
+    """Buy script `index` into the bag.
+
+    Raises ValueError if the index is out of range, the script is already sold,
+    the bag is full (len >= MAX_CONSUMABLES - checked before paying, so a
+    script that cannot be carried costs nothing) or the player can't afford it.
+    """
+    if not 0 <= index < len(shop.scripts):
+        raise ValueError(f"script index {index} is out of range")
+    item = shop.scripts[index]
+    if item.sold:
+        raise ValueError(f"{item.consumable.name} is already sold")
+    if len(run.player.consumables) >= MAX_CONSUMABLES:
+        raise ValueError(f"your bag holds no more than {MAX_CONSUMABLES} scripts")
+    _pay(run, item.price, item.consumable.name)
+    add_consumable(run.player, item.consumable)
+    item.sold = True
+    run.history.append(
+        f"You buy {item.consumable.name} for {item.price} credits: {item.consumable.description}"
     )
 
 
