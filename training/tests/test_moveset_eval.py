@@ -4,6 +4,7 @@ scripted model instead of Groq, so it runs without a key or network."""
 import json
 
 import pytest
+from agentic_rogue_like.agent import usage
 from agentic_rogue_like.agent.encounter_schema import (
     EnemyProposal,
     MoveProposal,
@@ -176,3 +177,19 @@ def test_reports_from_before_move_sets_still_load(tmp_path, monkeypatch) -> None
 
     assert type(result.proposal) is EnemyProposal
     assert result.context.with_moves is False
+
+
+def test_cost_probe_counts_each_call_once(monkeypatch) -> None:
+    # The graph records its own usage in usage.totals; the probe must neither
+    # add to those totals nor fold them into its samples.
+    monkeypatch.setattr(usage, "_totals", {})
+    model = _Scripted(lambda schema, prompt, call: _plain_for(prompt))
+    contexts = build_test_contexts(repeats=2, settings=("dungeon",))
+    run_harness(contexts, model_factory=model)
+    recorded = usage.totals()
+
+    samples = measure_cost_samples(contexts, model)
+
+    assert len(samples) == len({(c.tier, c.setting) for c in contexts})
+    assert all((s.input_tokens, s.output_tokens) == (500, 200) for s in samples)
+    assert usage.totals() == recorded

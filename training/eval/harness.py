@@ -1,11 +1,14 @@
 """Runs the real encounter-agent graph against a set of EvalContexts and
 records what actually happened - not a reimplementation of its logic.
 
-The one exception is cost: generate_enemy() calls with_structured_output()
-without include_raw, which throws away token usage. measure_cost_samples()
-makes a second, separate call per (tier, setting) with include_raw=True,
-reusing _build_prompt() so the prompt text is identical to what production
-sends - only the LangChain call shape differs, just enough to read usage.
+The one exception is cost. generate_enemy() does read token usage now (it
+calls through usage.invoke_structured with include_raw=True), but it only
+adds it to the process-wide totals behind GET /usage, which the harness
+never reads. measure_cost_samples() instead makes one separate probe call
+per (tier, setting), reusing _build_prompt() so the prompt text is identical
+to what production sends, and reads usage off that call's raw response. The
+probe bypasses usage.record(), so its tokens land only in its own CostSample
+and nothing is counted twice.
 """
 
 from __future__ import annotations
