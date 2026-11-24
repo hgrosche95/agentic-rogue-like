@@ -14,6 +14,7 @@ from agentic_rogue_like.shop import (
     SHOP_CARDS,
     buy_artifact,
     buy_card,
+    buy_script,
     leave_shop,
     remove_card,
     roll_shop,
@@ -208,3 +209,41 @@ def test_removal_needs_gold_and_a_big_enough_deck() -> None:
         remove_card(run, 0)
     with pytest.raises(ValueError, match="out of range"):
         remove_card(run, 99)
+
+
+def test_shop_offers_two_scripts() -> None:
+    scripts = roll_shop(_at_shop()).scripts
+    assert len(scripts) == 2
+    assert all(20 <= item.price <= 40 for item in scripts)
+
+
+def test_buy_script_adds_and_charges() -> None:
+    run = _at_shop(gold=100)
+    item = run.shop.scripts[0]
+    buy_script(run, run.shop, 0)
+    assert run.player.gold == 100 - item.price
+    assert len(run.player.consumables) == 1
+    assert item.sold
+
+
+def test_buy_script_full_slots_raises_without_charge() -> None:
+    run = _at_shop(gold=100)
+    run.player.consumables = [run.shop.scripts[0].consumable] * 3
+    with pytest.raises(ValueError):
+        buy_script(run, run.shop, 0)
+    assert run.player.gold == 100
+    assert not run.shop.scripts[0].sold
+
+
+def test_existing_shop_offers_unchanged() -> None:
+    shop = roll_shop(new_run(7))
+    assert [(i.card.id, i.price) for i in shop.cards] == [
+        ("brute-force", 25),
+        ("mainframe", 45),
+        ("purge", 25),
+        ("fork-bomb", 25),
+    ]
+    assert [(i.artifact.id, i.price) for i in shop.artifacts] == [
+        ("retained-state", 80),
+        ("daemon-worm", 80),
+    ]

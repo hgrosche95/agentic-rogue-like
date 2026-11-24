@@ -481,3 +481,82 @@ def test_create_run_difficulty_stored() -> None:
 def test_create_run_difficulty_clamped() -> None:
     assert _stored_difficulty({"seed": 1, "difficulty": 9}) == 5
     assert _stored_difficulty({"seed": 1, "difficulty": -4}) == 0
+
+
+def _api_combat_run(seed: int = 3) -> str:
+    run_id = client.post("/runs", json={"seed": seed}).json()["run_id"]
+    for _ in range(5):
+        run = _resolve(run_id).json()
+        if run["pending_combat"] is not None:
+            return run_id
+        client.post(
+            f"/runs/{run_id}/choose-node",
+            json={"node_id": run["current_node"]["connections"][0]},
+        )
+    raise AssertionError("no combat reached")
+
+
+def test_use_item_outside_combat_returns_409() -> None:
+    run_id = client.post("/runs", json={"seed": 1}).json()["run_id"]
+    assert client.post(f"/runs/{run_id}/combat/use-item", json={"index": 0}).status_code == 409
+
+
+def test_use_item_in_combat_applies_effect() -> None:
+    from agentic_rogue_like.consumables import CONSUMABLE_POOL
+    from agentic_rogue_like.models import ConsumableKind
+    from agentic_rogue_like.sessions import get_session
+
+    run_id = _api_combat_run()
+    session = get_session(run_id)
+    hp = session.combat.enemy_hp
+    session.combat.enemy_block = 0
+    session.run.player.consumables = [
+        next(c for c in CONSUMABLE_POOL if c.kind is ConsumableKind.DAMAGE)
+    ]
+    resp = client.post(f"/runs/{run_id}/combat/use-item", json={"index": 0})
+    assert resp.status_code == 200
+    assert session.combat.enemy_hp == hp - 10
+    assert resp.json()["player"]["consumables"] == []
+
+
+def test_use_item_bad_index_returns_400() -> None:
+    run_id = _api_combat_run()
+    assert client.post(f"/runs/{run_id}/combat/use-item", json={"index": 0}).status_code == 400
+
+
+def test_run_view_exposes_consumables() -> None:
+    run_id = client.post("/runs", json={"seed": 1}).json()["run_id"]
+    assert client.get(f"/runs/{run_id}").json()["player"]["consumables"] == []
+
+
+def _shop_run_id(monkeypatch) -> str:
+    import agentic_rogue_like.api as api
+    from agentic_rogue_like.models import Character, NodeType
+
+    original = api.new_run
+
+    def shop_run(seed, setting="dungeon", character=Character.CHRONOS, **kwargs):
+        run = original(seed, setting=setting, character=character, **kwargs)
+        node = run.nodes[run.current_node_id]
+        run.nodes[node.id] = node.model_copy(update={"type": NodeType.SHOP})
+        run.player.gold = 300
+        return run
+
+    monkeypatch.setattr(api, "new_run", shop_run)
+    run_id = client.post("/runs", json={"seed": 1}).json()["run_id"]
+    return run_id
+
+
+def test_shop_view_lists_scripts(monkeypatch) -> None:
+    run_id = _shop_run_id(monkeypatch)
+    run = _resolve(run_id).json()
+    assert len(run["shop"]["scripts"]) == 2
+    assert all("price" in s for s in run["shop"]["scripts"])
+
+
+def test_buy_script_endpoint(monkeypatch) -> None:
+    run_id = _shop_run_id(monkeypatch)
+    _resolve(run_id)
+    resp = client.post(f"/runs/{run_id}/shop/buy-script", json={"index": 0})
+    assert resp.status_code == 200
+    assert len(resp.json()["player"]["consumables"]) == 1

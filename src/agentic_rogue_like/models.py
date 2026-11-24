@@ -245,6 +245,32 @@ class Character(StrEnum):
     VIBE_CODER = "vibe_coder"
 
 
+class ConsumableKind(StrEnum):
+    """What a script does when it is run - see consumables.py.
+
+    Every one is a fixed effect with a fixed number (consumables.py's pool),
+    never generated and never upgraded."""
+
+    HEAL = "heal"
+    BLOCK = "block"
+    DRAW = "draw"
+    DAMAGE = "damage"
+    PURGE = "purge"
+
+
+class Consumable(BaseModel):
+    """A script in the player's bag: one use, then it is gone (consumables.py)."""
+
+    kind: ConsumableKind
+    name: str
+    description: str
+
+
+# How many scripts the bag holds at once. A fourth offer is not taken, it is
+# lost - add_consumable (consumables.py) is the one place that decides it.
+MAX_CONSUMABLES = 3
+
+
 class PlayerState(BaseModel):
     character: Character = Character.CHRONOS
     hp: int
@@ -253,6 +279,8 @@ class PlayerState(BaseModel):
     gold: int = 0
     artifacts: list[Artifact] = Field(default_factory=list)
     deck: list[Card] = Field(default_factory=list)
+    # The scripts carried into a fight (consumables.py), at most MAX_CONSUMABLES.
+    consumables: list[Consumable] = Field(default_factory=list)
 
     @property
     def is_alive(self) -> bool:
@@ -271,11 +299,21 @@ class ShopArtifact(BaseModel):
     sold: bool = False
 
 
+class ShopScript(BaseModel):
+    """A script on the black market's shelf: one copy, sold once (shop.py)."""
+
+    consumable: Consumable
+    price: int
+    sold: bool = False
+
+
 class Shop(BaseModel):
     """What a SHOP room has for sale - see shop.py."""
 
     cards: list[ShopCard] = Field(default_factory=list)
     artifacts: list[ShopArtifact] = Field(default_factory=list)
+    # Scripts (consumables.py) - the black market stocks SHOP_SCRIPTS of them.
+    scripts: list[ShopScript] = Field(default_factory=list)
     # Removing one card from the deck, once per shop.
     removal_price: int = 0
     removal_used: bool = False

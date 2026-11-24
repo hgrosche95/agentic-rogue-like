@@ -59,6 +59,7 @@ from .combat import (
     token_regen,
     uninstalls,
 )
+from .consumables import use_consumable
 from .enemies import FINAL_BOSS_ID, clamp_difficulty
 from .engine import (
     NUM_ACTS,
@@ -95,6 +96,7 @@ from .models import (
     Card,
     Character,
     Combo,
+    ConsumableKind,
     KillingBlow,
     MapNode,
     NodeType,
@@ -107,7 +109,7 @@ from .models import (
     StarterKit,
 )
 from .sessions import RunSession, create_session, get_session
-from .shop import MIN_DECK_SIZE, buy_artifact, buy_card, leave_shop, remove_card
+from .shop import MIN_DECK_SIZE, buy_artifact, buy_card, buy_script, leave_shop, remove_card
 from .stats import note_changes
 from .style import LABELS, play_style, style_counts
 
@@ -323,9 +325,20 @@ class ShopArtifactView(BaseModel):
     sold: bool
 
 
+# A script on offer (shop.ShopScript): its effect comes from the fixed pool in
+# consumables.py, so the view flattens the Consumable instead of nesting it.
+class ShopScriptView(BaseModel):
+    name: str
+    kind: ConsumableKind
+    description: str
+    price: int
+    sold: bool
+
+
 class ShopView(BaseModel):
     cards: list[ShopCardView]
     artifacts: list[ShopArtifactView]
+    scripts: list[ShopScriptView]
     # Removing a card from the deck: its price, whether this shop's one
     # removal is used up, and the deck size it can't go below.
     removal_price: int
@@ -342,6 +355,16 @@ class ShopView(BaseModel):
             artifacts=[
                 ShopArtifactView(artifact=item.artifact, price=item.price, sold=item.sold)
                 for item in shop.artifacts
+            ],
+            scripts=[
+                ShopScriptView(
+                    name=item.consumable.name,
+                    kind=item.consumable.kind,
+                    description=item.consumable.description,
+                    price=item.price,
+                    sold=item.sold,
+                )
+                for item in shop.scripts
             ],
             removal_price=shop.removal_price,
             removal_used=shop.removal_used,
@@ -534,6 +557,12 @@ class PlayCardRequest(BaseModel):
     # takes - exactly CardView.banish of them, or fewer if the hand is short.
     # Left out, the weakest go (combat.banish_candidates).
     banish_indices: list[int] | None = None
+
+
+# A script from the player's bag (PlayerState.consumables, consumables.py).
+class UseItemRequest(BaseModel):
+    # Its place in the bag.
+    index: int
 
 
 class MoveQueuedRequest(BaseModel):
@@ -996,6 +1025,30 @@ def play_card_endpoint(run_id: str, request: PlayCardRequest) -> RunView:
     return _run_view(run_id, session)
 
 
+@app.post("/runs/{run_id}/combat/use-item")
+def use_item_endpoint(run_id: str, request: UseItemRequest) -> RunView:
+    """Run a carried Script (consumables.py) during the player's own turn.
+
+    Costs no field slot and no tokens - the Script itself is the price, and it
+    is gone afterwards. Only a live fight accepts one (409 outside combat)."""
+    session = _get_session_or_404(run_id)
+    if session.combat is None:
+        raise HTTPException(status_code=409, detail="no combat in progress")
+
+    try:
+        line = use_consumable(session.combat, session.run.player, request.index, session.rng)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    session.run.history.append(line)
+
+    # kill.sh can knock the enemy out on the player's own turn.
+    if session.combat.enemy_hp <= 0:
+        _finish_fight(session)
+
+    return _run_view(run_id, session)
+
+
 @app.post("/runs/{run_id}/combat/move-queued")
 def move_queued_endpoint(run_id: str, request: MoveQueuedRequest) -> RunView:
     """Program mode: move a queued action to another line (combat.move_queued)."""
@@ -1128,6 +1181,12 @@ def buy_card_endpoint(run_id: str, request: ShopBuyRequest) -> RunView:
 @app.post("/runs/{run_id}/shop/buy-artifact")
 def buy_artifact_endpoint(run_id: str, request: ShopBuyRequest) -> RunView:
     return _shop_action(run_id, lambda run: buy_artifact(run, request.index))
+
+
+@app.post("/runs/{run_id}/shop/buy-script")
+def buy_script_endpoint(run_id: str, request: ShopBuyRequest) -> RunView:
+    """`index` is the script's place in the shop's offer (RunView.shop.scripts)."""
+    return _shop_action(run_id, lambda run: buy_script(run, run.shop, request.index))
 
 
 @app.post("/runs/{run_id}/shop/remove-card")
