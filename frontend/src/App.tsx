@@ -79,6 +79,8 @@ import { DealScreen, KitScreen } from "./components/StartScreens";
 import { ShopScreen } from "./components/ShopScreen";
 import { TitleBackdrop } from "./components/TitleBackdrop";
 import { Tooltips } from "./components/RichText";
+import { BestiaryButton, BestiaryView } from "./components/Bestiary";
+import { noteEncounter, noteOutcome } from "./bestiary";
 
 const FALLBACK_SETTINGS = ["dungeon"];
 const INTRO_SEEN_KEY = "agentic-rogue-like:intro-seen";
@@ -140,6 +142,7 @@ function App() {
   // Hovering a room on the map previews it in the next-jump panel.
   const [focusedJump, setFocusedJump] = useState<string | null>(null);
   const [isDeckOpen, setIsDeckOpen] = useState(false);
+  const [isBestiaryOpen, setIsBestiaryOpen] = useState(false);
   const [isIntroOpen, setIsIntroOpen] = useState(() => !hasSeenIntro());
   // The server closes a won fight in the same response as the killing blow.
   // Keep showing that fight - enemy at 0 HP - so the arena can play the enemy's
@@ -180,6 +183,14 @@ function App() {
   useEffect(() => {
     if (!inCombat) setIsMapOpen(false);
   }, [inCombat]);
+
+  // Every enemy met goes into the bestiary (bestiary.ts) - once per fight,
+  // with the move names it shows as the fight goes on.
+  const liveFight = run?.pending_combat ?? null;
+  const fightId = run && liveFight ? fightKey(run) : null;
+  useEffect(() => {
+    if (run && liveFight && fightId) noteEncounter(fightId, liveFight, run.setting);
+  }, [run, liveFight, fightId]);
 
   // D opens the deck in a fight and closes it again (the other combat keys
   // are CombatPanel's) - not over another window, nor while typing.
@@ -273,6 +284,14 @@ function App() {
     try {
       const next = await action();
       const fight = run?.pending_combat;
+      if (run && fight) {
+        // the fight just ended: beaten, or it took the last HP
+        if (!next.pending_combat && next.player.hp > 0) {
+          noteOutcome(fightKey(run), fight.enemy_name, run.setting, "won");
+        } else if (next.status === "defeat") {
+          noteOutcome(fightKey(run), next.stats?.killed_by?.enemy ?? fight.enemy_name, run.setting, "lost");
+        }
+      }
       setSlainCombat(
         fight && !next.pending_combat && next.player.hp > 0
           ? { ...fight, enemy_hp: 0, enemy_block: 0 }
@@ -455,6 +474,12 @@ function App() {
           onClick={() => {
             sfx.play("click");
             setIsDeckOpen(true);
+          }}
+        />
+        <BestiaryButton
+          onClick={() => {
+            sfx.play("click");
+            setIsBestiaryOpen(true);
           }}
         />
         {inCombat && (
@@ -655,6 +680,7 @@ function App() {
         </Overlay>
       )}
       {isDeckOpen && <DeckView deck={run.player.deck} onClose={() => setIsDeckOpen(false)} />}
+      {isBestiaryOpen && <BestiaryView currentSetting={run.setting} onClose={() => setIsBestiaryOpen(false)} />}
 
       {riftJump > 0 && (
         <div key={riftJump} className={`rift-transition ${inCombat ? "is-enter" : "is-exit"}`} aria-hidden="true" />
@@ -673,3 +699,8 @@ function App() {
 }
 
 export default App;
+
+// One fight of one run: the run and the room it is fought in.
+function fightKey(run: RunView): string {
+  return `${run.run_id}:${run.current_node.id}`;
+}
