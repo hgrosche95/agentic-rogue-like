@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from agentic_rogue_like.api import app
+from agentic_rogue_like.sessions import get_session
 
 client = TestClient(app)
 
@@ -459,3 +460,24 @@ def test_verdict_unknown_run_returns_404() -> None:
     response = client.get(f"/runs/{uuid.uuid4()}/verdict")
 
     assert response.status_code == 404
+
+
+def _stored_difficulty(payload: dict) -> int:
+    response = client.post("/runs", json=payload)
+    assert 200 <= response.status_code < 300
+    session = get_session(response.json()["run_id"])
+    assert session is not None
+    return session.run.difficulty
+
+
+def test_create_run_difficulty_default() -> None:
+    assert _stored_difficulty({"seed": 1}) == 0
+
+
+def test_create_run_difficulty_stored() -> None:
+    assert _stored_difficulty({"seed": 1, "difficulty": 2}) == 2
+
+
+def test_create_run_difficulty_clamped() -> None:
+    assert _stored_difficulty({"seed": 1, "difficulty": 9}) == 5
+    assert _stored_difficulty({"seed": 1, "difficulty": -4}) == 0
