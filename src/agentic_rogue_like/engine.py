@@ -36,12 +36,14 @@ from .models import (
     Character,
     Enemy,
     MapNode,
+    NemesisSpec,
     NodeType,
     PlayerState,
     RestSite,
     RunState,
     RunStatus,
 )
+from .nemesis import nemesis_enemy, valid_nemesis
 from .omega import adapt_omega, omega_taunts
 from .shop import MIN_DECK_SIZE, leave_shop, roll_shop
 from .starts import apply_deal, apply_kit, roll_deals, roll_kits
@@ -121,9 +123,13 @@ def new_run(
     character: Character = Character.CHRONOS,
     program_mode: bool = False,
     difficulty: int = 0,
+    nemesis: NemesisSpec | None = None,
 ) -> RunState:
     """`program_mode`: the field runs as a program (combat.run_program) for
     the whole run, and rewards offer control flow cards.
+
+    `nemesis`: the enemy that killed the player last run - it returns as the
+    first elite of act 1 (nemesis.py). Dropped if it makes no fightable elite.
 
     `difficulty`: stored clamped to 0 <= difficulty <= enemies.MAX_DIFFICULTY
     (enemies.clamp_difficulty) - out-of-range values are clamped, not rejected.
@@ -148,6 +154,7 @@ def new_run(
         program_mode=program_mode,
         difficulty=clamp_difficulty(difficulty),
         voice=fallback_voice(),
+        nemesis=valid_nemesis(nemesis),
     )
     # No artifact at the start - the first one comes from an elite. The
     # starter kits (starts.py) get their own rng, so offering them doesn't
@@ -543,6 +550,10 @@ def _room_enemy(
     """
     boss = node.type is NodeType.BOSS
     style = None if boss else play_style(run.player.deck)
+    if (returned := _returning_nemesis(run, node, rng)) is not None:
+        if run.program_mode:
+            returned = with_program_move(returned, style, run.player.deck)
+        return escalate(returned, node.floor, NUM_FLOORS, run.act, run.difficulty)
     enemy = enemy_for_node(
         enemy_id=f"agent-{rng.getrandbits(32):08x}",
         floor=node.floor,
@@ -570,6 +581,20 @@ def _room_enemy(
     if is_final_boss(run, node):
         enemy = omega_taunts(enemy, run.player.deck, run.stats)
     return escalate(enemy, node.floor, NUM_FLOORS, run.act, run.difficulty)
+
+
+def _returning_nemesis(run: RunState, node: MapNode, rng: random.Random) -> Enemy | None:
+    """The nemesis, if this is the first elite room of act 1 the player
+    enters and it has not returned yet (nemesis.py) - without an affix, and
+    with the AGI's line as its taunt. Escalated like any elite afterwards."""
+    if node.type is not NodeType.ELITE or run.act != 1 or run.nemesis is None:
+        return None
+    if run.nemesis_met:
+        return None
+    enemy = nemesis_enemy(run.nemesis, f"nemesis-{rng.getrandbits(32):08x}")
+    if enemy is not None:
+        run.nemesis_met = True
+    return enemy
 
 
 def start_combat_node(

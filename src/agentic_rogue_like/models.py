@@ -498,6 +498,42 @@ class Enemy(BaseModel):
         return moves
 
 
+# How long the parts of a nemesis may be - like a custom setting, they come
+# from the player's browser and end up in the log and on screen.
+MAX_NEMESIS_NAME_LENGTH = 40
+MAX_NEMESIS_DESCRIPTION_LENGTH = 200
+
+
+class NemesisSpec(BaseModel):
+    """The enemy that killed the player last run, sent back by the client to
+    return as the first elite of act 1 (nemesis.py). Only what the enemy *is*
+    - its strength is set fresh from the elite budget."""
+
+    name: str = Field(min_length=1, max_length=MAX_NEMESIS_NAME_LENGTH)
+    description: str = Field(default="", max_length=MAX_NEMESIS_DESCRIPTION_LENGTH)
+    attack_name: str = Field(min_length=1, max_length=MAX_NEMESIS_NAME_LENGTH)
+    moves: list[EnemyMove] = Field(min_length=1, max_length=4)
+    body_shape: BodyShape | None = None
+    feature: Feature | None = None
+
+    @field_validator("name", "description", "attack_name", mode="before")
+    @classmethod
+    def _trimmed(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("moves")
+    @classmethod
+    def _a_playable_move_set(cls, moves: list[EnemyMove]) -> list[EnemyMove]:
+        if kinds := {m.kind for m in moves} & PROGRAM_ONLY_MOVES:
+            raise ValueError(
+                f"{', '.join(sorted(k.value for k in kinds))} is added by the game, "
+                "not part of a move set"
+            )
+        if not any(m.kind in _ALWAYS_AVAILABLE for m in moves):
+            raise ValueError("a move set needs an attack or a barrage")
+        return moves
+
+
 class MapNode(BaseModel):
     id: str
     floor: int
@@ -689,3 +725,7 @@ class RunState(BaseModel):
     verdict: str | None = None
     # For the summary at the end of the run (stats.py) - never read by play.
     stats: RunStats = Field(default_factory=RunStats)
+    # The enemy that killed the player last run (nemesis.py): it returns as
+    # the first elite of act 1, once - `nemesis_met` is set when it does.
+    nemesis: NemesisSpec | None = None
+    nemesis_met: bool = False
