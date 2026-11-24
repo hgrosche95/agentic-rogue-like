@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useMemo, useState } from "react";
 import { loadBestiary, type BestiaryEntry } from "../bestiary";
-import { COLORS } from "../pixel/palette";
-import { enemySprite } from "../pixel/enemySprite";
 import { SETTING_LABELS } from "../settings";
 import { CloseButton, Overlay } from "./Overlay";
+import { PixelEnemy } from "./PixelEnemy";
 import "../bestiary.css";
 
 // The bestiary (bestiary.ts): every enemy met, across runs, as a grid of
@@ -13,10 +12,11 @@ const settingKey = (setting: string) => setting.trim().toLowerCase();
 const settingLabel = (setting: string) => SETTING_LABELS[settingKey(setting)] ?? setting;
 
 function EnemySprite({ entry, scale }: { entry: BestiaryEntry; scale: number }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const sprite = useMemo(
-    () =>
-      enemySprite({
+  return (
+    <PixelEnemy
+      className="bestiary-sprite"
+      scale={scale}
+      spec={{
         name: entry.name,
         maxHp: entry.maxHp,
         attack: entry.attack,
@@ -24,31 +24,7 @@ function EnemySprite({ entry, scale }: { entry: BestiaryEntry; scale: number }) 
         bodyShape: entry.bodyShape ?? undefined,
         feature: entry.feature ?? undefined,
         finalBoss: entry.finalBoss,
-      }),
-    [entry],
-  );
-  useEffect(() => {
-    const ctx = ref.current?.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, sprite.w, sprite.h - sprite.top);
-    // the empty rows above the head are cut, so it sits in its frame
-    for (let y = sprite.top; y < sprite.h; y++) {
-      for (let x = 0; x < sprite.w; x++) {
-        const p = sprite.pixels[y * sprite.w + x];
-        if (!p) continue;
-        ctx.fillStyle = COLORS[p - 1];
-        ctx.fillRect(x, y - sprite.top, 1, 1);
-      }
-    }
-  }, [sprite]);
-  return (
-    <canvas
-      ref={ref}
-      className="bestiary-sprite"
-      width={sprite.w}
-      height={sprite.h - sprite.top}
-      style={{ "--w": `${sprite.w * scale}px`, "--h": `${(sprite.h - sprite.top) * scale}px` } as CSSProperties}
-      aria-hidden="true"
+      }}
     />
   );
 }
