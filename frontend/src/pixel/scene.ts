@@ -1,4 +1,5 @@
 import type { CardType } from "../api";
+import { backdropFor, hasSky, paintBackdrop, rackHeight, rackX, RACKS, TORCHES, type Backdrop } from "./backdrop";
 import { enemySprite, type EnemySpec, type EnemySprite } from "./enemySprite";
 import { FINAL_BOSS_CENTER, FinalBoss } from "./finalBoss";
 import { C, COLORS, RAMPS, RAMP } from "./palette";
@@ -147,6 +148,8 @@ export class PixelScene {
   readonly canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private bg: HTMLCanvasElement;
+  // the machine world's backdrop, picked from the enemy's setting (backdrop.ts)
+  private backdrop: Backdrop = "cyberpunk";
   private patterns: (CanvasPattern | null)[] = [];
   private reducedMotion: boolean;
 
@@ -255,6 +258,11 @@ export class PixelScene {
       this.enemy = null;
       this.finalBoss = null;
       return;
+    }
+    const backdrop = backdropFor(spec.setting);
+    if (backdrop !== this.backdrop) {
+      this.backdrop = backdrop;
+      this.bg = this.paintBackground();
     }
     const sprite = enemySprite(spec);
     if (sprite === this.enemy) return;
@@ -939,17 +947,28 @@ export class PixelScene {
   private drawAmbient(t: number) {
     const frame = Math.floor(t / 5);
 
-    // twinkling stars
-    for (let i = 0; i < this.stars.length; i += 2) {
+    // twinkling stars, where the backdrop has a sky
+    for (let i = 0; i < (hasSky(this.backdrop) ? this.stars.length : 0); i += 2) {
       const tw = hash(i * 31 + Math.floor(t / 20));
       if (tw < 0.3) continue;
       this.rect(this.stars[i], this.stars[i + 1], 1, 1, tw > 0.85 ? C.white : tw > 0.6 ? C.lavender : C.violetLight);
     }
 
-    // rack LEDs: cyan bars flicker, red lamps blink
-    for (let r = 0; r < 7; r++) {
-      const x = 126 + r * 16;
-      const h = 22 + Math.round(hash(r * 5 + 3) * 16);
+    // dungeon torches: their flames flicker
+    if (this.backdrop === "dungeon") {
+      for (let k = 0; k < TORCHES.length; k++) {
+        const [tx, ty] = TORCHES[k];
+        const lick = hash(k * 17 + frame * 5) > 0.5 ? 1 : 0;
+        this.rect(tx - 1, ty - 3 - lick, 3, 3 + lick, C.amber);
+        this.rect(tx, ty - 4 - lick, 1, 2, C.amberHi);
+        this.rect(tx, ty - 1, 1, 1, C.white);
+      }
+    }
+
+    // rack LEDs (cyberpunk): cyan bars flicker, red lamps blink
+    for (let r = 0; r < (this.backdrop === "cyberpunk" ? RACKS : 0); r++) {
+      const x = rackX(r);
+      const h = rackHeight(r);
       const top = FLOOR - h;
       if (hash(r * 13 + Math.floor(t / 12)) > 0.4) this.rect(x + 6, top + 2, 1, 1, C.red);
       const ly = top + 5 + Math.floor(hash(r + frame * 7) * (h - 8));
@@ -1662,33 +1681,10 @@ export class PixelScene {
     for (let y = FLOOR + 2, gap = 2; y < HEIGHT; y += gap, gap++) r(0, y, RIFT_X, 1, C.wood0);
     for (let x = 4; x < RIFT_X; x += 13) r(x, FLOOR + 1, 1, HEIGHT - FLOOR, C.wood0);
 
-    // ----- the machine world
+    // ----- the machine world: the setting's backdrop (backdrop.ts)
     const X = RIFT_X + 1;
     const W = WIDTH - X;
-    r(X, 0, W, FLOOR, C.deepNight);
-    d(X, 18, W, 6, C.night);
-    r(X, 24, W, 30, C.night);
-    d(X, 54, W, 6, C.violet);
-    r(X, 60, W, FLOOR - 60, C.violet);
-    d(X, FLOOR - 8, W, 8, C.violetLight);
-    // far towers
-    for (let x = X + 2; x < WIDTH; x += 9) {
-      const h = 18 + Math.round(hash(x) * 30);
-      r(x, FLOOR - h, 6, h, C.deepNight);
-      for (let w = 0; w < 4; w++) r(x + 1 + (w % 2) * 3, FLOOR - h + 3 + w * 5, 1, 1, C.cyanDark);
-    }
-    // server racks
-    for (let i = 0; i < 7; i++) {
-      const x = 126 + i * 16;
-      const h = 22 + Math.round(hash(i * 5 + 3) * 16);
-      const top = FLOOR - h;
-      r(x - 1, top - 1, 10, h + 1, C.ink);
-      r(x, top, 8, h, C.cloth0);
-      r(x, top, 8, 1, C.violetLight);
-      r(x + 7, top + 1, 1, h - 1, C.night);
-      r(x + 2, top + 4, 1, h - 6, C.cyanMid);
-      r(x + 5, top + 4, 1, h - 6, C.cyanDark);
-    }
+    paintBackdrop(this.backdrop, r, d);
     // the grid floor, converging on a point behind the enemy
     r(X, FLOOR, W, HEIGHT - FLOOR, C.ink);
     for (let y = FLOOR, gap = 1; y < HEIGHT; y += gap, gap++) r(X, y, W, 1, y === FLOOR ? C.cyanMid : C.cyanDark);

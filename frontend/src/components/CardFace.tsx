@@ -500,12 +500,10 @@ export function CardFace({
           <CardTypeIcon type={card.type} />
         </span>
       )}
-      {/* its rarity on its edge: silver for uncommon, gold with corner marks for rare
-          (alive.css; the foil below is its shine), and a tag at its foot */}
-      {!onField && (card.rarity === "uncommon" || card.rarity === "rare") && (
-        <span className={`card-edge is-${card.rarity}`} aria-hidden="true" />
-      )}
-      {!onField && card.rarity === "rare" && <span className="card-corners" aria-hidden="true" />}
+      {/* its rarity as a flat ring inside the outline (alive.css), a gold
+          plus for an upgrade, and a tag at its foot */}
+      {!onField && <span className={`card-frame is-${card.rarity}`} aria-hidden="true" />}
+      {!onField && card.upgraded && <span className="card-plus" aria-hidden="true" />}
       {!onField && <span className={`card-rarity is-${card.rarity}`}>{card.rarity}</span>}
       {/* a rare card's foil, which catches the light as the card tilts (tilt.ts) */}
       {card.rarity === "rare" && !onField && <span className="card-foil" aria-hidden="true" />}

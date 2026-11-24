@@ -3,76 +3,128 @@
    the log's colours, status chips, idle life and screen wipes - all of it
    off the layout (transform, opacity, glow) and off for reduced motion. */
 
-/* ---------- rarity on the card's edge ---------- */
-.card-edge {
+/* ---------- rarity and upgrade on the card's frame ----------
+   A hard 4px ring inside the ink outline, one flat palette colour per
+   rarity (palette.ts: steel, coat, cyan, brass) - no gradient, no glow. */
+.card-frame {
   position: absolute;
   inset: 0;
   z-index: 3;
-  border-radius: inherit;
-  padding: 2.5px;
-  pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-}
-
-.card-edge.is-uncommon {
-  background: linear-gradient(135deg, #f4f8ff, #7d8fb5 26%, #ffffff 44%, #5d6b8f 64%, #dfe7f7);
-}
-
-.card-edge.is-rare {
-  padding: 3px;
-  background: linear-gradient(135deg, #fff3b0, #e0a020 24%, #fffbe0 42%, #b9780a 62%, #ffe27a 82%, #c98a10);
-}
-
-/* the gold rule's corner marks */
-.card-corners {
-  position: absolute;
-  inset: 6px;
-  z-index: 3;
+  border: 4px solid var(--frame);
   pointer-events: none;
 }
 
-.card-corners::before,
-.card-corners::after {
+.card-frame.is-starter {
+  --frame: #6d6682;
+}
+.card-frame.is-common {
+  --frame: #d8d3ea;
+}
+.card-frame.is-uncommon {
+  --frame: #3fd6e8;
+}
+.card-frame.is-rare {
+  --frame: #e0ad52;
+}
+
+/* rare cards add a brass step in each corner of the ring */
+.card-frame.is-rare::before,
+.card-frame.is-rare::after {
   content: "";
   position: absolute;
-  width: 12px;
-  height: 12px;
-  border: 2px solid #ffd54d;
+  width: 8px;
+  height: 8px;
+  background: #ffe29a;
 }
-
-.card-corners::before {
+.card-frame.is-rare::before {
   top: 0;
   left: 0;
-  border-right: 0;
-  border-bottom: 0;
 }
-
-.card-corners::after {
+.card-frame.is-rare::after {
   right: 0;
   bottom: 0;
-  border-left: 0;
-  border-top: 0;
 }
 
-.hand-card:has(> .card-edge.is-uncommon) {
-  box-shadow:
-    0 6px 18px rgba(0, 0, 0, 0.5),
-    0 0 14px rgba(200, 214, 255, 0.28);
+/* an upgraded card: a gold pixel plus in the top right corner, which
+   glints once when the card appears */
+.card-plus {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 4;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
 }
 
-.hand-card:has(> .card-edge.is-rare) {
-  box-shadow:
-    0 6px 18px rgba(0, 0, 0, 0.5),
-    0 0 22px rgba(255, 207, 77, 0.45);
+.card-plus::before,
+.card-plus::after {
+  content: "";
+  position: absolute;
+  background: #e0ad52;
+  box-shadow: 0 0 0 2px #07051a;
+  animation: plus-glint 0.6s steps(1) 1 both;
+}
+.card-plus::before {
+  left: 5px;
+  top: 0;
+  width: 4px;
+  height: 14px;
+}
+.card-plus::after {
+  left: 0;
+  top: 5px;
+  width: 14px;
+  height: 4px;
 }
 
-/* the older gold double rule gives way to the edge */
+@keyframes plus-glint {
+  0%,
+  50% {
+    background: #fbf8ff;
+  }
+  25% {
+    background: #ffe29a;
+  }
+  75%,
+  100% {
+    background: #e0ad52;
+  }
+}
+
+/* the header keeps the corner free for the plus */
+.hand-card:has(> .card-plus) .card-header {
+  padding-right: 20px;
+}
+
+/* the gem goes flat: one palette colour and an ink outline */
+.card-gem,
+.card-gem.rarity-uncommon,
+.card-gem.rarity-rare {
+  border-radius: 0;
+  box-shadow: none;
+  outline: 2px solid #07051a;
+}
+.card-gem.rarity-common {
+  background: #d8d3ea;
+}
+.card-gem.rarity-uncommon {
+  background: #3fd6e8;
+}
+.card-gem.rarity-rare {
+  background: #e0ad52;
+}
+
+/* the ring replaces the older gold double rule */
 .hand-card.rarity-rare {
   outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-plus::before,
+  .card-plus::after {
+    animation: none;
+  }
 }
 
 /* the tag at the card's foot */
