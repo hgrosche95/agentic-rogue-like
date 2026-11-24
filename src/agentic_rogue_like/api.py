@@ -59,7 +59,7 @@ from .combat import (
     token_regen,
     uninstalls,
 )
-from .enemies import FINAL_BOSS_ID
+from .enemies import FINAL_BOSS_ID, clamp_difficulty
 from .engine import (
     NUM_ACTS,
     apply_event_choice,
@@ -492,6 +492,8 @@ class NewRunRequest(BaseModel):
     character: Character = Character.CHRONOS
     # Run the field as a program (combat.run_program) instead of classic play.
     program_mode: bool = False
+    # How hard the run should be: 0 <= difficulty <= enemies.MAX_DIFFICULTY.
+    difficulty: int = 0
 
     @field_validator("setting")
     @classmethod
@@ -510,6 +512,15 @@ class NewRunRequest(BaseModel):
                 f"custom setting must be at most {MAX_CUSTOM_SETTING_LENGTH} characters"
             )
         return cleaned
+
+    @field_validator("difficulty")
+    @classmethod
+    def _difficulty_is_in_range(cls, value: int) -> int:
+        """Clamped to 0..enemies.MAX_DIFFICULTY instead of rejected, unlike
+        `setting` above: a stray 9 or -4 should harden or soften the run, not
+        fail the request (see enemies.clamp_difficulty's docstring). A
+        non-number is still a 422 - clamping is about range, not type."""
+        return clamp_difficulty(value)
 
 
 class EventChoiceRequest(BaseModel):
@@ -881,6 +892,7 @@ def create_run(request: NewRunRequest) -> RunView:
         setting=request.setting,
         character=request.character,
         program_mode=request.program_mode,
+        difficulty=request.difficulty,
     )
     run_id = create_session(run, random.Random(seed))
     session = get_session(run_id)

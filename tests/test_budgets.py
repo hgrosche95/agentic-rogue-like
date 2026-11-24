@@ -1,7 +1,7 @@
 import pytest
 
 from agentic_rogue_like.agent.budgets import _BUDGETS, budget_for
-from agentic_rogue_like.enemies import ENEMY_POOL, escalate, tier_floor
+from agentic_rogue_like.enemies import ENEMY_POOL, clamp_difficulty, escalate, tier_floor
 from agentic_rogue_like.models import PROGRAM_ONLY_MOVES, Enemy, MoveKind, default_moves
 from agentic_rogue_like.threat import threat
 
@@ -76,3 +76,39 @@ def test_act_two_has_no_early_tier() -> None:
     assert tier_floor(0, 8, act=1) == 0
     assert tier_floor(0, 8, act=2) == 4
     assert tier_floor(6, 8, act=2) == 6
+
+
+def test_escalate_difficulty_zero_matches_baseline() -> None:
+    enemy = Enemy(id="foe", name="Foe", hp=50, attack=10, attack_name="Slam")
+    late = escalate(enemy, floor=4, num_floors=8, difficulty=0)
+    assert (late.hp, late.attack) == (55, 11)
+    big = Enemy(id="foe", name="Foe", hp=100, attack=10, attack_name="Slam")
+    assert escalate(big, floor=0, num_floors=8, act=2, difficulty=0).hp == 121
+    late = escalate(big, floor=4, num_floors=8, act=2, difficulty=0)
+    assert (late.hp, late.attack) == (133, 13)
+
+
+def test_escalate_difficulty_two_raises_stats() -> None:
+    enemy = Enemy(id="foe", name="Foe", hp=50, attack=10, attack_name="Slam")
+    late = escalate(enemy, floor=4, num_floors=8, difficulty=2)
+    assert (late.hp, late.attack) == (64, 13)
+    assert (enemy.hp, enemy.attack) == (50, 10)  # the original is left alone
+    big = Enemy(id="foe", name="Foe", hp=100, attack=10, attack_name="Slam")
+    late = escalate(big, floor=4, num_floors=8, act=2, difficulty=2)
+    assert (late.hp, late.attack) == (154, 15)
+    assert (big.hp, big.attack) == (100, 10)
+
+
+def test_escalate_difficulty_is_clamped() -> None:
+    enemy = Enemy(id="foe", name="Foe", hp=50, attack=10, attack_name="Slam")
+    high = escalate(enemy, floor=4, num_floors=8, difficulty=9)
+    top = escalate(enemy, floor=4, num_floors=8, difficulty=5)
+    assert (high.hp, high.attack) == (top.hp, top.attack)
+    low = escalate(enemy, floor=4, num_floors=8, difficulty=-3)
+    zero = escalate(enemy, floor=4, num_floors=8, difficulty=0)
+    assert (low.hp, low.attack) == (zero.hp, zero.attack)
+
+
+@pytest.mark.parametrize(("value", "expected"), [(-1, 0), (0, 0), (3, 3), (5, 5), (6, 5)])
+def test_clamp_difficulty(value: int, expected: int) -> None:
+    assert clamp_difficulty(value) == expected

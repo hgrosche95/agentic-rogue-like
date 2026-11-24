@@ -595,6 +595,12 @@ class RunStats(BaseModel):
 
 class RunState(BaseModel):
     seed: int
+    # What the run was asked to be worth: 0 <= difficulty <=
+    # enemies.MAX_DIFFICULTY, clamped on the way in (enemies.clamp_difficulty).
+    # Every step above 0 gives enemies 8% more HP and attack
+    # (enemies.escalate) and, from step 3 on, the between-act recovery drops to
+    # 25% (engine.act_heal_percent).
+    difficulty: int = 0
     # Which map of the run the player is on - beating an act's boss opens
     # the next one (see engine.advance_act), beating the last one wins.
     # Program mode (combat.run_program): action cards are queued on the field

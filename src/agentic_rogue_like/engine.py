@@ -24,7 +24,7 @@ from .combat import CombatState, CombatVoice, FightTally, auto_resolve_combat, v
 from .combat import end_turn as _end_combat_turn
 from .combat import play_card as _play_combat_card
 from .combat import start_combat as _start_combat
-from .enemies import escalate, with_affix, with_program_move
+from .enemies import clamp_difficulty, escalate, with_affix, with_program_move
 from .events import EventOption, GameEvent, apply_option
 from .forge import forged_deal
 from .map_gen import NUM_FLOORS, generate_map
@@ -77,6 +77,26 @@ REST_HEAL = 15
 # of their max HP, on top of the boss's gold and card reward.
 NUM_ACTS = 2
 ACT_HEAL_PERCENT = 40
+# From HARD_HEAL_MIN_DIFFICULTY (enemies.MAX_DIFFICULTY is the ceiling) the
+# between-acts heal is the smaller HARD_ACT_HEAL_PERCENT instead: a harder run
+# may not be played by resting between acts. See act_heal_percent().
+HARD_ACT_HEAL_PERCENT = 25
+HARD_HEAL_MIN_DIFFICULTY = 3
+
+
+def act_heal_percent(difficulty: int) -> int:
+    """Share of max HP recovered when an act is beaten (advance_act).
+
+    `difficulty` below HARD_HEAL_MIN_DIFFICULTY (i.e. difficulty <= 2) heals
+    ACT_HEAL_PERCENT, difficulty >= HARD_HEAL_MIN_DIFFICULTY only
+    HARD_ACT_HEAL_PERCENT. Out-of-range values are clamped first
+    (enemies.clamp_difficulty), so 9 behaves like 5 and -3 like 0.
+    """
+    return (
+        HARD_ACT_HEAL_PERCENT
+        if clamp_difficulty(difficulty) >= HARD_HEAL_MIN_DIFFICULTY
+        else ACT_HEAL_PERCENT
+    )
 
 
 def is_final_boss(run: RunState, node: MapNode) -> bool:
@@ -99,9 +119,15 @@ def new_run(
     setting: str = DEFAULT_SETTING,
     character: Character = Character.CHRONOS,
     program_mode: bool = False,
+    difficulty: int = 0,
 ) -> RunState:
     """`program_mode`: the field runs as a program (combat.run_program) for
-    the whole run, and rewards offer control flow cards."""
+    the whole run, and rewards offer control flow cards.
+
+    `difficulty`: stored clamped to 0 <= difficulty <= enemies.MAX_DIFFICULTY
+    (enemies.clamp_difficulty) - out-of-range values are clamped, not rejected.
+    It hardens enemies in enemies.escalate and shrinks the between-acts heal
+    (act_heal_percent); the run's own budgets and rng are untouched."""
     hero = CHARACTERS[character]
     player = PlayerState(
         character=character,
@@ -119,6 +145,7 @@ def new_run(
         current_node_id="0-0",
         setting=setting,
         program_mode=program_mode,
+        difficulty=clamp_difficulty(difficulty),
         voice=fallback_voice(),
     )
     # No artifact at the start - the first one comes from an elite. The
@@ -353,8 +380,9 @@ def advance_act(run: RunState) -> None:
     """Move the run onto the next act's map, at its (already resolved) start camp.
 
     Called once the current act's boss is beaten. The player keeps
-    everything - deck, artifacts, gold - and recovers ACT_HEAL_PERCENT of
-    their max HP; enemies from here on are stronger (enemies.escalate).
+    everything - deck, artifacts, gold - and recovers the share
+    act_heal_percent(run.difficulty) gives them of their max HP; enemies from
+    here on are stronger (enemies.escalate).
     """
     run.act += 1
     run.nodes = generate_map(run.seed, run.act)
@@ -362,7 +390,7 @@ def advance_act(run: RunState) -> None:
     run.previous_node_id = None
     run.nodes["0-0"].visited = True
     run.floor = 0
-    healed = heal(run.player, run.player.max_hp * ACT_HEAL_PERCENT // 100)
+    healed = heal(run.player, run.player.max_hp * act_heal_percent(run.difficulty) // 100)
     run.history.append(
         f"The way to act {run.act} opens. You catch your breath and recover {healed} integrity - "
         f"the enemies ahead are stronger."
@@ -495,7 +523,7 @@ def _room_enemy(
     act_pack: Callable[[], ActPack | None] | None = None,
 ) -> Enemy:
     """The enemy of a combat room, ready to fight: picked (agent, act pack or pool),
-    affixed if elite, escalated for its depth on the map.
+    affixed if elite, escalated for its depth on the map and the run's difficulty.
 
     Once the player's deck shows a clear style (style.play_style), the AGI
     prefers enemies and affixes that answer it - and an enemy that does opens
@@ -532,7 +560,7 @@ def _room_enemy(
         enemy = enemy.model_copy(update={"taunt": line or taunt(style, enemy)})
     if is_final_boss(run, node):
         enemy = omega_taunts(enemy, run.player.deck, run.stats)
-    return escalate(enemy, node.floor, NUM_FLOORS, run.act)
+    return escalate(enemy, node.floor, NUM_FLOORS, run.act, run.difficulty)
 
 
 def start_combat_node(

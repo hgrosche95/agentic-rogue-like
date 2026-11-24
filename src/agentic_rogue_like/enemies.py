@@ -371,19 +371,58 @@ def pick_enemy(
 # that check the agent against them - stay exactly as they are.
 LATE_SCALING = 1.10
 
+# Difficulty levels a run may ask for (RunState.difficulty): 0 <= difficulty <=
+# MAX_DIFFICULTY, every step above 0 worth DIFFICULTY_STEP_PERCENT percent more
+# enemy HP and attack. Like LATE_SCALING it is applied in escalate(), after an
+# enemy is picked or generated, so the encounter agent's budgets are untouched.
+MAX_DIFFICULTY = 5
+DIFFICULTY_STEP_PERCENT = 8
+
 
 def scaling_steps(floor: int, num_floors: int, act: int = 1) -> int:
     """How many times LATE_SCALING applies to an enemy on `floor` of `act`."""
     return 2 * (act - 1) + (0 if floor < num_floors // 2 else 1)
 
 
-def escalate(enemy: Enemy, floor: int, num_floors: int, act: int = 1) -> Enemy:
+def clamp_difficulty(value: int) -> int:
+    """`value` inside the accepted range 0 <= difficulty <= MAX_DIFFICULTY:
+    anything below 0 becomes 0, anything above MAX_DIFFICULTY becomes
+    MAX_DIFFICULTY. Out-of-range requests are clamped rather than rejected -
+    a stray number should soften or harden the run, not fail it (unlike
+    api.NewRunRequest's setting, which is validated). Used by
+    api.NewRunRequest and engine.new_run, and again inside escalate()."""
+    return min(max(value, 0), MAX_DIFFICULTY)
+
+
+def escalate(
+    enemy: Enemy, floor: int, num_floors: int, act: int = 1, difficulty: int = 0
+) -> Enemy:
+    """`enemy` with its floor/act scaling (LATE_SCALING) applied and, above
+    difficulty 0, the difficulty bonus on top of it. `difficulty` is clamped
+    here too, so a caller that skipped clamp_difficulty cannot overshoot."""
     steps = scaling_steps(floor, num_floors, act)
-    if steps == 0:
+    level = clamp_difficulty(difficulty)
+    if steps == 0 and level == 0:
         return enemy
-    factor = LATE_SCALING**steps
-    return enemy.model_copy(
-        update={"hp": round(enemy.hp * factor), "attack": round(enemy.attack * factor)}
+    if steps == 0:
+        scaled = enemy
+    else:
+        factor = LATE_SCALING**steps
+        scaled = enemy.model_copy(
+            update={"hp": round(enemy.hp * factor), "attack": round(enemy.attack * factor)}
+        )
+    if level == 0:
+        # Difficulty 0 leaves the path above - and with it every seeded run -
+        # exactly as it was.
+        return scaled
+    # Integer percent math, rounding half up: a float factor would drift on
+    # values like 13 * 1.16, and round() would send .5 to the even number.
+    percent = 100 + DIFFICULTY_STEP_PERCENT * level
+    return scaled.model_copy(
+        update={
+            "hp": (scaled.hp * percent + 50) // 100,
+            "attack": (scaled.attack * percent + 50) // 100,
+        }
     )
 
 

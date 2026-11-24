@@ -8,6 +8,7 @@ from agentic_rogue_like.balance_sim import (
     SimConfig,
     build_report,
     load_variant,
+    main,
     naive_bot,
     smart_bot,
 )
@@ -66,3 +67,17 @@ def test_variant_overrides_budgets_player_and_cards(tmp_path: Path) -> None:
 def test_shipped_example_variants_load() -> None:
     for path in Path(__file__).parent.parent.joinpath("balance").glob("*.json"):
         load_variant(path).new_player()
+
+
+def test_difficulty_lowers_win_rate() -> None:
+    base = build_report(SimConfig(), naive_bot, fights=10, runs=10, seed=1234, bot_name="naive")
+    hard = build_report(
+        SimConfig(difficulty=5), naive_bot, fights=10, runs=10, seed=1234, bot_name="naive"
+    )
+    base_rate = sum(base.fresh[t].win_rate for t in TIERS)
+    hard_rate = sum(hard.fresh[t].win_rate for t in TIERS)
+    assert hard_rate <= base_rate
+
+
+def test_main_accepts_difficulty() -> None:
+    main(["--difficulty", "2", "--fights", "2", "--runs", "2", "--seed", "1234"])

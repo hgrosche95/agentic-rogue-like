@@ -96,12 +96,13 @@ from .combat import (
 )
 from .enemies import (
     ENEMY_POOL,
+    clamp_difficulty,
     escalate,
     pick_enemy,
     with_affix,
     with_program_move,
 )
-from .engine import ACT_HEAL_PERCENT, NUM_ACTS, boss_phases
+from .engine import NUM_ACTS, act_heal_percent, boss_phases
 from .events import GameEvent, apply_option, option_value, random_event
 from .map_gen import NUM_FLOORS, generate_map
 from .models import (
@@ -157,6 +158,10 @@ class SimConfig:
     program: bool = False
     # The final fight answers the run, as in the game (omega.adapt_omega).
     omega: bool = True
+    # Run difficulty, 0 <= difficulty <= enemies.MAX_DIFFICULTY, clamped by
+    # main(); hardens enemies (enemies.escalate) and, from 3 on, shrinks the
+    # between-acts heal (engine.act_heal_percent) - as in the game.
+    difficulty: int = 0
 
     def __post_init__(self) -> None:
         hero = CHARACTERS[self.character]
@@ -811,7 +816,7 @@ def fresh_fights(cfg: SimConfig, bot: Bot, n: int, seed: int) -> dict[str, list[
                 base = with_affix(base, rng)
             if cfg.program and tier != "boss":
                 base = with_program_move(base)
-            enemy = escalate(base, _TIER_FLOOR[tier], NUM_FLOORS)
+            enemy = escalate(base, _TIER_FLOOR[tier], NUM_FLOORS, difficulty=cfg.difficulty)
             results[tier].append(fight(player, enemy, tier, bot, rng, program=cfg.program))
     return results
 
@@ -895,7 +900,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 base = with_affix(base, rng, style)
             if cfg.program and node.type is not NodeType.BOSS:
                 base = with_program_move(base, style, player.deck)
-            enemy = escalate(base, node.floor, NUM_FLOORS, act)
+            enemy = escalate(base, node.floor, NUM_FLOORS, act, cfg.difficulty)
             final = node.type is NodeType.BOSS and act >= NUM_ACTS
             result = fight(player, enemy, tier, bot, rng, act, cfg.program, final and cfg.omega)
             fights.append(result)
@@ -917,7 +922,7 @@ def simulate_run(cfg: SimConfig, bot: Bot, seed: int, bot_name: str = "smart") -
                 act += 1
                 nodes = generate_map(seed, act)
                 node = nodes["0-0"]
-                heal(player, player.max_hp * ACT_HEAL_PERCENT // 100)
+                heal(player, player.max_hp * act_heal_percent(cfg.difficulty) // 100)
         elif node.type is NodeType.REST:
             amount = REST_HEAL + total(player.artifacts, "rest_heal")
             index = rest_choice(player, amount, bot_name) if cfg.rest_upgrades else None
@@ -1203,6 +1208,15 @@ def main(argv: list[str] | None = None) -> None:
         default=Character.CHRONOS.value,
         help='Charakter für alle Varianten ohne eigenes "character"',
     )
+    parser.add_argument(
+        "--difficulty",
+        type=int,
+        default=0,
+        help=(
+            "Schwierigkeitsstufe 0-5: pro Stufe 8% mehr Gegner-HP und -Angriff, "
+            "ab 3 heilt der Aktwechsel nur noch 25% (Werte außerhalb werden begrenzt)"
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.calibrate_threat:
@@ -1219,6 +1233,7 @@ def main(argv: list[str] | None = None) -> None:
     for cfg in cfgs:
         cfg.pool = args.pool
         cfg.program = cfg.program or args.program
+        cfg.difficulty = clamp_difficulty(args.difficulty)
     bot = with_order(BOTS[args.bot], args.order)
     order = f", Programm-Reihenfolge {args.order}" if any(c.program for c in cfgs) else ""
     print(f"Bot: {args.bot}{order}, {args.fights} Kämpfe/Stufe, {args.runs} Runs, Seed {args.seed}")

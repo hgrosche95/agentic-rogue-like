@@ -3,6 +3,8 @@ import random
 import pytest
 
 from agentic_rogue_like.engine import (
+    act_heal_percent,
+    advance_act,
     available_choices,
     move_to,
     new_run,
@@ -96,3 +98,22 @@ def test_switching_the_last_jump_is_no_step_of_its_own() -> None:
 
     run.nodes[second].visited = True
     assert switch_choices(run) == []
+
+
+def test_new_run_difficulty_default_and_clamp() -> None:
+    assert new_run(1).difficulty == 0
+    assert new_run(1, difficulty=7).difficulty == 5
+
+
+def test_act_heal_percent() -> None:
+    assert [act_heal_percent(d) for d in (0, 1, 2)] == [40, 40, 40]
+    assert [act_heal_percent(d) for d in (3, 5)] == [25, 25]
+
+
+def test_advance_act_heal_respects_difficulty() -> None:
+    for difficulty, expected_hp in ((0, 42), (3, 30)):
+        run = new_run(1, difficulty=difficulty)
+        run.player.max_hp = 80
+        run.player.hp = 10
+        advance_act(run)
+        assert run.player.hp == expected_hp
