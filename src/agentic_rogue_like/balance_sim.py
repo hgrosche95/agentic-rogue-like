@@ -764,6 +764,19 @@ class FightResult:
     won: bool
     turns: int
     hp_lost: int
+    # How often the bot had a real choice (E1): turns that started with at
+    # least one playable hand card, split by whether the bot played every one
+    # of them or left at least one in hand. Turns the fight ended in are left
+    # out - a killing blow leaves cards behind without any choice.
+    turns_all_played: int = 0
+    turns_with_leftover: int = 0
+
+
+def playable(state: CombatState, card: Card) -> bool:
+    """Whether `card` could go down right now - the same test the game's
+    auto-play uses (combat.auto_resolve_combat): within the context window
+    and with a free slot for it. Reads the state only, never the rng."""
+    return not overflows(state, card) and bool(free_slots(state, card))
 
 
 def fight(
@@ -791,13 +804,29 @@ def fight(
     if omega:
         adapt_omega(state, player.deck)
     turns = 0
+    all_played = leftover = 0
     while turns < MAX_AUTO_TURNS and state.enemy_hp > 0 and player.hp > 0:
         turns += 1
+        options = [c for c in state.hand if playable(state, c)]
         bot(state, player, rng)
         if state.enemy_hp <= 0 or player.hp <= 0:
             break
+        if options:
+            # by identity: a played card has left the hand, a drawn one was
+            # never among the options
+            if any(any(c is h for h in state.hand) for c in options):
+                leftover += 1
+            else:
+                all_played += 1
         end_turn(state, player, rng)
-    return FightResult(tier, state.enemy_hp <= 0, turns, max(hp_before - player.hp, 0))
+    return FightResult(
+        tier,
+        state.enemy_hp <= 0,
+        turns,
+        max(hp_before - player.hp, 0),
+        turns_all_played=all_played,
+        turns_with_leftover=leftover,
+    )
 
 
 def fresh_fights(cfg: SimConfig, bot: Bot, n: int, seed: int) -> dict[str, list[FightResult]]:
@@ -1084,23 +1113,34 @@ class TierStats:
     win_rate: float
     turns: float
     hp_lost: float
+    # shares of the turns with at least one playable card (FightResult):
+    # every playable card played / at least one left in hand - None if no
+    # turn counted
+    all_played: float | None = None
+    leftover: float | None = None
 
     @classmethod
     def of(cls, results: list[FightResult]) -> TierStats | None:
         if not results:
             return None
         won = [r for r in results if r.won]
+        full = sum(r.turns_all_played for r in results)
+        left = sum(r.turns_with_leftover for r in results)
+        counted = full + left
         return cls(
             n=len(results),
             win_rate=len(won) / len(results),
             turns=statistics.mean(r.turns for r in results),
             hp_lost=statistics.mean(r.hp_lost for r in results),
+            all_played=full / counted if counted else None,
+            leftover=left / counted if counted else None,
         )
 
 
 @dataclass
 class Report:
     name: str
+    character: str
     fresh: dict[str, TierStats | None]
     in_run: dict[str, TierStats | None]
     run_win_rate: float
@@ -1123,6 +1163,7 @@ def build_report(
             death_floors[key] = death_floors.get(key, 0) + 1
     return Report(
         name=cfg.name,
+        character=cfg.character.value,
         fresh=fresh,
         in_run=in_run,
         run_win_rate=sum(r.won for r in run_results) / max(runs, 1),
@@ -1130,15 +1171,24 @@ def build_report(
     )
 
 
+def _share(value: float | None) -> str:
+    return f"{'-':>5}" if value is None else f"{value:>5.0%}"
+
+
 def _fmt(s: TierStats | None) -> str:
     if s is None:
-        return f"{'-':>7} {'-':>6} {'-':>8}"
-    return f"{s.win_rate:>6.0%} {s.turns:>6.1f} {s.hp_lost:>8.1f}"
+        return f"{'-':>6} {'-':>6} {'-':>8} {'-':>5} {'-':>5}"
+    return (
+        f"{s.win_rate:>6.0%} {s.turns:>6.1f} {s.hp_lost:>8.1f} "
+        f"{_share(s.all_played)} {_share(s.leftover)}"
+    )
 
 
 def print_reports(reports: list[Report], cfgs: list[SimConfig]) -> None:
-    head = f"{'':<8}" + "".join(f"| {r.name:<22}" for r in reports)
-    sub = f"{'Stufe':<8}" + "| Sieg  Züge  HP-Verl. " * len(reports)
+    # Alle / Rest: share of the turns with a playable card in which the bot
+    # played every one of them / left at least one in hand (FightResult)
+    head = f"{'':<8}" + "".join(f"| {f'{r.name} ({r.character})':<36}" for r in reports)
+    sub = f"{'Stufe':<8}" + "| Sieg  Züge  HP-Verl.  Alle  Rest " * len(reports)
     for title, attr in (("Einzelkampf mit vollen HP", "fresh"), ("Im Run", "in_run")):
         print(f"\n{title}")
         print(head)
