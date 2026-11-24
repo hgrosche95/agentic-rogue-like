@@ -465,8 +465,11 @@
   }
 
   .combat-panel {
-    /* as tall as the width allows, but leaving room for stack and hand */
-    --stage-h: min(calc(100vw / 2.4), 64vh, calc(100vh - 420px));
+    /* as tall as the width allows, but leaving room for stack and hand -
+       400px is just enough for both, so a 1440x900 screen already gets the
+       5x scene (1200x500) and not the 4x one (PixelStage scales by whole
+       factors of 240x100) */
+    --stage-h: min(calc(100vw / 2.4), 64vh, calc(100vh - 400px));
   }
 
   .combat-panel > .arena-wrap {
@@ -514,7 +517,7 @@
 
   /* the stack stands on the floor, between the fighters */
   .combat-panel > .combat-row {
-    margin-top: calc(var(--stage-h) * -0.24);
+    margin-top: calc(var(--stage-h) * -0.24 - 4px);
   }
 
   .combat-panel .field-zone {
