@@ -27,11 +27,17 @@ import logging
 import os
 import random
 import time
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, field_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    ValidationError,
+    ValidatorFunctionWrapHandler,
+    field_validator,
+)
 
 from .agent import usage, verdict
 from .cards import can_upgrade, upgrade_card
@@ -99,6 +105,7 @@ from .models import (
     ConsumableKind,
     KillingBlow,
     MapNode,
+    NemesisSpec,
     NodeType,
     PlayerState,
     RestSite,
@@ -108,6 +115,7 @@ from .models import (
     Shop,
     StarterKit,
 )
+from .nemesis import valid_nemesis
 from .sessions import RunSession, create_session, get_session
 from .shop import MIN_DECK_SIZE, buy_artifact, buy_card, buy_script, leave_shop, remove_card
 from .stats import note_changes
@@ -517,6 +525,19 @@ class NewRunRequest(BaseModel):
     program_mode: bool = False
     # How hard the run should be: 0 <= difficulty <= enemies.MAX_DIFFICULTY.
     difficulty: int = 0
+    # The enemy that killed the player last run, kept by the client: it
+    # returns as the first elite of act 1 (nemesis.py). Anything that isn't a
+    # valid, fightable enemy is dropped without an error - a stale or tampered
+    # value in the browser must never keep a run from starting.
+    nemesis: NemesisSpec | None = None
+
+    @field_validator("nemesis", mode="wrap")
+    @classmethod
+    def _nemesis_or_nothing(cls, value: Any, handler: ValidatorFunctionWrapHandler) -> Any:
+        try:
+            return valid_nemesis(handler(value))
+        except ValidationError:
+            return None
 
     @field_validator("setting")
     @classmethod
@@ -922,6 +943,7 @@ def create_run(request: NewRunRequest) -> RunView:
         character=request.character,
         program_mode=request.program_mode,
         difficulty=request.difficulty,
+        nemesis=request.nemesis,
     )
     run_id = create_session(run, random.Random(seed))
     session = get_session(run_id)
