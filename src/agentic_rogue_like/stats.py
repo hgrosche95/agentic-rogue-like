@@ -32,6 +32,7 @@ from .models import (
     RunState,
     RunStatus,
 )
+from .nemesis import spec_from_enemy
 
 # The tiers a fight is scaled for - the same names the balance simulator's
 # enemy budgets use (agent/budgets.py).
@@ -142,12 +143,14 @@ def fold_tally(
         )
     else:
         move = tally.killed_by or enemy.attack_name
+        final_boss = enemy.id == FINAL_BOSS_ID
         stats.killed_by = KillingBlow(
             enemy=enemy.name,
             move=move,
             enemy_max_hp=enemy.hp,
             enemy_attack=enemy.attack,
-            final_boss=enemy.id == FINAL_BOSS_ID,
+            final_boss=final_boss,
+            nemesis=spec_from_enemy(enemy, final_boss),
         )
 
 

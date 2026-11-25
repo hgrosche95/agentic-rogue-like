@@ -1,0 +1,73 @@
+/* ---------- the nemesis (components/NemesisHint.tsx, CombatPanel) ----------
+   Red from the palette (36 / 35), hard outlines, no gradient, no blur. */
+
+.nemesis-hint {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(100%, 560px);
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 10px 14px;
+  background: var(--bg-deep);
+  border: var(--px-border);
+  box-shadow: inset 4px 4px 0 #8a1030, 4px 4px 0 var(--px-ink);
+}
+
+.nemesis-hint-art {
+  display: grid;
+  place-items: end center;
+  flex: 0 0 auto;
+  width: 88px;
+  height: 88px;
+  background: var(--px-ink);
+  border: 3px solid #8a1030;
+}
+
+.nemesis-hint-sprite {
+  width: var(--w);
+  height: var(--h);
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.nemesis-hint-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: var(--text);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.nemesis-hint-text b {
+  color: var(--danger);
+  font-family: var(--font-head);
+  text-transform: uppercase;
+}
+
+.nemesis-hint-text small {
+  color: var(--text-dim);
+}
+
+.nemesis-hint-tag,
+.phase-badge.nemesis-badge {
+  align-self: flex-start;
+  padding: 2px 6px;
+  font-family: var(--font-head);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #fbf8ff;
+  background: #8a1030;
+  border: 3px solid var(--px-ink);
+}
+
+.phase-badge.nemesis-badge {
+  font-size: 11px;
+  background: var(--danger);
+  color: var(--px-ink);
+  border-radius: 0;
+}

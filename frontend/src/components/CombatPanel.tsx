@@ -1091,6 +1091,11 @@ export function CombatPanel({
                   {intent.label} {intent.amount}
                 </span>
               )}
+              {combat.enemy_nemesis && !enemySlain && (
+                <span className="phase-badge nemesis-badge" title="It killed you last run">
+                  Nemesis
+                </span>
+              )}
               {combat.enemy_affix && !enemySlain && (
                 <span
                   className={`phase-badge affix-badge${combat.enemy_enraged ? " is-enraged" : ""}`}

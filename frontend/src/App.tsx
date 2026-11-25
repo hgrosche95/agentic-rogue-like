@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import "./App.css";
 import "@fontsource/orbitron/500.css";
 import "@fontsource/orbitron/700.css";
@@ -13,6 +13,7 @@ import "./faces.css";
 import "./table.css";
 import "./cardread.css";
 import "./alive.css";
+import "./nemesis.css";
 import "./phone.css";
 import {
   buyShopArtifact,
@@ -81,6 +82,8 @@ import { TitleBackdrop } from "./components/TitleBackdrop";
 import { Tooltips } from "./components/RichText";
 import { BestiaryButton, BestiaryView } from "./components/Bestiary";
 import { noteEncounter, noteOutcome } from "./bestiary";
+import { NemesisHint } from "./components/NemesisHint";
+import { clearNemesis, loadNemesis, saveNemesis } from "./nemesis";
 
 const FALLBACK_SETTINGS = ["dungeon"];
 const INTRO_SEEN_KEY = "agentic-rogue-like:intro-seen";
@@ -183,6 +186,15 @@ function App() {
   useEffect(() => {
     if (!inCombat) setIsMapOpen(false);
   }, [inCombat]);
+
+  // A lost run leaves its killer behind, to come back as the next run's
+  // nemesis (nemesis.ts) - not the final boss, which the server leaves out.
+  const killer = run?.status === "defeat" ? (run.stats.killed_by?.nemesis ?? null) : null;
+  useEffect(() => {
+    if (killer) saveNemesis(killer);
+  }, [killer]);
+  // what waits on the title screen - read again each time it comes back
+  const waitingNemesis = useMemo(() => (run === null ? loadNemesis() : null), [run]);
 
   // Every enemy met goes into the bestiary (bestiary.ts) - once per fight,
   // with the move names it shows as the fight goes on.
@@ -368,13 +380,19 @@ function App() {
             disabled={isLoading}
           />
         </section>
+        {waitingNemesis && <NemesisHint nemesis={waitingNemesis} setting={selectedSetting} />}
         <button
           className="is-primary start-run"
           disabled={isLoading || selectedSetting.trim() === ""}
           onClick={() => {
             sfx.play("select");
             runAction(
-              () => createRun(selectedSetting, selectedCharacter, programMode),
+              async () => {
+                // the nemesis goes along once, then it is spent
+                const next = await createRun(selectedSetting, selectedCharacter, programMode, undefined, waitingNemesis);
+                clearNemesis();
+                return next;
+              },
               "Building the dungeon...",
             );
           }}

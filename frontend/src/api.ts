@@ -243,6 +243,8 @@ export interface PendingCombatView {
   // what the enemy looks like (BodyShape / Feature), null if unknown
   enemy_body_shape?: BodyShape | null;
   enemy_feature?: Feature | null;
+  // last run's killer, back for revenge - the enemy plate badges it
+  enemy_nemesis?: boolean;
   enemy_phase_taunts: string[];
   enemy_attack_name: string;
   // the base attack stat - what the enemy's look is built from
@@ -470,6 +472,18 @@ export interface RunSummary {
   killed_by: KillingBlow | null;
 }
 
+// models.NemesisSpec: what the client keeps of last run's killer and sends
+// with the next new run, to return as the first elite of act 1. The moves
+// stay as the server sent them - the client never builds or changes one.
+export interface NemesisSpec {
+  name: string;
+  description: string;
+  attack_name: string;
+  moves: Record<string, unknown>[];
+  body_shape?: BodyShape | null;
+  feature?: Feature | null;
+}
+
 // models.KillingBlow. HP and attack let the end screen draw the killer as it
 // stood in the fight (they are 0 for a run from before the stats were kept).
 export interface KillingBlow {
@@ -478,6 +492,9 @@ export interface KillingBlow {
   enemy_max_hp: number;
   enemy_attack: number;
   final_boss: boolean;
+  // the killer as it can come back next run (nemesis.ts) - null for the
+  // final boss and for runs from before the nemesis existed
+  nemesis?: NemesisSpec | null;
 }
 
 // models.DefeatedEnemy: an enemy the run beat, the tier it was fought at
@@ -616,10 +633,17 @@ export function createRun(
   character: Character,
   programMode = false,
   seed?: number,
+  nemesis?: NemesisSpec | null,
 ): Promise<RunView> {
   return request<RunView>("/runs", {
     method: "POST",
-    body: JSON.stringify({ seed: seed ?? null, setting, character, program_mode: programMode }),
+    body: JSON.stringify({
+      seed: seed ?? null,
+      setting,
+      character,
+      program_mode: programMode,
+      nemesis: nemesis ?? null,
+    }),
   }, SLOW_TIMEOUT_MS);
 }
 
