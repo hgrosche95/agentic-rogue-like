@@ -1746,6 +1746,29 @@ button.is-busy:disabled {
    below the fold: the scene gives up those pixels */
 @media (min-width: 1200px) and (min-height: 820px) {
   .combat-panel.is-program {
-    --stage-h: min(calc(100vw / 2.4), 54vh, calc(100vh - 595px));
+    /* 600px: the rail standing lower (below) costs height, which this
+       gives back without losing a whole scale - 900px high still gets 3x
+       (300px), 1080px still 4x (400px) */
+    --stage-h: min(calc(100vw / 2.4), 54vh, calc(100vh - 600px));
+  }
+
+  /* The rail stands on the scene's floor, not over the fighters: the floor
+     line is 14% of the scene's height above its foot (pixel/layout FLOOR,
+     86 of 100), and a scene smaller than its stage sits centered with room
+     below, so 14% of the stage never reaches above the floor. (At 20% the
+     rail hid the fighters' legs and the lower half of a low enemy.) */
+  .combat-panel.is-program > .combat-row {
+    margin-top: calc(var(--stage-h) * -0.14);
+  }
+
+  /* what the rail gives up in overlap it takes back from its padding, so
+     the hint under the hand stays on a 900px-high screen */
+  .combat-panel.is-program .field-zone {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .combat-panel.is-program .field-zone > .zone-head {
+    margin-bottom: 4px;
   }
 }
